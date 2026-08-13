@@ -1,7 +1,7 @@
 // providerCallRepository.ts — the enrichment cache + cost ledger (enrichment domain, 06 §5/§6). One row
 // per (workspace, request_hash, provider) attempt: hit rows are the persistent cache (short-circuit the
 // waterfall with no call and no cost); every row's cost_micros aggregates into the daily budget breaker.
-// Pre-0109 the unique was (workspace, request_hash) only, which silently dropped every attempt after the
+// Pre-0111 the unique was (workspace, request_hash) only, which silently dropped every attempt after the
 // first — see the defect note on the index in schema/intel.ts.
 
 import type { EnrichField } from "@leadwolf/types";
@@ -43,7 +43,7 @@ export interface CachedCall {
 export interface CachedFieldHit {
   providerName: string;
   responsePayload: unknown;
-  /** null = a legacy (pre-0109) row that covered the WHOLE request. */
+  /** null = a legacy (pre-0111) row that covered the WHOLE request. */
   filledFields: EnrichField[] | null;
 }
 
@@ -89,7 +89,7 @@ export const providerCallRepository = {
    *   • existing row is a PAID answer (hit/miss) → no-op — concurrent duplicates collapse, and a paid
    *     ledger row is never mutated;
    *   • existing row is a ZERO-COST non-answer (rate_limited/error) → UPGRADE in place — a later retry
-   *     that gets through must not have its paid row silently dropped (the 0109 defect's retry-shaped
+   *     that gets through must not have its paid row silently dropped (the 0111 defect's retry-shaped
    *     sibling). Cost is summed (the old row's is 0 by construction), payload/fields/status replaced.
    */
   async record(tx: Tx, call: ProviderCallRecord): Promise<void> {
@@ -113,7 +113,7 @@ export const providerCallRepository = {
 
   /**
    * Per-field cache read (waterfall v2): every persisted hit for this request, with the fields each hit
-   * covered. A legacy row (null filled_fields, written before 0109) covered the whole request — callers
+   * covered. A legacy row (null filled_fields, written before 0111) covered the whole request — callers
    * treat it as "all" so old cache entries keep short-circuiting exactly as they always did.
    */
   async findCachedFields(

@@ -9,7 +9,12 @@
 // DARK by default: register.ts only constructs + schedules it when BILLING_SUBSCRIPTIONS_ENABLED is true.
 // Leader-locked so exactly one worker runs per tick.
 
-import { billingCycleRepository, creditRepository, db } from "@leadwolf/db";
+import {
+  billingCycleRepository,
+  creditRepository,
+  withPlatformReadTx,
+  withSystemTx,
+} from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -34,23 +39,32 @@ export function makeProcessSubscriptionGrantSweep(redis: IORedis) {
     _job: Job<SubscriptionGrantSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const due = await db.transaction((tx) => billingCycleRepository.dueForGrant(tx, MAX_CYCLES));
+      // Cross-tenant read, no side effect.
+      const due = await withPlatformReadTx((tx) =>
+        billingCycleRepository.dueForGrant(tx, MAX_CYCLES),
+      );
       let grantedCredits = 0;
       let expiredCredits = 0;
       let failures = 0;
 
       for (const cycle of due) {
         try {
-          const result = await db.transaction(async (tx) => {
-            const r = await creditRepository.applyMonthlyReset(
-              tx,
-              cycle.tenantId,
-              cycle.id,
-              cycle.grantCredits,
-            );
-            await billingCycleRepository.markGranted(tx, cycle.id, r.grantLedgerId);
-            return r;
-          });
+          // AUDITED: this GRANTS CREDITS. A balance that changed with no trace of who or why is the
+          // one thing a billing dispute cannot survive.
+          const result = await withSystemTx(
+            "subscription_grant_sweep",
+            "subscription.grant.monthly",
+            async (tx) => {
+              const r = await creditRepository.applyMonthlyReset(
+                tx,
+                cycle.tenantId,
+                cycle.id,
+                cycle.grantCredits,
+              );
+              await billingCycleRepository.markGranted(tx, cycle.id, r.grantLedgerId);
+              return r;
+            },
+          );
           grantedCredits += result.granted;
           expiredCredits += result.expired;
         } catch (err) {

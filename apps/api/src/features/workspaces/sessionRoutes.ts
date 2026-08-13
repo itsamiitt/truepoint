@@ -6,7 +6,6 @@
 
 import { forceReauthMember, listMemberSessions, revokeMemberSession } from "@leadwolf/core";
 import {
-  ForbiddenError,
   ValidationError,
   adminSessionListSchema,
   memberIdParamSchema,
@@ -16,7 +15,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const workspaceSecurityRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -27,8 +26,7 @@ workspaceSecurityRoutes.use("*", requireRole("owner", "admin"));
 
 /** GET /security/sessions — active sessions of this workspace's members (the admin sessions table). */
 workspaceSecurityRoutes.get("/security/sessions", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const claims = c.get("claims");
 
   const sessions = await listMemberSessions({
@@ -58,8 +56,7 @@ workspaceSecurityRoutes.get("/security/sessions", async (c) => {
 
 /** POST /security/sessions/:sessionId/revoke — end one member's session (it can no longer authenticate). */
 workspaceSecurityRoutes.post("/security/sessions/:sessionId/revoke", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const parsed = sessionIdParamSchema.safeParse({ sessionId: c.req.param("sessionId") });
   if (!parsed.success) throw new ValidationError("Invalid session id.");
 
@@ -77,8 +74,7 @@ workspaceSecurityRoutes.post("/security/sessions/:sessionId/revoke", async (c) =
 
 /** POST /security/members/:userId/force-reauth — revoke ALL of a member's sessions in this workspace. */
 workspaceSecurityRoutes.post("/security/members/:userId/force-reauth", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const parsed = memberIdParamSchema.safeParse({ userId: c.req.param("userId") });
   if (!parsed.success) throw new ValidationError("Invalid member id.");
 

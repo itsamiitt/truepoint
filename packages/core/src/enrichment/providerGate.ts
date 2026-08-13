@@ -1,4 +1,4 @@
-// providerGate.ts — the per-provider rate-limit + monthly-budget PORT for the waterfall (v2 / 0109).
+// providerGate.ts — the per-provider rate-limit + monthly-budget PORT for the waterfall (v2 / 0111).
 // This is where provider_configs.rate_limit_per_min and monthly_budget_cents — stored since 13 §3.6 but
 // never read by the engine — finally get enforced. core owns the port; the Redis implementation lives in
 // packages/integrations (redisProviderGate: a mailboxThrottle-style token bucket per provider + a monthly

@@ -135,6 +135,11 @@ export const REPO_DOMAIN = {
   platformStaff: "staff",
   staff: "staff",
   domain: "tenants",
+  // entitlements ALREADY has code in the map (packages/core/src/entitlements/{entitlementGate,resolveEntitlement}),
+  // so this is the db layer of an existing domain, not a new vocabulary invented to fit a file. Deliberately NOT
+  // "billing": decision D2 makes entitlements a cap layer ABOVE credits that never reads a balance, and filing it
+  // under billing would encode in the map the exact conflation the code refuses to make.
+  entitlement: "entitlements",
   accountHold: "billing",
   creditPack: "pricing",
   planTemplate: "plans",
@@ -170,6 +175,9 @@ export const REPO_DOMAIN = {
   // master_employment: schools are master_companies rows with org_kind='school', so "works at" and
   // "studied at" traverse one catalog.
   masterEducation: "master-sync",
+  // READ side of the Layer-0 employment edge (plan 33 · A2) — same system-owned graph, split from
+  // masterGraphRepository because that module owns the ingest-critical write path.
+  masterEmploymentRead: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",
@@ -268,6 +276,40 @@ export const REPO_DOMAIN = {
   verificationJob: "data-health",
   dataQualitySnapshot: "data-health",
 };
+/**
+ * Folder slugs that mean the SAME domain under a different name.
+ *
+ * Domains derived from a folder name inherit whatever that folder is called, so one concept split across two
+ * layers with two spellings becomes two unrelated domains in the map. That is the specific harm a navigation
+ * map exists to prevent: `apps/api/src/features/ingest/` and `packages/core/src/ingestion/` are one ingestion
+ * path, and a reader asking "where does ingestion live" was being shown half of it.
+ *
+ * The API/web feature-folder spelling wins, because that is the name the `/api/v1` surface already publishes.
+ * Aliasing rather than renaming the folder is deliberate: a rename touches every importer for a cosmetic gain,
+ * and CLAUDE.md is explicit that structure rules never justify churn in correctness-bearing code.
+ */
+/**
+ * `packages/core/src/*` folders that are cross-cutting infrastructure, NOT feature domains.
+ *
+ * The core rule turns any folder name into a domain, which is right for `scoring/` or `retention/` — those
+ * have api/web/db counterparts and are genuinely features. It is wrong for the PORTS. CLAUDE.md states core
+ * "owns all ports", and a port is consumed by every domain rather than belonging to one: `storage/fileStore.ts`
+ * and `security/malwareScanner.ts` describe themselves as siblings in exactly that role, and `cache/readThrough`
+ * is a tier sitting in front of other domains' reads.
+ *
+ * Listing them as domains made the map claim three features that do not exist, and diluted the domain list —
+ * which is the thing a newcomer reads to learn what this product DOES. Each is core-only (verified: no api,
+ * web or db file buckets to any of them), so nothing is orphaned by moving them to the shared area.
+ *
+ * Keep this list SHORT and explicit. A new core folder should surface as a domain and get a deliberate
+ * decision, exactly as REPO_DOMAIN's header argues — not be silently absorbed into "shared".
+ */
+export const CORE_SHARED_FOLDERS = new Set(["cache", "security", "storage"]);
+
+export const DOMAIN_ALIAS = {
+  ingestion: "ingest",
+};
+
 export const PROVIDER_DOMAIN = {
   "crm-sync": "crm-sync", // the shared connector/budget-store folder (the per-vendor files live inside it)
   salesforce: "crm-sync",
@@ -386,8 +428,10 @@ export function classify(p) {
   // core domains (ports + top-level files are shared, not a domain).
   if ((m = p.match(/^packages\/core\/src\/ports\//)))
     return { kind: "shared", area: "packages/core/ports" };
-  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//)))
-    return { kind: "feature", domain: m[1], bucket: "core" };
+  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//))) {
+    if (CORE_SHARED_FOLDERS.has(m[1])) return { kind: "shared", area: "packages/core" };
+    return { kind: "feature", domain: DOMAIN_ALIAS[m[1]] ?? m[1], bucket: "core" };
+  }
   if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p))
     return { kind: "shared", area: "packages/core" };
 
@@ -400,7 +444,8 @@ export function classify(p) {
   // db repositories -> domain via REPO_DOMAIN; rest of db is shared.
   if ((m = p.match(/^packages\/db\/src\/repositories\/(.+?)Repository\.(c|m)?[tj]sx?$/))) {
     const entity = m[1];
-    const domain = REPO_DOMAIN[entity] ?? REPO_DOMAIN[entity.toLowerCase()];
+    const raw = REPO_DOMAIN[entity] ?? REPO_DOMAIN[entity.toLowerCase()];
+    const domain = raw ? (DOMAIN_ALIAS[raw] ?? raw) : raw;
     return domain ? { kind: "feature", domain, bucket: "db" } : { kind: "unassigned" };
   }
   if (/^packages\/db\//.test(p)) return { kind: "shared", area: "packages/db" };
@@ -408,7 +453,8 @@ export function classify(p) {
   // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared. Colocated `.test`/`.itest`
   // files place with their queue (strip the suffix before lookup).
   if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+?)(?:\.i?test)?\.(c|m)?[tj]sx?$/))) {
-    const domain = QUEUE_DOMAIN[m[1]];
+    const raw = QUEUE_DOMAIN[m[1]];
+    const domain = raw ? (DOMAIN_ALIAS[raw] ?? raw) : raw;
     return domain ? { kind: "feature", domain, bucket: "workers" } : { kind: "unassigned" };
   }
   if (/^apps\/workers\//.test(p)) return { kind: "shared", area: "apps/workers" };
@@ -460,6 +506,15 @@ export function classify(p) {
     ))
   )
     return { kind: "shared", area: `packages/${m[1]}` };
+
+  // Build/tooling config at an app or package ROOT (next.config.mjs, postcss.config.mjs, …). This is not
+  // domain code and never can be — Next.js requires next.config at exactly this path — so reporting it as a
+  // placement violation is noise. It mattered: four such files sat permanently in `unassigned`, which the
+  // navigation-map spec renders as "Violations to fix". A violations list that can never reach zero trains
+  // readers to ignore it, and then a genuinely misplaced file hides among the furniture. Scoped to *.config.*
+  // at a ROOT only, so a stray file inside src/ still surfaces loudly.
+  if ((m = p.match(/^(apps|packages)\/([^/]+)\/[^/]*\.config\.(c|m)?[tj]s$/)))
+    return { kind: "shared", area: `${m[1]}/${m[2]}` };
 
   return { kind: "unassigned" };
 }

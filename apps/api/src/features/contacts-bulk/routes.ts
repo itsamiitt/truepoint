@@ -35,7 +35,7 @@ import { Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "../import/index.ts";
 
 export const contactsBulkRoutes = new Hono<{ Variables: RoleVariables }>();
@@ -45,13 +45,6 @@ contactsBulkRoutes.use("*", tenancy);
 // All bulk actions require an active workspace membership; the role is stashed for the finer core policy gates
 // (owner-assign: members may only self-assign/clear; export: viewer denied).
 contactsBulkRoutes.use("*", requireRole("owner", "admin", "member", "viewer"));
-
-function requireWorkspace(c: { get: (k: "workspaceId") => string | undefined }): string {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId)
-    throw new ForbiddenError("no_workspace", "Select a workspace to run bulk actions.");
-  return workspaceId;
-}
 
 /** POST /contacts/bulk/assign-owner — set/clear the soft owner. Body adds { ownerUserId }. */
 contactsBulkRoutes.post("/assign-owner", async (c) => {

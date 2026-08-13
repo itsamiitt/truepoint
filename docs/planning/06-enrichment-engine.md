@@ -133,7 +133,7 @@ flowchart TB
 3. **Sequential waterfall** — call provider; `hit` → stop; otherwise next. (A "parallel-cheap" mode is
    allowed for low-cost providers when latency matters.)
 
-> **As built — waterfall v2 (0109), behind `WATERFALL_V2_ENABLED` + the `enrichment_waterfall_v2` tenant
+> **As built — waterfall v2 (0111), behind `WATERFALL_V2_ENABLED` + the `enrichment_waterfall_v2` tenant
 > flag.** The flow above is now PER FIELD (`core/enrichment/fieldWaterfall.ts`): each field cascades down
 > its own resolved order — per-run `providerOrder` override → the workspace's saved
 > `enrichment_policy.provider_prefs` (email order ≠ phone order, plus a disabled set; the
@@ -144,7 +144,7 @@ flowchart TB
 > `providerConfigRepository.waterfallStatsByProvider` (30d per-provider hit/verified-valid/latency/cost —
 > the staff console shows it); wiring it INTO the ordering is the deferred `version: 2` priority mode.
 > The engine runs tx-split (read tx → provider I/O outside any tx → write tx), the ledger unique is
-> `(workspace, request_hash, provider)` with per-attempt `filled_fields` (the pre-0109 unique dropped
+> `(workspace, request_hash, provider)` with per-attempt `filled_fields` (the pre-0111 unique dropped
 > every attempt after the first — cost undercount + permanent cache miss), breakers/rate-limits are
 > Redis-shared (`redisBreakerStore`/`redisProviderGate` enforcing `provider_configs`
 > rate_limit_per_min + monthly_budget_cents, previously stored-but-unread), and

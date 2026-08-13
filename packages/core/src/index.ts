@@ -303,7 +303,7 @@ export {
   resetBreakers,
   type BulkWaterfallOptions,
 } from "./enrichment/waterfall.ts";
-// Waterfall v2 (0109): the per-field cascade + its injectable infrastructure ports. Redis-backed
+// Waterfall v2 (0111): the per-field cascade + its injectable infrastructure ports. Redis-backed
 // implementations live in @leadwolf/integrations (redisBreakerStore / redisProviderGate); the defaults
 // here keep tests and the flag-retired inline path dependency-free.
 export {

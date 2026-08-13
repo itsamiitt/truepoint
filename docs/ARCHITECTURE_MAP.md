@@ -106,7 +106,7 @@ packages/                       # side-effect-free libraries, each exported via 
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
     middleware/{requestId,authn,tenancy,error,rateLimit,revealRateLimit,idempotency,jobViewer,extensionScope,
-                requireRole,requireOrgRole,requireStaffRole,requireCapability,platformAdmin,syncPrincipal}.ts
+                requireRole,requireOrgRole,requireCapability,platformAdmin,syncPrincipal}.ts
     lifecycle.ts                  # drain state shared by server.ts (SIGTERM) and the readiness endpoint
     features/{auth,workspaces,settings,scim,import,import-mapping-templates,reveal,billing,enrichment,enrichment via jobs,
               scoring,compliance,activity,sales-navigator,outreach,email,home,search,account-search,saved-searches,
@@ -116,7 +116,8 @@ apps/                           # deployable processes (thin transport adapters)
   web/   src/                   # app.truepoint.in (Next 15) — AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,lists,enrichment/jobs,sales-navigator,settings/*}  app/{import,auth/callback}
     components/{shell/*,PageHeader}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
-                                              enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig}
+                                              enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig,
+                                              problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,EntityPicker,TenantPicker,UserPicker}  lib/{adminGate,authClient,pkce}
     app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,system-health}  features/*
@@ -170,11 +171,11 @@ apps/                           # deployable processes (thin transport adapters)
   server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
   `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)
 
-#### enrichment — *M4 provider waterfall + bulk match-first + waterfall v2* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038, 0109)
+#### enrichment — *M4 provider waterfall + bulk match-first + waterfall v2* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038, 0111)
 - **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (legacy trust÷cost
   ordering + per-process breaker; still the bulk residual path), `enrichContact.ts` (dual-gated: legacy single-tx body OR
   the v2 branch), `requestHash.ts`, `policy.ts` (auto-enrich guard: trigger + field-allowlist + budget), `jobStatus.ts`
-- **core (waterfall v2, 0109 — dark behind `WATERFALL_V2_ENABLED` + tenant flag):** `fieldWaterfall.ts` (PER-FIELD cascade,
+- **core (waterfall v2, 0111 — dark behind `WATERFALL_V2_ENABLED` + tenant flag):** `fieldWaterfall.ts` (PER-FIELD cascade,
   one memoized call per provider, capability filter, verify-before-accept w/ catch-all policy), `enrichContactV2.ts`
   (tx-split orchestration + `resolveProviderOrder`: per-run override → workspace prefs → default), `breakerStore.ts` +
   `providerGate.ts` (injectable ports; in-memory/pass-through defaults), `enrichmentEvidence.ts` (Layer-0 source_records +
@@ -187,7 +188,7 @@ apps/                           # deployable processes (thin transport adapters)
   keys)** VendorSpecs over one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
   `provider_configs`)
-- **db:** `providerCallRepository.ts` (cache + cost ledger; 0109 unique `(ws,hash,provider)` + per-field `filled_fields` —
+- **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
   **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
@@ -286,7 +287,13 @@ apps/                           # deployable processes (thin transport adapters)
   workspace-visible ids + audit), `tags.ts`, `lists.ts`,
   `contributionGate.ts` (`evaluateContribution` — may this row MINT a node in the SHARED graph? Gates the
   mint only: a denied row still LINKs to what the graph already holds. An opt-OUT over the ADR-0021 identity
-  mint, not an opt-in — decisions.md D13), `backfillMaster.ts` (applies that gate per row)
+  mint, not an opt-in — decisions.md D13), `backfillMaster.ts` (applies that gate per row),
+  `confidence.ts` — ⚠ **the DORMANT confidence engine** (Noisy-OR over `master_confidence_policy`; zero
+  production callers. The LIVE one customers see is `packages/types/src/confidence.ts` via
+  `buildConfidenceBadgeV1` — audit 32 §9D) + `confidenceDivergence.test.ts`, which measures the two against the
+  real seeded 0107 policy rows: switching engines is a **redistribution**, provider-sourced records +0.20 to
+  +0.26 and crawl-sourced −0.10, not a uniform lift. **Read that test before proposing to unify them**;
+  `fieldProvenance.ts` (the pure provenance fold)
 - **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog`; **bulk
   reveal** (`useBulkSelection`, `BulkActionBar`, `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
   **filter rail** (`FilterRail` + `FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, with
@@ -463,12 +470,22 @@ apps/                           # deployable processes (thin transport adapters)
   both responses are egress-validated with `.parse()`. `master_company_id` is deliberately absent from the
   education row — nothing renders it, and a stable Layer-0 id handed to every tenant is a cross-tenant
   correlation key for no gain (a `resolved` boolean carries what the UI needs)
+- **api (contact side):** `/contacts/:id/{education,employment,provenance,signals}` — same two-transaction
+  shape (tenant resolve under RLS → `withErTx`), except `signals`, which reads the TENANT-private
+  `intent_signals` and so crosses no wall at all. `/accounts/:id/{displacement,alumni}` and
+  `/accounts/:id/technologies/:techId/peers` add a THIRD leg: traverse Layer 0, then map the result back
+  through the overlay under RLS, so a graph-wide answer becomes "which of MY records" and Layer-0 ids never
+  leave the server
 - **web:** the UI lives in `features.prospect.web` (destination-keyed — see
-  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts` (both reads), and per surface —
-  `hooks/useAccountTechnologies.ts` + `components/AccountTechnologySections.tsx` for the ACCOUNT drawer (one
-  cache entry PER relationship, so develops and uses can never overwrite each other; two sections, "Builds"
-  and "Runs", never one merged list), and `hooks/useContactEducation.ts` +
-  `components/EducationSection.tsx` for the CONTACT drawer. Unmatched records render an explicit
+  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts` (every read), plus per surface —
+  ACCOUNT drawer: `hooks/useAccountTechnologies.ts` + `components/AccountTechnologySections.tsx` (one cache
+  entry PER relationship, so develops and uses can never overwrite each other; "Builds" and "Runs", never one
+  merged list) and `components/AccountGraphSections.tsx` (displacement + alumni, which HIDE themselves when
+  they have nothing to report — a permanent empty panel on every account is noise, and "0 alumni" on a
+  company is nonsense rather than emptiness); CONTACT drawer: `EducationSection`, `EmploymentSection` (a
+  company LIST, not a timeline — the import mints a bare edge with no title or dates), `ProvenanceSection`
+  (the confidence model, free, on a record you already own) and `SignalsSection`, each with its hook.
+  `orgKindCopy.ts` keeps the drawer from calling a university a company. Unmatched records render an explicit
   "not matched to the graph yet" rather than an empty list — "we hold nothing" and "we have not identified
   this record" are different facts and the UI never asserts the first when only the second is true
 - **api:** `features/account-intelligence/` — `routes.ts` (GET `/accounts/:accountId/technologies?relationship=develops|uses`,
@@ -491,7 +508,7 @@ apps/                           # deployable processes (thin transport adapters)
 #### auth — *M2 global identity + ADR-0040 hardening* ([17](./planning/17-authentication.md), ADR-0019/0020/0040)
 - **api:** `features/auth/*` (GET `/auth/session` incl. live workspace role) · `features/identity/*` (GET
   `/me`, `/orgs` — the extension's display identity + org switcher, each token-`sub`-scoped); RBAC middleware
-  `{requireRole,requireOrgRole,requireStaffRole,platformAdmin}.ts` (workspace / org / platform tiers)
+  `{requireRole,requireOrgRole,requireCapability,platformAdmin}.ts` (workspace / org / platform tiers — `requireCapability` is the ONE staff guard since C8 retired `requireStaffRole`)
 - **core:** `auth/members.ts` (workspace member lifecycle: invite/change-role/remove, owner non-removable, audited),
   `auth/adminSessions.ts` (list/revoke member sessions, force-reauth) · **db:** `userRepository.ts`
 - **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`loginTransaction`/`flow` + `scopeGuard`),
@@ -696,22 +713,46 @@ flowchart TD
   tables all take the `master_` prefix so the generator's `^master_` REVOKE loop makes them fail closed by
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
-  `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate).
+  `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `repositories/arrayParamBinding.test.ts` (static, DB-free: renders repository SQL through `PgDialect` offline and
+  asserts array binds are ONE parameter. Drizzle's `sql` template SPREADS a bare JS array into one bind per element,
+  so `ANY(${ids})` becomes the row constructor `ANY(($1,$2))` and Postgres fails at runtime with 22P02 — invisible to
+  types, lint and unit tests. Use `sql.param(arr)` + a cast, or hand-build the `'{a,b}'` literal as `dsarRepository`
+  documents. **If you write a raw `sql` query binding an array, add it to this test.**).
 - **`packages/core`** — `index.ts` is the public surface; domain code bucketed per feature above. Owns all ports
   (enrichment/sender/SearchPort/AiPort/MatchPort/DnsResolverPort) — never imports `integrations`.
 - **`packages/auth`** — the self-built auth primitives (login/registration/invitations/password+policy+breach/MFA/SSO/switch/
-  session-hardening) + `ipBinding`/`ipAllowlist`/`sessionTimeout`/`revocation`/`auditEvent`/`log`.
+  session-hardening) + `ipBinding`/`ipAllowlist`/`sessionTimeout`/`revocation`/`auditEvent`/`log`; plus
+  `guardDegradedLog.ts` — the one marker shape every FAIL-OPEN guard emits (both rate limiters, the reveal limiter,
+  `apps/api`'s entitlement gate), so a single alert expression `] DEGRADED ` catches all of them and two firing in one
+  window is the composite "Redis down ⇒ guards open" condition. Defined in `docs/planning/19-observability-reliability.md` §3.
+  `revocationLog.ts` is the older sibling marker and keeps its own prefix (its shape is test-pinned); and
+  `tenantSuspension.ts` — the audit-32 §9E gate, a PURE decision (`tenantSuspensionDecision` + the
+  `[tenant-suspension]` marker) with no env read, consumed today only by `switchOrg.ts`. It ships **DISARMED**:
+  `TENANT_SUSPENSION_ENFORCED` must be the literal `"true"` before it refuses anything, because `tenants.status`
+  had NO runtime reader at all and enforcing on deploy would eject every currently-suspended tenant. Shadow
+  lines (`mode=shadow … ALLOWED (would refuse once armed)`) are how the affected set gets sized first.
+  **All four tenant-selection paths now consult it** — `flow.ts` (finalizeLogin's org pick), `switchOrg`,
+  `switchWorkspace` and `refresh` — and `tenantSuspensionCoverage.test.ts` PINS that: it strips imports, asserts
+  each file makes the call (not merely imports it), and fails if a path inlines its own `tenantStatus !==
+  "active"`. **Adding a fifth path that mints a session for a tenant means adding it to that list**, or the gate
+  ships with a hole that stays silent until the day someone arms enforcement.
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
 - **`apps/api`** — `app.ts`, `server.ts`, `instrumentation.ts`; **`apps/api/middleware`** — `authn`, `tenancy`, `error`,
-  `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireStaffRole`, `platformAdmin`.
+  `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
 - **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
 - **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `auth/callback`); `components/shell/*`
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
-  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`).
+  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`,
+  `queryKeys`, plus the two seams every slice's `api.ts` uses: **`problemMessage`** — the single RFC 9457
+  problem-body→sentence reader, and **`maybeList`** — the `{items, available}` envelope with the
+  `isUnavailable` 404/501 predicate that tells a dark backend apart from a real failure. Both were private
+  per-slice copies (24 and 11 of them) until audit 32 F4; a new slice's data layer should import these
+  rather than re-declare them.
 - **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
   Brandmark) + `ImpersonationBanner` + `EntityPicker`/`TenantPicker`/`UserPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
 - **`apps/workers`** — `index.ts` (entry + bounded graceful drain), `register.ts` (composition root + producers +
@@ -747,19 +788,78 @@ flowchart TD
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (54):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the new feature
-  families since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
-  `custom-fields`/`customFields`, `email`, `enrichment-jobs`, `feature-flags`/`featureFlags`, `import-mapping-templates`,
-  `pipeline-stages`/`pipelineStages`, `provider-configs`, `saved-searches`/`savedSearches`, `scim`, the `settings-*` family
-  (`-custom-fields`/`-developer`/`-enrichment`/`-mailboxes`/`-shell`/`-tenant`/`-user`/`-workspace`), `staff`, `system-health`,
-  `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
-  list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
+- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
+  families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
+  `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
+  `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
+  `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical list can be
+  reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2006-file** JSON (86 domains with code, 38 shared areas,
-  **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
+  *(This entry previously listed `custom-fields`/`customFields`, `feature-flags`/`featureFlags`,
+  `saved-searches`/`savedSearches` and `pipeline-stages`/`pipelineStages` as case-variant PAIRS. Checked against the
+  JSON: no such pairs exist — every slug appears exactly once. The prose had gone stale against the generator.)*
+- **Three "domains" were never features (86 → 82 domains, 53 → 51 warnings).** `packages/core/src/{cache,security,
+  storage}` bucketed as feature domains because the core rule turns any folder name into one. That is right for
+  `scoring/` or `retention/`, which have api/web/db counterparts — and wrong for PORTS. CLAUDE.md says core "owns
+  all ports", and `storage/fileStore.ts` and `security/malwareScanner.ts` describe themselves as siblings in
+  exactly that role; `cache/readThrough` is a tier in front of other domains' reads. Listing them as domains made
+  the map claim three features that do not exist and diluted the list a newcomer reads to learn what the product
+  DOES. `CORE_SHARED_FOLDERS` now routes them to the `packages/core` shared area. Kept short and explicit on
+  purpose: a NEW core folder still surfaces as a domain and gets a deliberate decision rather than being silently
+  absorbed into "shared".
+
+- **One warning WAS a real defect, and is fixed (54 → 53).** `ingest` and `ingestion` were two domains for one
+  concept, because `apps/api/src/features/ingest/` and `packages/core/src/ingestion/` are spelled differently and a
+  folder-derived slug inherits whatever the folder is called. A reader asking "where does ingestion live" was shown
+  half of it. `DOMAIN_ALIAS` in `lib/arch-map.mjs` now folds `ingestion → ingest` — applied at the folder rule AND at
+  the `REPO_DOMAIN`/`QUEUE_DOMAIN` lookups, so there is one normalisation authority rather than two. Aliased rather
+  than renaming the folder: a rename touches every importer for a cosmetic gain, and structure rules never justify
+  churn in correctness-bearing code.
+- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (82 domains with code, 39 shared areas,
+  **2** unassigned, **51** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
-  `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`). The web files bucketed to
-  `features.prospect.web` and added no new unassigned entries or warnings. Both signals that refresh
+  `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
+  (provenance, employment, org-kind, signals, displacement, alumni, peer adopters) and audit 32's Waves 1/3
+  (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0111's FK indexes, `withSystemTx`,
+  the retired `requireStaffRole`, and the configuration-list safety cap). The web files bucketed to
+  `features.prospect.web` and added no new unassigned entries or warnings.
+  **Added since that refresh** (+4 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
+  and `apps/web/src/lib/maybeList.ts`, closing audit 32 · F4; and `packages/auth/src/guardDegradedLog.ts` (+ test)
+  closing C11's observability half — the one marker shape every fail-open guard emits, so a single alert
+  expression (`] DEGRADED `) catches all four. Its alert is defined in `docs/planning/19-observability-reliability.md` §3;
+  and `packages/db/src/repositories/arrayParamBinding.test.ts`, which converts a CI-only failure class into a
+  DB-free unit test after migration 0108's repositories cost three CI round-trips (a missing `leadwolf_er` GRANT,
+  then bare-JS-array binds). Both defects were invisible to typecheck, biome and every unit test — the standing
+  hazard on a host with no Docker, where "local gates green" is not the same claim as "CI green". Then
+  `packages/auth/src/tenantSuspension.ts` (+ test) for §9E — the highest-severity finding of the audit:
+  `tenants.status` is written by staff break-glass AND by the dunning ladder, and nothing read it, so a
+  suspended tenant kept full API access. USER suspension was enforced correctly all along; the TENANT-level
+  control was not. Shipped observe-first and still disarmed, now across all four paths with a coverage guard; §9C/§9D/§9E together are one pattern worth
+  remembering — **staff-facing configuration that configures nothing** (`retention_policies`,
+  `master_confidence_policy`, `tenants.status`) — plus the audit-register cleanup that came with it
+  (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
+  contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
+  not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
+
+  **Unassigned went 7 → 2, and the four config files that left were never violations.** `next.config.mjs` (×3) and
+  `postcss.config.mjs` sat permanently in `unassigned`, which the navigation-map spec renders as *"Violations
+  to fix"* — but a Next config is at exactly the path Next requires. `classify()` now places root-level
+  `*.config.*` as shared tooling. The point is not the number: a violations list that can never reach zero
+  trains readers to ignore it, and a genuinely misplaced file then hides among the furniture. The remaining
+  **2** are honest gaps. *(I first wrote 3, claiming `entitlementRepository` had no clearly-right domain. Wrong:
+  I checked `CANONICAL_DOMAINS` — the declared vocabulary — when `REPO_DOMAIN`'s rule is "a domain that ALREADY
+  has code in the map". `entitlements` has code, `packages/core/src/entitlements/*`, so the repository is simply
+  that domain's db layer and is now mapped. Still deliberately NOT `billing`: decision D2 makes entitlements a cap
+  layer ABOVE credits that never reads a balance, and filing it under billing would encode in the map the exact
+  conflation the code refuses to make.)* The two that remain are genuinely ambiguous, not un-triaged:
+  `usageEventRepository` is WRITTEN by three domains (contacts-resolve, prospect, reveal) and read by the
+  entitlement gate — cross-cutting metering, where any single home would be wrong; `outcomeMetricsRepository` has
+  no production caller at all, only an itest. `REPO_DOMAIN`'s header — a confidently wrong home is worse than an
+  honest gap — is why these two stay put.
+
+  **Deleted this cycle:** `apps/api/src/middleware/requireStaffRole.ts` — audit 32 · C8 migrated every endpoint
+  to `requireCapability`, so `StaffRoleVariables` now lives with the guard that sets it. Three references to
+  the retired module elsewhere in this file were corrected at the same time; if you find another, it is stale. Both signals that refresh
   raised were **fixed rather than flagged**: `masterEducation → master-sync` was added to `REPO_DOMAIN` (following
   the existing rule that every Layer-0 repository belongs to the one system-owned graph), and `account-intelligence`
   was added to `CANONICAL_DOMAINS` — so unassigned went 8→7 and warnings 55→54. The prose subsection count was also
@@ -767,11 +867,11 @@ flowchart TD
   When the source set changes again, re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares
   the `fileSetHash`) and refresh these purposes.
 
-  2026-08-12 refresh (waterfall v2, 0109): the new enrichment files all bucketed into their existing domains —
+  2026-08-12 refresh (waterfall v2, 0111): the new enrichment files all bucketed into their existing domains —
   `core/enrichment/{fieldWaterfall,enrichContactV2,breakerStore,providerGate,enrichmentEvidence,sourceImports}`
   → the core enrichment domain, `integrations/enrichment/{redisBreakerStore,redisProviderGate}` → integrations,
-  the api 202 producer + web ProviderPriorityPanel → their feature buckets — so unassigned held at 7 and
-  warnings at 54 (the 7 are the four framework-root next/postcss configs plus the three pre-0109
-  entitlement/outcomeMetrics/usageEvent repositories; unchanged by this refresh). The enrichment section's
-  one-line purposes above were updated for the v2 split (legacy waterfall vs the flag-gated per-field engine).
+  the api 202 producer + web ProviderPriorityPanel → their feature buckets. The enrichment section's
+  one-line purposes above were updated for the v2 split (legacy waterfall vs the flag-gated per-field
+  engine). Post-merge with main's concurrent hook fixes (edf64d2d…27578b28) the regenerated map reads
+  unassigned 2 / warnings 51 — main's REPO_DOMAIN/config-placement fixes absorbed the earlier seven.
 ```

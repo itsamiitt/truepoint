@@ -14,6 +14,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const salesNavRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -21,7 +22,7 @@ export const salesNavRoutes = new Hono<{ Variables: TenancyVariables }>();
 salesNavRoutes.use("*", authn);
 salesNavRoutes.use("*", tenancy);
 
-salesNavRoutes.post("/links", async (c) => {
+salesNavRoutes.post("/links", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before capturing links.");
@@ -68,7 +69,7 @@ salesNavRoutes.get("/links", async (c) => {
   return c.json({ links });
 });
 
-salesNavRoutes.delete("/links/:id", async (c) => {
+salesNavRoutes.delete("/links/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to remove a captured link.");

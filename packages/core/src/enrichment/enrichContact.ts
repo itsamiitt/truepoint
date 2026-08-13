@@ -64,7 +64,7 @@ export interface EnrichContactResult {
   costMicros: number;
   /** Set only when `status` is `policy_skipped` — why the auto-enrich policy denied the run (G-ENR-1). */
   policyReason?: AutoEnrichDenyReason;
-  /** waterfall v2 (0109): which provider won each filled field. Absent on the legacy path. */
+  /** waterfall v2 (0111): which provider won each filled field. Absent on the legacy path. */
   filledBy?: Partial<Record<EnrichField, string>>;
   /** waterfall v2: the verify-before-accept verdict persisted for a won email. */
   emailStatus?: string;
@@ -133,7 +133,7 @@ export async function enrichContact(
     fields = decision.allowedFields; // only the allowlisted fields reach the waterfall
   }
 
-  // Waterfall v2 dual gate (0109, D10): env kill-switch (zero queries while off) AND the per-tenant
+  // Waterfall v2 dual gate (0111, D10): env kill-switch (zero queries while off) AND the per-tenant
   // canary flag (fail-closed). Off ⇒ the legacy single-tx body below runs byte-identically.
   if (env.WATERFALL_V2_ENABLED && (await waterfallV2EnabledForScope(input.scope))) {
     return runEnrichmentV2({

@@ -22,7 +22,7 @@
   color: var(--tp-ink-4);
 }
 
-/* Provider priority (0109): ordered per-field lists with arrow-button reorder. */
+/* Provider priority (0111): ordered per-field lists with arrow-button reorder. */
 .providerList {
   display: flex;
   flex-direction: column;

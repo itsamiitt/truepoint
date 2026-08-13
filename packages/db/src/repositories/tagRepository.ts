@@ -8,6 +8,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 import { recordTags, tags } from "../schema/tags.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 /** A workspace tag with its live assignment count (usageCount) — the list/governance view-model. */
 export interface TagRow {
@@ -117,7 +118,8 @@ export const tagRepository = {
         .from(tags)
         .leftJoin(recordTags, eq(recordTags.tagId, tags.id))
         .groupBy(tags.id)
-        .orderBy(asc(tags.name)),
+        .orderBy(asc(tags.name))
+        .limit(LIST_SAFETY_CAP),
     );
   },
 

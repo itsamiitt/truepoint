@@ -7,7 +7,6 @@
 import { searchAccountsCount } from "@leadwolf/core";
 import { accountSearchRepository } from "@leadwolf/db";
 import {
-  ForbiddenError,
   ValidationError,
   accountFacetCountsRequest,
   accountQuery,
@@ -15,7 +14,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const accountSearchRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -24,8 +23,7 @@ accountSearchRoutes.use("*", tenancy);
 
 /** Filtered, keyset-paged company search (24 §5/§6). Body = AccountQuery → { accounts, nextCursor }. */
 accountSearchRoutes.post("/search", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = accountQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid account search query.");
@@ -39,8 +37,7 @@ accountSearchRoutes.post("/search", async (c) => {
 
 /** Live facet counts for the current query (24 §5). Body = { query, fields } → { facets }. */
 accountSearchRoutes.post("/facets", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = accountFacetCountsRequest.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid facet request (need query + fields).");
@@ -55,8 +52,7 @@ accountSearchRoutes.post("/facets", async (c) => {
 
 /** The TOTAL matching, workspace-visible accounts for an AccountQuery (24 Phase-3 select-all). Returns { total }. */
 accountSearchRoutes.post("/count", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = accountQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid account search query.");
@@ -70,8 +66,7 @@ accountSearchRoutes.post("/count", async (c) => {
 
 /** Typeahead suggestions drawn from indexed account values (24 §3). field + prefix as query params. */
 accountSearchRoutes.get("/suggest", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const limitRaw = c.req.query("limit");
   const parsed = accountSuggestQuery.safeParse({

@@ -15,7 +15,6 @@ import {
   updateList,
 } from "@leadwolf/core";
 import {
-  ForbiddenError,
   ValidationError,
   createDynamicListSchema,
   createListSchema,
@@ -25,18 +24,13 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const listsRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 listsRoutes.use("*", authn);
 listsRoutes.use("*", tenancy);
-
-function requireWorkspace(c: { get: (k: "workspaceId") => string | undefined }): string {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to use lists.");
-  return workspaceId;
-}
 
 /** List every list in the active workspace (workspace-shared), with live member counts. */
 listsRoutes.get("/", async (c) => {
@@ -49,7 +43,7 @@ listsRoutes.get("/", async (c) => {
 });
 
 /** Create a list. Body = { name, description? }. */
-listsRoutes.post("/", async (c) => {
+listsRoutes.post("/", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = createListSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { name, description? }.");
@@ -67,7 +61,7 @@ listsRoutes.post("/", async (c) => {
  * savedSearchId is re-validated under the caller's workspace in core (a foreign/absent id 404s — the FK is
  * not a workspace guard); membership then resolves on read from the saved query.
  */
-listsRoutes.post("/dynamic", async (c) => {
+listsRoutes.post("/dynamic", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = createDynamicListSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
@@ -83,7 +77,7 @@ listsRoutes.post("/dynamic", async (c) => {
 });
 
 /** Rename / re-describe a list (owner-only — enforced in core). Body = { name?, description? }. */
-listsRoutes.patch("/:id", async (c) => {
+listsRoutes.patch("/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = updateListSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { name?, description? }.");
@@ -98,7 +92,7 @@ listsRoutes.patch("/:id", async (c) => {
 });
 
 /** Delete a list (owner-only — enforced in core; members cascade). */
-listsRoutes.delete("/:id", async (c) => {
+listsRoutes.delete("/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   await deleteList({
     scope: { tenantId: c.get("tenantId"), workspaceId },
@@ -131,7 +125,7 @@ listsRoutes.get("/:id/members", async (c) => {
 });
 
 /** Add contacts to a list (bulk, idempotent). Body = { contactIds }. Returns { listId, affected }. */
-listsRoutes.post("/:id/members", async (c) => {
+listsRoutes.post("/:id/members", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = listMembersSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { contactIds: string[] }.");
@@ -145,7 +139,7 @@ listsRoutes.post("/:id/members", async (c) => {
 });
 
 /** Remove contacts from a list (bulk). Body = { contactIds }. Returns { listId, affected }. */
-listsRoutes.delete("/:id/members", async (c) => {
+listsRoutes.delete("/:id/members", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = listMembersSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { contactIds: string[] }.");

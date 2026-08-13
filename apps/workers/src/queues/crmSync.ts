@@ -41,10 +41,16 @@ import {
 } from "../crm-sync/crmRunnerDeps.ts";
 import { log } from "../logger.ts";
 
-export const CRM_SYNC_PULL_QUEUE = "crm_sync_pull";
-export const CRM_SYNC_INBOUND_QUEUE = "crm_sync_inbound";
-export const CRM_SYNC_PUSH_QUEUE = "crm_sync_push";
-export const CRM_SYNC_BACKFILL_QUEUE = "crm_sync_backfill";
+// RE-EXPORTED, NOT REDECLARED. These used to be string literals here, and because @leadwolf/types spelled
+// them with hyphens while this file spelled them with underscores, the API enqueued onto queues nobody was
+// listening to. One definition, in the shared contract, imported by both sides — that is the whole point of
+// packages/types existing.
+export {
+  CRM_SYNC_BACKFILL_QUEUE,
+  CRM_SYNC_INBOUND_QUEUE,
+  CRM_SYNC_PULL_QUEUE,
+  CRM_SYNC_PUSH_QUEUE,
+} from "@leadwolf/types";
 
 /** The connector registry, injected at registration so the consumers stay adapter-agnostic. */
 export type CrmConnectorLookup = (provider: string) => CrmConnector | undefined;

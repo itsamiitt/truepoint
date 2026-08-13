@@ -11,6 +11,7 @@ import type {
   ReverificationRun,
   WorkspaceDataQuality,
 } from "@leadwolf/types";
+import * as realTenancy from "../../middleware/tenancy.ts";
 
 // A minimal but schema-valid summary (the route parses it against homeSummarySchema before sending).
 const summary: HomeSummary = {
@@ -74,7 +75,12 @@ mock.module("../../middleware/authn.ts", () => ({
     await next();
   },
 }));
+// `...realTenancy` is load-bearing for the same reason the `...realCore` spread below is: mock.module REPLACES
+// the whole module, so listing only `tenancy` deletes `requireWorkspace` from it — and the route file imports
+// that, so the FILE fails to link with an error naming a symbol this test never mentions. Spreading the real
+// module keeps every other export (and any future one) intact while stubbing only the middleware.
 mock.module("../../middleware/tenancy.ts", () => ({
+  ...realTenancy,
   tenancy: async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
     c.set("tenantId", "t1");
     c.set("workspaceId", "w1");

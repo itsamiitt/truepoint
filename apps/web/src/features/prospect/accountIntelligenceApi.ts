@@ -9,8 +9,13 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
+  AccountAlumniResponse,
+  AccountDisplacementResponse,
   AccountTechnologiesResponse,
   ContactEducationResponse,
+  ContactEmploymentResponse,
+  ContactProvenanceResponse,
+  ContactSignalsResponse,
   OrgTechnologyRelationship,
 } from "@leadwolf/types";
 import { toApiError } from "./api";
@@ -39,4 +44,48 @@ export async function fetchContactEducation(contactId: string): Promise<ContactE
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/education`);
   if (!res.ok) throw await toApiError(res, "Could not load education");
   return (await res.json()) as ContactEducationResponse;
+}
+
+/**
+ * Why we believe what we hold — bands, recency and corroboration counts, free on a record you already own.
+ * Fetched on demand (drawer/popover open), never per grid row: this is one request per record, not per cell.
+ */
+export async function fetchContactProvenance(
+  contactId: string,
+): Promise<ContactProvenanceResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/provenance`);
+  if (!res.ok) throw await toApiError(res, "Could not load provenance");
+  return (await res.json()) as ContactProvenanceResponse;
+}
+
+/** Career history from the graph. Title/dates are usually absent today — render a list, not a timeline. */
+export async function fetchContactEmployment(
+  contactId: string,
+): Promise<ContactEmploymentResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/employment`);
+  if (!res.ok) throw await toApiError(res, "Could not load employment");
+  return (await res.json()) as ContactEmploymentResponse;
+}
+
+/** What this organization recently stopped running — the displacement trigger. Empty until a feed lands. */
+export async function fetchAccountDisplacement(
+  accountId: string,
+): Promise<AccountDisplacementResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/displacement`);
+  if (!res.ok) throw await toApiError(res, "Could not load displacement");
+  return (await res.json()) as AccountDisplacementResponse;
+}
+
+/** Which of MY contacts studied here — the reverse bridge, never the graph-wide population. */
+export async function fetchAccountAlumni(accountId: string): Promise<AccountAlumniResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/alumni`);
+  if (!res.ok) throw await toApiError(res, "Could not load alumni");
+  return (await res.json()) as AccountAlumniResponse;
+}
+
+/** Observed signals on a contact. Tenant-private (intent_signals) — the one graph surface with real data. */
+export async function fetchContactSignals(contactId: string): Promise<ContactSignalsResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/signals`);
+  if (!res.ok) throw await toApiError(res, "Could not load signals");
+  return (await res.json()) as ContactSignalsResponse;
 }

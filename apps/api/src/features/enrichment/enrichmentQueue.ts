@@ -1,4 +1,4 @@
-// enrichmentQueue.ts — apps/api's BullMQ PRODUCER for the async-first enrich POST (waterfall v2 / 0109,
+// enrichmentQueue.ts — apps/api's BullMQ PRODUCER for the async-first enrich POST (waterfall v2 / 0111,
 // ENRICHMENT_ASYNC_ENABLED). The request-side sibling of the worker's enqueueEnrichment: the route
 // enqueues and 202s instead of running providers on the request thread (the data-skill mandate:
 // "enrichment never runs inside a request"). Producer and consumer are decoupled by BullMQ — they share

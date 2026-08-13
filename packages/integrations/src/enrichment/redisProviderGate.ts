@@ -1,5 +1,5 @@
 // redisProviderGate.ts — the Redis-shared per-provider rate limiter + monthly budget gate (waterfall v2 /
-// 0109). This is the enforcement half of provider_configs.rate_limit_per_min and monthly_budget_cents —
+// 0111). This is the enforcement half of provider_configs.rate_limit_per_min and monthly_budget_cents —
 // columns platform admins have written since 13 §3.6 that the engine never read. BullMQ's limiter is
 // per-QUEUE, so bounding one vendor among five needs a per-provider bucket; the Lua token bucket is the
 // mailboxThrottle math verbatim, keyed per provider and shared fleet-wide.

@@ -6,6 +6,7 @@
 // of blind-uploading the file. Everything rides fetchWithAuth (in-memory bearer, ADR-0016).
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ColumnMapping,
@@ -16,7 +17,7 @@ import type {
   ImportMergeMode,
   SourceName,
 } from "@leadwolf/types";
-import { type ImportJobDetail, ImportsNotEnabledError, problemMessage } from "./apiV2";
+import { type ImportJobDetail, ImportsNotEnabledError } from "./apiV2";
 
 const IMPORTS_BASE = `${API_BASE}/api/v1/imports`;
 

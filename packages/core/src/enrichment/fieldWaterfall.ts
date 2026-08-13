@@ -1,4 +1,4 @@
-// fieldWaterfall.ts — the PER-FIELD provider waterfall (waterfall v2 / 0109; 06 §4 + the data-skill
+// fieldWaterfall.ts — the PER-FIELD provider waterfall (waterfall v2 / 0111; 06 §4 + the data-skill
 // mandate: "Stop at first sufficient answer… Different fields may resolve from different providers
 // (email from one, phone from another). Fall through on miss or low confidence, not on error alone.
 // The ordering is configurable, not hardcoded — per-field provider preferences are data.").

@@ -5,27 +5,18 @@
 // convention). The connect form sends the credential ONCE; no response ever returns it (D7).
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { type MaybeList, isUnavailable } from "@/lib/maybeList";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ConnectMailboxInput,
   MailboxView,
-  MaybeList,
   SendQuotaView,
   SendingDomainView,
   StartMailboxConnectInput,
 } from "./types";
 
 const EMAIL_BASE = `${API_BASE}/api/v1/email`;
-
-/** 404/501 = "not wired yet" (behind the flag) → available:false; any other !ok is a real error. */
-function isUnavailable(status: number): boolean {
-  return status === 404 || status === 501;
-}
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 export async function fetchMailboxes(): Promise<MaybeList<MailboxView>> {
   const res = await fetchWithAuth(`${EMAIL_BASE}/mailboxes`);

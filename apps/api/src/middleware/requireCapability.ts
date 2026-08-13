@@ -3,13 +3,24 @@
 // platformAdmin (the coarse `pa` gate): it resolves the ACTIVE role from platform_staff (an owner-connection
 // read — the table denies the app role) and rejects 403 unless the role grants EVERY listed capability.
 // super_admin implies all. Resolved per-request, so a revoked/changed grant takes effect immediately. This is
-// the same enforcement shape as requireStaffRole, expressed in capabilities — endpoints migrate to it
-// incrementally; the two are interchangeable while the migration is in flight.
+// This is now the ONLY staff-authz guard: audit 32 · C8 migrated every endpoint off requireStaffRole and
+// deleted it, so there is one system rather than two interchangeable ones that could drift apart.
 
 import { platformStaffRepository } from "@leadwolf/db";
-import { ForbiddenError, type StaffCapability, roleHasCapability } from "@leadwolf/types";
+import {
+  ForbiddenError,
+  type StaffCapability,
+  type StaffRole,
+  roleHasCapability,
+} from "@leadwolf/types";
 import type { Context, MiddlewareHandler } from "hono";
-import type { StaffRoleVariables } from "./requireStaffRole.ts";
+import type { ApiVariables } from "./authn.ts";
+
+/**
+ * The staff role this guard stashes for handlers. Declared HERE since audit 32 · C8 retired
+ * requireStaffRole: the guard that sets a context variable should own its type.
+ */
+export type StaffRoleVariables = ApiVariables & { staffRole: StaffRole };
 
 /** Guard a platform-admin route to callers whose staff role grants ALL of the given capabilities. */
 export function requireCapability(...required: StaffCapability[]): MiddlewareHandler {

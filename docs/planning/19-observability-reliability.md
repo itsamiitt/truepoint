@@ -33,6 +33,19 @@ by customer. PII never enters logs/traces (encrypted fields stay masked, `03 §2
 - **Severity ladder** (SEV1 customer-down → SEV3 degraded) with documented response times.
 - **On-call** rotation + escalation; every alert links to a **runbook** (§5). Alert hygiene reviewed so
   pages stay actionable.
+- **Guards-open (composite) — DEFINED, shipped.** Several guards deliberately fail OPEN when Redis is
+  unreachable: both rate limiters, the reveal limiter, the entitlement gate, and the revocation deny-list.
+  Each choice is right alone; together they are a different security posture, and on the reveal path they
+  leave credit balance (Postgres-backed) as the only remaining control on spend. Every one now emits a
+  greppable marker, so:
+  - **Expression:** `] DEGRADED ` — matches `[guard:rate-limit]`, `[guard:reveal-rate-limit]`,
+    `[guard:entitlement]` (`packages/auth/src/guardDegradedLog.ts`) and the older `[revocation] DEGRADED`
+    (`revocationLog.ts`). The `guard=`/`op=` field says which control opened.
+  - **Composite condition:** two or more distinct guards inside the same window ⇒ the fail-open set is open
+    at once. That is the page; a single guard is a warning.
+  - Markers are throttled to one line per 10s per module — during an outage these run at request rate, so an
+    unthrottled marker would bury its own signal. A page must therefore key on PRESENCE, never on volume.
+  - Lines carry the guard name and error reason only — never a key, IP, identifier or tenant.
 
 ## 4. Reliability primitives
 

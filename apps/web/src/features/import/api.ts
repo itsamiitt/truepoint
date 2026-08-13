@@ -3,6 +3,7 @@
 // only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   BulkImportJobStatusResponse,
@@ -17,11 +18,6 @@ import type {
   MaskedContact,
   SourceName,
 } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /**
  * Enqueue an import. The backend processes the file in a background worker (apps/workers) and returns 202 +

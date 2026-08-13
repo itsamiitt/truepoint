@@ -1227,6 +1227,45 @@ export const contactRepository = {
    *
    * Deliberately returns NO PII — just the bridge. The reveal path is where contact values live.
    */
+  /**
+   * The REVERSE bridge: given Layer-0 person ids, which of THIS workspace's contacts are they?
+   *
+   * This is what makes a graph-wide traversal safe to expose. "Who are the alumni of SPPU" is a question
+   * about the shared graph and its answer spans every tenant — returning it raw would leak the population of
+   * a dataset the caller has not earned. Mapping back through the overlay under RLS turns it into "which of
+   * MY contacts studied there", which is both the useful question and the only one the caller may ask.
+   *
+   * Returns masked identity only (no email, no phone, no ciphertext) — the reveal path owns contact values.
+   */
+  async findByMasterPersonIds(
+    tx: Tx,
+    masterPersonIds: readonly string[],
+    limit = 100,
+  ): Promise<
+    Array<{
+      id: string;
+      masterPersonId: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      jobTitle: string | null;
+    }>
+  > {
+    if (masterPersonIds.length === 0) return [];
+    return tx
+      .select({
+        id: contacts.id,
+        masterPersonId: contacts.masterPersonId,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+      })
+      .from(contacts)
+      .where(
+        and(inArray(contacts.masterPersonId, [...masterPersonIds]), isNull(contacts.deletedAt)),
+      )
+      .limit(limit);
+  },
+
   async getMasterPersonBridge(
     tx: Tx,
     contactId: string,

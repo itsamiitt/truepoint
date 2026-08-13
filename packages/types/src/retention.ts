@@ -70,6 +70,19 @@ export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
  * ARMS real deletion for that class — the server gates the write super_admin-only + audits it, and the UI
  * gates the enforce flip behind an explicit confirm. FUTURE: a compliance_officer co-sign (dual-control)
  * could be required on the enforce flip; out of scope for this pass.
+ *
+ * ⚠ PRECONDITION NOT YET SATISFIED — LEGAL HOLDS DO NOT EXIST. `legal_holds` is planned (13a Area 8) and has
+ * no table, no repository and no code; verified by search, not assumed. A legal hold is the standard exception
+ * to automated deletion, so arming ANY class before it exists means the sweep can destroy records under a
+ * litigation hold with nothing able to stop it. Nothing is at risk today — every seeded class is `shadow`
+ * (below), so the sweep deletes nothing — which is exactly why this is worth writing down now rather than
+ * discovering it at the flip. **Build legal holds, and make the sweep consult them, BEFORE the first
+ * `enforce`.**
+ *
+ * The same missing control already touches a LIVE path: DSAR erasure (apps/workers/src/queues/dsar.ts →
+ * deleteFanout → purgeDependents) runs today and cannot check a hold either. That one is a genuine
+ * right-to-erasure-versus-litigation-hold conflict and is a human/legal call, not an implementation detail —
+ * see docs/strategy/09-compliance.md before touching it.
  */
 export const retentionPolicyUpdateSchema = z.object({
   dataClass: retentionDataClass,

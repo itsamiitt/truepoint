@@ -18,7 +18,7 @@ export {
   type FetchJson,
   type VendorSpec,
 } from "./enrichment/httpProvider.ts";
-// Waterfall v2 (0109): the Redis-shared circuit breaker + per-provider rate/budget gate implementing
+// Waterfall v2 (0111): the Redis-shared circuit breaker + per-provider rate/budget gate implementing
 // core's BreakerStore/ProviderGate ports (wired at the worker composition root beside crmBudget).
 export { redisBreakerStore, type BreakerRedis } from "./enrichment/redisBreakerStore.ts";
 export { redisProviderGate, type GateRedis } from "./enrichment/redisProviderGate.ts";

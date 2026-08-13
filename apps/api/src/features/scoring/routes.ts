@@ -7,7 +7,8 @@ import { scoreRepository } from "@leadwolf/db";
 import { ForbiddenError } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const scoringRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -15,8 +16,7 @@ scoringRoutes.use("*", authn);
 scoringRoutes.use("*", tenancy);
 
 scoringRoutes.get("/:id/scores", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view scores.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view scores.");
   const history = await scoreRepository.historyForContact(
     { tenantId: c.get("tenantId"), workspaceId },
     c.req.param("id"),
@@ -24,7 +24,7 @@ scoringRoutes.get("/:id/scores", async (c) => {
   return c.json({ scores: history });
 });
 
-scoringRoutes.post("/:id/rescore", async (c) => {
+scoringRoutes.post("/:id/rescore", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before rescoring.");

@@ -35,8 +35,19 @@ export const prospectKeys = {
    *  are DIFFERENT ANSWERS from different tables — sharing one cache entry would let one overwrite the other. */
   accountTechnologies: (accountId: string, relationship: "develops" | "uses") =>
     ["prospect", "account-technologies", accountId, relationship] as const,
+  /** One account's recently-removed technology (`GET /accounts/:id/displacement`). */
+  accountDisplacement: (accountId: string) =>
+    ["prospect", "account-displacement", accountId] as const,
+  /** The caller's own contacts who studied at this institution (`GET /accounts/:id/alumni`). */
+  accountAlumni: (accountId: string) => ["prospect", "account-alumni", accountId] as const,
   /** One contact's Layer-0 education edges (`GET /contacts/:id/education`). */
   contactEducation: (contactId: string) => ["prospect", "contact-education", contactId] as const,
+  /** One contact's Layer-0 employment stints (`GET /contacts/:id/employment`). */
+  contactEmployment: (contactId: string) => ["prospect", "contact-employment", contactId] as const,
+  /** One contact's observed signals (`GET /contacts/:id/signals`). */
+  contactSignals: (contactId: string) => ["prospect", "contact-signals", contactId] as const,
+  /** One contact's field provenance / confidence badges (`GET /contacts/:id/provenance`). */
+  contactProvenance: (contactId: string) => ["prospect", "contact-provenance", contactId] as const,
   /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
   typeahead: (field: string, term: string) => ["prospect", "typeahead", field, term] as const,
   /** One async bulk-reveal job's status/progress. */

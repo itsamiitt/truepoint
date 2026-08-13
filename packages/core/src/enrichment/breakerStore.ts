@@ -1,4 +1,4 @@
-// breakerStore.ts — the circuit-breaker PORT for the enrichment waterfall (06 §4; waterfall v2 / 0109).
+// breakerStore.ts — the circuit-breaker PORT for the enrichment waterfall (06 §4; waterfall v2 / 0111).
 // core owns the port; the production Redis implementation lives in packages/integrations
 // (redisBreakerStore, modeled on redisCrmBudgetStore) because workers are horizontally scaled — a
 // process-local breaker lets N workers each burn the full error budget before any breaker opens (the

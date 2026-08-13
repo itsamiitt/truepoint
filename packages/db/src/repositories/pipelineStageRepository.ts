@@ -10,6 +10,7 @@ import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 import { pipelineStages } from "../schema/pipelineStages.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 /** The columns the create path computes. `ordering`/`isDefault` default in SQL; status is the canonical enum. */
 export interface StageCreateValues {
@@ -142,7 +143,8 @@ export const pipelineStageRepository = {
         .select()
         .from(pipelineStages)
         .where(includeArchived ? undefined : eq(pipelineStages.archived, false))
-        .orderBy(asc(pipelineStages.ordering), asc(pipelineStages.createdAt));
+        .orderBy(asc(pipelineStages.ordering), asc(pipelineStages.createdAt))
+        .limit(LIST_SAFETY_CAP);
       return rows.map(toRecord);
     });
   },

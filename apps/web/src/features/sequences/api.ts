@@ -10,6 +10,7 @@
 // unchanged.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { type MaybeList, isUnavailable } from "@/lib/maybeList";
 import { API_BASE } from "@/lib/publicConfig";
 import type { MaskedContact } from "@leadwolf/types";
 import type {
@@ -57,17 +58,6 @@ async function toApiError(res: Response, fallback: string): Promise<ApiError> {
   } | null;
   const message = body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
   return new ApiError(message, res.status, body?.code ?? "error");
-}
-
-/** A status that means the endpoint isn't wired yet (404 not_found / 501 not_implemented). */
-function isUnavailable(status: number): boolean {
-  return status === 404 || status === 501;
-}
-
-/** A list payload + whether the backend exists yet (false → the panel shows a "connect …" empty state). */
-export interface MaybeList<T> {
-  items: T[];
-  available: boolean;
 }
 
 /** GET /outreach/sequences — the workspace's sequences for the list view. */

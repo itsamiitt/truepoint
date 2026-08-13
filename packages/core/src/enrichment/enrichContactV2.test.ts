@@ -1,4 +1,4 @@
-// enrichContactV2.test.ts — the PURE D8 ordering resolution (0109): per-run override → workspace
+// enrichContactV2.test.ts — the PURE D8 ordering resolution (0111): per-run override → workspace
 // per-field priority → engine default (trust ÷ cost), explicit lists as PREFIXES, disabled subtraction,
 // unknown-name tolerance. The tx-split orchestration itself is proven by the db itest
 // (enrichWaterfallV2.itest.ts) — this file stays hermetic.

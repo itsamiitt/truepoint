@@ -10,7 +10,7 @@
 // DARK by default: register.ts only builds + schedules it when BILLING_SUBSCRIPTIONS_ENABLED is true.
 // Leader-locked so exactly one worker runs per tick.
 
-import { db, subscriptionRepository } from "@leadwolf/db";
+import { subscriptionRepository, withPlatformReadTx, withSystemTx } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -34,7 +34,8 @@ export function makeProcessSubscriptionDunningSweep(redis: IORedis) {
     _job: Job<SubscriptionDunningSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const delinquent = await db.transaction((tx) =>
+      // A cross-tenant READ with no side effect — the unaudited owner seam is the honest one here.
+      const delinquent = await withPlatformReadTx((tx) =>
         subscriptionRepository.pastDueBeyondGrace(tx, GRACE_DAYS, MAX_ROWS),
       );
       let suspended = 0;
@@ -44,8 +45,13 @@ export function makeProcessSubscriptionDunningSweep(redis: IORedis) {
         try {
           // Suspend ONLY if still active (suspendForDunning's WHERE guard) — a staff suspension or an already-
           // suspended tenant is left untouched. Reversible: the webhook auto-lifts it when payment resumes.
-          const touched = await db.transaction((tx) =>
-            subscriptionRepository.suspendForDunning(tx, s.tenantId),
+          // AUDITED per tenant, not per run: suspending an account for non-payment is exactly the
+          // event a customer later asks about by date, and one row per sweep could not answer it.
+          const touched = await withSystemTx(
+            "subscription_dunning_sweep",
+            "subscription.dunning.suspend",
+            (tx) => subscriptionRepository.suspendForDunning(tx, s.tenantId),
+            { targetType: "tenant", targetId: s.tenantId, tenantId: s.tenantId },
           );
           if (touched > 0) {
             suspended += 1;

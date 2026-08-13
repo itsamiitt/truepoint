@@ -71,6 +71,11 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
 
   // The conflict target must match whichever partial unique applies, so the two cases are written out
   // rather than unified behind a clever COALESCE — a wrong target silently degrades to "always insert".
+  // `sql.param(...)::text[]` on the fields_of_study binds below is REQUIRED, not defensive. Drizzle's sql
+  // template SPREADS a plain JS array into one bind per element, so `${"${['Computer Science']}"}` arrives as
+  // the bare string "Computer Science" and Postgres rejects it with 22P02 ("Array value must start with {").
+  // sql.param binds the whole array as ONE parameter; the cast then types it. Verified against the dialect
+  // offline. sql.param(null) still binds a single null, so the unset case is unaffected.
   if (input.masterCompanyId) {
     const rows = (await tx.execute(sql`
       INSERT INTO master_education (
@@ -80,7 +85,7 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
       ) VALUES (
         ${input.masterPersonId}, ${input.masterCompanyId}, ${input.schoolNameRaw ?? null},
         ${input.schoolNameNormalized ?? null}, ${input.degree ?? null},
-        ${input.fieldsOfStudy ?? null}, ${startedOn}, ${input.endedOn ?? null},
+        ${sql.param(input.fieldsOfStudy ?? null)}::text[], ${startedOn}, ${input.endedOn ?? null},
         ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
         ${input.confidence ?? null}, ${input.observedAt ?? null}
       )
@@ -107,7 +112,7 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
       asserting_source, match_method, confidence, observed_at
     ) VALUES (
       ${input.masterPersonId}, ${input.schoolNameRaw ?? null}, ${input.schoolNameNormalized},
-      ${input.degree ?? null}, ${input.fieldsOfStudy ?? null}, ${startedOn}, ${input.endedOn ?? null},
+      ${input.degree ?? null}, ${sql.param(input.fieldsOfStudy ?? null)}::text[], ${startedOn}, ${input.endedOn ?? null},
       ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
       ${input.confidence ?? null}, ${input.observedAt ?? null}
     )

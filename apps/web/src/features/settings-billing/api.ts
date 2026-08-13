@@ -11,6 +11,8 @@
 // states instead of erroring. No fabricated balances, no fake checkouts.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { isUnavailable } from "@/lib/maybeList";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   CreditLedgerEntry,
@@ -19,15 +21,6 @@ import type {
   UsagePage,
 } from "@leadwolf/types";
 import type { TenantPlan, UsageFilters } from "./types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
-
-function notBuilt(status: number): boolean {
-  return status === 404 || status === 501;
-}
 
 export async function fetchBalance(): Promise<number> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/balance`);
@@ -75,7 +68,7 @@ export async function exportUsageCsv(opts: UsageFilters = {}): Promise<void> {
  *  null when the route isn't built yet (defensive — /credits/me is built). */
 export async function fetchTenantPlan(): Promise<TenantPlan | null> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/me`);
-  if (notBuilt(res.status)) return null;
+  if (isUnavailable(res.status)) return null;
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load plan"));
   const { plan } = (await res.json()) as { plan: TenantPlanEnvelope };
   return {
@@ -100,7 +93,7 @@ export async function startCheckout(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ pack }),
   });
-  if (notBuilt(res.status)) return { available: false };
+  if (isUnavailable(res.status)) return { available: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not start checkout"));
   const data = (await res.json()) as { checkoutUrl?: string };
   return { available: true, checkoutUrl: data.checkoutUrl };
@@ -109,7 +102,7 @@ export async function startCheckout(
 /** GET /credits/subscription — the tenant's current subscription, or null (month-to-month). 404/501 → null. */
 export async function fetchSubscription(): Promise<SubscriptionView | null> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/subscription`);
-  if (notBuilt(res.status)) return null;
+  if (isUnavailable(res.status)) return null;
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load subscription"));
   const { subscription } = (await res.json()) as { subscription: SubscriptionView | null };
   return subscription;
@@ -119,7 +112,7 @@ export async function fetchSubscription(): Promise<SubscriptionView | null> {
  *  Returns the URL to redirect to, or null when unavailable (Stripe not wired, or no billing account yet). */
 export async function openBillingPortal(): Promise<string | null> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/billing-portal`, { method: "POST" });
-  if (notBuilt(res.status) || res.status === 404) return null;
+  if (isUnavailable(res.status) || res.status === 404) return null;
   if (!res.ok) throw new Error(await problemMessage(res, "Could not open the billing portal"));
   const data = (await res.json()) as { portalUrl?: string };
   return data.portalUrl ?? null;
@@ -135,7 +128,7 @@ export interface CreditLedgerPage {
 export async function fetchCreditLedger(cursor?: string): Promise<CreditLedgerPage> {
   const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/ledger${qs}`);
-  if (notBuilt(res.status)) return { entries: [], nextCursor: null };
+  if (isUnavailable(res.status)) return { entries: [], nextCursor: null };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load credit history"));
   return (await res.json()) as CreditLedgerPage;
 }

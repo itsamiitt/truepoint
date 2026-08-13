@@ -1,4 +1,4 @@
-// enrichmentEvidence.ts — Layer-0 evidence + provenance events for a waterfall-v2 enrichment (0109),
+// enrichmentEvidence.ts — Layer-0 evidence + provenance events for a waterfall-v2 enrichment (0111),
 // mirroring recordImportEvidence (runImport.ts) verbatim in posture [A-01, CLAUDE.md rule 5]:
 //   • its OWN withErTx (leadwolf_er) — provenance_event and source_records are not writable from the
 //     tenant tx, and the overlay landing must not hold the ER role's transaction;

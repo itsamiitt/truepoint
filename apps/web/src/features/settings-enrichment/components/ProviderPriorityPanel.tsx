@@ -1,4 +1,4 @@
-// ProviderPriorityPanel.tsx — the Workspace ▸ Enrichment providers settings form (waterfall v2 / 0109;
+// ProviderPriorityPanel.tsx — the Workspace ▸ Enrichment providers settings form (waterfall v2 / 0111;
 // 06 §4 "the ordering is configurable, not hardcoded — per-field provider preferences are data") [S-04]
 // [S-08]. Per-FIELD ordered lists (the email order and the phone order are independent), reordered with
 // UP/DOWN ARROW BUTTONS + a numeric position — deliberately not drag-and-drop: the monorepo carries no

@@ -269,7 +269,7 @@ export const auditAction = z.enum([
   // Import visibility & permissions P0 (import-and-data-model-redesign 10 §3 / 15 ruling M1): the audited
   // per-workspace import-policy change (who_can_import + strategy defaults). Writer lands with S-V4.
   "import.policy_updated",
-  // Waterfall v2 (0109): the audited per-workspace enrichment-policy change (provider priority /
+  // Waterfall v2 (0111): the audited per-workspace enrichment-policy change (provider priority /
   // verification knobs / budget / triggers) — written in-tx by enrichmentPolicyRepository.applyPartial.
   "enrichment.policy_updated",
   // Import v2 P1 lifecycle verbs (import-and-data-model-redesign 08 §7 / 15 ruling M1, S-I1 train): the

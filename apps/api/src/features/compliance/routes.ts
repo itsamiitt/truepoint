@@ -17,7 +17,6 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import {
-  ForbiddenError,
   type TenantStaffAccess,
   ValidationError,
   consentCreateSchema,
@@ -28,7 +27,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 // ── Public DSAR intake (08 §4) — deliberately session-less; throttled by the global /api limiter ───────
 export const dsarPublicRoutes = new Hono();
@@ -47,8 +46,7 @@ complianceRoutes.use("*", authn);
 complianceRoutes.use("*", tenancy);
 
 complianceRoutes.post("/suppression", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const workspaceId = requireWorkspace(c);
   const parsed = suppressionCreateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid suppression entry.");
   const body = parsed.data;
@@ -91,8 +89,7 @@ complianceRoutes.post("/suppression", requireRole("owner", "admin"), async (c) =
 // List the caller's manageable suppression entries (tenant + workspace scope; global rows excluded). The
 // response never includes the email/phone blind indexes (HMACs of PII) — see suppressionRepository.list.
 complianceRoutes.get("/suppression", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const workspaceId = requireWorkspace(c);
   const rows = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
     suppressionRepository.list(tx),
   );
@@ -112,8 +109,7 @@ complianceRoutes.get("/suppression", async (c) => {
 // Remove one suppression entry. RLS limits removal to the caller's own scope, so a foreign/global id is a
 // no-op (not an error). Every removal is audited in the same transaction (suppression.remove).
 complianceRoutes.delete("/suppression/:id", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const workspaceId = requireWorkspace(c);
   const id = c.req.param("id");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     throw new ValidationError("Invalid suppression id.");
@@ -134,8 +130,7 @@ complianceRoutes.delete("/suppression/:id", requireRole("owner", "admin"), async
 });
 
 complianceRoutes.post("/consent", requireRole("owner", "admin", "member"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const workspaceId = requireWorkspace(c);
   const parsed = consentCreateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid consent record.");
   const id = await recordConsent(
@@ -154,8 +149,7 @@ complianceRoutes.post("/consent", requireRole("owner", "admin", "member"), async
 // owner/admin only: a withdrawal auto-inserts a GLOBAL suppression row (consent.ts → addGlobalSuppression),
 // so it must not be looser than the direct owner/admin suppression writes it effectively triggers.
 complianceRoutes.post("/consent/:contactId/withdraw", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const workspaceId = requireWorkspace(c);
   const result = await withdrawConsent(
     { tenantId: c.get("tenantId"), workspaceId },
     c.req.param("contactId"),

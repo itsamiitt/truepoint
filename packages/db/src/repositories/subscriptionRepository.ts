@@ -120,7 +120,13 @@ export const subscriptionRepository = {
 
   /** Suspend a tenant for DUNNING (M11 subs, ADR-0041) — ONLY if it is currently ACTIVE, so a staff suspension
    *  is never clobbered and an already-suspended tenant is untouched. Tagged suspension_reason='dunning' so it
-   *  can be auto-lifted when payment resumes. Returns rows touched (0 = it wasn't active). */
+   *  can be auto-lifted when payment resumes. Returns rows touched (0 = it wasn't active).
+   *
+   *  ⚠ SETTING THIS STATUS CURRENTLY BLOCKS NOTHING (audit 32 §9E). No runtime path reads tenants.status:
+   *  login/refresh/switchOrg check the USER's status, listForUser filters on tenantMembers.status only, and
+   *  middleware/tenancy takes tid straight from the verified token. A suspended tenant keeps full API access.
+   *  That applies to the staff break-glass suspension too, not just dunning. See §9E for the options — the
+   *  fix is small, but turning it on ejects every currently-suspended tenant, so it is a human decision. */
   async suspendForDunning(tx: Tx, tenantId: string): Promise<number> {
     const updated = await tx
       .update(tenants)

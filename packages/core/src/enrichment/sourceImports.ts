@@ -3,7 +3,7 @@
 // and each contribution needs its own raw-payload provenance row under its own source name.
 //
 // The sourceName CHECK guard: a provider whose name is not in the closed sourceName vocabulary gets NO
-// row (the enrichContact.ts:202 posture) — but since 0109 every shipped adapter (apollo, zoominfo,
+// row (the enrichContact.ts:202 posture) — but since 0111 every shipped adapter (apollo, zoominfo,
 // clearbit, pdl, coresignal) IS in the vocabulary, a skip here means a NEW adapter landed without its
 // enum member, which the returned map makes visible to tests.
 

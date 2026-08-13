@@ -385,7 +385,7 @@ const crmConnectors = defaultCrmConnectors();
 // scaled: a process-local counter would let N workers each grant the full budget. Shares the existing
 // BullMQ connection rather than opening another.
 const crmBudget = redisCrmBudgetStore(connection);
-// Waterfall v2 (0109): the Redis-SHARED enrichment circuit breaker + per-provider rate/budget gate —
+// Waterfall v2 (0111): the Redis-SHARED enrichment circuit breaker + per-provider rate/budget gate —
 // same reasoning as crmBudget above (horizontally-scaled workers make a process-local breaker let N
 // workers each burn the full error budget). Shares the existing BullMQ connection. Inert while
 // WATERFALL_V2_ENABLED is off (the legacy path never touches them).

@@ -444,6 +444,53 @@ export async function withPlatformTx<T>(
 }
 
 /**
+ * The actor recorded for work no human initiated.
+ *
+ * `platform_audit_log.actor_user_id` is NOT NULL (it exists so a privileged action always names someone) but
+ * carries no FK to `users`, so a sentinel is safe here and does not fabricate a user row. The nil UUID is
+ * used rather than a real service account because there is nothing to authenticate AS — a background sweep
+ * is the system acting on its own schedule, and giving it a users row would make it look like a principal
+ * someone could log in as.
+ */
+export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Run `fn` with cross-tenant visibility for a BACKGROUND JOB, writing an audit row in the SAME transaction.
+ *
+ * WHY THIS EXISTS (audit 32 §6.4). `withPlatformTx` had 103 call sites in apps/api and ZERO in apps/workers.
+ * Every cross-tenant thing the worker fleet does — suspending a tenant for non-payment, granting a monthly
+ * credit allotment, backfilling a ledger, purging expired data — ran on a raw `db.transaction()` on the owner
+ * (BYPASSRLS) connection with no audit row at all. So the audited-privileged-access invariant held for the
+ * staff console and did not hold for the automation, which is the half that runs unattended and at scale.
+ * A tenant asking "why was my account suspended on the 3rd" had no answer.
+ *
+ * Same contract as `withPlatformTx`: the audit INSERT and the work commit or roll back together, so there is
+ * no path that performs the action and loses the record of it. The difference is only the actor and that the
+ * job name is stamped into metadata, so the trail says WHICH sweep did it.
+ *
+ * GRANULARITY IS THE CALLER'S CHOICE and it matters: wrap the per-tenant unit of work, not the whole sweep.
+ * One row per run tells you a sweep happened; one row per affected tenant tells you what happened TO a
+ * tenant, which is the question anyone actually asks.
+ */
+export async function withSystemTx<T>(
+  job: string,
+  action: string,
+  fn: (tx: Tx) => Promise<T>,
+  target: PlatformAuditTarget = {},
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`INSERT INTO platform_audit_log
+            (actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, metadata)
+          VALUES (${SYSTEM_ACTOR_ID}::uuid, ${action}, ${target.targetType ?? null}, ${target.targetId ?? null},
+                  ${target.tenantId ?? null}::uuid, ${target.workspaceId ?? null}::uuid, NULL,
+                  ${JSON.stringify({ ...(target.metadata ?? {}), job })}::jsonb)`,
+    );
+    return fn(tx);
+  });
+}
+
+/**
  * Run `fn` as the DB owner WITHOUT writing an audit row — for UNAUTHENTICATED / high-volume reads of
  * SYSTEM-OWNED, NON-PII platform config ONLY (today: the public pricing catalog — `credit_packs`,
  * `plan_templates`, ADR-0012 transparent self-serve). The base connection is the owner (BYPASSRLS), so this

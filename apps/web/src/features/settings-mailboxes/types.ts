@@ -54,8 +54,5 @@ export interface StartMailboxConnectInput {
   redirect_after?: string;
 }
 
-/** A list that may not be wired yet — the {items, available} envelope (features/sequences convention). */
-export interface MaybeList<T> {
-  items: T[];
-  available: boolean;
-}
+// `MaybeList` used to be declared here, verbatim identical to the one in features/sequences. Both now come
+// from @/lib/maybeList — see that file for why the shape is a web concern rather than an API contract.

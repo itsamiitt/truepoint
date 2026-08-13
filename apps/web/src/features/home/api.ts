@@ -3,13 +3,9 @@
 // PII-safe payload, so the slice no longer composes it client-side. The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { DataQualityTrendPoint, HomeSummary, WorkspaceDataQuality } from "./types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** Load the whole Home cockpit in one call. */
 export async function fetchHomeSummary(): Promise<HomeSummary> {

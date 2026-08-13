@@ -6,7 +6,6 @@
 import { assignTag, createTag, deleteTag, unassignTag, updateTag } from "@leadwolf/core";
 import { tagRepository } from "@leadwolf/db";
 import {
-  ForbiddenError,
   ValidationError,
   assignTagSchema,
   createTagSchema,
@@ -15,7 +14,8 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const tagsRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -23,12 +23,6 @@ tagsRoutes.use("*", authn);
 tagsRoutes.use("*", tenancy);
 
 /** Resolve the verified workspace or 403 — tags are workspace-scoped, so a workspace must be selected. */
-function requireWorkspace(c: { get: (k: "workspaceId") => string | undefined }): string {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to manage tags.");
-  return workspaceId;
-}
-
 // ── Tag definitions ──────────────────────────────────────────────────────────────────────────────────────
 tagsRoutes.get("/", async (c) => {
   const workspaceId = requireWorkspace(c);
@@ -44,7 +38,7 @@ tagsRoutes.get("/", async (c) => {
   });
 });
 
-tagsRoutes.post("/", async (c) => {
+tagsRoutes.post("/", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = createTagSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { name, color? }.");
@@ -56,7 +50,7 @@ tagsRoutes.post("/", async (c) => {
   return c.json({ id }, 201);
 });
 
-tagsRoutes.patch("/:id", async (c) => {
+tagsRoutes.patch("/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = updateTagSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success || (parsed.data.name === undefined && parsed.data.color === undefined)) {
@@ -71,7 +65,7 @@ tagsRoutes.patch("/:id", async (c) => {
   return c.body(null, 204);
 });
 
-tagsRoutes.delete("/:id", async (c) => {
+tagsRoutes.delete("/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   await deleteTag({ tenantId: c.get("tenantId"), workspaceId }, c.req.param("id"));
   return c.body(null, 204);
@@ -104,7 +98,7 @@ tagsRoutes.get("/records/:entity/:recordId", async (c) => {
 });
 
 // ── Assignments ──────────────────────────────────────────────────────────────────────────────────────────
-tagsRoutes.post("/:id/assign", async (c) => {
+tagsRoutes.post("/:id/assign", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = assignTagSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { entity, record_id }.");
@@ -117,7 +111,7 @@ tagsRoutes.post("/:id/assign", async (c) => {
   return c.body(null, 204);
 });
 
-tagsRoutes.post("/:id/unassign", async (c) => {
+tagsRoutes.post("/:id/unassign", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const parsed = assignTagSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { entity, record_id }.");

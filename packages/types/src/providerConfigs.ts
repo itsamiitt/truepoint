@@ -42,7 +42,7 @@ export function deriveProviderHealth(counts: ProviderCallStatusCounts): Provider
 }
 
 /**
- * Waterfall telemetry per provider over a bounded window (0109, P6; 06 §4's expectedHitRate substrate).
+ * Waterfall telemetry per provider over a bounded window (0111, P6; 06 §4's expectedHitRate substrate).
  * READ-ONLY in v1 — visible in the staff console and learned from `provider_calls`, but it feeds ordering
  * only as a future `version: 2` priority mode, never implicitly. `verifiedValid` counts hits whose email
  * verdict was `valid` (the S-08 quality signal); `costPerVerifiedValidMicros` is the metric that matters
@@ -73,7 +73,7 @@ export const providerConfigViewSchema = z.object({
   monthlyBudgetCents: z.number().int().nullable(),
   monthToDateCents: z.number().int().nullable(),
   health: providerHealth,
-  /** 30-day waterfall telemetry (0109). Optional-additive; null when the window holds no rows. */
+  /** 30-day waterfall telemetry (0111). Optional-additive; null when the window holds no rows. */
   stats: providerWaterfallStatsSchema.nullable().optional(),
 });
 export type ProviderConfigView = z.infer<typeof providerConfigViewSchema>;

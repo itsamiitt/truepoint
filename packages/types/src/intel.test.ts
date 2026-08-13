@@ -1,4 +1,4 @@
-// intel.test.ts — the enrichment DTO contracts (waterfall v2 / 0109): the providerOrder override is
+// intel.test.ts — the enrichment DTO contracts (waterfall v2 / 0111): the providerOrder override is
 // validated against the KNOWN provider set (never free text — it reaches the waterfall's ordering), the
 // 202 ack shape round-trips, and KNOWN_ENRICH_PROVIDERS stays in lockstep with the enum that validates
 // order entries (the single-source rule the admin allowlist + settings panel rely on).

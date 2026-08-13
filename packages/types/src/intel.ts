@@ -70,7 +70,7 @@ export type EnrichField = z.infer<typeof enrichField>;
  * single source shared by api validation, the platform-admin allowlist, and the web settings panel
  * (waterfall v2, 06 §4: "the ordering is configurable, not hardcoded"). Ids match EnrichmentProvider.name
  * and provider_configs.provider exactly. Adding a vendor = one entry here + an adapter + a sourceName
- * member (contacts.ts) + the source_imports CHECK — grep 0109 for the checklist.
+ * member (contacts.ts) + the source_imports CHECK — grep 0111 for the checklist.
  */
 export const KNOWN_ENRICH_PROVIDERS = [
   { provider: "apollo", label: "Apollo" },
@@ -105,7 +105,7 @@ export const enrichmentTriggerAckSchema = z.object({
 });
 export type EnrichmentTriggerAck = z.infer<typeof enrichmentTriggerAckSchema>;
 
-/** Per-tenant half of the waterfall-v2 DUAL GATE (0109). Effective v2 = the global WATERFALL_V2_ENABLED
+/** Per-tenant half of the waterfall-v2 DUAL GATE (0111). Effective v2 = the global WATERFALL_V2_ENABLED
  *  env kill-switch AND this flag (fail-closed via evaluateFlag: unknown flag = off). The shared key lives
  *  here so api/workers can never drift (the CHANNELS_DUAL_WRITE_FLAG_KEY precedent). */
 export const ENRICHMENT_WATERFALL_V2_FLAG_KEY = "enrichment_waterfall_v2";

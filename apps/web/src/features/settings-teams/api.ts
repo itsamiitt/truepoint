@@ -2,13 +2,9 @@
 // workspace-scoped team CRUD + roster (add-by-email). GROUPING ONLY; nothing here affects record access.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { TeamMemberView, TeamView } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** null = the feature is off (TEAMS_ENABLED false → 404) — the panel degrades to a "not available" note. */
 export async function fetchTeams(): Promise<TeamView[] | null> {

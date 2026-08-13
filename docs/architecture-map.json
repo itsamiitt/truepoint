@@ -27,7 +27,6 @@
     "auth",
     "auth-policy",
     "billing",
-    "cache",
     "channels",
     "compliance",
     "contacts-bulk",
@@ -56,7 +55,6 @@
     "imports",
     "inbox",
     "ingest",
-    "ingestion",
     "lists",
     "master-sync",
     "notifications",
@@ -77,7 +75,6 @@
     "scim",
     "scoring",
     "search",
-    "security",
     "sequences",
     "settings",
     "settings-billing",
@@ -104,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2023,
-  "fileSetHash": "sha256:7615b3fe648f162bdfeaa60d35ea4767b16341ccdcd59941239a7a8da46e7d6e",
+  "fileCount": 2047,
+  "fileSetHash": "sha256:6c258ebbb49521832bd2a23e03325d19118225235a10b867f5c721207645492c",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -336,18 +333,6 @@
         "apps/workers/src/queues/subscriptionDunningSweep.ts",
         "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
-      "integrations": []
-    },
-    "cache": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/cache/readThrough.test.ts",
-        "packages/core/src/cache/readThrough.ts"
-      ],
-      "db": [],
-      "workers": [],
       "integrations": []
     },
     "channels": {
@@ -870,7 +855,9 @@
         "packages/core/src/entitlements/resolveEntitlement.test.ts",
         "packages/core/src/entitlements/resolveEntitlement.ts"
       ],
-      "db": [],
+      "db": [
+        "packages/db/src/repositories/entitlementRepository.ts"
+      ],
       "workers": [],
       "integrations": []
     },
@@ -1193,15 +1180,6 @@
         "apps/api/src/features/ingest/index.ts",
         "apps/api/src/features/ingest/routes.ts"
       ],
-      "core": [],
-      "db": [],
-      "workers": [],
-      "integrations": []
-    },
-    "ingestion": {
-      "web": [],
-      "admin": [],
-      "api": [],
       "core": [
         "packages/core/src/ingestion/connectors/adminUpload.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
@@ -1253,6 +1231,7 @@
       "db": [
         "packages/db/src/repositories/masterCompanyDetailRepository.ts",
         "packages/db/src/repositories/masterEducationRepository.ts",
+        "packages/db/src/repositories/masterEmploymentReadRepository.ts",
         "packages/db/src/repositories/masterGraphRepository.ts",
         "packages/db/src/repositories/masterSignalsRepository.ts",
         "packages/db/src/repositories/masterTechnologyRepository.ts"
@@ -1390,6 +1369,7 @@
         "apps/web/src/features/prospect/bulkReveal.ts",
         "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
+        "apps/web/src/features/prospect/components/AccountGraphSections.tsx",
         "apps/web/src/features/prospect/components/AccountTechnologySections.tsx",
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
         "apps/web/src/features/prospect/components/AddToListDialog.tsx",
@@ -1399,12 +1379,14 @@
         "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
         "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/EducationSection.tsx",
+        "apps/web/src/features/prospect/components/EmploymentSection.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
         "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
+        "apps/web/src/features/prospect/components/ProvenanceSection.tsx",
         "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
@@ -1413,6 +1395,7 @@
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
         "apps/web/src/features/prospect/components/SaveSearchPanel.tsx",
+        "apps/web/src/features/prospect/components/SignalsSection.tsx",
         "apps/web/src/features/prospect/components/StageManagementPanel.tsx",
         "apps/web/src/features/prospect/components/StageSelector.tsx",
         "apps/web/src/features/prospect/components/TagChip.tsx",
@@ -1429,6 +1412,8 @@
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
         "apps/web/src/features/prospect/hooks/useContactEducation.ts",
+        "apps/web/src/features/prospect/hooks/useContactEmployment.ts",
+        "apps/web/src/features/prospect/hooks/useContactProvenance.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
@@ -1446,6 +1431,8 @@
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/keys.ts",
+        "apps/web/src/features/prospect/orgKindCopy.test.ts",
+        "apps/web/src/features/prospect/orgKindCopy.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
         "apps/web/src/features/prospect/searchAbort.test.ts",
         "apps/web/src/features/prospect/searchApi.ts",
@@ -1463,6 +1450,7 @@
         "packages/core/src/prospect/bulkActions.ts",
         "packages/core/src/prospect/confidence.test.ts",
         "packages/core/src/prospect/confidence.ts",
+        "packages/core/src/prospect/confidenceDivergence.test.ts",
         "packages/core/src/prospect/conflictDetect.test.ts",
         "packages/core/src/prospect/conflictDetect.ts",
         "packages/core/src/prospect/contactMergeGate.ts",
@@ -1737,17 +1725,6 @@
       "db": [
         "packages/db/src/repositories/searchRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "security": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/security/malwareScanner.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -2026,17 +2003,6 @@
       "workers": [],
       "integrations": []
     },
-    "storage": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/storage/fileStore.ts"
-      ],
-      "db": [],
-      "workers": [],
-      "integrations": []
-    },
     "system-health": {
       "web": [],
       "admin": [
@@ -2198,6 +2164,9 @@
     }
   },
   "shared": {
+    "apps/admin": [
+      "apps/admin/next.config.mjs"
+    ],
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/ai-usage/page.tsx",
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
@@ -2248,11 +2217,13 @@
     ],
     "apps/api": [
       "apps/api/src/app.authz.test.ts",
+      "apps/api/src/app.authz.workspaceWrites.test.ts",
       "apps/api/src/app.ts",
       "apps/api/src/cache.ts",
       "apps/api/src/instrumentation.ts",
       "apps/api/src/lifecycle.ts",
       "apps/api/src/metricsRoute.test.ts",
+      "apps/api/src/notFound.test.ts",
       "apps/api/src/readiness.test.ts",
       "apps/api/src/readiness.ts",
       "apps/api/src/server.ts",
@@ -2281,13 +2252,14 @@
       "apps/api/src/middleware/requireEntitlement.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
-      "apps/api/src/middleware/requireStaffRole.ts",
       "apps/api/src/middleware/revealRateLimit.ts",
       "apps/api/src/middleware/roleGuards.test.ts",
       "apps/api/src/middleware/syncPrincipal.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],
     "apps/auth": [
+      "apps/auth/next.config.mjs",
+      "apps/auth/postcss.config.mjs",
       "apps/auth/src/bootSelfTest.ts",
       "apps/auth/src/instrumentation.ts",
       "apps/auth/src/middleware.ts"
@@ -2538,6 +2510,7 @@
       "apps/forge/src/features/sync-status/types.ts"
     ],
     "apps/web": [
+      "apps/web/next.config.mjs",
       "apps/web/src/securityHeaders.test.ts"
     ],
     "apps/web/app": [
@@ -2606,6 +2579,8 @@
       "apps/web/src/lib/authLink.ts",
       "apps/web/src/lib/credits.ts",
       "apps/web/src/lib/eventStream.ts",
+      "apps/web/src/lib/maybeList.ts",
+      "apps/web/src/lib/problemMessage.ts",
       "apps/web/src/lib/publicConfig.ts",
       "apps/web/src/lib/queryKeys.ts",
       "apps/web/src/lib/sessionProbe.test.ts",
@@ -2674,6 +2649,8 @@
       "packages/auth/src/code.ts",
       "packages/auth/src/emailVerification.ts",
       "packages/auth/src/flow.ts",
+      "packages/auth/src/guardDegradedLog.test.ts",
+      "packages/auth/src/guardDegradedLog.ts",
       "packages/auth/src/identifierLookup.test.ts",
       "packages/auth/src/identifierLookup.ts",
       "packages/auth/src/index.ts",
@@ -2718,6 +2695,9 @@
       "packages/auth/src/ssoTransaction.ts",
       "packages/auth/src/switchOrg.ts",
       "packages/auth/src/switchWorkspace.ts",
+      "packages/auth/src/tenantSuspension.test.ts",
+      "packages/auth/src/tenantSuspension.ts",
+      "packages/auth/src/tenantSuspensionCoverage.test.ts",
       "packages/auth/src/token.test.ts",
       "packages/auth/src/token.ts",
       "packages/auth/src/webauthnAuthentication.ts",
@@ -2750,7 +2730,11 @@
       "packages/config/src/workerSurface.test.ts"
     ],
     "packages/core": [
-      "packages/core/src/index.ts"
+      "packages/core/src/cache/readThrough.test.ts",
+      "packages/core/src/cache/readThrough.ts",
+      "packages/core/src/index.ts",
+      "packages/core/src/security/malwareScanner.ts",
+      "packages/core/src/storage/fileStore.ts"
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
@@ -2766,6 +2750,7 @@
       "packages/db/src/provenanceVocabularyParity.test.ts",
       "packages/db/src/repositories/accountChildPlan.test.ts",
       "packages/db/src/repositories/accountChildPlan.ts",
+      "packages/db/src/repositories/arrayParamBinding.test.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
       "packages/db/src/repositories/contactChannelPlan.ts",
       "packages/db/src/repositories/crmDeadLetterRepository.test.ts",
@@ -2774,6 +2759,8 @@
       "packages/db/src/repositories/jobVisibility.ts",
       "packages/db/src/repositories/leaseAccounting.test.ts",
       "packages/db/src/repositories/leaseAccounting.ts",
+      "packages/db/src/repositories/listCaps.test.ts",
+      "packages/db/src/repositories/listCaps.ts",
       "packages/db/src/repositories/masterSignalsRepository.test.ts",
       "packages/db/src/repositories/platformAdminReads.ts",
       "packages/db/src/repositories/platformAdminWrites.ts",
@@ -2794,6 +2781,8 @@
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contactChannels.ts",
       "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/contributionControls.test.ts",
+      "packages/db/src/schema/contributionControls.ts",
       "packages/db/src/schema/crm.ts",
       "packages/db/src/schema/customFields.ts",
       "packages/db/src/schema/dataQualitySnapshots.ts",
@@ -3061,6 +3050,7 @@
       "packages/types/src/contacts.ts",
       "packages/types/src/contribution.ts",
       "packages/types/src/crm.ts",
+      "packages/types/src/crmQueueParity.test.ts",
       "packages/types/src/customFields.ts",
       "packages/types/src/dataApproval.ts",
       "packages/types/src/dataHealth.test.ts",
@@ -3160,11 +3150,6 @@
     ]
   },
   "unassigned": [
-    "apps/admin/next.config.mjs",
-    "apps/auth/next.config.mjs",
-    "apps/auth/postcss.config.mjs",
-    "apps/web/next.config.mjs",
-    "packages/db/src/repositories/entitlementRepository.ts",
     "packages/db/src/repositories/outcomeMetricsRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
   ],
@@ -3175,7 +3160,6 @@
     "undeclared domain 'announcements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'audit-log' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'auth-policy' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'cache' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'channels' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-dedup' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
@@ -3194,7 +3178,6 @@
     "undeclared domain 'identity' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'ingest' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'ingestion' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'master-sync' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
@@ -3205,7 +3188,6 @@
     "undeclared domain 'public-pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'scim' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'security' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-enrichment' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

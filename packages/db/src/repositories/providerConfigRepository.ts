@@ -90,15 +90,7 @@ export const providerConfigRepository = {
   },
 
   /**
-   * Cross-tenant recent call-STATUS counts per provider since `since` — the raw signal for PASSIVE provider
-   * health (turned into a status by @leadwolf/types deriveProviderHealth). Same owner/cross-tenant path as
-   * monthToDateCentsByProvider: grouped in SQL by (provider_name, status) so the result is tiny
-   * (providers × statuses) and bounded by the time window. Selects ONLY provider_name/status/count — NEVER
-   * response_payload (no PII, no secrets). Same BYPASSRLS caveat applies: on a non-superuser owner it sees
-   * no rows, so every provider reads back as "unknown" (never a fabricated green).
-   */
-  /**
-   * Cross-tenant waterfall telemetry per provider since `since` (0109, P6): attempts / hits /
+   * Cross-tenant waterfall telemetry per provider since `since` (0111, P6): attempts / hits /
    * verified-valid / latency avg+p95 / total cost — the read-only substrate for 06 §4's expectedHitRate
    * learning. Verification rows (`verify:%` names) are EXCLUDED — they meter the verifier, not a vendor.
    * Selects aggregates only, never response_payload. Same BYPASSRLS caveat as the reads above: on a
@@ -155,6 +147,14 @@ export const providerConfigRepository = {
     return out;
   },
 
+  /**
+   * Cross-tenant recent call-STATUS counts per provider since `since` — the raw signal for PASSIVE provider
+   * health (turned into a status by @leadwolf/types deriveProviderHealth). Same owner/cross-tenant path as
+   * monthToDateCentsByProvider: grouped in SQL by (provider_name, status) so the result is tiny
+   * (providers × statuses) and bounded by the time window. Selects ONLY provider_name/status/count — NEVER
+   * response_payload (no PII, no secrets). Same BYPASSRLS caveat applies: on a non-superuser owner it sees
+   * no rows, so every provider reads back as "unknown" (never a fabricated green).
+   */
   async recentHealthByProvider(
     tx: Tx,
     since: Date,

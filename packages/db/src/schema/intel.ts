@@ -106,7 +106,7 @@ export const providerCalls = pgTable(
     // One persisted answer per (workspace, request, provider). The hash is provider-independent
     // (requestHash.ts), and enrichContact records EVERY waterfall attempt under the same hash — a
     // (workspace, hash)-only unique with onConflictDoNothing silently dropped every attempt after the
-    // first (the pre-0109 defect: a miss-then-hit run lost the hit's cost AND its cache row, so the
+    // first (the pre-0111 defect: a miss-then-hit run lost the hit's cost AND its cache row, so the
     // same request re-paid the missing provider forever). Concurrent duplicates still collapse per triple.
     uniqWsHashProvider: uniqueIndex("uniq_provider_calls_ws_hash_provider").on(
       t.workspaceId,

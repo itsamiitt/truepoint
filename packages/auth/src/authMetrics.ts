@@ -33,6 +33,25 @@ export interface AuthMetricLabels {
    *  numbers to watch for passkey adoption + failure rates once WEBAUTHN_ENABLED is armed. Bounded enums (4
    *  series) — no credential id / user id (those are the audit log, not here). */
   webauthn_ceremony_total: { ceremony: "register" | "authenticate"; result: "success" | "failure" };
+  /** OBSERVE-FIRST tenant-suspension gate (audit 32 §9E). Counts sessions that touched a tenant whose status
+   *  is not `active`, on any of the four tenant-selection paths. `mode=shadow` means the session PROCEEDED and
+   *  would have been refused once armed — that count IS the blast radius, and it is what this file's header
+   *  calls the pre-req for flipping a lockout-capable control. `path` is bounded to the four call sites so an
+   *  operator can see whether the exposure is on login or only on rare org switches.
+   *
+   *  Deliberately NO tenant id: the PII rule above forbids it and it would be unbounded cardinality. The
+   *  `[tenant-suspension]` LOG line carries the tenant — that is the right split, counter for "how much",
+   *  log for "which".
+   *
+   *  WHERE TO SCRAPE IT: **apps/auth `/metrics`**, not apps/api's. This registry is in-process, and all four
+   *  call sites (finishLogin, org/switch, workspace/switch, extension/refresh) run in apps/auth — verified,
+   *  not assumed. apps/api renders the same function but will show this series empty, because nothing there
+   *  increments it. That is the same split the auth /metrics route header already documents for policy-block
+   *  and token-mint. */
+  auth_tenant_suspension_total: {
+    mode: "shadow" | "enforce";
+    path: "login" | "refresh" | "switch_org" | "switch_workspace";
+  };
 }
 export type AuthMetricName = keyof AuthMetricLabels;
 

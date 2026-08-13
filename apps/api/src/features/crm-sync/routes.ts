@@ -21,7 +21,6 @@ import {
 } from "@leadwolf/db";
 import { defaultCrmConnectors } from "@leadwolf/integrations";
 import {
-  ForbiddenError,
   ValidationError,
   crmConflictResolveSchema,
   crmConnectStartSchema,
@@ -31,7 +30,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueCrmBackfill } from "./crmQueue.ts";
 
 export const crmRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -53,15 +52,10 @@ const SCOPES: Record<string, string[]> = {
   ],
 };
 
-function requireWorkspace(workspaceId: string | undefined): string {
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace first.");
-  return workspaceId;
-}
-
 // ── Connections ──────────────────────────────────────────────────────────────────────────────────────
 
 crmRoutes.get("/connections", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const connections = await crmConnectionRepository.listByWorkspace({
     tenantId: c.get("tenantId"),
     workspaceId,
@@ -79,7 +73,7 @@ crmRoutes.get("/connections", async (c) => {
  * own scopes could request `full`.
  */
 crmRoutes.post("/connections", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const parsed = crmConnectStartSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     throw new ValidationError("Body must be { provider: 'salesforce'|'hubspot', environment? }.");
@@ -114,7 +108,7 @@ crmRoutes.post("/connections", requireRole("owner", "admin"), async (c) => {
  * sits inside the authed router rather than beside the webhook.
  */
 crmRoutes.get("/oauth/callback", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const code = c.req.query("code");
   const state = c.req.query("state");
   const provider = c.req.query("provider") ?? "salesforce";
@@ -149,7 +143,7 @@ crmRoutes.get("/oauth/callback", requireRole("owner", "admin"), async (c) => {
  * update (00 §4.1).
  */
 crmRoutes.patch("/connections/:id/sync-mode", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const parsed = crmSyncModeUpdateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     throw new ValidationError("Body must be { sync_mode: 'disabled'|'shadow'|'enforce' }.");
@@ -171,7 +165,7 @@ crmRoutes.patch("/connections/:id/sync-mode", requireRole("owner", "admin"), asy
 
 /** Trigger the initial backfill for a connection. Low-priority queue; idempotent per (connection, object). */
 crmRoutes.post("/connections/:id/backfill", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const scope = { tenantId: c.get("tenantId"), workspaceId };
   const connectionId = c.req.param("id");
 
@@ -193,7 +187,7 @@ crmRoutes.post("/connections/:id/backfill", requireRole("owner", "admin"), async
 // ── Health + review reads (00 §9) ────────────────────────────────────────────────────────────────────
 
 crmRoutes.get("/connections/:id/runs", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const runs = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
     crmSyncRunRepository.listRecentForConnection(tx, c.req.param("id"), 50),
   );
@@ -201,7 +195,7 @@ crmRoutes.get("/connections/:id/runs", async (c) => {
 });
 
 crmRoutes.get("/connections/:id/streams", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const streams = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
     crmSyncStateRepository.listByConnection(tx, c.req.param("id")),
   );
@@ -209,7 +203,7 @@ crmRoutes.get("/connections/:id/streams", async (c) => {
 });
 
 crmRoutes.get("/connections/:id/mappings", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const mappings = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
     crmFieldMappingRepository.listByConnection(tx, c.req.param("id")),
   );
@@ -222,7 +216,7 @@ crmRoutes.get("/connections/:id/mappings", async (c) => {
  * previously read-only.
  */
 crmRoutes.patch("/mappings/:id", requireRole("owner", "admin"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const parsed = crmMappingUpdateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     throw new ValidationError("Body must set at least one of direction, authority or enabled.");
@@ -238,7 +232,7 @@ crmRoutes.patch("/mappings/:id", requireRole("owner", "admin"), async (c) => {
 
 /** The conflict review queue. Values are already PII-masked by the repository's write path (§4.7). */
 crmRoutes.get("/conflicts", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const conflicts = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
     crmSyncConflictRepository.listOpen(tx, 100),
   );
@@ -247,7 +241,7 @@ crmRoutes.get("/conflicts", async (c) => {
 
 /** Close a conflict. Records who decided; only an `open` row transitions, so a stale UI cannot re-decide. */
 crmRoutes.patch("/conflicts/:id", requireRole("owner", "admin", "member"), async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const workspaceId = requireWorkspace(c);
   const parsed = crmConflictResolveSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Body must be { status: 'resolved'|'ignored' }.");
 

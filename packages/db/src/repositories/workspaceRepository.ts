@@ -20,6 +20,7 @@ import {
 import { notifications } from "../schema/notifications.ts";
 import { planTemplates } from "../schema/platformOps.ts";
 import { creditRepository } from "./creditRepository.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
 export interface WorkspaceSummary {
@@ -52,7 +53,8 @@ export const workspaceRepository = {
         // DETERMINISTIC order (creation order, id tiebreak). Without it Postgres returns rows in an
         // unstable order, so the `[0]` single-workspace auto-select (flow.ts) and the picker default could
         // change between logins → "logged into the wrong workspace" (Issue 2c).
-        .orderBy(asc(workspaces.createdAt), asc(workspaces.id));
+        .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
+        .limit(LIST_SAFETY_CAP);
       return rows.map((r) => ({ id: r.id, name: r.name, role: r.role }));
     });
   },
@@ -245,6 +247,10 @@ export interface TenantMembership {
   tenantId: string;
   tenantName: string;
   isTenantOwner: boolean;
+  /** The TENANT's status (active|suspended|…), not the membership's — those are different things and both
+   *  matter. Surfaced so the auth layer can act on a suspended tenant (audit 32 §9E); this read itself stays
+   *  behaviour-neutral and still returns suspended tenants. The decision belongs above the repository. */
+  tenantStatus: string;
 }
 
 /** A tenant member projected for the SCIM /Users surface: the global identity joined to its tenant membership.
@@ -269,6 +275,7 @@ export const tenantMemberRepository = {
         tenantId: tenants.id,
         tenantName: tenants.name,
         isTenantOwner: tenantMembers.isTenantOwner,
+        tenantStatus: tenants.status,
       })
       .from(tenantMembers)
       .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
@@ -280,7 +287,25 @@ export const tenantMemberRepository = {
       tenantId: r.tenantId,
       tenantName: r.tenantName,
       isTenantOwner: r.isTenantOwner,
+      tenantStatus: r.tenantStatus,
     }));
+  },
+
+  /**
+   * One tenant's status, for the §9E suspension gate on paths that hold a tenantId but no membership row
+   * (refresh, switchWorkspace). Global client, like listForUser: this is a PRE-tenant read the auth service
+   * makes before any RLS GUC is set, so it cannot go through withTenantTx.
+   *
+   * Returns null when the row does not exist. The caller must treat null as NOT active — a missing tenant is
+   * not a permitted one — which is exactly what tenantSuspensionDecision(null, …) already does.
+   */
+  async getTenantStatus(tenantId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ status: tenants.status })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    return row?.status ?? null;
   },
 
   // The active org role (owner|billing_admin|security_admin|compliance_admin|member) for a member, or null

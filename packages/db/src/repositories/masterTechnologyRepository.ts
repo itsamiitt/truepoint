@@ -398,13 +398,21 @@ export async function listCreatorsForTechnologies(
   technologyIds: string[],
 ): Promise<Map<string, { masterCompanyId: string; companyName: string }>> {
   if (technologyIds.length === 0) return new Map();
+  // `sql.param` + the cast are BOTH required, and the reason is not obvious: drizzle's sql template SPREADS a
+  // plain JS array into one bind per element, so `ANY(${"${ids}"})` renders as `ANY(($1, $2))` — a row
+  // constructor, not an array — and Postgres fails with 22P02 "malformed array literal". Verified against the
+  // dialect offline, not guessed. sql.param binds the array as ONE parameter, giving `ANY($1::uuid[])`.
+  //
+  // dsarRepository solves the same problem by hand-building the literal string '{a,b}'. That is fine for uuids
+  // and documented there; sql.param is used here instead because it needs no hand-rolled quoting, which
+  // matters for the text[] binds in masterEducationRepository where a value can legitimately contain a comma.
   const rows = (await tx.execute(sql`
     SELECT v.technology_id, v.master_company_id, c.name AS company_name
       FROM master_technology_vendors v
       JOIN master_companies c ON c.id = v.master_company_id
      WHERE v.relationship = 'creator'
        AND v.ended_on IS NULL
-       AND v.technology_id = ANY(${technologyIds})
+       AND v.technology_id = ANY(${sql.param(technologyIds)}::uuid[])
   `)) as unknown as Array<{
     technology_id: string;
     master_company_id: string;
@@ -419,6 +427,63 @@ export async function listCreatorsForTechnologies(
   );
 }
 
+/**
+ * What this company RECENTLY STOPPED running — the displacement signal (plan 33 · Track C).
+ *
+ * `removed_at` is the whole point of the episode grain: a technology detected, removed, then re-detected is
+ * three rows, and the middle one is the sales trigger. This reads the closed episodes rather than inferring
+ * displacement from an absence, because an absence is indistinguishable from "we never detected it".
+ *
+ * ⚠ EMPTY TODAY. Nothing populates master_technology_adoptions yet, so `removed_at` is never set and this
+ * returns nothing for every company. It is correct-when-data-arrives, not currently useful.
+ */
+export async function listRecentlyRemovedTechnologies(
+  tx: Tx,
+  masterCompanyId: string,
+  withinDays = 180,
+  limit = 50,
+): Promise<
+  Array<{
+    technologyId: string;
+    slug: string;
+    canonicalName: string;
+    detectionMethod: string;
+    firstSeenAt: Date;
+    lastSeenAt: Date;
+    removedAt: Date;
+  }>
+> {
+  const rows = (await tx.execute(sql`
+    SELECT a.technology_id, t.slug, t.canonical_name, a.detection_method,
+           a.first_seen_at, a.last_seen_at, a.removed_at
+      FROM master_technology_adoptions a
+      JOIN master_technologies t ON t.id = a.technology_id
+     WHERE a.master_company_id = ${masterCompanyId}
+       AND a.removed_at IS NOT NULL
+       AND a.removed_at >= now() - make_interval(days => ${withinDays})
+     ORDER BY a.removed_at DESC
+     LIMIT ${limit}
+  `)) as unknown as Array<{
+    technology_id: string;
+    slug: string;
+    canonical_name: string;
+    detection_method: string;
+    first_seen_at: Date;
+    last_seen_at: Date;
+    removed_at: Date;
+  }>;
+
+  return rows.map((r) => ({
+    technologyId: r.technology_id,
+    slug: r.slug,
+    canonicalName: r.canonical_name,
+    detectionMethod: r.detection_method,
+    firstSeenAt: r.first_seen_at,
+    lastSeenAt: r.last_seen_at,
+    removedAt: r.removed_at,
+  }));
+}
+
 export const masterTechnologyRepository = {
   resolveTechnology,
   recordDetection,
@@ -428,4 +493,5 @@ export const masterTechnologyRepository = {
   listCompanyProducts,
   listTechnologyVendors,
   listCreatorsForTechnologies,
+  listRecentlyRemovedTechnologies,
 };

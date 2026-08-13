@@ -1,8 +1,8 @@
-// providerCallsLedger.itest.ts — the 0109 provider_calls ledger fix, proven on a real Postgres 16
+// providerCallsLedger.itest.ts — the 0111 provider_calls ledger fix, proven on a real Postgres 16
 // (Testcontainers by default, or ITEST_DATABASE_URL — see itestDb.ts). Named *.itest.ts so default
 // `bun test` skips it; CI is the runner.
 //
-// THE DEFECT THIS GUARDS AGAINST RETURNING: pre-0109 the unique was (workspace_id, request_hash) while
+// THE DEFECT THIS GUARDS AGAINST RETURNING: pre-0111 the unique was (workspace_id, request_hash) while
 // the hash is provider-independent and enrichContact records one row PER ATTEMPT under the same hash with
 // onConflictDoNothing — so a miss-then-hit run silently dropped the hit row: its cost never counted in
 // spendSince, and findCached (status='hit') missed forever, re-paying the missing provider on every call.
@@ -10,7 +10,7 @@
 // Proves: (1) two attempts under the SAME hash from DIFFERENT providers BOTH persist;
 // (2) a duplicate (workspace, hash, provider) triple still collapses (replay-safe);
 // (3) findCachedFields unions per-field coverage and treats a legacy null filled_fields row as "all";
-// (4) spendSince counts every attempt's cost (the pre-0109 undercount is gone);
+// (4) spendSince counts every attempt's cost (the pre-0111 undercount is gone);
 // (5) spendSinceByProvider splits the same total by provider.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -55,7 +55,7 @@ afterAll(async () => {
   await dbHandle?.stop();
 });
 
-describe("provider_calls ledger (0109)", () => {
+describe("provider_calls ledger (0111)", () => {
   test("two attempts under the same hash from different providers BOTH persist", async () => {
     const scope = { tenantId: tenantA, workspaceId: wsA };
     await dbApi.withTenantTx(scope, async (tx) => {
@@ -83,7 +83,7 @@ describe("provider_calls ledger (0109)", () => {
 
     const [n] = await admin`
       SELECT count(*)::int AS n FROM provider_calls WHERE workspace_id = ${wsA} AND request_hash = ${HASH}`;
-    expect((n as { n: number }).n).toBe(2); // pre-0109 this was 1 — the hit row vanished
+    expect((n as { n: number }).n).toBe(2); // pre-0111 this was 1 — the hit row vanished
   });
 
   test("a duplicate (workspace, hash, provider) triple still collapses — replay-safe", async () => {
@@ -211,7 +211,7 @@ describe("provider_calls ledger (0109)", () => {
       dbApi.providerCallRepository.spendSince(tx, wsA, since),
     );
     // 30k (apollo miss) + 40k (pdl hit) + 35k (coresignal hit) + 60k (legacy zoominfo)
-    // + 20k (clearbit retry-upgrade) = 185k. Pre-0109 the multi-attempt rows were dropped.
+    // + 20k (clearbit retry-upgrade) = 185k. Pre-0111 the multi-attempt rows were dropped.
     expect(total).toBe(185_000);
 
     const byProvider = await dbApi.withTenantTx(scope, (tx) =>

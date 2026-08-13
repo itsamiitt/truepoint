@@ -1,5 +1,5 @@
 // redisBreakerStore.ts — the Redis-shared circuit breaker for the enrichment waterfall (waterfall v2 /
-// 0109; the "Redis-shared breaker is the M12 scale follow-up" note in core waterfall.ts:4, delivered).
+// 0111; the "Redis-shared breaker is the M12 scale follow-up" note in core waterfall.ts:4, delivered).
 // Workers are horizontally scaled: a process-local breaker lets N workers EACH make the full error budget
 // of failing calls before any breaker opens; this one is shared, so the fleet collectively opens after
 // `threshold` consecutive failures.

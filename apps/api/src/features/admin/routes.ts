@@ -72,7 +72,6 @@ import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { announcementRoutes } from "./announcements.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
@@ -150,7 +149,11 @@ adminRoutes.get("/crm/dead-letters", async (c) => {
  * re-attempt a write that failed for a reason nobody has diagnosed — so the replay is a separate, explicit
  * action rather than a side effect of clicking a status.
  */
-adminRoutes.patch("/crm/dead-letters/:id", async (c) => {
+// requireCapability("data:manage") — added by audit 32 · C3. This is a CROSS-TENANT WRITE that sat behind
+// only the `pa` claim, while every other admin write in this file carries a capability. Any platform staffer,
+// including read-only roles, could triage another tenant's poison jobs. "data:manage" is the exact fit: its
+// own definition is "perform data-ops mutations — cross-tenant, audited".
+adminRoutes.patch("/crm/dead-letters/:id", requireCapability("data:manage"), async (c) => {
   const parsed = crmDeadLetterTriageSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     throw new ValidationError("Body must be { status: 'retrying'|'resolved'|'ignored' }.");
@@ -278,27 +281,23 @@ adminRoutes.get("/tenants/:id", async (c) => {
 
 // ── Customer-360 overview (13a Area 3, 13 §3.3) — a tenant's reveal activity + active holds at a glance, for
 // support. Broad read (any staff tier); audited. PII-free aggregate. ──
-adminRoutes.get(
-  "/tenants/:id/overview",
-  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
-  async (c) => {
-    const tenantId = c.req.param("id");
-    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
-    const o = await withPlatformTx(
-      actorOf(c),
-      "admin.tenant_overview",
-      (tx) => platformAdminRepository.getTenantOverview(tx, tenantId),
-      { targetType: "tenant", targetId: tenantId, tenantId },
-    );
-    return c.json({
-      reveals30d: o.reveals30d,
-      burn30d: o.burn30d,
-      revealsTotal: o.revealsTotal,
-      lastRevealAt: o.lastRevealAt ? o.lastRevealAt.toISOString() : null,
-      activeHolds: o.activeHolds,
-    });
-  },
-);
+adminRoutes.get("/tenants/:id/overview", requireCapability("tenants:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const o = await withPlatformTx(
+    actorOf(c),
+    "admin.tenant_overview",
+    (tx) => platformAdminRepository.getTenantOverview(tx, tenantId),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({
+    reveals30d: o.reveals30d,
+    burn30d: o.burn30d,
+    revealsTotal: o.revealsTotal,
+    lastRevealAt: o.lastRevealAt ? o.lastRevealAt.toISOString() : null,
+    activeHolds: o.activeHolds,
+  });
+});
 
 // ── Tenant lifecycle + manual credit ops (13a Area 1, 13 §3.1) ─────────────────────────────────────────
 // These are the first cross-tenant WRITES on the admin surface. Each runs through withPlatformTx (owner
@@ -503,21 +502,17 @@ function toNoteView(r: {
   };
 }
 
-adminRoutes.get(
-  "/tenants/:id/notes",
-  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
-  async (c) => {
-    const tenantId = c.req.param("id");
-    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
-    const notes = await withPlatformTx(
-      actorOf(c),
-      "admin.list_support_notes",
-      async (tx) => (await supportNoteRepository.listForTenant(tx, tenantId)).map(toNoteView),
-      { targetType: "tenant", targetId: tenantId, tenantId },
-    );
-    return c.json({ notes });
-  },
-);
+adminRoutes.get("/tenants/:id/notes", requireCapability("tenants:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const notes = await withPlatformTx(
+    actorOf(c),
+    "admin.list_support_notes",
+    async (tx) => (await supportNoteRepository.listForTenant(tx, tenantId)).map(toNoteView),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ notes });
+});
 
 adminRoutes.post("/tenants/:id/notes", requireCapability("tenants:notes:write"), async (c) => {
   const tenantId = c.req.param("id");
@@ -565,21 +560,17 @@ function toHoldView(r: {
   };
 }
 
-adminRoutes.get(
-  "/tenants/:id/holds",
-  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
-  async (c) => {
-    const tenantId = c.req.param("id");
-    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
-    const holds = await withPlatformTx(
-      actorOf(c),
-      "admin.list_holds",
-      async (tx) => (await accountHoldRepository.listForTenant(tx, tenantId)).map(toHoldView),
-      { targetType: "tenant", targetId: tenantId, tenantId },
-    );
-    return c.json({ holds });
-  },
-);
+adminRoutes.get("/tenants/:id/holds", requireCapability("tenants:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const holds = await withPlatformTx(
+    actorOf(c),
+    "admin.list_holds",
+    async (tx) => (await accountHoldRepository.listForTenant(tx, tenantId)).map(toHoldView),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ holds });
+});
 
 adminRoutes.post("/tenants/:id/holds", requireCapability("tenants:hold"), async (c) => {
   const tenantId = c.req.param("id");
@@ -1010,30 +1001,26 @@ adminRoutes.post(
 // billing surface gets aggregate counts elsewhere (the tenants directory / usage analytics). The read runs
 // through the audited withPlatformTx (an admin.list.view_metadata row names the tenant); the tenantId is
 // validated as a UUID BEFORE the tx so a malformed id is a clean 422 with no audit row.
-adminRoutes.get(
-  "/tenants/:tenantId/lists",
-  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
-  async (c) => {
-    const tenantId = c.req.param("tenantId");
-    if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
-    const rows = await withPlatformTx(
-      actorOf(c),
-      LIST_PLATFORM_AUDIT_ACTIONS.viewMetadata,
-      (tx) => platformAdminRepository.listTenantListsOverview(tx, tenantId),
-      { targetType: "tenant", targetId: tenantId, tenantId },
-    );
-    const lists: StaffListOverview[] = rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      ownerUserId: r.ownerUserId,
-      memberCount: r.memberCount,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    }));
-    return c.json({ lists });
-  },
-);
+adminRoutes.get("/tenants/:tenantId/lists", requireCapability("tenants:read"), async (c) => {
+  const tenantId = c.req.param("tenantId");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
+  const rows = await withPlatformTx(
+    actorOf(c),
+    LIST_PLATFORM_AUDIT_ACTIONS.viewMetadata,
+    (tx) => platformAdminRepository.listTenantListsOverview(tx, tenantId),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  const lists: StaffListOverview[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    ownerUserId: r.ownerUserId,
+    memberCount: r.memberCount,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+  return c.json({ lists });
+});
 
 // ── Auth-policy enforcement master switch (P1-01) — STAFF-ONLY per-tenant enable + break-glass disable. ──
 // The lockout-capable login gates (IP allowlist / allowed methods / session + idle timeout / forced-MFA
@@ -1045,7 +1032,7 @@ adminRoutes.get(
 // this switch (it is absent from the tenant-editable authPolicySchema), so an org cannot self-lock-out.
 adminRoutes.post(
   "/tenants/:tenantId/auth-enforcement",
-  requireStaffRole("super_admin"),
+  requireCapability("platform:configure"),
   async (c) => {
     const tenantId = c.req.param("tenantId");
     if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
@@ -1076,12 +1063,12 @@ const PLATFORM_POLICY_FLOOR: AuthPolicy = {
   ipAllowlist: [],
 };
 
-adminRoutes.get("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
+adminRoutes.get("/auth/platform-policy", requireCapability("platform:configure"), async (c) => {
   const rows = await effectivePolicyRepository.getPlatformRows();
   return c.json({ policies: rows.map((r) => ({ key: r.key, value: r.value })) });
 });
 
-adminRoutes.put("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
+adminRoutes.put("/auth/platform-policy", requireCapability("platform:configure"), async (c) => {
   const body = (await c.req.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
   if (!body || typeof body.key !== "string") {
     throw new ValidationError("Expected a { key, value } body.");
@@ -1125,135 +1112,118 @@ adminRoutes.put("/auth/platform-policy", requireStaffRole("super_admin"), async 
 // api client to probe — do not fabricate a green check). The route never hangs (each probe is timeout-bounded)
 // and never 500s on a probe failure (probeQueues always resolves; the defensive .catch degrades a total
 // failure to redis:"down"/workers:"unknown" and still returns 200). ──
-adminRoutes.get(
-  "/system-health",
-  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
-  async (c) => {
-    const statuses = await withPlatformTx(actorOf(c), "admin.system_health", (tx) =>
-      platformAdminRepository.sampleJobStatuses(tx),
-    );
+adminRoutes.get("/system-health", requireCapability("system:read"), async (c) => {
+  const statuses = await withPlatformTx(actorOf(c), "admin.system_health", (tx) =>
+    platformAdminRepository.sampleJobStatuses(tx),
+  );
 
-    const byStatus: Record<string, number> = {};
-    for (const s of statuses) byStatus[s] = (byStatus[s] ?? 0) + 1;
+  const byStatus: Record<string, number> = {};
+  for (const s of statuses) byStatus[s] = (byStatus[s] ?? 0) + 1;
 
-    const queueDepth =
-      (byStatus.queued ?? 0) + (byStatus.running ?? 0) + (byStatus.estimating ?? 0);
-    const deadLetter = byStatus.failed ?? 0;
+  const queueDepth = (byStatus.queued ?? 0) + (byStatus.running ?? 0) + (byStatus.estimating ?? 0);
+  const deadLetter = byStatus.failed ?? 0;
 
-    // Live BullMQ probe. probeQueues already absorbs per-queue failures via allSettled and always resolves; the
-    // .catch is belt-and-suspenders against a synchronous singleton-construction error so the route can NEVER
-    // 500 from a probe — a total failure degrades to redis:"down"/workers:"unknown" with no queue readings.
-    const probe = await probeQueues().catch(
-      () => ({ redis: "down", workers: "unknown", queues: [] }) as SystemHealthProbe,
-    );
+  // Live BullMQ probe. probeQueues already absorbs per-queue failures via allSettled and always resolves; the
+  // .catch is belt-and-suspenders against a synchronous singleton-construction error so the route can NEVER
+  // 500 from a probe — a total failure degrades to redis:"down"/workers:"unknown" with no queue readings.
+  const probe = await probeQueues().catch(
+    () => ({ redis: "down", workers: "unknown", queues: [] }) as SystemHealthProbe,
+  );
 
-    return c.json({
-      // The api answered this request, so it is up; database is up (the tx above ran). workers/redis are real
-      // BullMQ probe results; search stays "unknown" — no api client exists to probe it (no fabricated checks).
-      services: [
-        { name: "api", status: "up" },
-        { name: "database", status: "up" },
-        { name: "workers", status: probe.workers },
-        { name: "redis", status: probe.redis },
-        { name: "search", status: "unknown" },
-      ],
-      // Live per-queue depth / DLQ (failed) / connected-worker counts; reachable:false + null counts when down.
-      queues: probe.queues,
-      jobs: {
-        sampleSize: statuses.length,
-        truncated: statuses.length >= PLATFORM_READ_LIMIT,
-        byStatus,
-        queueDepth,
-        deadLetter,
-      },
-    });
-  },
-);
+  return c.json({
+    // The api answered this request, so it is up; database is up (the tx above ran). workers/redis are real
+    // BullMQ probe results; search stays "unknown" — no api client exists to probe it (no fabricated checks).
+    services: [
+      { name: "api", status: "up" },
+      { name: "database", status: "up" },
+      { name: "workers", status: probe.workers },
+      { name: "redis", status: probe.redis },
+      { name: "search", status: "unknown" },
+    ],
+    // Live per-queue depth / DLQ (failed) / connected-worker counts; reachable:false + null counts when down.
+    queues: probe.queues,
+    jobs: {
+      sampleSize: statuses.length,
+      truncated: statuses.length >= PLATFORM_READ_LIMIT,
+      byStatus,
+      queueDepth,
+      deadLetter,
+    },
+  });
+});
 
 // ── Data-quality cockpit (P5; 10 §5 Data Health + PLAN_06 re-verification) — cross-tenant DQ observability: the
 // platform-wide rollup of the latest per-workspace data_quality_snapshots + the recent re-verification ledger.
 // Read-only and coarse-gated (any staff, like /system-health); `admin.data_quality` is a plain withPlatformTx
 // read string, deliberately NOT in the mutation enum. NON-PII — counts only, never contact rows. ──
-adminRoutes.get(
-  "/data-quality",
-  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
-  async (c) => {
-    const rawDays = Number(c.req.query("days") ?? "30");
-    const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
-    const since = new Date(Date.now() - days * 86_400_000);
-    const data = await withPlatformTx(actorOf(c), "admin.data_quality", async (tx) => {
-      // Sequential — one tx is one connection; no concurrent statements on it.
-      const rollup = await platformDataQualityReadRepository.rollup(tx);
-      const totals = await platformDataQualityReadRepository.verificationTotals(tx, since);
-      const recentRuns = await platformDataQualityReadRepository.recentVerificationRuns(
-        tx,
-        PLATFORM_READ_LIMIT,
-      );
-      return { rollup, totals, recentRuns };
-    });
-    return c.json({
-      windowDays: days,
-      rollup: {
-        workspaces: data.rollup.workspaces,
-        latestAt: data.rollup.latestAt ? data.rollup.latestAt.toISOString() : null,
-        total: data.rollup.total,
-        withEmail: data.rollup.withEmail,
-        withPhone: data.rollup.withPhone,
-        emailValid: data.rollup.emailValid,
-        fresh: data.rollup.fresh,
-        stale: data.rollup.stale,
-        neverVerified: data.rollup.neverVerified,
-      },
-      verification: {
-        totals: data.totals,
-        recentRuns: data.recentRuns.map((r) => ({
-          tenantId: r.tenantId,
-          tenantName: r.tenantName,
-          finishedAt: r.finishedAt.toISOString(),
-          scanned: r.scanned,
-          reverified: r.reverified,
-          errored: r.errored,
-        })),
-      },
-    });
-  },
-);
+adminRoutes.get("/data-quality", requireCapability("system:read"), async (c) => {
+  const rawDays = Number(c.req.query("days") ?? "30");
+  const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
+  const since = new Date(Date.now() - days * 86_400_000);
+  const data = await withPlatformTx(actorOf(c), "admin.data_quality", async (tx) => {
+    // Sequential — one tx is one connection; no concurrent statements on it.
+    const rollup = await platformDataQualityReadRepository.rollup(tx);
+    const totals = await platformDataQualityReadRepository.verificationTotals(tx, since);
+    const recentRuns = await platformDataQualityReadRepository.recentVerificationRuns(
+      tx,
+      PLATFORM_READ_LIMIT,
+    );
+    return { rollup, totals, recentRuns };
+  });
+  return c.json({
+    windowDays: days,
+    rollup: {
+      workspaces: data.rollup.workspaces,
+      latestAt: data.rollup.latestAt ? data.rollup.latestAt.toISOString() : null,
+      total: data.rollup.total,
+      withEmail: data.rollup.withEmail,
+      withPhone: data.rollup.withPhone,
+      emailValid: data.rollup.emailValid,
+      fresh: data.rollup.fresh,
+      stale: data.rollup.stale,
+      neverVerified: data.rollup.neverVerified,
+    },
+    verification: {
+      totals: data.totals,
+      recentRuns: data.recentRuns.map((r) => ({
+        tenantId: r.tenantId,
+        tenantName: r.tenantName,
+        finishedAt: r.finishedAt.toISOString(),
+        scanned: r.scanned,
+        reverified: r.reverified,
+        errored: r.errored,
+      })),
+    },
+  });
+});
 
 // ── Trust & abuse (P6, 13 §3 abuse-ops) — cross-tenant trust signals: signup velocity (tenants/users), a
 // free/disposable-email signup heuristic, active abuse/fraud holds by kind, and the tenant-status mix. Read-only,
 // coarse-gated (any staff, like /system-health + /data-quality); `admin.trust_abuse` is a plain withPlatformTx
 // read string, NOT in the mutation enum. NON-PII — counts only. ──
-adminRoutes.get(
-  "/trust-abuse",
-  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
-  async (c) => {
-    const data = await withPlatformTx(actorOf(c), "admin.trust_abuse", async (tx) => {
-      // Sequential — one tx is one connection; no concurrent statements on it.
-      const signals = await platformTrustReadRepository.signals(tx);
-      const holds = await platformTrustReadRepository.activeHoldsByKind(tx);
-      const tenantStatus = await platformTrustReadRepository.tenantsByStatus(tx);
-      return { signals, holds, tenantStatus };
-    });
-    return c.json(data);
-  },
-);
+adminRoutes.get("/trust-abuse", requireCapability("system:read"), async (c) => {
+  const data = await withPlatformTx(actorOf(c), "admin.trust_abuse", async (tx) => {
+    // Sequential — one tx is one connection; no concurrent statements on it.
+    const signals = await platformTrustReadRepository.signals(tx);
+    const holds = await platformTrustReadRepository.activeHoldsByKind(tx);
+    const tenantStatus = await platformTrustReadRepository.tenantsByStatus(tx);
+    return { signals, holds, tenantStatus };
+  });
+  return c.json(data);
+});
 
 // ── AI usage (M14 / 13a Area 14) — cross-tenant AI-request metering: per-tenant request volume, non-ok
 // outcomes, repair rate, average latency + token totals over a trailing window (default 30d, ≤365). Read-only,
 // coarse-gated (any staff, like /data-quality + /trust-abuse); `admin.ai_usage` is a plain withPlatformTx read
 // string, NOT in the mutation enum. NON-PII — call metadata only (the NL query text is never stored). ──
-adminRoutes.get(
-  "/ai-usage",
-  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
-  async (c) => {
-    const rawDays = Number(c.req.query("days") ?? "30");
-    const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
-    const tenants = await withPlatformTx(actorOf(c), "admin.ai_usage", (tx) =>
-      aiRequestRepository.usageSince(tx, days, PLATFORM_READ_LIMIT),
-    );
-    return c.json({ windowDays: days, tenants });
-  },
-);
+adminRoutes.get("/ai-usage", requireCapability("system:read"), async (c) => {
+  const rawDays = Number(c.req.query("days") ?? "30");
+  const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
+  const tenants = await withPlatformTx(actorOf(c), "admin.ai_usage", (tx) =>
+    aiRequestRepository.usageSince(tx, days, PLATFORM_READ_LIMIT),
+  );
+  return c.json({ windowDays: days, tenants });
+});
 
 // ── Import-jobs monitor (data-management A4; 15-bulk-import-design) — recent bulk-import jobs ACROSS all
 // tenants, the staff rollout-monitoring feed for the COPY-staging pipeline. Per-job status / av-scan / row
@@ -1264,16 +1234,12 @@ adminRoutes.get(
 // METADATA + tallies only (the repo selects import_jobs, never import_job_rows) — no imported contact PII
 // leaves the boundary. Read-only: no actions on this surface. The repo shape is returned directly via c.json
 // (no Zod schema), matching the sibling cross-tenant list reads (tenants / users / workspaces).
-adminRoutes.get(
-  "/import-jobs",
-  requireStaffRole("super_admin", "support", "read_only"),
-  async (c) => {
-    const jobs = await withPlatformTx(actorOf(c), "admin.list_import_jobs", (tx) =>
-      platformAdminRepository.recentImportJobs(tx),
-    );
-    return c.json({ jobs });
-  },
-);
+adminRoutes.get("/import-jobs", requireCapability("tenants:read"), async (c) => {
+  const jobs = await withPlatformTx(actorOf(c), "admin.list_import_jobs", (tx) =>
+    platformAdminRepository.recentImportJobs(tx),
+  );
+  return c.json({ jobs });
+});
 
 // ── Retention-runs review (data-management A5; 16-retention-engine-design) — recent retention-engine RUNS
 // ACROSS all tenants, the SHADOW evidence operators review BEFORE flipping a class to `enforce`. Per-run class /
@@ -1284,16 +1250,12 @@ adminRoutes.get(
 // in the platformAuditAction mutation enum (only writes are enum-tracked). COUNTS-only (retention_runs carries
 // no contact rows / PII) — nothing sensitive leaves the boundary. Read-only: no actions on this surface. The
 // repo shape is returned directly via c.json (no Zod schema), matching the sibling cross-tenant reads.
-adminRoutes.get(
-  "/retention-runs",
-  requireStaffRole("super_admin", "compliance_officer", "read_only"),
-  async (c) => {
-    const runs = await withPlatformTx(actorOf(c), "admin.list_retention_runs", (tx) =>
-      platformAdminRepository.recentRetentionRuns(tx),
-    );
-    return c.json({ runs });
-  },
-);
+adminRoutes.get("/retention-runs", requireCapability("retention:read"), async (c) => {
+  const runs = await withPlatformTx(actorOf(c), "admin.list_retention_runs", (tx) =>
+    platformAdminRepository.recentRetentionRuns(tx),
+  );
+  return c.json({ runs });
+});
 
 // ── Feature flags (13 §3.5, ADR-0011) ──────────────────────────────────────────────────────────────────
 // All reads + writes go through withPlatformTx: cross-tenant owner visibility + an in-tx platform_audit_log
@@ -1485,16 +1447,12 @@ adminRoutes.get("/feature-flags/env-gates", (c) => {
 
 /** List every global retention policy. View-only staff tiers may read; the write below is super_admin only.
  *  Response is Zod-validated against the shared RetentionPolicy contract before it leaves the boundary. */
-adminRoutes.get(
-  "/retention-policies",
-  requireStaffRole("super_admin", "compliance_officer", "read_only"),
-  async (c) => {
-    const policies = await withPlatformTx(actorOf(c), "admin.list_retention_policies", (tx) =>
-      retentionClassPolicyRepository.listPolicies(tx),
-    );
-    return c.json({ policies: retentionPolicySchema.array().parse(policies) });
-  },
-);
+adminRoutes.get("/retention-policies", requireCapability("retention:read"), async (c) => {
+  const policies = await withPlatformTx(actorOf(c), "admin.list_retention_policies", (tx) =>
+    retentionClassPolicyRepository.listPolicies(tx),
+  );
+  return c.json({ policies: retentionPolicySchema.array().parse(policies) });
+});
 
 /** Define or update a class's policy (idempotent on data class). super_admin ONLY — flipping `mode` to
  *  `enforce` ARMS permanent deletion for that class — and AUDITED (retention_policy.set, with the class +
@@ -1503,7 +1461,7 @@ adminRoutes.get(
  *  a real retentionDataClass by the body schema (retentionPolicyUpdateSchema). FUTURE: a compliance_officer
  *  co-sign (dual-control) could be required on the enforce flip — a separate approval workflow, out of scope
  *  here; today the controls are super_admin-only + audit + the UI confirm dialog. */
-adminRoutes.put("/retention-policies", requireStaffRole("super_admin"), async (c) => {
+adminRoutes.put("/retention-policies", requireCapability("platform:configure"), async (c) => {
   const parsed = retentionPolicyUpdateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const policy = parsed.data;

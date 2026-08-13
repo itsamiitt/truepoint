@@ -43,7 +43,7 @@ import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { requireEntitlement } from "../../middleware/requireEntitlement.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "../import/index.ts";
 import { enqueueBulkRevealDrive } from "./bulkRevealQueue.ts";
 
@@ -223,8 +223,7 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
  *  jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1), behind the S-V3 dual gate
  *  (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4). */
 revealRoutes.get("/reveal-jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+  const workspaceId = requireWorkspace(c, "Select a workspace.");
   const viewer = await buildJobViewer({
     tenantId: c.get("tenantId"),
     workspaceId,
@@ -243,8 +242,7 @@ revealRoutes.get(
   "/reveal-jobs/:jobId",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const viewer = await buildJobViewer({
       tenantId: c.get("tenantId"),
       workspaceId,
@@ -266,8 +264,7 @@ revealRoutes.get(
   "/reveal-jobs/:jobId/failed",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const contactIds = await revealJobRepository.listFailedContactIds(
       { tenantId: c.get("tenantId"), workspaceId },
       c.req.param("jobId"),
@@ -282,8 +279,7 @@ revealRoutes.get(
   "/reveal-jobs/:jobId/download",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const viewer = await buildJobViewer({
       tenantId: c.get("tenantId"),
       workspaceId,
@@ -308,8 +304,7 @@ revealRoutes.post(
   "/reveal-jobs/:jobId/confirm",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     if (!env.BULK_REVEAL_ENABLED)
       throw new ForbiddenError("feature_disabled", "Bulk reveal is not enabled.");
     const scope = { tenantId: c.get("tenantId"), workspaceId };
@@ -329,8 +324,7 @@ revealRoutes.post(
   "/reveal-jobs/:jobId/cancel",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const ok = await revealJobRepository.cancelAndRelease(
       { tenantId: c.get("tenantId"), workspaceId },
       c.req.param("jobId"),
@@ -345,8 +339,7 @@ revealRoutes.post(
   "/reveal-jobs/:jobId/pause",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const ok = await revealJobRepository.pauseRunning(
       { tenantId: c.get("tenantId"), workspaceId },
       c.req.param("jobId"),
@@ -360,8 +353,7 @@ revealRoutes.post(
   "/reveal-jobs/:jobId/resume",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const workspaceId = requireWorkspace(c, "Select a workspace.");
     const scope = { tenantId: c.get("tenantId"), workspaceId };
     const jobId = c.req.param("jobId");
     const ok = await revealJobRepository.resumePaused(scope, jobId);

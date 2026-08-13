@@ -1,4 +1,4 @@
--- 0109_enrichment_waterfall_v2.sql — waterfall v2 substrate [S-04][S-08][A-01] (hand-authored).
+-- 0111_enrichment_waterfall_v2.sql — waterfall v2 substrate [S-04][S-08][A-01] (hand-authored).
 --
 -- 1) THE LEDGER FIX. provider_calls was unique on (workspace_id, request_hash) while the hash is
 --    provider-independent (core requestHash.ts) and enrichContact records one row PER ATTEMPT under the

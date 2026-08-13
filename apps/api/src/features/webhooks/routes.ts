@@ -23,6 +23,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const webhooksRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -55,7 +56,7 @@ webhooksRoutes.get("/deliveries", async (c) => {
   return c.json({ deliveries });
 });
 
-webhooksRoutes.post("/deliveries/:id/replay", async (c) => {
+webhooksRoutes.post("/deliveries/:id/replay", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const tenantId = c.get("tenantId");
   const outcome = await replayDelivery({
@@ -89,7 +90,7 @@ webhooksRoutes.get("/", async (c) => {
   return c.json({ webhooks });
 });
 
-webhooksRoutes.post("/", async (c) => {
+webhooksRoutes.post("/", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const tenantId = c.get("tenantId");
   const parsed = createWebhookSchema.safeParse(await c.req.json().catch(() => null));
@@ -114,7 +115,7 @@ webhooksRoutes.post("/", async (c) => {
   }
 });
 
-webhooksRoutes.post("/:id/test", async (c) => {
+webhooksRoutes.post("/:id/test", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const tenantId = c.get("tenantId");
   const result = await sendTestEvent({
@@ -129,7 +130,7 @@ webhooksRoutes.post("/:id/test", async (c) => {
   });
 });
 
-webhooksRoutes.delete("/:id", async (c) => {
+webhooksRoutes.delete("/:id", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c);
   const tenantId = c.get("tenantId");
   const removed = await webhookRepository.deleteSubscription(

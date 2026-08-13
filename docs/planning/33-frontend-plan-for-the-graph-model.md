@@ -132,14 +132,31 @@ Effort spent making an empty surface prettier is effort spent hiding that it is 
 
 ## 5. API work this plan requires
 
-Only one genuinely new endpoint, plus one additive field.
+Only one genuinely new endpoint, plus one additive field. **Status: the endpoint shipped; the additive field is blocked — see below.**
 
 1. **`GET /api/v1/contacts/:id/provenance`** *(new, for A1)* — per-field band, last-verified, source
    count, source class. Same two-transaction pattern as the other Layer-0 reads: resolve the contact
    under `withTenantTx`, then read under `withErTx`. No raw scores, no contributor reference.
-2. **`confidence_band` on search rows** *(additive, for the A1 grid chip)* — must be computed
-   in-query or denormalized, **never** per-row lookups; the grid renders 50 rows a page and an N+1
-   here would be felt immediately.
+2. ~~**`confidence_band` on search rows**~~ *(additive, for the A1 grid chip)* — **NOT BUILT, and it
+   should not be built until §9D of plan 32 is decided.** The performance constraint I wrote here
+   (compute in-query or denormalize, never per-row — the grid renders 50 rows and an N+1 would be felt
+   immediately) is still right, but it is not the binding one. The binding problem is *which number*:
+
+   - The drawer badge reads **Layer 0** — `provenanceBadgeRepository` over `provenance_event`, through
+     `buildConfidenceBadgeV1`, reachable only via `withErTx` because `leadwolf_app` is REVOKE'd from
+     that table.
+   - Search runs **Layer 1** under RLS. In-query, the only confidence data it can reach is
+     `contacts.field_provenance` (jsonb), `email_status` and `last_verified_at` — a *different store*.
+
+   Computing the chip from the tenant store would put a "high" chip in the grid beside a "medium"
+   badge in the drawer for the same contact. `badgeV1.ts` states the rule this breaks in its own
+   header: *"a badge that disagrees with itself across surfaces is worse than no badge, because the
+   user cannot tell which one is lying."* And plan 32 §9D already found **two** confidence engines
+   shipping and disagreeing by 0.09–0.17; deriving a third for the grid makes that worse, not better.
+
+   The honest options are (a) decide §9D first, then denormalize the winning band onto `contacts` with
+   a producer that keeps it fresh, or (b) leave the chip out of the grid. What must not happen is a
+   third in-query derivation that looks cheap and quietly contradicts the drawer.
 
 Both belong in `packages/types/src/accountIntelligence.ts` first — contract before implementation.
 

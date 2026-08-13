@@ -27,6 +27,34 @@ function safePath(url: string): string {
   }
 }
 
+/**
+ * Hono's unmatched-route handler.
+ *
+ * Without this, a 404 leaves Hono to answer with its plain-text default — so the ONE response a client is
+ * most likely to hit by accident (a typo'd path, a removed endpoint, a stale SDK) was the one response that
+ * broke the RFC-9457 contract every other error honours. A client with a `catch (problem.code)` branch got an
+ * unparseable body precisely when it needed to branch.
+ *
+ * `not_found` here is deliberately the same code a NotFoundError produces: from outside, "no such route" and
+ * "no such record" are both "that is not here", and giving them different codes would invite clients to
+ * distinguish something we do not want them probing.
+ */
+export function notFound(c: Context): Response {
+  const requestId = currentRequestId(c);
+  c.header("content-type", "application/problem+json");
+  return c.json(
+    {
+      // No leading slash: ERROR_TYPE_BASE_URL already carries its separator (see the 500 branch below).
+      type: `${env.ERROR_TYPE_BASE_URL}not-found`,
+      title: "Not found",
+      status: 404,
+      code: "not_found",
+      ...(requestId ? { requestId } : {}),
+    },
+    404,
+  );
+}
+
 export function onError(err: Error, c: Context): Response {
   const requestId = currentRequestId(c);
 

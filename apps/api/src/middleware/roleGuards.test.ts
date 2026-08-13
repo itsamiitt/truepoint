@@ -42,7 +42,7 @@ mock.module("@leadwolf/db", () => ({
 // Import the guards AFTER the mock is registered so their static @leadwolf/db imports bind to the stub.
 const { requireRole, getWorkspaceRole } = await import("./requireRole.ts");
 const { requireOrgRole, getOrgRole } = await import("./requireOrgRole.ts");
-const { requireStaffRole, getStaffRole } = await import("./requireStaffRole.ts");
+const { requireCapability, getStaffRole } = await import("./requireCapability.ts");
 
 /** A throwaway Hono-ish context exposing only the get/set surface the guards read/write. */
 function makeContext(vars: Record<string, unknown>) {
@@ -144,43 +144,66 @@ describe("requireOrgRole (tenant tier)", () => {
   });
 });
 
-describe("requireStaffRole (platform tier)", () => {
-  it("calls next() and stashes the role when allowed", async () => {
+describe("requireCapability (platform tier)", () => {
+  // Ported from the retired requireStaffRole suite (audit 32 · C8). The BEHAVIOUR under test is unchanged —
+  // resolve the active staff role per request, stash it, reject when it does not qualify — only the way the
+  // requirement is expressed moved from a role list to a capability.
+  it("calls next() and stashes the role when the capability is granted", async () => {
     const c = makeContext({ claims });
     let nexted = false;
-    await requireStaffRole("support", "compliance_officer")(c, async () => {
+    await requireCapability("data:read")(c, async () => {
       nexted = true;
     });
     expect(nexted).toBe(true);
     expect(getStaffRole(c)).toBe("support");
   });
 
-  it("lets `super_admin` through even when not in the allow-list (implies all)", async () => {
+  it("lets `super_admin` through for a capability granted to NO role (implies all)", async () => {
+    // platform:configure is deliberately in no role bundle — it is how the migration expresses the routes
+    // that were previously requireStaffRole("super_admin").
     next.staff = "super_admin";
     const c = makeContext({ claims });
     let nexted = false;
-    await requireStaffRole("billing_ops")(c, async () => {
+    await requireCapability("platform:configure")(c, async () => {
       nexted = true;
     });
     expect(nexted).toBe(true);
     expect(getStaffRole(c)).toBe("super_admin");
   });
 
-  it("rejects 403 when the role is not in the allow-list", async () => {
+  it("rejects 403 when the role lacks the capability", async () => {
     next.staff = "read_only";
     const c = makeContext({ claims });
-    await expect(requireStaffRole("billing_ops")(c, async () => undefined)).rejects.toMatchObject({
+    await expect(
+      requireCapability("tenants:credits")(c, async () => undefined),
+    ).rejects.toMatchObject({
       status: 403,
-      code: "insufficient_staff_role",
+      code: "insufficient_capability",
     });
   });
 
   it("rejects 403 when the caller is not active platform staff (null role)", async () => {
     next.staff = null;
     const c = makeContext({ claims });
-    await expect(requireStaffRole("support")(c, async () => undefined)).rejects.toMatchObject({
-      status: 403,
-      code: "insufficient_staff_role",
-    });
+    await expect(requireCapability("tenants:read")(c, async () => undefined)).rejects.toMatchObject(
+      {
+        status: 403,
+        code: "insufficient_capability",
+      },
+    );
+  });
+
+  it("read_only KEEPS the read access the migration mapped for it", async () => {
+    // The regression this guards: migrating a role list to a capability must not silently revoke someone.
+    // read_only previously passed requireStaffRole on the tenant-overview and retention-evidence routes.
+    next.staff = "read_only";
+    for (const cap of ["tenants:read", "system:read", "retention:read"] as const) {
+      const c = makeContext({ claims });
+      let nexted = false;
+      await requireCapability(cap)(c, async () => {
+        nexted = true;
+      });
+      expect(nexted).toBe(true);
+    }
   });
 });

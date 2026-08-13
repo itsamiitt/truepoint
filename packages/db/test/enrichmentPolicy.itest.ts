@@ -145,7 +145,7 @@ describe("G-ENR-1 auto-enrich policy DoD", () => {
     }
   });
 
-  test("provider_prefs round-trips: priority + verification survive applyPartial and re-read (0109)", async () => {
+  test("provider_prefs round-trips: priority + verification survive applyPartial and re-read (0111)", async () => {
     const scope = { tenantId: tenantA, workspaceId: wsA };
     const written = await dbApi.enrichmentPolicyRepository.applyPartial(
       scope,

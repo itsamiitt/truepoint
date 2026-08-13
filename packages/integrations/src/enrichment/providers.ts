@@ -1,5 +1,5 @@
 // providers.ts — the vendor adapters (06 §3): Apollo, ZoomInfo, Clearbit (first wave) + PDL, Coresignal
-// (waterfall v2 / 0109), each a VendorSpec over the shared httpProvider shape. Endpoint payload mappings
+// (waterfall v2 / 0111), each a VendorSpec over the shared httpProvider shape. Endpoint payload mappings
 // follow each vendor's person-enrich API; trust/cost are static waterfall inputs (hit-rate learning lands
 // with telemetry, 06 §4). Keys come from config; an absent key → permanent `miss` (the adapter never
 // throws on configuration) — which is also the COMPLIANCE enforcement: PDL/Coresignal ship dark until

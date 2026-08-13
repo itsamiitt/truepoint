@@ -48,8 +48,11 @@ import {
 import { AddToListDialog } from "./AddToListDialog";
 import { CopyButton } from "./CopyButton";
 import { EducationSection } from "./EducationSection";
+import { EmploymentSection } from "./EmploymentSection";
+import { ProvenanceSection } from "./ProvenanceSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
+import { SignalsSection } from "./SignalsSection";
 import { StageSelector } from "./StageSelector";
 import { TagPicker } from "./TagPicker";
 
@@ -666,6 +669,33 @@ export function RecordDetail({
               <h3 className={styles.sectionTitle}>Custom fields</h3>
             </div>
             <CustomFieldsSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Why we believe this</h3>
+            </div>
+            {/* The confidence model, readable WITHOUT spending a credit (plan 33 · A1). Until now it
+                surfaced only inside RevealDialog — at the moment of payment and never after. */}
+            <ProvenanceSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Signals</h3>
+            </div>
+            {/* Tenant-private (intent_signals) — no Layer-0 crossing, and the one graph surface with real
+                data today: the S-13 sweep writes job_change rows. */}
+            <SignalsSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Employment</h3>
+            </div>
+            {/* Career history from the graph. NOT a timeline — the import mints a bare edge with no
+                title or dates, so this is a company list that grows into detail (plan 33 §A2). */}
+            <EmploymentSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

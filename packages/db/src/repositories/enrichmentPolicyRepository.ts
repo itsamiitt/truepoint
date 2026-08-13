@@ -40,7 +40,7 @@ export interface EnrichmentPolicyRecord {
 }
 
 /** The writable policy columns. `tenantId`/`workspaceId` scope the row; the rest is the policy itself.
- *  The v2 pref shapes are optional — an omitting caller (pre-0109 call sites, tests) writes engine
+ *  The v2 pref shapes are optional — an omitting caller (pre-0111 call sites, tests) writes engine
  *  defaults, which is exactly the do-nothing posture an unconfigured workspace has. */
 export interface EnrichmentPolicyUpsert {
   tenantId: string;
@@ -56,7 +56,7 @@ export interface EnrichmentPolicyUpsert {
 /**
  * Narrow the stored provider_prefs jsonb back to the typed shapes, defaulting on any miss. safeParse (not
  * a cast like triggers/fieldAllowlist) because this jsonb nests two shapes with defaults — a row written
- * before 0109 (`{}`), or by a future `version: 2` writer, must degrade to engine defaults rather than
+ * before 0111 (`{}`), or by a future `version: 2` writer, must degrade to engine defaults rather than
  * leak an unvalidated object into the waterfall's ordering input.
  */
 function parsePrefs(raw: unknown): {

@@ -6,7 +6,6 @@
 import { env } from "@leadwolf/config";
 import { teamRepository } from "@leadwolf/db";
 import {
-  ForbiddenError,
   NotFoundError,
   type TeamView,
   ValidationError,
@@ -19,7 +18,7 @@ import {
 import { type Context, Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,8 +37,7 @@ function scopeOf(c: Context<{ Variables: TenancyVariables }>): {
   tenantId: string;
   workspaceId: string;
 } {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to manage teams.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to manage teams.");
   return { tenantId: c.get("tenantId"), workspaceId };
 }
 

@@ -328,6 +328,13 @@ export const emailMessage = pgTable(
     inReplyTo: varchar("in_reply_to", { length: 998 }),
     referenceIds: text("reference_ids").array(), // the References-header Message-ID chain (oldest→newest)
     subject: varchar("subject", { length: 255 }),
+    // ⚠ CLEARTEXT, and it contradicts body_enc below (audit 32 §9F). This is Gmail's own preview OF THE BODY
+    // (gmailInbound.ts passes msg.snippet through), so the row encrypts the message content and then stores
+    // its first 280 characters in the clear. Both decisions cannot be right. Not free to fix, though: the
+    // inbox thread list renders this (web features/inbox ThreadList.tsx), so dropping it costs a UX feature
+    // and encrypting it puts a decrypt on a list render path. Also: email_message is in NO
+    // DSAR fan-out path — see §9F, which separates this (a defect) from whether email records belong in
+    // erasure scope at all (a legal call that has never actually been made).
     snippet: varchar("snippet", { length: 280 }), // short preview for the inbox list
     fromAddr: citext("from_addr").notNull(),
     toAddrs: text("to_addrs").array(),

@@ -18,6 +18,7 @@
 import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { crmConnections } from "../schema/crm.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 /** Safe projection — NEVER includes oauth_token_enc (00 §7.2). */
 export interface CrmConnectionRecord {
@@ -155,7 +156,11 @@ export const crmConnectionRepository = {
   /** Every connection in the workspace (the CRM settings read). Never returns a credential. RLS-scoped. */
   async listByWorkspace(scope: TenantScope): Promise<CrmConnectionRecord[]> {
     return withTenantTx(scope, (tx) =>
-      tx.select(safeColumns).from(crmConnections).orderBy(asc(crmConnections.createdAt)),
+      tx
+        .select(safeColumns)
+        .from(crmConnections)
+        .orderBy(asc(crmConnections.createdAt))
+        .limit(LIST_SAFETY_CAP),
     );
   },
 

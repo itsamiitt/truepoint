@@ -7,7 +7,7 @@
 // terminating — safe to leave scheduled). DARK by default (BILLING_LEDGER_BACKFILL_ENABLED): enable it, let it
 // drain, confirm 0 drift via billing-recon, then it can stay off. Leader-locked so exactly one worker runs.
 
-import { creditRepository, db, withPlatformReadTx } from "@leadwolf/db";
+import { creditRepository, withPlatformReadTx, withSystemTx } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -40,8 +40,13 @@ export function makeProcessLedgerBackfillSweep(redis: IORedis) {
       let backfilled = 0;
       for (const tenantId of tenantIds) {
         try {
-          const { residual } = await db.transaction((tx) =>
-            creditRepository.backfillTenantLedger(tx, tenantId),
+          // AUDITED: a one-time rewrite of a tenant's credit history is precisely the kind of
+          // privileged action that must leave a trace naming the job that did it.
+          const { residual } = await withSystemTx(
+            "ledger_backfill_sweep",
+            "credit.ledger.backfill",
+            (tx) => creditRepository.backfillTenantLedger(tx, tenantId),
+            { targetType: "tenant", targetId: tenantId, tenantId },
           );
           backfilled += 1;
           // residual != 0 is expected (it absorbs pre-ledger history); log it for the audit trail.

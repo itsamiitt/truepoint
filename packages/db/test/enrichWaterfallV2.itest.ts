@@ -1,4 +1,4 @@
-// enrichWaterfallV2.itest.ts — waterfall v2 (0109) end-to-end on a real Postgres 16: the tx-split
+// enrichWaterfallV2.itest.ts — waterfall v2 (0111) end-to-end on a real Postgres 16: the tx-split
 // enrichContact path behind the dual gate (WATERFALL_V2_ENABLED env + enrichment_waterfall_v2 tenant
 // flag), with stub providers and a static verifier injected through EnrichDeps. [S-04][S-08][A-01]
 //
@@ -99,7 +99,7 @@ afterAll(async () => {
   await dbHandle?.stop();
 });
 
-describe("waterfall v2 end-to-end (0109)", () => {
+describe("waterfall v2 end-to-end (0111)", () => {
   test("per-field winners from different providers: ledger rows, email_status, source_imports", async () => {
     const contactId = await seedContact("case1.com");
     const apollo = stub("apollo", {}); // paid miss
@@ -127,7 +127,7 @@ describe("waterfall v2 end-to-end (0109)", () => {
     expect(pdl.calls()).toBe(1);
     expect(coresignal.calls()).toBe(1);
 
-    // Ledger: one row per attempt (miss AND hits) + the verify row — the 0109 fix in action.
+    // Ledger: one row per attempt (miss AND hits) + the verify row — the 0111 fix in action.
     const calls = await admin`
       SELECT provider_name, status, cost_micros::int AS cost, filled_fields
       FROM provider_calls WHERE workspace_id = ${wsA} ORDER BY provider_name`;
@@ -241,8 +241,8 @@ describe("waterfall v2 end-to-end (0109)", () => {
       await admin`SELECT count(*)::int AS n FROM provider_calls WHERE workspace_id = ${wsA}`;
 
     expect(result.status).toBe("unfilled");
-    expect(result.costMicros).toBe(50_000); // both paid misses counted — the pre-0109 ledger lost one
-    // BOTH miss rows persisted under the same hash (the ledger fix — pre-0109 the second was dropped).
+    expect(result.costMicros).toBe(50_000); // both paid misses counted — the pre-0111 ledger lost one
+    // BOTH miss rows persisted under the same hash (the ledger fix — pre-0111 the second was dropped).
     expect((after[0] as { n: number }).n - (before[0] as { n: number }).n).toBe(2);
   });
 });

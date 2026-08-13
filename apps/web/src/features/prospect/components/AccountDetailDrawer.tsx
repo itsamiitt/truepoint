@@ -8,7 +8,10 @@
 import type { MaskedAccount } from "@leadwolf/types";
 import { Avatar, Drawer, StatusBadge, TpButton, TpChip } from "@leadwolf/ui";
 import { Users } from "lucide-react";
+import { useAccountTechnologies } from "../hooks/useAccountTechnologies";
+import { isNotableOrgKind, orgKindCopy } from "../orgKindCopy";
 import styles from "../prospect.module.css";
+import { AccountAlumniSection, AccountDisplacementSection } from "./AccountGraphSections";
 import { AccountTechnologySection } from "./AccountTechnologySections";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -45,6 +48,10 @@ export function AccountDetailDrawer({
   /** Switch the page to the Contacts scope filtered by this account. Omit to hide the button. */
   onViewContacts?: (account: MaskedAccount) => void;
 }) {
+  // The develops section already fetches this account's Layer-0 answer; reading org_kind off that shared
+  // cache entry costs NOTHING extra — same query key, same request.
+  const { orgKind } = useAccountTechnologies(account?.id ?? null, "develops");
+  const copy = orgKindCopy(orgKind as never);
   const open = account != null;
   const hq = account ? [account.hqCity, account.hqCountry].filter(Boolean).join(", ") || "—" : "—";
   const fundingStage = account
@@ -82,13 +89,16 @@ export function AccountDetailDrawer({
             <Avatar name={account.name} size={44} />
             <div className={styles.identityMeta}>
               <span className={styles.identityName}>{account.name}</span>
-              <span className={styles.identitySub}>{account.domain ?? "—"}</span>
+              <span className={styles.identitySub}>
+                {account.domain ?? "—"}
+                {isNotableOrgKind(orgKind as never) ? ` · ${copy.noun}` : ""}
+              </span>
             </div>
           </div>
 
           <section className={styles.section}>
             <div className={styles.sectionHead}>
-              <h3 className={styles.sectionTitle}>Firmographics</h3>
+              <h3 className={styles.sectionTitle}>{copy.attributesTitle}</h3>
               <StatusBadge tone={account.revealedContactCount > 0 ? "success" : "muted"}>
                 {account.contactCount.toLocaleString()} contacts
               </StatusBadge>
@@ -114,6 +124,11 @@ export function AccountDetailDrawer({
               bridged this account to the shared graph. */}
           <AccountTechnologySection accountId={account.id} relationship="develops" />
           <AccountTechnologySection accountId={account.id} relationship="uses" />
+          {/* Conditional siblings: each renders NOTHING unless it has something to report — a permanent
+              empty "Recently dropped" panel on every account is noise, and "0 alumni" on a company is a
+              nonsense answer rather than an empty one. */}
+          <AccountDisplacementSection accountId={account.id} />
+          <AccountAlumniSection accountId={account.id} />
 
           {account.technologies.length > 0 ? (
             <section className={styles.section}>

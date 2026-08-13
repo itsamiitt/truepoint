@@ -15,6 +15,7 @@
 // A CAP LAYER ABOVE CREDITS (decision D2): this never reads or writes a balance. Credits answer "what does it
 // cost", entitlements answer "is it allowed at all". Reconciling the two in code is explicitly out of scope.
 
+import { guardDegradedLog, makeDegradedThrottle } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import {
   type EntitlementDecision,
@@ -25,6 +26,9 @@ import {
 import { entitlementRepository, withTenantTx } from "@leadwolf/db";
 import { AppError } from "@leadwolf/types";
 import type { Context, Next } from "hono";
+
+// Module-scoped throttle for the fail-open marker (audit 32 · C11) — see guardDegradedLog.ts.
+const allowDegradedLog = makeDegradedThrottle();
 
 /**
  * Guard one metered action behind its entitlement key.
@@ -47,7 +51,12 @@ export function requireEntitlement(key: string) {
     try {
       evaluated = await evaluate({ tenantId, workspaceId }, key);
     } catch (err) {
-      console.error("[entitlement] evaluation failed; allowing the request", { key, err });
+      // Fail open — unchanged. What changed (audit 32 · C11) is the marker: this now carries the shared
+      // `] DEGRADED ` shape so ONE alert expression catches every guard that opens, and two firing in the same
+      // window is the composite condition the audit was actually worried about. Throttled, because during an
+      // outage this runs per request. The entitlement `key` is dropped from the line deliberately — it is not
+      // needed to page someone, and this fires at request rate.
+      if (allowDegradedLog(Date.now())) console.error(guardDegradedLog("entitlement", err));
       return next();
     }
     const { decision, enforcing } = evaluated;

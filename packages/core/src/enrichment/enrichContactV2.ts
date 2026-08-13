@@ -1,4 +1,4 @@
-// enrichContactV2.ts — the waterfall-v2 orchestration (0109): the tx-split successor to enrichContact's
+// enrichContactV2.ts — the waterfall-v2 orchestration (0111): the tx-split successor to enrichContact's
 // single-transaction body, entered ONLY through enrichContact's dual gate (WATERFALL_V2_ENABLED env +
 // the enrichment_waterfall_v2 tenant flag). [S-04][S-08][A-01]
 //

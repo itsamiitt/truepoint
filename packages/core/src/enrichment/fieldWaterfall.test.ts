@@ -1,4 +1,4 @@
-// fieldWaterfall.test.ts — the waterfall-v2 per-field cascade invariants (0109; 06 §4 + the data-skill
+// fieldWaterfall.test.ts — the waterfall-v2 per-field cascade invariants (0111; 06 §4 + the data-skill
 // mandate). Hermetic: stub providers, in-memory breaker, pass-through/scripted gates and verifiers.
 
 import { describe, expect, test } from "bun:test";

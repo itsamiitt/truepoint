@@ -1,4 +1,4 @@
-// redisStores.test.ts — the Redis-shared breaker + provider gate (waterfall v2 / 0109) against an
+// redisStores.test.ts — the Redis-shared breaker + provider gate (waterfall v2 / 0111) against an
 // in-memory Redis fake (the crmBudgetStore test idiom): key lifecycles, threshold/cooldown semantics,
 // budget windows, and the TTL-on-create rule — no live Redis in CI.
 

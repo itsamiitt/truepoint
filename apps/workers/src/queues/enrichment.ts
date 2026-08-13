@@ -2,7 +2,7 @@
 // (packages/integrations) into core's enrichContact. Provider I/O lives here on the worker, never on the
 // api request thread or inside the reveal lock window.
 //
-// Waterfall v2 (0109): the processor is a FACTORY (the bulkEnrichment precedent) so the composition root
+// Waterfall v2 (0111): the processor is a FACTORY (the bulkEnrichment precedent) so the composition root
 // can inject the Redis-shared breaker + provider gate. When a v2 run reports all-throttled-nothing-filled,
 // the job is DEFERRED — re-enqueued with the vendor-suggested delay — never dropped (the mailboxThrottle
 // posture). Legacy path (flag off): deps are unused and behavior is unchanged.

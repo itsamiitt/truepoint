@@ -7,7 +7,6 @@
 
 import { changeMemberRole, inviteMember, listWorkspaceMembers, removeMember } from "@leadwolf/core";
 import {
-  ForbiddenError,
   ValidationError,
   changeMemberRoleSchema,
   inviteMemberSchema,
@@ -17,7 +16,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const workspaceMembersRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -28,8 +27,7 @@ workspaceMembersRoutes.use("*", requireRole("owner", "admin"));
 
 /** GET /current/members — the active members + pending invites of this workspace (the members table). */
 workspaceMembersRoutes.get("/current/members", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   const members = await listWorkspaceMembers({
     tenantId: c.get("tenantId"),
@@ -53,8 +51,7 @@ workspaceMembersRoutes.get("/current/members", async (c) => {
 
 /** POST /current/members — invite an email at a non-owner role (idempotent on (workspace, email)). */
 workspaceMembersRoutes.post("/current/members", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const parsed = inviteMemberSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid invite.");
 
@@ -73,8 +70,7 @@ workspaceMembersRoutes.post("/current/members", async (c) => {
 
 /** PATCH /current/members/:memberId — change an active member's role (never to owner). */
 workspaceMembersRoutes.patch("/current/members/:memberId", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const id = workspaceMemberIdParamSchema.safeParse({ memberId: c.req.param("memberId") });
   if (!id.success) throw new ValidationError("Invalid member id.");
   const body = changeMemberRoleSchema.safeParse(await c.req.json().catch(() => null));
@@ -94,8 +90,7 @@ workspaceMembersRoutes.patch("/current/members/:memberId", async (c) => {
 
 /** DELETE /current/members/:memberId — remove an active member or revoke a pending invite (not the owner). */
 workspaceMembersRoutes.delete("/current/members/:memberId", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const id = workspaceMemberIdParamSchema.safeParse({ memberId: c.req.param("memberId") });
   if (!id.success) throw new ValidationError("Invalid member id.");
 

@@ -231,15 +231,49 @@ Job-change notifications deep-link to `/prospect?contact=<id>`; keep that as the
 address (no new route — consolidation rule) but make it robust: on load with `?contact=`, the
 drawer must open even when the contact isn't in the current result page (fetch by id via A4).
 
-**F4 — Contract-shape normalization.** Move `MaybeList<T>` (duplicated in two slices) into
-`@leadwolf/types` or eliminate it once §4.4-P2 response envelopes are normalized; consolidate the
-three import clients (`api.ts`, `apiV2.ts`, `apiDrafts.ts`) behind one barrel with deprecation
-notes.
+**F4 — Contract-shape normalization. DONE, but not as scoped.** Both halves as written were
+wrong, and the duplication that mattered was one neither half named.
 
-**F5 — Orphaned routes decision.** `/crm-sync` exists in both apps but is reachable from neither
-nav nor palette. Either wire it behind the `CRM_SYNC_ENABLED` flag surface or delete the pages
-(removal-cleanup rule). Flagged for decision — CRM sync is dark, so deleting UI now and
-restoring with the flag is the cheaper path.
+- `MaybeList<T>` does **not** belong in `@leadwolf/types`. No endpoint returns `{items, available}`
+  — the server returns a list or a 404/501, and `available` is synthesized client-side from the
+  status. Putting it in the shared contract package would assert something untrue about the wire
+  format. It now lives in `apps/web/src/lib/maybeList.ts`, a web concern in a web location.
+- The three import clients should **not** be consolidated. `apiV2.ts` says in its own header that
+  it is "separate from the legacy api.ts so the two transport contracts (legacy poll vs v2 durable)
+  stay visibly distinct" — they share no function names and return different types. There is also
+  nothing to deprecate: all three are live, and the slice barrel correctly exports only components,
+  so a barrel over the data layer would *enlarge* the public surface. Left alone.
+- **What was actually duplicated:** `problemMessage` existed as **24 byte-identical private
+  copies**, and the 404/501 predicate as **11 more** under two names (`notBuilt` ×10,
+  `isUnavailable` ×1). `problemMessage` decides what the app *says* when something fails, so any
+  improvement to it reached one slice in twenty-four and the same failure was explained differently
+  depending on the screen. Both now have one definition (`lib/problemMessage.ts`,
+  `lib/maybeList.ts`); 29 files, −151 lines net.
+
+**F5 — Orphaned routes decision. STILL A HUMAN DECISION, but one of the two options as written does
+not exist.** Verified state: `/crm-sync` exists in `apps/web` and `apps/admin`, the feature slice is
+complete (`api.ts`, four components, hooks, keys, CSS module), and a repo-wide search finds **zero**
+references to the path outside the route file and the slice itself — no nav entry, no palette entry,
+no link from settings. Next.js still serves the URL, so it is reachable by typing it.
+
+- **"Wire it behind the `CRM_SYNC_ENABLED` flag surface" is not implementable as described.**
+  `apps/web` has **no per-tenant flag reader** — `components/shell/navConfig.ts` says so at the
+  `IMPORTS_DESTINATION` note, where the same thing was wanted for the IMPORT_V2 dual gate and could not
+  be done. The shipped precedent is the opposite of strict-dark nav: show the rail entry to everyone and
+  let the page degrade to an honest "not enabled yet" state off the API's 404.
+- `/crm-sync` does **not** currently degrade that way. It renders whatever `problemMessage` returns as a
+  footnote, so with the backend dark it reads as a broken page rather than an unreleased one.
+
+Accurate options, in increasing cost:
+1. **Delete the pages + slice** (removal-cleanup rule), restore when the flag flips. Cheapest, and what
+   this audit originally leaned toward. Destructive, so it needs the human call.
+2. **Leave it** — dead but URL-reachable. Free, but anyone who reaches it sees a page that looks broken.
+3. **Rail it on the IMPORTS precedent** — add to `DESTINATIONS` and first replace the raw-error footnote
+   with a purpose-built "not enabled yet" state. This surfaces an unreleased feature to every user, which
+   is a product decision, not a cleanup.
+
+Not done either way: options 1 and 3 are both product calls, and doing option 3's UI work before the
+decision would be wasted if the answer is 1.
 
 **Flagged, not scheduled** (no current-outcome backing — need a human decision):
 - Technology-stack panel on account drawer: the catalog/adoption schema has **no producer**, so
@@ -278,12 +312,12 @@ restoring with the flag is the cheaper path.
 | C3 | `PATCH /admin/crm/dead-letters/:id` is a cross-tenant write behind only the `pa` claim (`admin/routes.ts:153`). | Add `requireCapability("data:manage")`. |
 | C4 | No `app.notFound()` — 404s return Hono plain text, breaking RFC 9457 exactly where clients hit it (forge-api does it right). | Register a problem+json notFound handler. |
 | C5 | Idempotency implemented 4 ways; `POST /credits/checkout` + `/credits/subscribe` have **none**. | Adopt the shared middleware on all money/create routes; keep DB-unique as defence-in-depth (already the pattern for imports). |
-| C6 | No shared pagination transport; 9+ endpoints return unbounded arrays (`/tags`, `/custom-fields`, `/saved-searches`, `/teams`, `/workspaces`, `/crm/connections`, `/contacts/reveal-jobs`, `/enrichment/jobs`, `/pipeline-stages`); `GET /contacts` caps at 500 with no cursor. | Add `lib/pagination.ts` (Zod query schema + hard max + flat `nextCursor` envelope). Normalize the unbounded lists now, coordinated with the web slices in the same deploy (pre-production — cheap now, breaking later). |
-| C7 | `requireWorkspace` copy-pasted 3× + inlined ~40×. | Promote to middleware beside `tenancy`. |
+| C6 | No shared pagination transport; 9+ endpoints return unbounded arrays (`/tags`, `/custom-fields`, `/saved-searches`, `/teams`, `/workspaces`, `/crm/connections`, `/contacts/reveal-jobs`, `/enrichment/jobs`, `/pipeline-stages`); ~~`GET /contacts` caps at 500 with no cursor~~ (**wrong — no such endpoint; see §9B**). | Add `lib/pagination.ts` (Zod query schema + hard max + flat `nextCursor` envelope). Normalize the unbounded lists now, coordinated with the web slices in the same deploy (pre-production — cheap now, breaking later). |
+| ~~C7~~ **DONE** | `requireWorkspace` copy-pasted 3× + inlined ~40×. | Promoted to one helper in `middleware/tenancy.ts` (one signature — the three copies had two incompatible ones). All **50** inline sites migrated across 18 files, −62 lines; the only remaining `if (!workspaceId) throw` is the helper's own body. Five bare `ForbiddenError("no_workspace")` sites gained the default detail — a response-body change, and an improvement: a 403 with no `detail` tells the caller nothing. |
 | C8 | Two parallel staff-authz systems (`requireStaffRole` vs `requireCapability`) mid-migration. | Finish the capability migration; delete `requireStaffRole` per its own file comment. |
-| C9 | Extension allow-list grants `GET /contacts/:id` which does not exist. | Resolved by A4 (build the endpoint) — until then remove the entry. |
+| ~~C9~~ **DONE** | Extension allow-list grants `GET /contacts/:id` which does not exist. | **Entry removed** (not deferred to A4). Verified first: no bare `GET /:id` exists under `/contacts` anywhere in `apps/api`, and `background/api/client.ts` calls exactly two contact routes — the reveal POST and `by-linkedin` — both separately granted. Left in place it would have pre-authorized contact-detail for extension tokens the moment someone built it, without the deliberate review the allow-list exists to force. Re-add it as part of building A4. The drift test that derives the list from the extension client still passes, which is what proves the grant was unused. |
 | C10 | `POST /master-sync` is a permanently-dark orphaned second write path into the master graph (superseded by ADR-0047 in-process promotion; `app.ts:200` says so itself). | Delete route + `syncPrincipal` wiring; keep `forgeSyncRepository.applyItem` (the live in-process path). |
-| C11 | Fail-open trio: revocation check, entitlement gate, and both rate limiters all fail open on Redis outage — leaving only credit balance guarding the money path. | Keep fail-open for availability but add a composite alert ("Redis down ⇒ guards open") + a per-request header/log marker so the state is observable. Decision on failing closed for `revealRateLimit` specifically is flagged to the human. |
+| ~~C11~~ **observability DONE; fail-closed decision still open** | Fail-open trio: revocation check, entitlement gate, and both rate limiters all fail open on Redis outage — leaving only credit balance guarding the money path. | Fail-open behavior **unchanged** (availability is the right call). The state is now observable: `guardDegradedLog` gives every guard one marker shape, so a single expression (`] DEGRADED `) catches all four and two firing in a window IS the composite condition — defined in [19 §3](./19-observability-reliability.md). The revocation guard already had its own marker (AUTH-066) and keeps it; its shape is test-pinned. Markers are throttled (10s/module) because they fire at request rate during an outage. **No response header** — it would have to be set per-guard, and the two limiters live in `packages/auth` with no `Context`, so coverage would be partial and a missing header would read as "guards healthy", which is worse than none. **Failing closed for `revealRateLimit` remains a human decision** and is not made here. |
 
 ### 4.3 New endpoints (the only genuinely new API surface — all read-only, all tenant-scoped)
 
@@ -532,6 +566,233 @@ P2: C11 observability, F-flagged items pending decisions.
 
 ---
 
+## 9B. Corrections — findings this audit got WRONG (recorded during implementation)
+
+Nine items in the register above did not survive contact with the code. They are listed here rather than
+quietly edited, because the pattern in them is more useful than any single correction: **this audit
+repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns, a number
+that looked like a cap) without reading the reasoning already present at the site.** Where the code carried a documented decision, the code
+was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts of this document. §9.4 in particular is now 3-for-3 wrong: both OAuth-state tables, all three outboxes, and both retention stores were each filed as duplication on column-shape resemblance alone.
+
+| # | The audit said | What was actually true |
+|---|---|---|
+| **C10** | Delete the dark `/master-sync` ingress — an orphaned second write path. | `app.ts` already documents a considered decision to KEEP it flag-gated: it is an ADR-0047 ingress an **externally-hosted Forge** could still need, and gating makes enabling it a reviewable act. Deleting it would have thrown away a deliberate choice. **Not done.** |
+| **§6.4** | `retentionScanRepository`'s purge is a "destructive, cross-tenant, **unaudited** seam". | It is audited, and better than a generic row would be: `runRetentionSweep` appends an immutable `retention_runs` row per class under a tenant-scoped tx, recording candidate count, deleted count, cutoff, mode and timing. The owner connection is deliberate (explicit tenant predicate, double-gated upstream). **Not changed.** |
+| **§6.4** | `schedulerRepository`'s claim is an unaudited cross-tenant write. | It is a 60-second lease, not a privileged action. One audit row per tick would bury the real entries. **Not changed.** |
+| **§9.3** | `teamRepository.listTeams` is unbounded. | Already bounded. (The other six named reads genuinely were not — those are fixed.) |
+| **§9.4** | The two OAuth-state tables "are the same table". | They are not. `crm_oauth_states` carries `environment` and `scopes` (sandbox-vs-production, requested grants) that email OAuth has no use for; `oauth_connect_state`'s PKCE verifier is **NOT NULL** where CRM's is nullable; and `redirect_uri` (an OAuth protocol parameter) is a different thing from `redirect_after` (in-app navigation state), not a rename. Merging would add meaningless columns to both and weaken a NOT NULL. Same reasoning that keeps `master_employment` and `master_education` apart: shared shape, different payload. **Not merged.** |
+| **F5** | Either wire `/crm-sync` behind the `CRM_SYNC_ENABLED` flag surface, or delete it. | The first option does not exist. `apps/web` has **no per-tenant flag reader** — `navConfig.ts` records that the same gating was wanted for IMPORT_V2 and could not be done, and the shipped precedent is to rail the entry for everyone and degrade honestly on a 404. The decision is real; the menu was wrong. See F5 for the corrected options. |
+| **§9.4** | The two retention stores are duplication with only one execution path — consolidate them. | They are not duplicates. `retention_class_policies` is the ENGINE's config: keyed by **data class** (natural PK), carries the `disabled\|shadow\|enforce` rollout mode, is read by `runRetentionSweep`, and writes `retention_runs`. `retention_policies` is keyed by **entity + field** with staff attribution and a reason, and doc 13a Area 8 specifies it as a *"retention SLA per field/entity"* — a `compliance_officer` register, listed beside the sub-processor registry and legal holds. Different key, different author, different purpose. **Not merged.** The real defect underneath is narrower and is recorded in §9C. |
+| **C6 (second half)** | "`GET /contacts` caps at 500 with no cursor" — a breaking fix needing a coordinated API+web deploy. | **There is no `GET /contacts` list endpoint.** Contact listing is `POST /api/v1/search/contacts`, which is keyset-paged by design: `cursor` in (`packages/types/src/search.ts:151-156` — "never offset"), `nextCursor` out, and the cursor chain is covered by tests (`inMemorySearchPort.test.ts:109-115`). The audit read a cap in the bulk-mutation footprint as a cap on the list. **Nothing to fix — C6 is fully closed by the six configuration-list caps.** |
+| **§9.4** | Three near-identical outbox tables should converge on one with a `lane` discriminator. | `projection_outbox` has **no tenant column at all** — it is a Layer-0 table keyed on `cluster_id`. Merging it into the tenant-scoped outboxes would either put a Layer-0 queue under tenant RLS or nullify the tenant columns and lose RLS on the rest, breaking the one boundary the schema exists to hold. `event_outbox` and `worker_outbox` ARE close and could merge, but they are drained by different relays with different delivery semantics, so the gain is cosmetic. **Not merged.** The one real defect here stands: `worker_outbox` omits the FKs its sibling declares — deferred, see below. |
+
+**Deferred rather than dropped.** `worker_outbox`'s missing FKs are a genuine integrity gap, and the two
+retention-policy stores (§9.4) are genuine duplication with only one execution path. Both need a migration,
+and **migrations 0108 and 0109 have not yet been verified by CI** (no Docker on the authoring host). Stacking
+a third unverified schema change on two unverified ones trades a small cleanup for a compounding risk, so
+these wait for CI's verdict rather than being written blind.
+
+---
+
+## 9C. Found while disproving §9.4 — an unenforced retention SLA register (NEEDS A HUMAN DECISION)
+
+`retention_policies` has a complete staff CRUD surface — `GET/POST/PATCH /admin/compliance/retention` plus
+`setActive`, all `compliance_officer`-gated and audited through `withPlatformTx` — and **nothing executes it.**
+`runRetentionSweep` reads `retentionClassPolicyRepository` only; a repository-wide search finds no worker, no
+core path and no SQL that reads `retention_policies` outside those admin routes.
+
+That may well be correct. A records-retention schedule kept as a documented commitment, shown to an auditor
+and enforced by other means, is ordinary compliance practice — and doc 13a describes this table as an
+**SLA register**, grouped with the sub-processor registry and legal holds rather than with the sweep.
+
+What is NOT correct is the schema comment. `packages/db/src/schema/platformOps.ts` describes the table as
+"the input to the retention sweep (a separate worker)". It is not an input to anything. A compliance officer
+can author "contacts.email — 400 days" in the admin console, see it saved and active, and reasonably believe
+personal data is being deleted on that schedule. Nothing deletes it.
+
+**A sequencing constraint found alongside it.** `legal_holds` is planned (13a Area 8) and **does not exist** —
+no table, no repository, no code. A legal hold is the standard exception to automated deletion, so no retention
+class may be flipped to `enforce` until it does, or the sweep can destroy records under a litigation hold with
+nothing able to stop it. Nothing is at risk today: every seeded class ships `shadow` and deletes nothing. The
+note is recorded at `packages/types/src/retention.ts`, in the comment that already enumerates the gates on the
+`enforce` flip — that is where whoever flips it will be reading. The same missing control already touches a
+**live** path, DSAR erasure (`queues/dsar.ts` → `deleteFanout` → `purgeDependents`), which cannot check a hold
+either; that is a right-to-erasure-versus-litigation-hold conflict and a legal call, not an implementation one.
+
+**Why this is flagged rather than fixed.** Wiring the register into the sweep changes what gets deleted and
+when — it is a change to the deletion of personal data, which CLAUDE.md rule 3 puts on the human, and the
+entity/field model would first need a defined mapping onto the engine's data classes and modes. Silently
+enforcing an SLA someone authored under the assumption it was advisory is the more dangerous of the two
+failure modes. The alternatives, in increasing cost:
+
+1. ~~**Correct the comment only**~~ — **DONE.** `platformOps.ts` no longer claims to be "the input to the
+   retention sweep".
+2. ~~**Say so in the UI**~~ — **DONE**, and it was worse than "unlabelled". The confirm dialog stated that
+   activating a policy *"ARMS the retention sweep — rows older than N days become eligible for deletion"*,
+   which is false: nothing arms, nothing deletes. An officer was being told the opposite of the truth at the
+   exact moment of the decision. The dialog now says it records a retention commitment and starts no deletion,
+   the section carries a one-line note pointing at where deletion actually lives, and the confirm title reads
+   "Mark … active" rather than "Enable". Copy only — no behaviour changed, so this needed no product call.
+3. **Wire it into the sweep** — a real feature: map entity/field to data class, decide the mode it enters
+   at (`shadow` first, per the engine's own contract), and re-run the compliance checklist.
+
+## 9D. Two confidence engines ship; the better one is dead (NEEDS A HUMAN DECISION)
+
+Found by working the roadmap rather than the register: 06-roadmap Phase 2 lists "per-field decay curves",
+and CLAUDE.md/08-architecture say **"Decay curves are Phase 2 — not built."** That is half true, and the half
+that is false is the load-bearing half. A decay curve ships and drives what customers see. A *second*,
+policy-driven one is built, tested, exported — and called by nothing.
+
+| | `packages/types/src/confidence.ts` | `packages/core/src/prospect/confidence.ts` |
+|---|---|---|
+| **Status** | **LIVE** — `buildConfidenceBadgeV1` → `revealContact.ts` + the account-intelligence provenance route | **DORMANT** — `resolvePolicy`, `evidenceFactor`, `daysUntilStale` have **zero** consumers; `scoreConfidence`'s only repo hit is a comment in an itest |
+| **Corroboration** | multiplicative boost, **capped at 1.25×** | **Noisy-OR** `1-(1-w)ⁿ` (TruthFinder KDD'07 / Knowledge Vault KDD'14) |
+| **Half-lives** | **hardcoded** `FIELD_HALF_LIFE_DAYS` — changing one means shipping code | **from `master_confidence_policy`** (0107), per `(field, source_type)` with `'*'` wildcards — staff-tunable, no deploy |
+| **Decay math** | identical `2^(-age/halfLife)` | identical |
+
+**They disagree materially, and NOT in one direction.** Computed both ways against the REAL seeded policy rows
+from migration 0107 (not invented parameters), by `packages/core/src/prospect/confidenceDivergence.test.ts`:
+
+| source | method | age (d) | sources | live | dormant | delta |
+|---|---|---:|---:|---:|---:|---:|
+| provider | provider | 180 | 1 | 0.4725 | 0.6761 | **+0.2036** |
+| provider | provider | 180 | 3 | 0.5315 | 0.7927 | **+0.2612** |
+| provider | provider | 180 | 5 | 0.5449 | 0.7953 | **+0.2504** |
+| reveal | user_confirm | 30 | 1 | 0.8333 | 0.8974 | +0.0641 |
+| crawl | crawl | 365 | 1 | 0.2351 | 0.1349 | **−0.1002** |
+| crawl | crawl | 365 | 3 | 0.2645 | 0.2229 | −0.0416 |
+
+**This is the finding that should drive the decision.** Switching engines is not "everything scores a bit
+higher" — it is a REDISTRIBUTION. Provider-sourced records gain 0.20–0.26 (enough to cross two badge bands),
+while passively-crawled records LOSE up to 0.10. Arguably that is the more honest model — a licensed provider
+corroborated three ways deserves more belief than a crawl, and the live engine's 1.25× cap cannot express
+that — but it means a visible subset of records would get *less* confident on the day of the switch, and those
+are exactly the records a customer is most likely to have complained about already.
+
+The divergence is driven by CORROBORATION, not decay: the decay arithmetic is identical in both files, and the
+gap widens as source count rises (Noisy-OR compounds; a capped multiplier cannot). Both engines agree on the
+one property that matters most — a fact with no observation date is not scored as false.
+
+**Two consequences while it stands.** `master_confidence_policy` is staff-tunable configuration that tunes
+nothing — the third such surface this audit has found, after `retention_policies` (§9C) and the dark
+`/crm-sync` console (F5). And the live half-lives can only be changed by shipping code, which is the opposite
+of what a Phase-2 tuning loop needs.
+
+**Not decided here** (CLAUDE.md rule 5 — the confidence/provenance model is the product's spine, and rule 6 —
+surface the conflict, never silently reinterpret). The options:
+
+1. **Correct the claim only.** Both files now carry headers saying which is live, which is dormant, and by how
+   much they differ. Done — it stops the next author wiring the wrong one or assuming they agree.
+2. **Wire the policy engine behind a flag, shadow-first** — compute both, log the delta, flip nobody. This is
+   exactly the pattern `retention_class_policies` already uses (`disabled|shadow|enforce`) and the entitlement
+   gate uses (shadow disagreement metric), so the precedent is in-house. Costs a worker path and a metric.
+3. **Delete the dormant model.** Cheapest, and defensible if the capped-boost model is the intended one — but
+   it discards the only implementation that reads the policy table the schema already ships and seeds.
+
+Option 2 is the one this codebase's own precedents point at, but it changes how customer-facing confidence is
+computed, so it is the human's call.
+
+**This decision blocks real work, not just tidiness.** Plan 33 §5 requires a `confidence_band` chip on search
+rows. It cannot be built until §9D is settled: the drawer badge reads Layer 0 (`provenance_event`, via
+`withErTx`), while search runs Layer 1 under RLS where the only reachable confidence data is
+`contacts.field_provenance` / `email_status` / `last_verified_at` — a different store. Deriving the chip
+in-query would put a "high" chip beside a "medium" badge for the same contact, which is precisely the failure
+`badgeV1.ts` warns about. So §9D is not an abstract cleanup: one shipped plan is waiting on it.
+
+## 9E. Tenant suspension suspends nothing (NEEDS A HUMAN DECISION — highest severity found)
+
+`tenants.status` can be set to `'suspended'` by two paths, and **no runtime code reads it.**
+
+- **Staff suspension** — `POST /admin/tenants/:id/suspend`, `super_admin` only, gated behind a consumed JIT
+  elevation and an audited `withPlatformTx`. It is the heaviest control in the console, and its own comment
+  says *"the action gates the whole tenant."*
+- **Dunning suspension** — `subscriptionRepository.suspendForDunning` (M11/ADR-0041), automated, tagged
+  `suspension_reason='dunning'` so payment resumption can auto-lift it.
+
+**What was checked, by name, across `apps/` and `packages/`:**
+
+| Path | Checks |
+|---|---|
+| `login` / `refresh` / `switchOrg` / `switchWorkspace` | `user.status !== "active"` — **user** suspension works |
+| `tenantMemberRepository.listForUser` | joins `tenants` but filters on `tenantMembers.status` **only** |
+| `middleware/tenancy.ts` | reads `claims.tid` from the verified token; **no status read** |
+| every non-admin read of `tenants.status` | exactly two, both in `subscriptionRepository`, and both are the
+  `WHERE` guard of the status **write** itself — not an access check |
+
+So a suspended tenant's users keep their sessions, keep refreshing them, keep switching into the org, and keep
+every API route. **User** suspension is enforced properly; the **tenant**-level control is not. No test asserts
+otherwise — `platformAuditCoverage` covers the audit action name only — so this was never wired rather than
+regressed.
+
+**Two distinct consequences.** The staff break-glass control does not break glass: the response to an abuse or
+legal incident sets a flag and stops nothing. And a tenant that stops paying retains full product access
+indefinitely, since the dunning ladder's terminal state is this same no-op.
+
+**Why not simply fixed here.** The correct behaviour is unambiguous, but switching it on ejects every currently
+suspended tenant the moment it deploys — including any suspended for a stale, mistaken, or long-since-resolved
+reason. That is a customer-visible action with no undo, which CLAUDE.md rule 3 and rule 6 put on the human.
+
+**Options, in the order this codebase's own precedents suggest:**
+
+1. **Shadow first** — add the check to the auth/tenancy path behind a flag, default OFF, logging what it *would*
+   refuse. This is exactly the pattern `requireEntitlement` uses for its rollout and `retention_class_policies`
+   encodes as `disabled|shadow|enforce`. It makes the blast radius measurable before anyone is locked out.
+2. **Enforce at token mint only** (`login`/`refresh`/`switchOrg`), not per-request. Cheaper and self-limiting:
+   existing sessions die within the access-token TTL rather than instantly, which is the same graceful shape
+   user suspension already has.
+3. **Enforce per-request** in `tenancy`. Immediate and complete, and the largest blast radius.
+
+Before any of them: **count the currently-suspended tenants and read their `suspension_reason`.** If that set is
+empty, options 2 and 3 are free and this is a five-line fix.
+
+## 9F. `email_message` cleartext — one clear defect, one legal question (verified)
+
+The register carried this as "9.5-P0: `email_message` plaintext unreachable by blind-index DSAR erasure,
+blocked on compliance". Verified rather than carried forward on the audit's word — and it is two separate
+things that were being discussed as one.
+
+**Verified facts.** `email_message` stores `body_enc` as KMS-envelope **ciphertext**, while `snippet`
+(varchar 280), `from_addr` (citext) and `to_addrs` (text[]) are **cleartext**. The table is LIVE, not dark:
+`dispatchOutreachSend` writes outbound rows and `gmailInboxPollSweep` → `recordInboundReply` writes inbound
+ones. And `email_message` appears **nowhere** in the DSAR fan-out — `purgeDependents` covers `source_imports`,
+`contact_reveals`, `consent_records`, `list_members`; `deleteFanout` tombstones `contacts` and clears
+`master_emails` / `master_phones` / `master_signals`. Nothing touches email rows.
+
+**1. The clear defect: `snippet` contradicts `body_enc`.** `snippet` is Gmail's own preview *of the message
+body* (`gmailInbound.ts` passes `msg.snippet` straight through). So the system encrypts the body — deciding
+message content is sensitive enough to warrant KMS envelope encryption — and then stores the first 280
+characters of that same content in the clear, in the same row. Whatever the right answer is, those two
+decisions cannot both be right. This needs no legal input to recognise; it is an internal inconsistency.
+
+**2. The legal question, which is NOT a bug to fix blindly.** After a completed erasure, a subject's address
+still sits in `from_addr` / `to_addrs`. That may well be correct: these rows are the **tenant's own
+correspondence**, and a business's record of having emailed someone is not obviously erasable on that person's
+request — communications records commonly survive erasure under a legitimate-interest or record-keeping basis.
+The problem is not the answer, it is that **the system answers by omission**. Nobody decided that email records
+are out of erasure scope; the fan-out simply never included them, and the blind-index design means it could not
+have reached them anyway.
+
+**What to do, in order:**
+
+1. **Fix the snippet inconsistency.** *(Correcting my own note from the commit that added this section: I
+   called it "cheap, no legal input needed". RECOGNISING it is free; FIXING it is not, and I should not have
+   written that.)* The snippet is consumed — `apps/web/src/features/inbox/components/ThreadList.tsx:63`
+   renders it as the thread preview — so every option has a real cost, and each changes PII storage or display,
+   which CLAUDE.md rule 3 puts behind the compliance checklist:
+   - **Stop storing it** — the inbox thread list loses its preview line. Smallest code change, real UX loss.
+   - **Encrypt it with the body** — preserves the feature, but the thread list must now decrypt every row it
+     renders, on a list path that currently reads a plain column. Needs a look at the envelope scheme before
+     anyone promises it is cheap.
+   - **Justify it in writing** — argue that a 280-character excerpt is materially less exposing than the full
+     body. That is a defensible position, but it has to be *written down*, because right now the codebase
+     asserts both things at once and neither is recorded as a decision.
+2. **Decide the erasure scope explicitly** and record it in `09-compliance.md`: are `email_message` rows in or
+   out of DSAR erasure? Either answer is defensible; the current implicit "out" is not, because it was never
+   chosen.
+3. **If in scope**, the reach problem is real: erasure resolves subjects by `email_blind_index`, and these
+   columns have no blind index, so they are unreachable by the existing mechanism. That is a schema change, and
+   it should not be designed before step 2 answers whether it is needed.
+
 ## 10. Implementation order
 
 Slices are sized to ship independently to main (pre-prod convention), each with its gates
@@ -554,7 +815,7 @@ the relevant skills open (any data-path slice: platform + data + security).
 **Wave 3 — structural debt:**
 8. 9.2 schema backfills (SQL-only tables → pgTable; platform_audit_log migration; parity itests).
 9. §6.4-1 `withSystemTx` + worker sweep migration + stop exporting raw `db`. [A-01]
-10. C6 pagination normalization + C7 + F4 (coordinated API+web deploy).
+10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. C7 and F4 are both done — see their entries.
 11. 9.5-P0 email cleartext remediation (after compliance-checklist sign-off). [A-01][A-02]
 
 **Wave 4 — consolidation & deletions (each needs a small decision recorded in decisions.md):**

@@ -16,7 +16,8 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const pipelineStagesRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -48,8 +49,7 @@ function toDto(s: {
 
 // GET /pipeline-stages?includeArchived=true — the workspace's stages in display order.
 pipelineStagesRoutes.get("/", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view stages.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view stages.");
   const includeArchived = c.req.query("includeArchived") === "true";
   const stages = await pipelineStageRepository.list(
     { tenantId: c.get("tenantId"), workspaceId },
@@ -59,7 +59,7 @@ pipelineStagesRoutes.get("/", async (c) => {
 });
 
 // POST /pipeline-stages — create a stage (maps_to_status validated to the canonical enum by the schema).
-pipelineStagesRoutes.post("/", async (c) => {
+pipelineStagesRoutes.post("/", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before creating stages.");
@@ -77,7 +77,7 @@ pipelineStagesRoutes.post("/", async (c) => {
 });
 
 // PATCH /pipeline-stages/:id — edit a stage (rename, re-map, reorder, set default, archive).
-pipelineStagesRoutes.patch("/:id", async (c) => {
+pipelineStagesRoutes.patch("/:id", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before editing stages.");
@@ -99,16 +99,20 @@ pipelineStagesRoutes.patch("/:id", async (c) => {
 });
 
 // POST /pipeline-stages/contacts/:id/stage — assign (or clear) a contact's stage; rolls outreach_status up.
-pipelineStagesRoutes.post("/contacts/:id/stage", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId)
-    throw new ForbiddenError("no_workspace", "Select a workspace before assigning stages.");
-  const parsed = assignStageSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw new ValidationError("Body must be { stage_id } (null to clear).");
-  const result = await assignStage({
-    scope: { tenantId: c.get("tenantId"), workspaceId },
-    contactId: c.req.param("id"),
-    stageId: parsed.data.stage_id,
-  });
-  return c.json(result);
-});
+pipelineStagesRoutes.post(
+  "/contacts/:id/stage",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId)
+      throw new ForbiddenError("no_workspace", "Select a workspace before assigning stages.");
+    const parsed = assignStageSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("Body must be { stage_id } (null to clear).");
+    const result = await assignStage({
+      scope: { tenantId: c.get("tenantId"), workspaceId },
+      contactId: c.req.param("id"),
+      stageId: parsed.data.stage_id,
+    });
+    return c.json(result);
+  },
+);

@@ -9,11 +9,11 @@
 // contacts and 200 reveals, so every number above that was wrong while being labelled a total.
 
 import { reportsRepository } from "@leadwolf/db";
-import { ForbiddenError, reportsSummaryQuerySchema, reportsSummarySchema } from "@leadwolf/types";
+import { reportsSummaryQuerySchema, reportsSummarySchema } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const reportsRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -26,8 +26,7 @@ const DAY_MS = 86_400_000;
 const RANGE_DAYS: Record<string, number | null> = { "7d": 7, "14d": 14, "30d": 30, all: null };
 
 reportsRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   // Parsed, not read: `tz` reaches date_trunc's third argument, so it is bounded and pattern-checked at the
   // contract rather than trusted from the query string.

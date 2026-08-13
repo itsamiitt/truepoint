@@ -4,15 +4,11 @@
 // panel renders read-only status + deep links instead (no faked mutations). The slice's only backend seam.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { NotificationPrefs, UserProfile, UserProfilePatch } from "./types";
 
 const BASE = `${API_BASE}/api/v1/settings/user`;
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 // ── Profile ─────────────────────────────────────────────────────────────────────────────────────────
 /** GET the editable profile (name / timezone / locale + read-only email + avatar). */

@@ -3,13 +3,9 @@
 // or automates against LinkedIn. The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { SalesNavCaptureResult, SalesNavLinkDTO, SalesNavLinkRequest } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** GET /sales-navigator/links — the workspace's captured links, newest first. No PII; workspace-scoped. */
 export async function fetchLinks(): Promise<SalesNavLinkDTO[]> {

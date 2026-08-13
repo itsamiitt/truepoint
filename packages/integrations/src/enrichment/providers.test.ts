@@ -1,6 +1,6 @@
 // providers.test.ts — provider CONTRACT tests on recorded fixtures (14 §3.5: no live spend in CI): each
 // adapter maps its vendor payload shape onto the port contract, reports miss-without-key, and surfaces
-// rate-limit/error statuses the waterfall + breaker react to. The 0109 additions also prove the hardened
+// rate-limit/error statuses the waterfall + breaker react to. The 0111 additions also prove the hardened
 // transport (host pin, https-only, size cap, throw→zero-cost-error) and the GET/query adapter shape.
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -110,7 +110,7 @@ describe("enrichment provider contract (recorded fixtures)", () => {
   });
 });
 
-describe("hardened default transport (0109 security mandate)", () => {
+describe("hardened default transport (0111 security mandate)", () => {
   test("a non-allowlisted host is refused before any network I/O", async () => {
     const err = await defaultFetchJson("https://attacker.internal/metadata", {
       method: "GET",
