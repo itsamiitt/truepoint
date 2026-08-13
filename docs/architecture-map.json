@@ -27,7 +27,6 @@
     "auth",
     "auth-policy",
     "billing",
-    "cache",
     "channels",
     "compliance",
     "contacts-bulk",
@@ -76,7 +75,6 @@
     "scim",
     "scoring",
     "search",
-    "security",
     "sequences",
     "settings",
     "settings-billing",
@@ -335,18 +333,6 @@
         "apps/workers/src/queues/subscriptionDunningSweep.ts",
         "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
-      "integrations": []
-    },
-    "cache": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/cache/readThrough.test.ts",
-        "packages/core/src/cache/readThrough.ts"
-      ],
-      "db": [],
-      "workers": [],
       "integrations": []
     },
     "channels": {
@@ -1733,17 +1719,6 @@
       "workers": [],
       "integrations": []
     },
-    "security": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/security/malwareScanner.ts"
-      ],
-      "db": [],
-      "workers": [],
-      "integrations": []
-    },
     "sequences": {
       "web": [
         "apps/web/src/features/sequences/api.ts",
@@ -2015,17 +1990,6 @@
         "packages/db/src/repositories/staffRepository.ts",
         "packages/db/src/repositories/supportNoteRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "storage": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/storage/fileStore.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -2755,7 +2719,11 @@
       "packages/config/src/workerSurface.test.ts"
     ],
     "packages/core": [
-      "packages/core/src/index.ts"
+      "packages/core/src/cache/readThrough.test.ts",
+      "packages/core/src/cache/readThrough.ts",
+      "packages/core/src/index.ts",
+      "packages/core/src/security/malwareScanner.ts",
+      "packages/core/src/storage/fileStore.ts"
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
@@ -3175,7 +3143,6 @@
     "undeclared domain 'announcements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'audit-log' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'auth-policy' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'cache' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'channels' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-dedup' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
@@ -3204,7 +3171,6 @@
     "undeclared domain 'public-pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'scim' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'security' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-enrichment' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

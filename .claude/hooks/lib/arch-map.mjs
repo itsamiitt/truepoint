@@ -288,6 +288,24 @@ export const REPO_DOMAIN = {
  * Aliasing rather than renaming the folder is deliberate: a rename touches every importer for a cosmetic gain,
  * and CLAUDE.md is explicit that structure rules never justify churn in correctness-bearing code.
  */
+/**
+ * `packages/core/src/*` folders that are cross-cutting infrastructure, NOT feature domains.
+ *
+ * The core rule turns any folder name into a domain, which is right for `scoring/` or `retention/` — those
+ * have api/web/db counterparts and are genuinely features. It is wrong for the PORTS. CLAUDE.md states core
+ * "owns all ports", and a port is consumed by every domain rather than belonging to one: `storage/fileStore.ts`
+ * and `security/malwareScanner.ts` describe themselves as siblings in exactly that role, and `cache/readThrough`
+ * is a tier sitting in front of other domains' reads.
+ *
+ * Listing them as domains made the map claim three features that do not exist, and diluted the domain list —
+ * which is the thing a newcomer reads to learn what this product DOES. Each is core-only (verified: no api,
+ * web or db file buckets to any of them), so nothing is orphaned by moving them to the shared area.
+ *
+ * Keep this list SHORT and explicit. A new core folder should surface as a domain and get a deliberate
+ * decision, exactly as REPO_DOMAIN's header argues — not be silently absorbed into "shared".
+ */
+export const CORE_SHARED_FOLDERS = new Set(["cache", "security", "storage"]);
+
 export const DOMAIN_ALIAS = {
   ingestion: "ingest",
 };
@@ -410,8 +428,10 @@ export function classify(p) {
   // core domains (ports + top-level files are shared, not a domain).
   if ((m = p.match(/^packages\/core\/src\/ports\//)))
     return { kind: "shared", area: "packages/core/ports" };
-  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//)))
+  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//))) {
+    if (CORE_SHARED_FOLDERS.has(m[1])) return { kind: "shared", area: "packages/core" };
     return { kind: "feature", domain: DOMAIN_ALIAS[m[1]] ?? m[1], bucket: "core" };
+  }
   if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p))
     return { kind: "shared", area: "packages/core" };
 

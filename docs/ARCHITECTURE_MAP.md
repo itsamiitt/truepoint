@@ -786,6 +786,16 @@ flowchart TD
   *(This entry previously listed `custom-fields`/`customFields`, `feature-flags`/`featureFlags`,
   `saved-searches`/`savedSearches` and `pipeline-stages`/`pipelineStages` as case-variant PAIRS. Checked against the
   JSON: no such pairs exist — every slug appears exactly once. The prose had gone stale against the generator.)*
+- **Three "domains" were never features (86 → 82 domains, 53 → 51 warnings).** `packages/core/src/{cache,security,
+  storage}` bucketed as feature domains because the core rule turns any folder name into one. That is right for
+  `scoring/` or `retention/`, which have api/web/db counterparts — and wrong for PORTS. CLAUDE.md says core "owns
+  all ports", and `storage/fileStore.ts` and `security/malwareScanner.ts` describe themselves as siblings in
+  exactly that role; `cache/readThrough` is a tier in front of other domains' reads. Listing them as domains made
+  the map claim three features that do not exist and diluted the list a newcomer reads to learn what the product
+  DOES. `CORE_SHARED_FOLDERS` now routes them to the `packages/core` shared area. Kept short and explicit on
+  purpose: a NEW core folder still surfaces as a domain and gets a deliberate decision rather than being silently
+  absorbed into "shared".
+
 - **One warning WAS a real defect, and is fixed (54 → 53).** `ingest` and `ingestion` were two domains for one
   concept, because `apps/api/src/features/ingest/` and `packages/core/src/ingestion/` are spelled differently and a
   folder-derived slug inherits whatever the folder is called. A reader asking "where does ingestion live" was shown
@@ -793,8 +803,8 @@ flowchart TD
   the `REPO_DOMAIN`/`QUEUE_DOMAIN` lookups, so there is one normalisation authority rather than two. Aliased rather
   than renaming the folder: a rename touches every importer for a cosmetic gain, and structure rules never justify
   churn in correctness-bearing code.
-- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (86 domains with code, 39 shared areas,
-  **3** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
+- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (82 domains with code, 39 shared areas,
+  **2** unassigned, **51** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
   (provenance, employment, org-kind, signals, displacement, alumni, peer adopters) and audit 32's Waves 1/3
