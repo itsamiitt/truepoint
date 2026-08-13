@@ -661,6 +661,52 @@ surface the conflict, never silently reinterpret). The options:
 Option 2 is the one this codebase's own precedents point at, but it changes how customer-facing confidence is
 computed, so it is the human's call.
 
+## 9E. Tenant suspension suspends nothing (NEEDS A HUMAN DECISION — highest severity found)
+
+`tenants.status` can be set to `'suspended'` by two paths, and **no runtime code reads it.**
+
+- **Staff suspension** — `POST /admin/tenants/:id/suspend`, `super_admin` only, gated behind a consumed JIT
+  elevation and an audited `withPlatformTx`. It is the heaviest control in the console, and its own comment
+  says *"the action gates the whole tenant."*
+- **Dunning suspension** — `subscriptionRepository.suspendForDunning` (M11/ADR-0041), automated, tagged
+  `suspension_reason='dunning'` so payment resumption can auto-lift it.
+
+**What was checked, by name, across `apps/` and `packages/`:**
+
+| Path | Checks |
+|---|---|
+| `login` / `refresh` / `switchOrg` / `switchWorkspace` | `user.status !== "active"` — **user** suspension works |
+| `tenantMemberRepository.listForUser` | joins `tenants` but filters on `tenantMembers.status` **only** |
+| `middleware/tenancy.ts` | reads `claims.tid` from the verified token; **no status read** |
+| every non-admin read of `tenants.status` | exactly two, both in `subscriptionRepository`, and both are the
+  `WHERE` guard of the status **write** itself — not an access check |
+
+So a suspended tenant's users keep their sessions, keep refreshing them, keep switching into the org, and keep
+every API route. **User** suspension is enforced properly; the **tenant**-level control is not. No test asserts
+otherwise — `platformAuditCoverage` covers the audit action name only — so this was never wired rather than
+regressed.
+
+**Two distinct consequences.** The staff break-glass control does not break glass: the response to an abuse or
+legal incident sets a flag and stops nothing. And a tenant that stops paying retains full product access
+indefinitely, since the dunning ladder's terminal state is this same no-op.
+
+**Why not simply fixed here.** The correct behaviour is unambiguous, but switching it on ejects every currently
+suspended tenant the moment it deploys — including any suspended for a stale, mistaken, or long-since-resolved
+reason. That is a customer-visible action with no undo, which CLAUDE.md rule 3 and rule 6 put on the human.
+
+**Options, in the order this codebase's own precedents suggest:**
+
+1. **Shadow first** — add the check to the auth/tenancy path behind a flag, default OFF, logging what it *would*
+   refuse. This is exactly the pattern `requireEntitlement` uses for its rollout and `retention_class_policies`
+   encodes as `disabled|shadow|enforce`. It makes the blast radius measurable before anyone is locked out.
+2. **Enforce at token mint only** (`login`/`refresh`/`switchOrg`), not per-request. Cheaper and self-limiting:
+   existing sessions die within the access-token TTL rather than instantly, which is the same graceful shape
+   user suspension already has.
+3. **Enforce per-request** in `tenancy`. Immediate and complete, and the largest blast radius.
+
+Before any of them: **count the currently-suspended tenants and read their `suspension_reason`.** If that set is
+empty, options 2 and 3 are free and this is a five-line fix.
+
 ## 10. Implementation order
 
 Slices are sized to ship independently to main (pre-prod convention), each with its gates
