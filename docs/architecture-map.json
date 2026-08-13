@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2028,
-  "fileSetHash": "sha256:9f7950116d0ec8e7b2710f920ef86f72c5889d32bf6c73c65487fb5f12948e65",
+  "fileCount": 2029,
+  "fileSetHash": "sha256:a2d36b4fbe11f5abc3e18bad76196f8dc764e5006d23bafa3b21e862df5279ab",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2723,6 +2723,7 @@
       "packages/auth/src/switchWorkspace.ts",
       "packages/auth/src/tenantSuspension.test.ts",
       "packages/auth/src/tenantSuspension.ts",
+      "packages/auth/src/tenantSuspensionCoverage.test.ts",
       "packages/auth/src/token.test.ts",
       "packages/auth/src/token.ts",
       "packages/auth/src/webauthnAuthentication.ts",

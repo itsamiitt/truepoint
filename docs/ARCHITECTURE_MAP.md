@@ -714,8 +714,11 @@ flowchart TD
   `TENANT_SUSPENSION_ENFORCED` must be the literal `"true"` before it refuses anything, because `tenants.status`
   had NO runtime reader at all and enforcing on deploy would eject every currently-suspended tenant. Shadow
   lines (`mode=shadow … ALLOWED (would refuse once armed)`) are how the affected set gets sized first.
-  **`refresh`, `switchWorkspace` and `finalizeLogin`'s org pick still do NOT consult it** — adopt the exported
-  decision rather than re-deriving one.
+  **All four tenant-selection paths now consult it** — `flow.ts` (finalizeLogin's org pick), `switchOrg`,
+  `switchWorkspace` and `refresh` — and `tenantSuspensionCoverage.test.ts` PINS that: it strips imports, asserts
+  each file makes the call (not merely imports it), and fails if a path inlines its own `tenantStatus !==
+  "active"`. **Adding a fifth path that mints a session for a tenant means adding it to that list**, or the gate
+  ships with a hole that stays silent until the day someone arms enforcement.
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
@@ -775,7 +778,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2028-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2029-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
@@ -794,7 +797,7 @@ flowchart TD
   `packages/auth/src/tenantSuspension.ts` (+ test) for §9E — the highest-severity finding of the audit:
   `tenants.status` is written by staff break-glass AND by the dunning ladder, and nothing read it, so a
   suspended tenant kept full API access. USER suspension was enforced correctly all along; the TENANT-level
-  control was not. Shipped observe-first and still disarmed; §9C/§9D/§9E together are one pattern worth
+  control was not. Shipped observe-first and still disarmed, now across all four paths with a coverage guard; §9C/§9D/§9E together are one pattern worth
   remembering — **staff-facing configuration that configures nothing** (`retention_policies`,
   `master_confidence_policy`, `tenants.status`) — plus the audit-register cleanup that came with it
   (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
