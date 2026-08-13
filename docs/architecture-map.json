@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2021,
-  "fileSetHash": "sha256:8394d4c03c788024dac1f5c39e4430919f43a66743a021a677bbecb879defbf0",
+  "fileCount": 2023,
+  "fileSetHash": "sha256:a1a39b911936d2746da7d6f074bbc8741ad13303096cace8388237e3f75513a7",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2605,6 +2605,8 @@
       "apps/web/src/lib/authLink.ts",
       "apps/web/src/lib/credits.ts",
       "apps/web/src/lib/eventStream.ts",
+      "apps/web/src/lib/maybeList.ts",
+      "apps/web/src/lib/problemMessage.ts",
       "apps/web/src/lib/publicConfig.ts",
       "apps/web/src/lib/queryKeys.ts",
       "apps/web/src/lib/sessionProbe.test.ts",

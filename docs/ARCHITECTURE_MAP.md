@@ -116,7 +116,8 @@ apps/                           # deployable processes (thin transport adapters)
   web/   src/                   # app.truepoint.in (Next 15) — AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,lists,enrichment/jobs,sales-navigator,settings/*}  app/{import,auth/callback}
     components/{shell/*,PageHeader}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
-                                              enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig}
+                                              enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig,
+                                              problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,EntityPicker,TenantPicker,UserPicker}  lib/{adminGate,authClient,pkce}
     app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,system-health}  features/*
@@ -709,7 +710,12 @@ flowchart TD
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
 - **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `auth/callback`); `components/shell/*`
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
-  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`).
+  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`,
+  `queryKeys`, plus the two seams every slice's `api.ts` uses: **`problemMessage`** — the single RFC 9457
+  problem-body→sentence reader, and **`maybeList`** — the `{items, available}` envelope with the
+  `isUnavailable` 404/501 predicate that tells a dark backend apart from a real failure. Both were private
+  per-slice copies (24 and 11 of them) until audit 32 F4; a new slice's data layer should import these
+  rather than re-declare them.
 - **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
   Brandmark) + `ImpersonationBanner` + `EntityPicker`/`TenantPicker`/`UserPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
 - **`apps/workers`** — `index.ts` (entry + bounded graceful drain), `register.ts` (composition root + producers +
@@ -753,7 +759,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2021-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2023-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
@@ -761,6 +767,12 @@ flowchart TD
   (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0109's FK indexes, `withSystemTx`,
   the retired `requireStaffRole`, and the configuration-list safety cap). The web files bucketed to
   `features.prospect.web` and added no new unassigned entries or warnings.
+  **Added since that refresh** (+2 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
+  and `apps/web/src/lib/maybeList.ts`, closing audit 32 · F4 — plus the audit-register cleanup that came with it
+  (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
+  contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
+  not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
+
   **Deleted this cycle:** `apps/api/src/middleware/requireStaffRole.ts` — audit 32 · C8 migrated every endpoint
   to `requireCapability`, so `StaffRoleVariables` now lives with the guard that sets it. Three references to
   the retired module elsewhere in this file were corrected at the same time; if you find another, it is stale. Both signals that refresh
