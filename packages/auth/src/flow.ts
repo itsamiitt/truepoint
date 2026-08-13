@@ -22,6 +22,11 @@ import { isMethodAllowed } from "./policy.ts";
 import { shadowComparePolicy } from "./policyShadow.ts";
 import { authorizeTenantSelection } from "./scopeGuard.ts";
 import { createSession } from "./session.ts";
+import {
+  suspensionMode,
+  tenantSuspensionDecision,
+  tenantSuspensionLog,
+} from "./tenantSuspension.ts";
 
 export type LoginStep = "mfa" | "mfa_enroll" | "org" | "workspace" | "complete";
 
@@ -169,6 +174,26 @@ export async function finalizeLogin(
   // user's REAL active memberships and authorizeTenantSelection is the unchanged authoritative gate.
   const orgs = await getOrgs(txn);
   const tenantId = authorizeTenantSelection(orgs, txn.tenantId);
+
+  // Tenant suspension (audit 32 §9E) — the LAST of the four tenant-selection paths to adopt the shared
+  // decision. Free here: `orgs` already carries tenantStatus from listForUser, so unlike refresh and
+  // switchWorkspace this needs no extra read, which is why `disabled` is not consulted — there is no cost to
+  // buy back. Login is also where the shadow signal is most useful: it is the path a suspended tenant's users
+  // hit first, and the one whose refusal they can actually act on.
+  //
+  // Placed AFTER authorizeTenantSelection deliberately: that gate is the authoritative cross-tenant boundary
+  // and stays untouched. This only decides whether an ALREADY-AUTHORIZED tenant is currently permitted.
+  const suspension = suspensionMode(env.TENANT_SUSPENSION_ENFORCED);
+  const selected = orgs.find((o) => o.tenantId === tenantId);
+  const suspensionDecision = tenantSuspensionDecision(selected?.tenantStatus, suspension);
+  if (suspensionDecision.suspended) {
+    console.warn(tenantSuspensionLog(tenantId, selected?.tenantStatus, suspensionDecision.refuse));
+    // ForbiddenError, matching authorizeTenantSelection's shape one line above: at login the user is choosing
+    // an org, and "you may not enter this one" is the same class of answer whether the reason is membership
+    // or suspension. (refresh/switchWorkspace throw InvalidTokenError instead — there the contract is about
+    // the token, not the choice.)
+    if (suspensionDecision.refuse) throw new ForbiddenError("tenant_suspended");
+  }
 
   // MFA enforcement (ADR-0018): a tenant that MANDATES MFA must not complete login without it — fail closed
   // at the token gate. Enrolled users are already challenged earlier (resolveNextStep → "mfa", so mfaVerified
