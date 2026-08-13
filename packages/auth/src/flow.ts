@@ -188,6 +188,10 @@ export async function finalizeLogin(
   const suspensionDecision = tenantSuspensionDecision(selected?.tenantStatus, suspension);
   if (suspensionDecision.suspended) {
     console.warn(tenantSuspensionLog(tenantId, selected?.tenantStatus, suspensionDecision.refuse));
+    recordAuthMetric("auth_tenant_suspension_total", {
+      mode: suspensionDecision.refuse ? "enforce" : "shadow",
+      path: "login",
+    });
     // ForbiddenError, matching authorizeTenantSelection's shape one line above: at login the user is choosing
     // an org, and "you may not enter this one" is the same class of answer whether the reason is membership
     // or suspension. (refresh/switchWorkspace throw InvalidTokenError instead — there the contract is about

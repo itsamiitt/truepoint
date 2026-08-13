@@ -9,6 +9,7 @@
 import { env } from "@leadwolf/config";
 import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import {
   suspensionMode,
@@ -53,6 +54,10 @@ export async function switchOrg(args: {
   );
   if (decision.suspended) {
     console.warn(tenantSuspensionLog(target.tenantId, target.tenantStatus, decision.refuse));
+    recordAuthMetric("auth_tenant_suspension_total", {
+      mode: decision.refuse ? "enforce" : "shadow",
+      path: "switch_org",
+    });
     if (decision.refuse) throw new ForbiddenError("tenant_suspended");
   }
 

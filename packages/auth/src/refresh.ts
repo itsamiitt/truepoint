@@ -50,6 +50,10 @@ export async function refreshAccessToken(args: {
     const decision = tenantSuspensionDecision(tenantStatus, suspension);
     if (decision.suspended) {
       console.warn(tenantSuspensionLog(session.tenantId, tenantStatus, decision.refuse));
+      recordAuthMetric("auth_tenant_suspension_total", {
+        mode: decision.refuse ? "enforce" : "shadow",
+        path: "refresh",
+      });
       // InvalidTokenError, not Forbidden: refresh's whole contract is "this token no longer buys a session",
       // and every caller already handles it by sending the user back to auth. A novel error shape here would
       // strand clients that only know the one.

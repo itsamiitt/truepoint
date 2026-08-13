@@ -50,6 +50,10 @@ describe("every tenant-selection path consults the suspension gate", () => {
       // The decision alone is not enough — an unlogged shadow decision produces no signal, which defeats the
       // entire observe-first rollout.
       expect(src).toContain("tenantSuspensionLog(");
+      // And the COUNTER. The log says which tenant; the metric says how many, and the metric is what an
+      // operator can actually chart before deciding to arm enforcement — authMetrics.ts's own header calls
+      // exactly that the pre-req for flipping a lockout-capable control on.
+      expect(src).toContain('recordAuthMetric("auth_tenant_suspension_total"');
     });
   }
 
@@ -58,6 +62,17 @@ describe("every tenant-selection path consults the suspension gate", () => {
     // and the fail-closed classification is the part most likely to be got wrong when rewritten by hand.
     for (const file of TENANT_SELECTION_PATHS) {
       expect(source(file)).toContain('from "./tenantSuspension.ts"');
+    }
+  });
+
+  test("the counter carries NO tenant id — authMetrics' PII/cardinality rule", () => {
+    // The log line carries the tenant; the metric must not. Unbounded label cardinality blows up the metrics
+    // store and can leak identity, which is why authMetrics.ts restricts labels to low-cardinality enums.
+    for (const file of TENANT_SELECTION_PATHS) {
+      const call = body(file).split('recordAuthMetric("auth_tenant_suspension_total"')[1] ?? "";
+      const args = call.slice(0, call.indexOf("});") + 1);
+      expect(args).not.toContain("tenantId");
+      expect(args).not.toContain("tenant_id");
     }
   });
 

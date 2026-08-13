@@ -13,6 +13,7 @@ import {
   workspaceRepository,
 } from "@leadwolf/db";
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import {
   suspensionMode,
@@ -49,6 +50,10 @@ export async function switchWorkspace(args: {
     const decision = tenantSuspensionDecision(tenantStatus, suspension);
     if (decision.suspended) {
       console.warn(tenantSuspensionLog(session.tenantId, tenantStatus, decision.refuse));
+      recordAuthMetric("auth_tenant_suspension_total", {
+        mode: decision.refuse ? "enforce" : "shadow",
+        path: "switch_workspace",
+      });
       if (decision.refuse) throw new InvalidTokenError();
     }
   }
