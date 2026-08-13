@@ -39,7 +39,7 @@ function source(file: string): string {
  * test green — verified by doing it. Stripping imports is what makes the assertion about the CALL.
  */
 function body(file: string): string {
-  return source(file).replace(/^import[^;]*;/gms, "");
+  return source(file).replace(/^import\s[^;]*;/gm, "");
 }
 
 describe("every tenant-selection path consults the suspension gate", () => {
