@@ -106,7 +106,7 @@ packages/                       # side-effect-free libraries, each exported via 
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
     middleware/{requestId,authn,tenancy,error,rateLimit,revealRateLimit,idempotency,jobViewer,extensionScope,
-                requireRole,requireOrgRole,requireStaffRole,requireCapability,platformAdmin,syncPrincipal}.ts
+                requireRole,requireOrgRole,requireCapability,platformAdmin,syncPrincipal}.ts
     lifecycle.ts                  # drain state shared by server.ts (SIGTERM) and the readiness endpoint
     features/{auth,workspaces,settings,scim,import,import-mapping-templates,reveal,billing,enrichment,enrichment via jobs,
               scoring,compliance,activity,sales-navigator,outreach,email,home,search,account-search,saved-searches,
@@ -451,12 +451,22 @@ apps/                           # deployable processes (thin transport adapters)
   both responses are egress-validated with `.parse()`. `master_company_id` is deliberately absent from the
   education row — nothing renders it, and a stable Layer-0 id handed to every tenant is a cross-tenant
   correlation key for no gain (a `resolved` boolean carries what the UI needs)
+- **api (contact side):** `/contacts/:id/{education,employment,provenance,signals}` — same two-transaction
+  shape (tenant resolve under RLS → `withErTx`), except `signals`, which reads the TENANT-private
+  `intent_signals` and so crosses no wall at all. `/accounts/:id/{displacement,alumni}` and
+  `/accounts/:id/technologies/:techId/peers` add a THIRD leg: traverse Layer 0, then map the result back
+  through the overlay under RLS, so a graph-wide answer becomes "which of MY records" and Layer-0 ids never
+  leave the server
 - **web:** the UI lives in `features.prospect.web` (destination-keyed — see
-  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts` (both reads), and per surface —
-  `hooks/useAccountTechnologies.ts` + `components/AccountTechnologySections.tsx` for the ACCOUNT drawer (one
-  cache entry PER relationship, so develops and uses can never overwrite each other; two sections, "Builds"
-  and "Runs", never one merged list), and `hooks/useContactEducation.ts` +
-  `components/EducationSection.tsx` for the CONTACT drawer. Unmatched records render an explicit
+  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts` (every read), plus per surface —
+  ACCOUNT drawer: `hooks/useAccountTechnologies.ts` + `components/AccountTechnologySections.tsx` (one cache
+  entry PER relationship, so develops and uses can never overwrite each other; "Builds" and "Runs", never one
+  merged list) and `components/AccountGraphSections.tsx` (displacement + alumni, which HIDE themselves when
+  they have nothing to report — a permanent empty panel on every account is noise, and "0 alumni" on a
+  company is nonsense rather than emptiness); CONTACT drawer: `EducationSection`, `EmploymentSection` (a
+  company LIST, not a timeline — the import mints a bare edge with no title or dates), `ProvenanceSection`
+  (the confidence model, free, on a record you already own) and `SignalsSection`, each with its hook.
+  `orgKindCopy.ts` keeps the drawer from calling a university a company. Unmatched records render an explicit
   "not matched to the graph yet" rather than an empty list — "we hold nothing" and "we have not identified
   this record" are different facts and the UI never asserts the first when only the second is true
 - **api:** `features/account-intelligence/` — `routes.ts` (GET `/accounts/:accountId/technologies?relationship=develops|uses`,
@@ -479,7 +489,7 @@ apps/                           # deployable processes (thin transport adapters)
 #### auth — *M2 global identity + ADR-0040 hardening* ([17](./planning/17-authentication.md), ADR-0019/0020/0040)
 - **api:** `features/auth/*` (GET `/auth/session` incl. live workspace role) · `features/identity/*` (GET
   `/me`, `/orgs` — the extension's display identity + org switcher, each token-`sub`-scoped); RBAC middleware
-  `{requireRole,requireOrgRole,requireStaffRole,platformAdmin}.ts` (workspace / org / platform tiers)
+  `{requireRole,requireOrgRole,requireCapability,platformAdmin}.ts` (workspace / org / platform tiers — `requireCapability` is the ONE staff guard since C8 retired `requireStaffRole`)
 - **core:** `auth/members.ts` (workspace member lifecycle: invite/change-role/remove, owner non-removable, audited),
   `auth/adminSessions.ts` (list/revoke member sessions, force-reauth) · **db:** `userRepository.ts`
 - **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`loginTransaction`/`flow` + `scopeGuard`),
@@ -693,7 +703,7 @@ flowchart TD
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
 - **`apps/api`** — `app.ts`, `server.ts`, `instrumentation.ts`; **`apps/api/middleware`** — `authn`, `tenancy`, `error`,
-  `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireStaffRole`, `platformAdmin`.
+  `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
 - **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
@@ -743,11 +753,17 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2006-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2021-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
-  `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`). The web files bucketed to
-  `features.prospect.web` and added no new unassigned entries or warnings. Both signals that refresh
+  `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
+  (provenance, employment, org-kind, signals, displacement, alumni, peer adopters) and audit 32's Waves 1/3
+  (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0109's FK indexes, `withSystemTx`,
+  the retired `requireStaffRole`, and the configuration-list safety cap). The web files bucketed to
+  `features.prospect.web` and added no new unassigned entries or warnings.
+  **Deleted this cycle:** `apps/api/src/middleware/requireStaffRole.ts` — audit 32 · C8 migrated every endpoint
+  to `requireCapability`, so `StaffRoleVariables` now lives with the guard that sets it. Three references to
+  the retired module elsewhere in this file were corrected at the same time; if you find another, it is stale. Both signals that refresh
   raised were **fixed rather than flagged**: `masterEducation → master-sync` was added to `REPO_DOMAIN` (following
   the existing rule that every Layer-0 repository belongs to the one system-owned graph), and `account-intelligence`
   was added to `CANONICAL_DOMAINS` — so unassigned went 8→7 and warnings 55→54. The prose subsection count was also

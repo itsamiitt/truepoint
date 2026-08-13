@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2019,
-  "fileSetHash": "sha256:12844e1939893ef5697bee6b6c60f9c58bd2ae90656b73ed9d13c1cdf0b4688e",
+  "fileCount": 2021,
+  "fileSetHash": "sha256:8394d4c03c788024dac1f5c39e4430919f43a66743a021a677bbecb879defbf0",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2773,6 +2773,8 @@
       "packages/db/src/repositories/jobVisibility.ts",
       "packages/db/src/repositories/leaseAccounting.test.ts",
       "packages/db/src/repositories/leaseAccounting.ts",
+      "packages/db/src/repositories/listCaps.test.ts",
+      "packages/db/src/repositories/listCaps.ts",
       "packages/db/src/repositories/masterSignalsRepository.test.ts",
       "packages/db/src/repositories/platformAdminReads.ts",
       "packages/db/src/repositories/platformAdminWrites.ts",
