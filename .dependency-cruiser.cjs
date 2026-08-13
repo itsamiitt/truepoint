@@ -123,7 +123,8 @@ module.exports = {
       // Left enabled rather than removed: it still covers non-aliased locations, and the eight error-level
       // boundary rules above are what this cruise is really for. Fixing it properly means a per-app cruise
       // using that app's tsconfig -- a build-tooling change, not a rule tweak.
-      comment: "Flag unreachable modules (dead code). NOTE: blind to `@/...` alias imports -- see above.",
+      comment:
+        "Flag unreachable modules (dead code). NOTE: blind to `@/...` alias imports -- see above.",
       severity: "warn",
       from: { orphan: true, pathNot: "\\.(d\\.ts|test\\.[tj]sx?)$" },
       to: {},
