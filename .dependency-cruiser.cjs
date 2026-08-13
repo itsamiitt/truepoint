@@ -7,6 +7,25 @@
  * violations.
  */
 module.exports = {
+  // ── VERIFIED TO FIRE (13 Aug 2026) ────────────────────────────────────────────────────────────────────
+  // A lint rule that cannot fail is indistinguishable from one that passes, and this session found three
+  // guards in this repo that could not fail (a no-orphans rule blind to `@/` aliases, a PII tripwire whose
+  // patterns did not match the vocabulary of the roots it scanned, and a coverage test satisfied by an import
+  // line). So the ERROR-level rules below were checked empirically rather than assumed.
+  //
+  // Method: plant a real violating import, run `bun run lint:boundaries`, confirm the named rule reports the
+  // exact edge, revert, confirm exit 0. Seven fired correctly and each named its edge:
+  //
+  //   no-circular                     core -> integrations -> core
+  //   apps-never-import-apps          apps/api/src/cache.ts -> apps/web/src/lib/maybeList.ts
+  //   core-must-not-import-integrations   packages/core/src/index.ts -> packages/integrations/src/index.ts
+  //   types-is-a-leaf                 packages/types -> packages/db
+  //   config-imports-only-types       packages/config -> packages/core
+  //   extension-stays-thin            apps/extension -> packages/db
+  //   forge-capture-sdk-stays-thin    packages/forge-capture-sdk -> packages/core
+  //
+  // NOT yet exercised: no-deep-import-from-app, no-deep-import-cross-package, no-cross-feature-import. They
+  // are stated here as unverified rather than left to look covered by the list above.
   forbidden: [
     {
       name: "no-circular",
