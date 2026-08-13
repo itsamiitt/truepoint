@@ -720,6 +720,12 @@ flowchart TD
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `dataAccessBoundary.test.ts` (static, DB-free: enforces CLAUDE.md's "repositories are the ONLY data-access
+  layer" — no `drizzle-orm`/`postgres` import outside `packages/db`, because a raw client skips the tenancy
+  seams that SET the RLS GUCs. **Note for anyone reaching for dependency-cruiser instead: it cannot express
+  this here.** Bun's `node_modules/.bun/` layout means the cruise records no npm dependency for `drizzle-orm`
+  at all — a rule written there passes on a planted violation. itests are exempt; they hold raw connections on
+  purpose to prove RLS blocks a foreign tenant.)
   + `grantOrder.test.ts` (static, DB-free: guards two things in `applyMigrations`' grant block that only a
   comment held. **The partition-ACL mirror must run LAST** — partition ACLs do not inherit, so a parent REVOKE
   says nothing about `provenance_event_2026_08`, and `mirror_partition_acl` has to follow every GRANT/REVOKE
