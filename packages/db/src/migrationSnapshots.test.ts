@@ -92,8 +92,14 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  a plain blocking CREATE INDEX for anything declared in a schema file, so these indexes are deliberately
  *  hand-authored and invisible to `generate`. It also adds one FK constraint, which drizzle-kit COULD see —
  *  but a snapshot cannot be emitted for half a migration, and the chain HEAD stays at 0107 until the next
- *  rebaseline. */
-const EXPECTED_DEFICIT = 68;
+ *  rebaseline.
+ *
+ *  68 → 69 for 0110_worker_outbox_fks — the FIRST category once more. It ends in two CREATE INDEX
+ *  CONCURRENTLY statements (the cascade-supporting indexes), which cannot run inside a transaction block and
+ *  which drizzle-kit would emit as plain blocking CREATE INDEX from a schema file. The two FK constraints in
+ *  it ARE declared in schema/workerOutbox.ts and drizzle-kit could see those — but, as with 0109, a snapshot
+ *  cannot be emitted for half a migration, so the chain HEAD stays at 0107. */
+const EXPECTED_DEFICIT = 69;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

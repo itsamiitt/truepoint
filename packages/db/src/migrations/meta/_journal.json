@@ -764,6 +764,13 @@
       "when": 1786333359272,
       "tag": "0109_fk_access_path_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1786333360272,
+      "tag": "0110_worker_outbox_fks",
+      "breakpoints": true
     }
   ]
 }

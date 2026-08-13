@@ -12,6 +12,7 @@
 // directly (jobId + scope only — never rows).
 import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { tenants, workspaces } from "./auth.ts";
 
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 
@@ -19,8 +20,15 @@ export const workerOutbox = pgTable(
   "worker_outbox",
   {
     id: id(),
-    tenantId: uuid("tenant_id").notNull(),
-    workspaceId: uuid("workspace_id").notNull(),
+    // FKs with CASCADE (migration 0110), matching event_outbox. A row here is publish-INTENT, and that intent
+    // is void once its tenant or workspace is gone — without the cascade the relay, which drains cross-tenant
+    // on the owner connection, would publish queue jobs for a tenant that no longer exists.
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     /** Publisher routing key (e.g. BULK_ENRICHMENT_DRIVE_TOPIC). Closed vocabulary in @leadwolf/types. */
     topic: varchar("topic", { length: 60 }).notNull(),
     /** The queue DTO to publish, verbatim (PII-free by contract — validated by the relay before publish). */
