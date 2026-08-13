@@ -203,13 +203,24 @@ describe("M12 email cross-tenant isolation (P0)", () => {
     expect(right).toBe(1);
   });
 
-  test("email_event (workspace-scoped): wrong workspace GUC sees zero of the other workspace's events", async () => {
+  test("email_event (workspace-scoped): wrong workspace GUC sees zero; right sees its own", async () => {
     const wrong = await app.begin(async (tx) => {
       await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
       const [r] = await tx`SELECT count(*)::int AS n FROM email_event WHERE tenant_id = ${tenantA}`;
       return (r as { n: number }).n;
     });
     expect(wrong).toBe(0);
+
+    // The POSITIVE CONTROL. Every other case in this file pairs its zero with a one, and this one did not:
+    // `wrong === 0` on its own passes whether RLS is working OR the seed never wrote a wsA row, and those are
+    // indistinguishable from the assertion. The row exists today, so the test was sound — but only by luck of
+    // a seed it never checks, and a security proof should not depend on that.
+    const right = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${wsA}, true)`;
+      const [r] = await tx`SELECT count(*)::int AS n FROM email_event WHERE tenant_id = ${tenantA}`;
+      return (r as { n: number }).n;
+    });
+    expect(right).toBe(1);
   });
 
   test("oauth_connect_state (tenant-scoped): wrong tenant GUC sees zero; right sees its own", async () => {
