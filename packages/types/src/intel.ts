@@ -123,6 +123,8 @@ export const enrichmentJobDataSchema = z.object({
   fields: z.array(enrichField).min(1),
   requestedByUserId: z.string().nullable().optional(),
   providerOrder: z.array(enrichProviderId).max(20).optional(),
+  /** All-throttled deferral count (worker-internal) — bounds the re-enqueue loop; capped, never user-set. */
+  deferrals: z.number().int().nonnegative().max(10).optional(),
 });
 export type EnrichmentJobData = z.infer<typeof enrichmentJobDataSchema>;
 

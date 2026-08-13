@@ -390,6 +390,19 @@ describe("runFieldWaterfalls — gate + breaker", () => {
     expect(out.winners.get("email")?.provider).toBe("a");
   });
 
+  test("skipProviders (retry path): an already-answered provider is never re-called", async () => {
+    const answered = stub({ name: "a", answer: { email: "jane@acme.com" } });
+    const backup = stub({ name: "b", answer: { email: "j@b.com" } });
+    const out = await base({
+      providers: [answered.provider, backup.provider],
+      orderFor: () => ["a", "b"],
+      request: { ...REQUEST, fields: ["email"] },
+      skipProviders: new Set(["a"]),
+    });
+    expect(answered.calls()).toBe(0); // paid on the prior run — never re-bought
+    expect(out.winners.get("email")?.provider).toBe("b");
+  });
+
   test("unknown provider names in the order are ignored (forward-compatible prefs)", async () => {
     const a = stub({ name: "a", answer: { email: "jane@acme.com" } });
     const out = await base({

@@ -51,6 +51,13 @@ export interface CachedFieldsResult {
   /** "all" when a legacy whole-request hit exists; otherwise the union of per-field coverage. */
   coveredFields: EnrichField[] | "all";
   byProvider: CachedFieldHit[];
+  /**
+   * Providers that ANSWERED this request (a hit or a PAID miss). Every call is made with the union of
+   * still-unfilled fields, so an answered provider was already asked for everything a retry would ask —
+   * the engine skips these to never pay the same vendor twice for one request. rate_limited/error rows
+   * are NOT included (those deserve a retry, and their zero-cost rows upgrade in place on success).
+   */
+  answeredProviders: string[];
 }
 
 export const providerCallRepository = {
@@ -77,12 +84,31 @@ export const providerCallRepository = {
     return rows[0] ?? null;
   },
 
-  /** Record a call outcome; a concurrent duplicate of the same (request, provider) is a silent no-op. */
+  /**
+   * Record a call outcome. Conflict semantics on the (workspace, request_hash, provider) triple:
+   *   • existing row is a PAID answer (hit/miss) → no-op — concurrent duplicates collapse, and a paid
+   *     ledger row is never mutated;
+   *   • existing row is a ZERO-COST non-answer (rate_limited/error) → UPGRADE in place — a later retry
+   *     that gets through must not have its paid row silently dropped (the 0109 defect's retry-shaped
+   *     sibling). Cost is summed (the old row's is 0 by construction), payload/fields/status replaced.
+   */
   async record(tx: Tx, call: ProviderCallRecord): Promise<void> {
     await tx
       .insert(providerCalls)
       .values({ ...call, cacheHit: call.cacheHit ?? false })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [providerCalls.workspaceId, providerCalls.requestHash, providerCalls.providerName],
+        set: {
+          status: dsql`excluded.status`,
+          costMicros: dsql`${providerCalls.costMicros} + excluded.cost_micros`,
+          responsePayload: dsql`excluded.response_payload`,
+          filledFields: dsql`excluded.filled_fields`,
+          latencyMs: dsql`excluded.latency_ms`,
+          verification: dsql`excluded.verification`,
+          calledAt: dsql`excluded.called_at`,
+        },
+        setWhere: dsql`${providerCalls.status} IN ('rate_limited','error')`,
+      });
   },
 
   /**
@@ -100,26 +126,30 @@ export const providerCallRepository = {
         providerName: providerCalls.providerName,
         responsePayload: providerCalls.responsePayload,
         filledFields: providerCalls.filledFields,
+        status: providerCalls.status,
       })
       .from(providerCalls)
       .where(
         and(
           eq(providerCalls.workspaceId, workspaceId),
           eq(providerCalls.requestHash, requestHash),
-          eq(providerCalls.status, "hit"),
         ),
       );
-    const byProvider: CachedFieldHit[] = rows.map((r) => ({
+    const answeredProviders = rows
+      .filter((r) => r.status === "hit" || r.status === "miss")
+      .map((r) => r.providerName);
+    const hits = rows.filter((r) => r.status === "hit");
+    const byProvider: CachedFieldHit[] = hits.map((r) => ({
       providerName: r.providerName,
       responsePayload: r.responsePayload,
       filledFields: (r.filledFields as EnrichField[] | null) ?? null,
     }));
     if (byProvider.some((r) => r.filledFields === null)) {
-      return { coveredFields: "all", byProvider };
+      return { coveredFields: "all", byProvider, answeredProviders };
     }
     const union = new Set<EnrichField>();
     for (const row of byProvider) for (const f of row.filledFields ?? []) union.add(f);
-    return { coveredFields: [...union], byProvider };
+    return { coveredFields: [...union], byProvider, answeredProviders };
   },
 
   /** Serialize the daily-budget evaluation per workspace (re-audit F3 — worker-platform Phase 5 entry gate).

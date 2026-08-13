@@ -105,6 +105,67 @@ describe("provider_calls ledger (0109)", () => {
     expect((n as { n: number }).n).toBe(1);
   });
 
+  test("a retry after a zero-cost non-answer UPGRADES the row in place (paid row never dropped)", async () => {
+    const retryHash = Buffer.from(new Uint8Array(32).fill(8));
+    const scope = { tenantId: tenantA, workspaceId: wsA };
+    // Run 1: the vendor throttled us — zero-cost rate_limited row.
+    await dbApi.withTenantTx(scope, (tx) =>
+      dbApi.providerCallRepository.record(tx, {
+        tenantId: tenantA,
+        workspaceId: wsA,
+        providerName: "clearbit",
+        requestHash: retryHash,
+        status: "rate_limited",
+        costMicros: 0,
+      }),
+    );
+    // Run 2 (retry): the call goes through and is PAID — must not vanish into onConflictDoNothing.
+    await dbApi.withTenantTx(scope, (tx) =>
+      dbApi.providerCallRepository.record(tx, {
+        tenantId: tenantA,
+        workspaceId: wsA,
+        providerName: "clearbit",
+        requestHash: retryHash,
+        status: "hit",
+        costMicros: 20_000,
+        responsePayload: { person: { email: "x@y.z" } },
+        filledFields: ["email"],
+      }),
+    );
+    const rows = await admin`
+      SELECT status, cost_micros::int AS cost, filled_fields
+      FROM provider_calls WHERE workspace_id = ${wsA} AND request_hash = ${retryHash}`;
+    expect(rows.length).toBe(1); // upgraded in place, not duplicated
+    expect((rows[0] as { status: string }).status).toBe("hit");
+    expect((rows[0] as { cost: number }).cost).toBe(20_000); // 0 + 20k
+    expect((rows[0] as { filled_fields: unknown }).filled_fields).toEqual(["email"]);
+
+    // …but a PAID row is immutable: a duplicate hit record is a no-op, cost not double-counted.
+    await dbApi.withTenantTx(scope, (tx) =>
+      dbApi.providerCallRepository.record(tx, {
+        tenantId: tenantA,
+        workspaceId: wsA,
+        providerName: "clearbit",
+        requestHash: retryHash,
+        status: "hit",
+        costMicros: 20_000,
+        filledFields: ["email"],
+      }),
+    );
+    const [after] = await admin`
+      SELECT cost_micros::int AS cost FROM provider_calls
+      WHERE workspace_id = ${wsA} AND request_hash = ${retryHash}`;
+    expect((after as { cost: number }).cost).toBe(20_000);
+  });
+
+  test("findCachedFields reports answeredProviders (hit + paid miss; throttles excluded)", async () => {
+    const cached = await dbApi.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbApi.providerCallRepository.findCachedFields(tx, wsA, HASH),
+    );
+    // From the earlier tests: apollo missed (paid), pdl hit — both ANSWERED this hash.
+    expect([...cached.answeredProviders].sort()).toEqual(["apollo", "pdl"]);
+  });
+
   test("findCachedFields unions per-field coverage across hit rows", async () => {
     const scope = { tenantId: tenantA, workspaceId: wsA };
     await dbApi.withTenantTx(scope, (tx) =>
@@ -149,15 +210,21 @@ describe("provider_calls ledger (0109)", () => {
     const total = await dbApi.withTenantTx(scope, (tx) =>
       dbApi.providerCallRepository.spendSince(tx, wsA, since),
     );
-    // 30k (apollo miss) + 40k (pdl hit) + 35k (coresignal hit) + 60k (legacy zoominfo) = 165k.
-    // Pre-0109 the pdl and coresignal rows were dropped and this read 90k.
-    expect(total).toBe(165_000);
+    // 30k (apollo miss) + 40k (pdl hit) + 35k (coresignal hit) + 60k (legacy zoominfo)
+    // + 20k (clearbit retry-upgrade) = 185k. Pre-0109 the multi-attempt rows were dropped.
+    expect(total).toBe(185_000);
 
     const byProvider = await dbApi.withTenantTx(scope, (tx) =>
       dbApi.providerCallRepository.spendSinceByProvider(tx, wsA, since),
     );
     const map = Object.fromEntries(byProvider.map((r) => [r.providerName, r.totalMicros]));
-    expect(map).toEqual({ apollo: 30_000, pdl: 40_000, coresignal: 35_000, zoominfo: 60_000 });
+    expect(map).toEqual({
+      apollo: 30_000,
+      pdl: 40_000,
+      coresignal: 35_000,
+      zoominfo: 60_000,
+      clearbit: 20_000,
+    });
   });
 
   // LAST on purpose: this seeds additional rows and would shift the exact spendSince totals above.

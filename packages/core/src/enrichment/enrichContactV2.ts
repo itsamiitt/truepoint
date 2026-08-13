@@ -212,7 +212,15 @@ export async function runEnrichmentV2(run: EnrichmentV2Run): Promise<EnrichmentV
     }
 
     const configs = await providerConfigRepository.list(tx);
-    return { contact, request, hash, uncovered, cachedProviders: cached.byProvider, configs };
+    return {
+      contact,
+      request,
+      hash,
+      uncovered,
+      cachedProviders: cached.byProvider,
+      answeredProviders: cached.answeredProviders,
+      configs,
+    };
   });
 
   if (pre.uncovered.length === 0) {
@@ -250,6 +258,10 @@ export async function runEnrichmentV2(run: EnrichmentV2Run): Promise<EnrichmentV
     breaker: deps.breaker,
     gate: deps.gate,
     limitsByProvider,
+    // Retry path: providers that already ANSWERED this hash (hit or paid miss) were asked with the full
+    // unfilled union — re-calling them re-buys nothing. rate_limited/error rows are retryable; their
+    // zero-cost ledger rows upgrade in place on success (providerCallRepository.record).
+    skipProviders: new Set(pre.answeredProviders),
     emailVerifier: deps.emailVerifier,
     phoneVerifier: deps.phoneVerifier,
     policy: verification,

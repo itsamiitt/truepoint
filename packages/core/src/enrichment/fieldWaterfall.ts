@@ -97,6 +97,8 @@ export interface RunFieldWaterfallsInput {
   gate: ProviderGate;
   /** provider_configs limits by provider name (missing = unlimited) — the gate's per-call input. */
   limitsByProvider?: ReadonlyMap<string, ProviderLimits>;
+  /** Providers that already ANSWERED this request hash on a prior run (retry path) — never re-paid. */
+  skipProviders?: ReadonlySet<string>;
   emailVerifier: EmailVerifierPort;
   phoneVerifier: PhoneVerifierPort;
   policy: VerificationKnobs;
@@ -262,6 +264,7 @@ export async function runFieldWaterfalls(
     for (const name of input.orderFor(field)) {
       const provider = byName.get(name);
       if (!provider) continue; // unknown name in stored prefs — ignore (forward-compatible)
+      if (input.skipProviders?.has(name)) continue; // answered on a prior run — a retry re-buys nothing
       if (!provider.capabilities.includes(capability)) continue; // honest capability filter
 
       const outcome = await callOnce(provider);

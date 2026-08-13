@@ -19,6 +19,8 @@ export { ENRICHMENT_DLQ, ENRICHMENT_QUEUE };
 export type { EnrichmentJobData };
 
 const DEFAULT_DEFER_MS = 30_000;
+/** All-throttled deferrals per original job — bounds the re-enqueue cycle (defer, never drop, never spin). */
+const MAX_DEFERRALS = 3;
 
 export interface EnrichmentProcessorDeps {
   /** Redis-shared breaker/gate (+ verifier overrides in tests) for the v2 path. */
@@ -45,9 +47,15 @@ export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
     );
     // v2 deferral: every capable provider was throttle-denied and nothing was filled — try again after
     // the smallest vendor-suggested delay. Deferred, never dropped; the re-enqueued job re-reads the
-    // cache first, so a concurrent fill costs nothing.
-    if (result.status === "unfilled" && result.allThrottled && deps.defer) {
-      await deps.defer(job.data, result.retryAfterMs ?? DEFAULT_DEFER_MS);
+    // cache first, so a concurrent fill costs nothing. CAPPED at MAX_DEFERRALS so a permanently
+    // throttled vendor set can't turn one request into an infinite re-enqueue cycle — the final
+    // `unfilled` result stands and the ledger's rate_limited rows say why.
+    const deferrals = job.data.deferrals ?? 0;
+    if (result.status === "unfilled" && result.allThrottled && deps.defer && deferrals < MAX_DEFERRALS) {
+      await deps.defer(
+        { ...job.data, deferrals: deferrals + 1 },
+        result.retryAfterMs ?? DEFAULT_DEFER_MS,
+      );
     }
     return result;
   };
