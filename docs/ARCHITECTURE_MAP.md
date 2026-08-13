@@ -708,7 +708,14 @@ flowchart TD
   `guardDegradedLog.ts` — the one marker shape every FAIL-OPEN guard emits (both rate limiters, the reveal limiter,
   `apps/api`'s entitlement gate), so a single alert expression `] DEGRADED ` catches all of them and two firing in one
   window is the composite "Redis down ⇒ guards open" condition. Defined in `docs/planning/19-observability-reliability.md` §3.
-  `revocationLog.ts` is the older sibling marker and keeps its own prefix (its shape is test-pinned).
+  `revocationLog.ts` is the older sibling marker and keeps its own prefix (its shape is test-pinned); and
+  `tenantSuspension.ts` — the audit-32 §9E gate, a PURE decision (`tenantSuspensionDecision` + the
+  `[tenant-suspension]` marker) with no env read, consumed today only by `switchOrg.ts`. It ships **DISARMED**:
+  `TENANT_SUSPENSION_ENFORCED` must be the literal `"true"` before it refuses anything, because `tenants.status`
+  had NO runtime reader at all and enforcing on deploy would eject every currently-suspended tenant. Shadow
+  lines (`mode=shadow … ALLOWED (would refuse once armed)`) are how the affected set gets sized first.
+  **`refresh`, `switchWorkspace` and `finalizeLogin`'s org pick still do NOT consult it** — adopt the exported
+  decision rather than re-deriving one.
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
@@ -768,7 +775,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2026-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2028-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
@@ -783,7 +790,13 @@ flowchart TD
   and `packages/db/src/repositories/arrayParamBinding.test.ts`, which converts a CI-only failure class into a
   DB-free unit test after migration 0108's repositories cost three CI round-trips (a missing `leadwolf_er` GRANT,
   then bare-JS-array binds). Both defects were invisible to typecheck, biome and every unit test — the standing
-  hazard on a host with no Docker, where "local gates green" is not the same claim as "CI green" — plus the audit-register cleanup that came with it
+  hazard on a host with no Docker, where "local gates green" is not the same claim as "CI green". Then
+  `packages/auth/src/tenantSuspension.ts` (+ test) for §9E — the highest-severity finding of the audit:
+  `tenants.status` is written by staff break-glass AND by the dunning ladder, and nothing read it, so a
+  suspended tenant kept full API access. USER suspension was enforced correctly all along; the TENANT-level
+  control was not. Shipped observe-first and still disarmed; §9C/§9D/§9E together are one pattern worth
+  remembering — **staff-facing configuration that configures nothing** (`retention_policies`,
+  `master_confidence_policy`, `tenants.status`) — plus the audit-register cleanup that came with it
   (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
   contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
   not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
