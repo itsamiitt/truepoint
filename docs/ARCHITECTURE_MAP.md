@@ -776,14 +776,23 @@ flowchart TD
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (54):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the new feature
-  families since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
-  `custom-fields`/`customFields`, `email`, `enrichment-jobs`, `feature-flags`/`featureFlags`, `import-mapping-templates`,
-  `pipeline-stages`/`pipelineStages`, `provider-configs`, `saved-searches`/`savedSearches`, `scim`, the `settings-*` family
-  (`-custom-fields`/`-developer`/`-enrichment`/`-mailboxes`/`-shell`/`-tenant`/`-user`/`-workspace`), `staff`, `system-health`,
-  `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
-  list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
+- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
+  families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
+  `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
+  `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
+  `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical list can be
+  reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
+  *(This entry previously listed `custom-fields`/`customFields`, `feature-flags`/`featureFlags`,
+  `saved-searches`/`savedSearches` and `pipeline-stages`/`pipelineStages` as case-variant PAIRS. Checked against the
+  JSON: no such pairs exist — every slug appears exactly once. The prose had gone stale against the generator.)*
+- **One warning WAS a real defect, and is fixed (54 → 53).** `ingest` and `ingestion` were two domains for one
+  concept, because `apps/api/src/features/ingest/` and `packages/core/src/ingestion/` are spelled differently and a
+  folder-derived slug inherits whatever the folder is called. A reader asking "where does ingestion live" was shown
+  half of it. `DOMAIN_ALIAS` in `lib/arch-map.mjs` now folds `ingestion → ingest` — applied at the folder rule AND at
+  the `REPO_DOMAIN`/`QUEUE_DOMAIN` lookups, so there is one normalisation authority rather than two. Aliased rather
+  than renaming the folder: a rename touches every importer for a cosmetic gain, and structure rules never justify
+  churn in correctness-bearing code.
 - **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (86 domains with code, 39 shared areas,
   **3** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in

@@ -271,6 +271,22 @@ export const REPO_DOMAIN = {
   verificationJob: "data-health",
   dataQualitySnapshot: "data-health",
 };
+/**
+ * Folder slugs that mean the SAME domain under a different name.
+ *
+ * Domains derived from a folder name inherit whatever that folder is called, so one concept split across two
+ * layers with two spellings becomes two unrelated domains in the map. That is the specific harm a navigation
+ * map exists to prevent: `apps/api/src/features/ingest/` and `packages/core/src/ingestion/` are one ingestion
+ * path, and a reader asking "where does ingestion live" was being shown half of it.
+ *
+ * The API/web feature-folder spelling wins, because that is the name the `/api/v1` surface already publishes.
+ * Aliasing rather than renaming the folder is deliberate: a rename touches every importer for a cosmetic gain,
+ * and CLAUDE.md is explicit that structure rules never justify churn in correctness-bearing code.
+ */
+export const DOMAIN_ALIAS = {
+  ingestion: "ingest",
+};
+
 export const PROVIDER_DOMAIN = {
   "crm-sync": "crm-sync", // the shared connector/budget-store folder (the per-vendor files live inside it)
   salesforce: "crm-sync",
@@ -390,7 +406,7 @@ export function classify(p) {
   if ((m = p.match(/^packages\/core\/src\/ports\//)))
     return { kind: "shared", area: "packages/core/ports" };
   if ((m = p.match(/^packages\/core\/src\/([^/]+)\//)))
-    return { kind: "feature", domain: m[1], bucket: "core" };
+    return { kind: "feature", domain: DOMAIN_ALIAS[m[1]] ?? m[1], bucket: "core" };
   if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p))
     return { kind: "shared", area: "packages/core" };
 
@@ -403,7 +419,8 @@ export function classify(p) {
   // db repositories -> domain via REPO_DOMAIN; rest of db is shared.
   if ((m = p.match(/^packages\/db\/src\/repositories\/(.+?)Repository\.(c|m)?[tj]sx?$/))) {
     const entity = m[1];
-    const domain = REPO_DOMAIN[entity] ?? REPO_DOMAIN[entity.toLowerCase()];
+    const raw = REPO_DOMAIN[entity] ?? REPO_DOMAIN[entity.toLowerCase()];
+    const domain = raw ? (DOMAIN_ALIAS[raw] ?? raw) : raw;
     return domain ? { kind: "feature", domain, bucket: "db" } : { kind: "unassigned" };
   }
   if (/^packages\/db\//.test(p)) return { kind: "shared", area: "packages/db" };
@@ -411,7 +428,8 @@ export function classify(p) {
   // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared. Colocated `.test`/`.itest`
   // files place with their queue (strip the suffix before lookup).
   if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+?)(?:\.i?test)?\.(c|m)?[tj]sx?$/))) {
-    const domain = QUEUE_DOMAIN[m[1]];
+    const raw = QUEUE_DOMAIN[m[1]];
+    const domain = raw ? (DOMAIN_ALIAS[raw] ?? raw) : raw;
     return domain ? { kind: "feature", domain, bucket: "workers" } : { kind: "unassigned" };
   }
   if (/^apps\/workers\//.test(p)) return { kind: "shared", area: "apps/workers" };

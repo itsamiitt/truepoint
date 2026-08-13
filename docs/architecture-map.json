@@ -56,7 +56,6 @@
     "imports",
     "inbox",
     "ingest",
-    "ingestion",
     "lists",
     "master-sync",
     "notifications",
@@ -1184,15 +1183,6 @@
         "apps/api/src/features/ingest/index.ts",
         "apps/api/src/features/ingest/routes.ts"
       ],
-      "core": [],
-      "db": [],
-      "workers": [],
-      "integrations": []
-    },
-    "ingestion": {
-      "web": [],
-      "admin": [],
-      "api": [],
       "core": [
         "packages/core/src/ingestion/connectors/adminUpload.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
@@ -3203,7 +3193,6 @@
     "undeclared domain 'identity' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'ingest' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'ingestion' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'master-sync' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
