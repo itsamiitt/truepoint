@@ -80,6 +80,10 @@ async function seedSubject(email: string, linkedin: string): Promise<[string, st
   // ingest; a stint description is prose the subject wrote.
   await admin`INSERT INTO master_person_identifiers (master_person_id, id_type, id_value)
               VALUES (${personId}, 'linkedin_member_urn', ${`urn-${linkedin}`})`;
+  // Multi-value attributes (0116) — personal data the fan-out must delete, identifier-row class.
+  await admin`INSERT INTO master_person_skills (master_person_id, skill) VALUES (${personId}, 'SQL')`;
+  await admin`INSERT INTO master_person_languages (master_person_id, name, proficiency)
+              VALUES (${personId}, 'English', 'PROFESSIONAL_WORKING')`;
   await admin`INSERT INTO master_employment (master_person_id, company_name_raw, company_name_normalized,
                                              title, location, description, is_current)
               VALUES (${personId}, 'Acme Inc', 'acme inc', 'VP', 'HQ, USA', 'I did things.', true)`;
@@ -137,6 +141,13 @@ describe("DSAR erasure reaches Layer 0", () => {
       SELECT count(*)::int AS n FROM master_person_identifiers
        WHERE master_person_id = ${subjectPersonId}`;
     expect((idents as { n: number }).n).toBe(0);
+
+    // … the multi-value attribute rows (0116) go with them — a skill/language list is personal data …
+    const [attrs] = await admin`
+      SELECT (SELECT count(*) FROM master_person_skills    WHERE master_person_id = ${subjectPersonId})
+           + (SELECT count(*) FROM master_person_languages WHERE master_person_id = ${subjectPersonId})
+             AS n`;
+    expect(Number((attrs as { n: number | string }).n)).toBe(0);
 
     // … and the stint keeps its business fact but loses the subject-authored prose.
     const [stint] = await admin`

@@ -806,6 +806,13 @@
       "when": 1787179803000,
       "tag": "0115_source_name_linkedin_api",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1787179804000,
+      "tag": "0116_person_attributes_and_email_type",
+      "breakpoints": true
     }
   ]
 }

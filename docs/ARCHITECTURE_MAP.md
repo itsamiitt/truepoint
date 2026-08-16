@@ -43,7 +43,10 @@
 > (`core/src/sourceLanding/landSourcePayload.ts`, one `withErTx`: evidence → resolve → suppression guard →
 > provenance fold → stints/education/identifiers/series → same-tx events → `job_change`/`headcount_*`
 > signals — the first real `master_signals` producer). All default-off behind `LINKEDIN_*` env gates; the
-> vendor key itself is a HUMAN GATE.
+> vendor key itself is a HUMAN GATE. **Amended same day (0116, user instruction):** multi-value
+> `master_person_skills`/`master_person_languages` (`schema/masterPersonAttributes.ts` — the C6 gate,
+> opened) and typed multi-channel contribution (`master_emails.email_type`; encrypted multi-row
+> emails/phones behind `LINKEDIN_CHANNELS_ENABLED`).
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -55,7 +58,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2064 source files · 83 code-bearing domains · 39 shared areas · 52 domain-vocabulary warnings · 2
+> **2065 source files · 83 code-bearing domains · 39 shared areas · 52 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the

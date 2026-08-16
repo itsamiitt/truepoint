@@ -346,6 +346,8 @@ export {
   mapLinkedinPerson,
   mapLinkedinCompany,
   mapOwnershipType,
+  mapEmailType,
+  mapPhoneLineType,
   revenueMinor,
   revenueDisplay,
   headcountDeltaPct,
@@ -354,6 +356,8 @@ export {
   type MappedPosition,
   type MappedEducation,
   type MappedHeadcountPoint,
+  type MappedChannelValue,
+  type MappedLanguage,
 } from "./sourceLanding/mapLinkedinPayload.ts";
 export {
   registrableDomain,

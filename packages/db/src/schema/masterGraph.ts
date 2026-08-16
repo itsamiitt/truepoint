@@ -377,6 +377,9 @@ export const masterEmails = pgTable(
     emailBlindIndex: bytea("email_blind_index").notNull(), // HMAC; GLOBAL dedup + DSAR/suppression key (UNIQUE)
     emailDomain: citext("email_domain"),
     emailStatus: varchar("email_status", { length: 20 }).notNull().default("unverified"),
+    // 0116 (linkedin_api multi-channel): the source's asserted address KIND — work|personal|other, nullable
+    // when the source asserts nothing. Distinct from email_status (verification verdict).
+    emailType: varchar("email_type", { length: 20 }),
     sourceCount: integer("source_count").notNull().default(1), // corroboration (survivorship input)
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
     verificationSource: varchar("verification_source", { length: 50 }),
@@ -388,6 +391,10 @@ export const masterEmails = pgTable(
     emailStatusEnum: check(
       "master_emails_email_status_enum",
       sql`${t.emailStatus} IN ('unverified','valid','risky','invalid','catch_all','unknown')`,
+    ),
+    emailTypeEnum: check(
+      "master_emails_email_type_enum",
+      sql`${t.emailType} IS NULL OR ${t.emailType} IN ('work','personal','other')`,
     ),
   }),
 );

@@ -433,6 +433,137 @@ export const masterProfileRepository = {
   },
 
   /**
+   * Contribute one email channel value (0116 multi-channel gate). The GLOBAL blind-index unique is the
+   * claim: INSERT ON CONFLICT DO NOTHING → re-SELECT the owner. Own row → corroborate (source_count+1),
+   * fill email_enc where the row held only the dedup key (the paid-provider contribution masterGraph.ts's
+   * channel notes anticipate), and fill email_type when newly asserted. Another person's row → 'other_owner'
+   * (an ER merge signal, not a write) — the same posture as the resolver's email claim.
+   */
+  async upsertPersonEmail(
+    tx: Tx,
+    input: {
+      masterPersonId: string;
+      emailEnc: Uint8Array | null;
+      emailBlindIndex: Uint8Array;
+      emailDomain: string | null;
+      emailType: string | null;
+      isPrimary: boolean;
+    },
+  ): Promise<"landed" | "other_owner"> {
+    await tx.execute(sql`
+      INSERT INTO master_emails (master_person_id, email_enc, email_blind_index, email_domain, email_type, is_primary)
+      VALUES (${input.masterPersonId}, ${input.emailEnc}, ${input.emailBlindIndex},
+              ${input.emailDomain}, ${input.emailType}, ${input.isPrimary})
+      ON CONFLICT (email_blind_index) DO NOTHING
+    `);
+    const owner = (await tx.execute(sql`
+      SELECT id, master_person_id FROM master_emails
+       WHERE email_blind_index = ${input.emailBlindIndex} LIMIT 1
+    `)) as unknown as Array<{ id: string; master_person_id: string }>;
+    const row = owner[0];
+    if (!row) return "landed"; // impossible-race posture mirrors appendSourceRecord
+    if (row.master_person_id !== input.masterPersonId) return "other_owner";
+    await tx.execute(sql`
+      UPDATE master_emails
+         SET source_count = source_count + 1,
+             email_enc    = COALESCE(email_enc, ${input.emailEnc}),
+             email_type   = COALESCE(${input.emailType}, email_type),
+             is_primary   = is_primary OR ${input.isPrimary}
+       WHERE id = ${row.id} AND master_person_id = ${input.masterPersonId}
+    `);
+    return "landed";
+  },
+
+  /** Contribute one phone channel value — the master_phones twin of upsertPersonEmail. */
+  async upsertPersonPhone(
+    tx: Tx,
+    input: {
+      masterPersonId: string;
+      phoneEnc: Uint8Array | null;
+      phoneBlindIndex: Uint8Array;
+      lineType: string | null;
+    },
+  ): Promise<"landed" | "other_owner"> {
+    await tx.execute(sql`
+      INSERT INTO master_phones (master_person_id, phone_enc, phone_blind_index, line_type)
+      VALUES (${input.masterPersonId}, ${input.phoneEnc}, ${input.phoneBlindIndex}, ${input.lineType})
+      ON CONFLICT (phone_blind_index) DO NOTHING
+    `);
+    const owner = (await tx.execute(sql`
+      SELECT id, master_person_id FROM master_phones
+       WHERE phone_blind_index = ${input.phoneBlindIndex} LIMIT 1
+    `)) as unknown as Array<{ id: string; master_person_id: string }>;
+    const row = owner[0];
+    if (!row) return "landed";
+    if (row.master_person_id !== input.masterPersonId) return "other_owner";
+    await tx.execute(sql`
+      UPDATE master_phones
+         SET source_count = source_count + 1,
+             phone_enc    = COALESCE(phone_enc, ${input.phoneEnc}),
+             line_type    = COALESCE(${input.lineType}, line_type)
+       WHERE id = ${row.id} AND master_person_id = ${input.masterPersonId}
+    `);
+    return "landed";
+  },
+
+  /** Raise the masked-search facets after a channel contribution. TRUE-only — facets are recomputed by the
+   *  DSAR fan-out on erasure, never lowered here. */
+  async raisePersonChannelFacets(
+    tx: Tx,
+    masterPersonId: string,
+    facets: { hasEmail?: boolean; hasPhone?: boolean },
+  ): Promise<void> {
+    if (!facets.hasEmail && !facets.hasPhone) return;
+    await tx.execute(sql`
+      UPDATE master_persons
+         SET has_email = has_email OR ${facets.hasEmail === true},
+             has_phone = has_phone OR ${facets.hasPhone === true},
+             updated_at = now()
+       WHERE id = ${masterPersonId}
+    `);
+  },
+
+  /** Multi-value skills (0116; one row per (person, skill), citext-deduped; re-assert corroborates). */
+  async upsertPersonSkills(
+    tx: Tx,
+    masterPersonId: string,
+    skills: readonly string[],
+    sourceName: string,
+    observedAt: Date,
+  ): Promise<void> {
+    for (const skill of skills) {
+      await tx.execute(sql`
+        INSERT INTO master_person_skills (master_person_id, skill, source_name, observed_at)
+        VALUES (${masterPersonId}, ${skill}, ${sourceName}, ${observedAt.toISOString()}::timestamptz)
+        ON CONFLICT (master_person_id, skill)
+        DO UPDATE SET source_count = master_person_skills.source_count + 1,
+                      observed_at  = EXCLUDED.observed_at
+      `);
+    }
+  },
+
+  /** Multi-value languages (0116). A newly asserted proficiency wins; an absent one preserves the stored. */
+  async upsertPersonLanguages(
+    tx: Tx,
+    masterPersonId: string,
+    languages: ReadonlyArray<{ name: string; proficiency: string | null }>,
+    sourceName: string,
+    observedAt: Date,
+  ): Promise<void> {
+    for (const lang of languages) {
+      await tx.execute(sql`
+        INSERT INTO master_person_languages (master_person_id, name, proficiency, source_name, observed_at)
+        VALUES (${masterPersonId}, ${lang.name}, ${lang.proficiency}, ${sourceName},
+                ${observedAt.toISOString()}::timestamptz)
+        ON CONFLICT (master_person_id, name)
+        DO UPDATE SET proficiency  = COALESCE(EXCLUDED.proficiency, master_person_languages.proficiency),
+                      source_count = master_person_languages.source_count + 1,
+                      observed_at  = EXCLUDED.observed_at
+      `);
+    }
+  },
+
+  /**
    * LINK-or-MINT a SCHOOL by its legacy numeric LinkedIn school id (a namespace deliberately distinct from
    * linkedin_company_id — see the master_company_identifiers header). The identifier table's global unique
    * is the convergence point: INSERT the school → claim the identifier ON CONFLICT DO NOTHING → re-SELECT

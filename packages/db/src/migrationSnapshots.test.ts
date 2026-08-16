@@ -119,8 +119,15 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *    • 0114 master_company_headcount — the FIRST category verbatim: PARTITION BY HASH, which drizzle-kit
  *      cannot express; the table object is kept OUT of schema/index.ts (masterSignals precedent).
  *    • 0115 source_imports CHECK swap — 0111's category verbatim (drop+recreate CHECK widening).
- *  The next rebaseline absorbs the 0112/0113 links exactly as it will 0091/0094/0111. */
-const EXPECTED_DEFICIT = 74;
+ *  The next rebaseline absorbs the 0112/0113 links exactly as it will 0091/0094/0111.
+ *
+ *  74 → 75 for 0116_person_attributes_and_email_type — 0091's category, stated as such. Both new tables
+ *  (master_person_skills/master_person_languages) are plain and IN the barrel, and the email_type column
+ *  lands on a barrel table — drizzle COULD see all of it. But the chain HEAD is 0107, so `generate`
+ *  proposes every post-0107 change at once and dies on an interactive column-conflict prompt; per the
+ *  2026-08-04 correction a retroactive snapshot cannot be emitted either. Hand-authored; the next
+ *  rebaseline absorbs the link. */
+const EXPECTED_DEFICIT = 75;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

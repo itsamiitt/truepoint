@@ -838,6 +838,15 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // LINKEDIN_CHANNELS_ENABLED — the landing's master_emails/master_phones contribution (multi-value,
+    // typed, encrypted). Separate from the main landing gate because channel PII is the co-op boundary's
+    // sensitive half: a paid provider MAY contribute email_enc/phone_enc (masterGraph.ts channel notes),
+    // but flipping that on is its own decision. Opened per the 2026-08-16 user instruction; still ships
+    // default-off.
+    LINKEDIN_CHANNELS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // LINKEDIN_COMPANY_REFRESH_ENABLED — registers the leader-locked platform sweep that re-fetches tracked
     // companies' firmographics + headcount series on a cadence.
     LINKEDIN_COMPANY_REFRESH_ENABLED: z

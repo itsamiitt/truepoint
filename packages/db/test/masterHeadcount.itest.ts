@@ -17,7 +17,6 @@
 // DB error capture uses try/catch, NEVER expect(...).rejects (the pooled-connection hang trap).
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 

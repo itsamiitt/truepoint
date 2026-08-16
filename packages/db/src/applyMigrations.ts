@@ -315,6 +315,8 @@ const GRANTS = `
   -- Company external-id table (0113) — the company twin of master_person_identifiers, and the same
   -- enumeration-surface argument: a GLOBAL (id_type, id_value) join key over LinkedIn ids and slugs.
   REVOKE ALL ON master_company_identifiers FROM leadwolf_app;
+  -- Multi-value person attributes (0116) — a skill/language list keyed to a person is personal data.
+  REVOKE ALL ON master_person_skills, master_person_languages FROM leadwolf_app;
   -- master_confidence_policy (0107) is scoring config, not tenant data. The app never needs it: it reads the
   -- COMPUTED confidence stored in field_provenance, not the curve that produced it. Revoked so the scoring
   -- policy cannot be read or tampered with from a tenant-scoped connection.
@@ -362,6 +364,8 @@ const GRANTS = `
   -- checks the parent's privileges); its partitions pick the ACL up via mirror_partition_acl at the very
   -- end of this block, same order-sensitivity note as the 0100-0107 grants above.
   GRANT SELECT, INSERT, UPDATE ON master_company_identifiers, master_company_headcount TO leadwolf_er;
+  -- Multi-value person attributes (0116), written by the same landing path. Same posture: never DELETE.
+  GRANT SELECT, INSERT, UPDATE ON master_person_skills, master_person_languages TO leadwolf_er;
   -- master_education (0108) — the education stint edge, the sibling of master_employment above and written by
   -- the same resolver path (masterEducationRepository.recordEducation runs under withErTx). Same posture:
   -- SELECT/INSERT/UPDATE, never DELETE. It was created without this grant, and the failure mode is worth

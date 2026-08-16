@@ -303,6 +303,14 @@ export const dsarFanoutRepository = {
     await tx.execute(
       sql`DELETE FROM master_person_identifiers WHERE master_person_id = ANY(${ids}::uuid[])`,
     );
+    // SKILLS + LANGUAGES (0116) — a skill/language list keyed to a person is personal data, same class as
+    // the identifier rows above; deleted in the same privileged transaction.
+    await tx.execute(
+      sql`DELETE FROM master_person_skills WHERE master_person_id = ANY(${ids}::uuid[])`,
+    );
+    await tx.execute(
+      sql`DELETE FROM master_person_languages WHERE master_person_id = ANY(${ids}::uuid[])`,
+    );
     // STINT FREE-TEXT (0112): position location/description are subject-authored prose; the stint itself
     // (an anonymous node held a role at a company) survives as business fact, its self-description does not.
     await tx.execute(sql`
@@ -352,6 +360,10 @@ export const dsarFanoutRepository = {
       masterPersonIds.length === 0
         ? sql`0`
         : sql`(SELECT count(*) FROM master_person_identifiers
+                WHERE master_person_id = ANY(${ids}::uuid[]))
+            + (SELECT count(*) FROM master_person_skills
+                WHERE master_person_id = ANY(${ids}::uuid[]))
+            + (SELECT count(*) FROM master_person_languages
                 WHERE master_person_id = ANY(${ids}::uuid[]))`;
     const [r] = (await tx.execute(sql`
       SELECT ((SELECT count(*) FROM master_emails WHERE email_blind_index = ${emailBlindIndex})

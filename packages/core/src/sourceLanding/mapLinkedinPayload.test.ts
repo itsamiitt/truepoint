@@ -7,9 +7,11 @@ import { describe, expect, test } from "bun:test";
 import { linkedinApiCompanyPayloadSchema, linkedinApiPersonPayloadSchema } from "@leadwolf/types";
 import {
   headcountDeltaPct,
+  mapEmailType,
   mapLinkedinCompany,
   mapLinkedinPerson,
   mapOwnershipType,
+  mapPhoneLineType,
   revenueDisplay,
   revenueMinor,
 } from "./mapLinkedinPayload.ts";
@@ -88,10 +90,26 @@ const PERSON_FIXTURE = {
       end_date: null,
     },
   ],
-  skills: ["ASC 606", "Accounting"],
-  languages: [{ name: "English", proficiency: "PROFESSIONAL_WORKING" }],
+  skills: ["ASC 606", "Accounting", "accounting"], // case-variant dupe — must collapse
+  languages: [
+    { name: "English", proficiency: "PROFESSIONAL_WORKING" },
+    { name: "Hindi", proficiency: "native_or_bilingual" }, // lowercase in — normalized out
+    { name: "English", proficiency: "ELEMENTARY" }, // dupe name — first wins
+  ],
   volunteering: [{ role: "Mentor", organization: "X", cause: "education" }],
-  contact: { primary_email: null, emails: [], phones: [] },
+  contact: {
+    primary_email: "Bill.Gates@VerticalBridge.example",
+    emails: [
+      "bill.gates@verticalbridge.example", // case-dupe of primary — must collapse
+      { email: "bg.home@gmail.example", type: "Personal" },
+      { value: "bill@consulting.example", type: "Business" },
+    ],
+    phones: [
+      "+1 415 555 0100",
+      { number: "+14155550100", type: "mobile" },
+      { phone: "+91 98765 43210", type: "Work" },
+    ],
+  },
 };
 
 // Shaped from `source plan/Truepoint company 1.txt` (monthly series trimmed to 4 points).
@@ -156,7 +174,7 @@ describe("mapLinkedinPerson", () => {
     ]);
   });
 
-  test("the raw-only compliance boundary holds: no sensitive field reaches the mapped output", () => {
+  test("the raw-only compliance boundary holds: still-gated fields never reach the mapped output", () => {
     const flat = JSON.stringify(mapped);
     expect(mapped.fields).not.toHaveProperty("pronoun");
     expect(mapped.fields).not.toHaveProperty("premium");
@@ -164,8 +182,15 @@ describe("mapLinkedinPerson", () => {
     expect(mapped.fields).not.toHaveProperty("profilePhotoUrl");
     expect(flat).not.toContain("profile_picture");
     expect(flat).not.toContain("licdn.com/photo");
-    expect(flat).not.toContain("ASC 606"); // skills stay raw-only
-    expect(flat).not.toContain("PROFESSIONAL_WORKING"); // languages stay raw-only
+    expect(flat).not.toContain("volunteering"); // volunteering stays raw-only (not named by the gate-opening instruction)
+  });
+
+  test("skills + languages ARE mapped (the C6 gate opened 2026-08-16): deduped, proficiency validated", () => {
+    expect(mapped.skills).toEqual(["ASC 606", "Accounting"]);
+    expect(mapped.languages).toEqual([
+      { name: "English", proficiency: "PROFESSIONAL_WORKING" },
+      { name: "Hindi", proficiency: "NATIVE_OR_BILINGUAL" },
+    ]);
   });
 
   test("profile scalars: headline/location land; jobTitle comes from the primary position", () => {
@@ -186,6 +211,19 @@ describe("mapLinkedinPerson", () => {
     expect(yearOnly.end).toEqual({ isoDate: "2022-01-01", precision: "month" });
     expect(yearOnly.linkedinCompanyId).toBe("14806044");
     expect(yearOnly.companyNameNormalized).toBe("unified women s healthcare");
+  });
+
+  test("multi-value TYPED channels: primary-first emails, case-dedup, both entry shapes, kind vocabularies", () => {
+    expect(mapped.emails).toEqual([
+      { value: "Bill.Gates@VerticalBridge.example", type: null, isPrimary: true },
+      { value: "bg.home@gmail.example", type: "personal", isPrimary: false },
+      { value: "bill@consulting.example", type: "work", isPrimary: false }, // "Business" → work
+    ]);
+    expect(mapped.phones).toEqual([
+      { value: "+1 415 555 0100", type: null, isPrimary: true },
+      // "+14155550100" collapses onto the first entry via the digit-key dedup
+      { value: "+91 98765 43210", type: "direct", isPrimary: false }, // "Work" → direct
+    ]);
   });
 
   test("educations: school id carried; empty fields_of_study → null", () => {
@@ -269,6 +307,20 @@ describe("unit helpers", () => {
     expect(revenueMinor(1, "BILLION")).toBe(100_000_000_000);
     expect(revenueMinor(3, "PARSECS")).toBeNull();
     expect(revenueMinor(999_999, "TRILLION")).toBeNull(); // > MAX_SAFE_INTEGER → dropped
+  });
+
+  test("channel kind vocabularies", () => {
+    expect(mapEmailType("Work")).toBe("work");
+    expect(mapEmailType("professional")).toBe("work");
+    expect(mapEmailType("Personal")).toBe("personal");
+    expect(mapEmailType("weird")).toBe("other");
+    expect(mapEmailType(null)).toBeNull();
+    expect(mapPhoneLineType("Mobile")).toBe("mobile");
+    expect(mapPhoneLineType("cell")).toBe("mobile");
+    expect(mapPhoneLineType("office")).toBe("direct");
+    expect(mapPhoneLineType("switchboard")).toBe("hq");
+    expect(mapPhoneLineType("carrier-pigeon")).toBe("unknown");
+    expect(mapPhoneLineType("")).toBeNull();
   });
 
   test("revenueDisplay currency forms", () => {

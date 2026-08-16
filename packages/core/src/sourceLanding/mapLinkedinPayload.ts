@@ -2,11 +2,14 @@
 // (docs/planning/linkedin-source-ingestion/). No IO: same payload → same landing input, so the landing
 // converges on replay exactly like the folds it feeds.
 //
-// THE COMPLIANCE BOUNDARY LIVES HERE (2026-08-16 decision, raw-only fields): pronoun, premium, open_link,
-// job_seeker, photo URLs, skills, languages and volunteering are DROPPED at this boundary — the structured
-// schema never sees them. They survive verbatim in source_records.raw_data (appended by landSourcePayload),
-// so the decision is reversible by re-projection the day a HUMAN GATE opens. Do not "complete" this mapper
-// by adding them.
+// THE COMPLIANCE BOUNDARY LIVES HERE (2026-08-16 decisions, amended same day): pronoun, premium,
+// open_link, job_seeker, photo URLs and volunteering are DROPPED at this boundary — the structured schema
+// never sees them; they survive verbatim in source_records.raw_data. Skills, languages, and the typed
+// multi-value contact channels WERE raw-only under the same decision until the user's explicit /loop
+// instruction opened those gates ("make sure that there can be multiple languages … skills … multiple
+// phone numbers, phone number type and multiple emails and email type") — they are now mapped, and the
+// channel values land encrypted behind LINKEDIN_CHANNELS_ENABLED. Do not "complete" this mapper with the
+// still-dropped fields.
 //
 // Normalizers are the SHARED ones — parsePartialDate (@leadwolf/types), registrableDomain / canonicalName /
 // linkedinPublicId (enrichment/matchKeys.ts) — because a second implementation of any of them WILL drift,
@@ -17,6 +20,7 @@ import {
   type LinkedinApiEducation,
   type LinkedinApiPersonPayload,
   type LinkedinApiPosition,
+  type LinkedinApiTypedValue,
   type PartialDatePrecision,
   parsePartialDate,
 } from "@leadwolf/types";
@@ -59,6 +63,21 @@ export interface MappedEducation {
   end: MappedDate;
 }
 
+/** A raw asserted channel value with the source's asserted KIND. Normalization (email canonicalization,
+ *  E.164, blind index, encryption) happens in the LANDING — this stays a pure string transform. */
+export interface MappedChannelValue {
+  value: string;
+  /** master_emails.email_type vocabulary for emails ('work'|'personal'|'other'|null); the raw kind string
+   *  for phones (the landing maps it onto master_phones.line_type). */
+  type: string | null;
+  isPrimary: boolean;
+}
+
+export interface MappedLanguage {
+  name: string;
+  proficiency: string | null; // the LinkedIn five-level vocabulary, or null
+}
+
 export interface MappedPerson {
   kind: "person";
   /** Resolver match keys (LINK ladder order lives in the resolver, not here). */
@@ -73,6 +92,12 @@ export interface MappedPerson {
   /** Index into positions[] of the CURRENT PRIMARY stint (the payload's current_position match), or null. */
   primaryPositionIndex: number | null;
   educations: MappedEducation[];
+  /** Multi-value channels (2026-08-16 gate): deduped on the raw value, primary-first for emails. */
+  emails: MappedChannelValue[];
+  phones: MappedChannelValue[];
+  /** Multi-value attributes (C6 gate opened): deduped case-insensitively, order-preserving. */
+  skills: string[];
+  languages: MappedLanguage[];
 }
 
 export interface MappedHeadcountPoint {
@@ -206,6 +231,44 @@ function mapEducation(e: LinkedinApiEducation): MappedEducation {
   };
 }
 
+/** Normalize an email KIND string onto the master_emails.email_type CHECK vocabulary. */
+export function mapEmailType(raw: string | null | undefined): string | null {
+  const t = raw?.trim().toLowerCase();
+  if (!t) return null;
+  if (/work|professional|business|corporate/.test(t)) return "work";
+  if (/personal|private|home/.test(t)) return "personal";
+  return "other";
+}
+
+/** Normalize a phone KIND string onto the master_phones.line_type vocabulary (direct|mobile|hq|unknown). */
+export function mapPhoneLineType(raw: string | null | undefined): string | null {
+  const t = raw?.trim().toLowerCase();
+  if (!t) return null;
+  if (/mobile|cell/.test(t)) return "mobile";
+  if (/work|direct|office|professional/.test(t)) return "direct";
+  if (/hq|switchboard|main|company/.test(t)) return "hq";
+  return "unknown";
+}
+
+type RawChannelEntry = string | LinkedinApiTypedValue;
+
+/** Flatten string-or-typed-object channel entries to (value, rawType) pairs, dropping empties. */
+function channelEntries(
+  entries: readonly RawChannelEntry[] | null | undefined,
+): Array<{ value: string; rawType: string | null }> {
+  const out: Array<{ value: string; rawType: string | null }> = [];
+  for (const e of entries ?? []) {
+    if (typeof e === "string") {
+      const v = trimmed(e);
+      if (v) out.push({ value: v, rawType: null });
+      continue;
+    }
+    const v = trimmed(e.value) ?? trimmed(e.email) ?? trimmed(e.number) ?? trimmed(e.phone);
+    if (v) out.push({ value: v, rawType: trimmed(e.type) });
+  }
+  return out;
+}
+
 /** Which positions[] entry is the payload's current primary. Prefer the exact current_position match
  *  (company_id + title), else the first is_current entry, else null. */
 function primaryIndex(
@@ -252,6 +315,70 @@ export function mapLinkedinPerson(payload: LinkedinApiPersonPayload): MappedPers
     put("jobTitle", positions[primary].title);
   }
 
+  // Emails: primary_email first (flagged), then the list; dedup case-insensitively on the raw value.
+  const emails: MappedChannelValue[] = [];
+  const seenEmails = new Set<string>();
+  const pushEmail = (value: string, rawType: string | null, isPrimary: boolean): void => {
+    const key = value.toLowerCase();
+    if (seenEmails.has(key)) return;
+    seenEmails.add(key);
+    emails.push({ value, type: mapEmailType(rawType), isPrimary });
+  };
+  const primaryEmail = trimmed(payload.contact?.primary_email);
+  if (primaryEmail) pushEmail(primaryEmail, null, true);
+  for (const e of channelEntries(payload.contact?.emails)) {
+    pushEmail(e.value, e.rawType, emails.length === 0);
+  }
+
+  // Phones: dedup on the raw string; E.164 canonicalization (which also collapses format variants)
+  // happens in the landing, where the blind index is computed.
+  const phones: MappedChannelValue[] = [];
+  const seenPhones = new Set<string>();
+  for (const p of channelEntries(payload.contact?.phones)) {
+    const key = p.value.replace(/[^\d+]/g, "");
+    if (key.length === 0 || seenPhones.has(key)) continue;
+    seenPhones.add(key);
+    phones.push({
+      value: p.value,
+      type: mapPhoneLineType(p.rawType),
+      isPrimary: phones.length === 0,
+    });
+  }
+
+  // Skills: order-preserving, case-insensitive dedup, bounded to the schema's citext sanity.
+  const skills: string[] = [];
+  const seenSkills = new Set<string>();
+  for (const s of payload.skills ?? []) {
+    const v = trimmed(s);
+    if (!v) continue;
+    const key = v.toLowerCase();
+    if (seenSkills.has(key)) continue;
+    seenSkills.add(key);
+    skills.push(v.slice(0, 120));
+  }
+
+  const LANGUAGE_PROFICIENCIES = new Set([
+    "ELEMENTARY",
+    "LIMITED_WORKING",
+    "PROFESSIONAL_WORKING",
+    "FULL_PROFESSIONAL",
+    "NATIVE_OR_BILINGUAL",
+  ]);
+  const languages: MappedLanguage[] = [];
+  const seenLanguages = new Set<string>();
+  for (const l of payload.languages ?? []) {
+    const name = trimmed(l.name);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seenLanguages.has(key)) continue;
+    seenLanguages.add(key);
+    const prof = trimmed(l.proficiency)?.toUpperCase() ?? null;
+    languages.push({
+      name: name.slice(0, 120),
+      proficiency: prof && LANGUAGE_PROFICIENCIES.has(prof) ? prof : null,
+    });
+  }
+
   return {
     kind: "person",
     linkedinPublicId: slug,
@@ -268,6 +395,10 @@ export function mapLinkedinPerson(payload: LinkedinApiPersonPayload): MappedPers
     educations: (payload.educations ?? [])
       .map(mapEducation)
       .filter((e) => e.linkedinSchoolId != null || e.schoolNameRaw != null),
+    emails,
+    phones,
+    skills,
+    languages,
   };
 }
 

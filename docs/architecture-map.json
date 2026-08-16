@@ -102,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2064,
-  "fileSetHash": "sha256:85e942660715d48b77c1b8a8a20f11c1c2abc7aca369e0d053c546fe755b3a47",
+  "fileCount": 2065,
+  "fileSetHash": "sha256:64baed1b0190370c90c2fe2ea78cf1a97520fd584817f26e5af1482d66968f7f",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2826,6 +2826,7 @@
       "packages/db/src/schema/masterEducation.ts",
       "packages/db/src/schema/masterGraph.ts",
       "packages/db/src/schema/masterHeadcount.ts",
+      "packages/db/src/schema/masterPersonAttributes.ts",
       "packages/db/src/schema/masterSignals.ts",
       "packages/db/src/schema/masterTechnology.ts",
       "packages/db/src/schema/masterTechnologyAdoption.ts",

@@ -1,8 +1,16 @@
 # linkedin_api source ingestion — schema gap-closure + storage architecture
 
-**Status: BUILT DARK (2026-08-16).** Migrations 0112–0115 + the full landing vertical are on the branch,
-byte-identical off. Nothing fetches, lands, or emits until the flags below flip — and the first production
-`LINKEDIN_API_KEY` is itself a HUMAN GATE (§8).
+**Status: BUILT DARK (2026-08-16; amended same day).** Migrations 0112–0116 + the full landing vertical are
+on the branch, byte-identical off. Nothing fetches, lands, or emits until the flags below flip — and the
+first production `LINKEDIN_API_KEY` is itself a HUMAN GATE (§8).
+
+**Same-day amendment (user instruction, recorded):** "make sure that there can be multiple languages,
+position, schools, skills etc along with multiple phone numbers, phone number type and multiple emails and
+email type." Positions/schools were already multi-row (`master_employment`/`master_education`). The
+instruction OPENED two gates this doc had recorded as closed: **C6 skills/languages** (now
+`master_person_skills` + `master_person_languages`, 0116) and **typed multi-channel contribution** (now
+`master_emails` multi-row + `email_type`, `master_phones` multi-row + `line_type`, encrypted, behind the
+new `LINKEDIN_CHANNELS_ENABLED`). Volunteering was NOT named and stays raw-only.
 
 Outcomes: **[S-09]** (positions history + primary-edge transitions), **[S-13]** (job_change signal fed by a
 real producer), **[S-10]** (source_count/observed_at corroboration on every fact), **[S-04]/[S-08]**
@@ -26,9 +34,9 @@ Samples this design was cut against: `source plan/` at the repo root — 3 perso
 | `headline`, `summary`, `location` (free text) | nowhere | 0112 columns `headline`/`summary`/`location_raw` (business-contact class, 09-compliance rule 3) |
 | `positions[]` | `master_employment` ✓ (0105 raw-name survival) | + 0112 `location`/`description`/`start_precision`/`end_precision`; per-position employer resolved by numeric LinkedIn id (below) |
 | `educations[]` | `master_education` ✓ (0108) | + precision columns; school LINK-or-MINT by `linkedin_school_id` identifier (distinct namespace — never the company-id column) |
-| `contact.emails/phones` | `master_emails`/`master_phones` + dead channel tables | reveal-gated; rides the shipped enrichment waterfall + CH-INV-1 channel path — **not** written by the landing (§8 gate 5 for master-side contribution) |
-| `pronoun`, `premium`, `open_link`, `job_seeker`, photos | — | **raw-only, permanently** (user decision 2026-08-16): retained in `source_records.raw_data`, dropped at the mapper boundary, no columns. HUMAN GATE to ever structure |
-| `skills[]`, `languages[]`, `volunteering[]` | — (C6: "no listed outcome") | **raw-only** (same decision). Reversible by re-projection from the evidence log the day C6 opens; sketches live in the plan file, not in DDL |
+| `contact.emails/phones` | `master_emails`/`master_phones` (multi-row by construction) | **landed by the landing since the same-day amendment** — multi-value, typed (`email_type` 0116; `line_type`), canonicalized (storage-normalized email / E.164), HMAC blind-indexed, AES-GCM encrypted, claim-pattern converged; behind `LINKEDIN_CHANNELS_ENABLED`. Facets `has_email`/`has_phone` raised TRUE-only. The tenant-side reveal/enrich lane is unchanged |
+| `skills[]`, `languages[]` | — (C6: "no listed outcome") | **structured since the same-day amendment (C6 gate opened by user instruction)**: `master_person_skills` + `master_person_languages` (0116) — one row per (person, value), citext dedup, `source_count` corroboration, proficiency CHECK vocabulary |
+| `pronoun`, `premium`, `open_link`, `job_seeker`, photos, `volunteering[]` | — | **raw-only**: retained in `source_records.raw_data`, dropped at the mapper boundary, no columns. HUMAN GATE to ever structure |
 
 ### Company payload → schema
 
@@ -176,6 +184,7 @@ unnamed until its review; its host joins the outbound allowlist at config time; 
 | `LINKEDIN_API_KEY` / `LINKEDIN_API_BASE_URL` | any fetch at all (absent = permanent miss = the compliance enforcement) | unset |
 | `LINKEDIN_SOURCE_LANDING_ENABLED` | every structured Layer-0 write in `landLinkedinPayload` | off |
 | `LINKEDIN_SIGNALS_ENABLED` | master_signals emission from this lane | off |
+| `LINKEDIN_CHANNELS_ENABLED` | the landing's master_emails/master_phones contribution (multi-value, typed, encrypted) — separate because channel PII is the co-op boundary's sensitive half | off |
 | `LINKEDIN_COMPANY_REFRESH_ENABLED` | registration of the platform sweep | off |
 | `PROVENANCE_EVENTS_ENABLED` (existing) | the event append inside the landing (shipped asymmetric posture) | off |
 
@@ -191,10 +200,13 @@ call, the landing returns `flag_off` before touching the DB, the sweep is never 
 
 `dsarRepository.suppressMasterPersons` now also: deletes the subject's `master_person_identifiers` rows
 (a surviving handle would re-link the subject on the next ingest — recognition belongs in the deny list),
-NULLs the 0112 self-description columns (`headline`/`summary`/`location_raw` identify a person as surely as
-the name), and NULLs stint `location`/`description` (subject-authored prose; the stint's business fact —
-anonymous node held role at company — survives, the pre-existing posture). `scanMasterResiduals` counts
-surviving identifier rows (a scan that does not count a store cannot prove anything about it). Proven in
+deletes the 0116 `master_person_skills`/`master_person_languages` rows (a skill/language list keyed to a
+person is personal data, the identifier-row class), NULLs the 0112 self-description columns
+(`headline`/`summary`/`location_raw` identify a person as surely as the name), and NULLs stint
+`location`/`description` (subject-authored prose; the stint's business fact — anonymous node held role at
+company — survives, the pre-existing posture). `scanMasterResiduals` counts surviving identifier, skill and
+language rows (a scan that does not count a store cannot prove anything about it). Channel rows
+(`master_emails`/`master_phones`, now multi-value) were already deleted by the shipped fan-out. Proven in
 `dsarLayerZero.itest.ts`.
 
 Company data (identifiers, headcount, firmographics) is business data — deliberately untouched by
@@ -229,10 +241,14 @@ person-subject erasure.
    review does not.
 2. **Person photo columns** — not shipped (user decision); photos stay raw-only.
 3. **pronoun / premium / open_link / job_seeker** ever leaving raw payload.
-4. **C6 skills/languages/volunteering module** — raw-only now; backfillable from `source_records` by
-   re-projection; `technology_skill_map` remains the preserved idea.
-5. **Master-side email/phone contribution from this provider** (`master_emails.email_enc` etc.) — the
-   landing deliberately writes no channel values; a follow-up behind its own flag.
+4. ~~**C6 skills/languages module**~~ — **OPENED 2026-08-16** by explicit user instruction; built as
+   `master_person_skills`/`master_person_languages` (0116), landing-wired, DSAR-wired. Volunteering was not
+   named and REMAINS gated raw-only; `technology_skill_map` remains the preserved vocabulary idea.
+5. ~~**Master-side email/phone contribution from this provider**~~ — **OPENED 2026-08-16** by the same
+   instruction ("multiple phone numbers, phone number type and multiple emails and email type"); built as
+   the `LINKEDIN_CHANNELS_ENABLED` slice (multi-value, typed, encrypted, claim-pattern converged; facets
+   raised TRUE-only). The FLAG still ships off — flipping it in production remains a deliberate act,
+   sequenced with gate 1.
 6. **Education provenance entity-type** — `provenance_event.entity_type` has `employment` but no
    `education` member; education assertions currently ride the edge table's own provenance columns
    (asserting_source/confidence/source_count). Adding the enum member is a one-line CHECK swap + zod edit
@@ -240,7 +256,14 @@ person-subject erasure.
 
 ---
 
-## 9. Verification (all run 2026-08-16 on local PG17)
+## 9. Verification (all run 2026-08-16 on local PG17; re-run in full after the same-day amendment)
+
+Amendment coverage on top of the original run: mapper 16 pass (multi-value typed channels — both entry
+shapes, case-dedup, primary-first, kind vocabularies; skills case-dedup; language proficiency validation);
+`linkedinSourceLanding.itest.ts` 5/5 with the 0116 assertions (2 typed encrypted emails + facets, E.164
+phone dedup + line types, skills/languages rows, replay leaves every corroboration counter untouched);
+`dsarLayerZero.itest.ts` 10/10 with skills/languages erasure; `masterHeadcount.itest.ts` unchanged 7/9
+(same two known-local ACL asserts). Original run detail:
 
 - `packages/types/src/partialDate.test.ts` — 6 pass.
 - `packages/core/src/sourceLanding/mapLinkedinPayload.test.ts` — 13 pass (fixtures = the samples; the

@@ -93,10 +93,17 @@ const PERSON_V1 = {
       end_date: "2011",
     },
   ],
-  skills: ["Accounting"],
-  languages: [],
+  skills: ["Accounting", "GAAP", "accounting"], // case-dupe collapses to 2 rows
+  languages: [
+    { name: "English", proficiency: "PROFESSIONAL_WORKING" },
+    { name: "Hindi", proficiency: "NATIVE_OR_BILINGUAL" },
+  ],
   volunteering: [],
-  contact: { primary_email: null, emails: [], phones: [] },
+  contact: {
+    primary_email: "Itest.WG@Itest-VB.example",
+    emails: [{ email: "wg.home@itest-mail.example", type: "personal" }],
+    phones: ["+1 415 555 0100", { number: "+91 98765 43210", type: "mobile" }],
+  },
 };
 
 // v2: same person, NEW current employer (job change) + a changed headline (fold update path).
@@ -181,6 +188,7 @@ beforeAll(async () => {
   process.env.LINKEDIN_SOURCE_LANDING_ENABLED = "true";
   process.env.PROVENANCE_EVENTS_ENABLED = "true";
   process.env.LINKEDIN_SIGNALS_ENABLED = "true";
+  process.env.LINKEDIN_CHANNELS_ENABLED = "true"; // multi-value typed email/phone contribution (0116)
 
   const { applyMigrations } = await import("../src/applyMigrations.ts");
   await applyMigrations(dbHandle.adminUrl);
@@ -257,6 +265,35 @@ describe("linkedin_api Layer-0 landing (landLinkedinPayload)", () => {
     const [events] = await admin`
       SELECT count(*)::int AS n FROM provenance_event WHERE entity_id = ${personId}`;
     expect(events!.n).toBeGreaterThan(0);
+
+    // Multi-value attributes (0116, C6 gate opened): skills case-deduped, languages with proficiency.
+    const skills = await admin`
+      SELECT skill FROM master_person_skills WHERE master_person_id = ${personId} ORDER BY skill`;
+    expect(skills.map((r) => r.skill)).toEqual(["Accounting", "GAAP"]);
+    const langs = await admin`
+      SELECT name, proficiency FROM master_person_languages
+       WHERE master_person_id = ${personId} ORDER BY name`;
+    expect(langs.map((r) => `${r.name}:${r.proficiency}`)).toEqual([
+      "English:PROFESSIONAL_WORKING",
+      "Hindi:NATIVE_OR_BILINGUAL",
+    ]);
+
+    // Multi-value TYPED channels (0116, LINKEDIN_CHANNELS_ENABLED): two emails (primary + typed personal,
+    // encrypted, typed), two phones (E.164-deduped, line-typed), facets raised.
+    const emails = await admin`
+      SELECT email_domain, email_type, is_primary,
+             (email_enc IS NOT NULL) AS has_enc
+        FROM master_emails WHERE master_person_id = ${personId} ORDER BY is_primary DESC, email_domain`;
+    expect(
+      emails.map((r) => `${r.email_domain}|${r.email_type}|${r.is_primary}|${r.has_enc}`),
+    ).toEqual(["itest-vb.example|null|true|true", "itest-mail.example|personal|false|true"]);
+    const phones = await admin`
+      SELECT line_type, (phone_enc IS NOT NULL) AS has_enc
+        FROM master_phones WHERE master_person_id = ${personId} ORDER BY line_type NULLS FIRST`;
+    expect(phones.map((r) => `${r.line_type}|${r.has_enc}`)).toEqual(["null|true", "mobile|true"]);
+    const [facets] = await admin`
+      SELECT has_email, has_phone FROM master_persons WHERE id = ${personId}`;
+    expect(facets).toEqual({ has_email: true, has_phone: true });
   });
 
   test("2. idempotent replay: duplicate, no new events, corroboration NOT double-counted", async () => {
@@ -278,6 +315,14 @@ describe("linkedin_api Layer-0 landing (landLinkedinPayload)", () => {
       SELECT source_count FROM master_employment
        WHERE master_person_id = ${personId} AND is_primary`;
     expect(stintAfter!.source_count).toBe(stintBefore!.source_count);
+    // Corroboration counters on multi-value rows are also replay-proof.
+    const [skillAfter] = await admin`
+      SELECT source_count FROM master_person_skills
+       WHERE master_person_id = ${personId} AND skill = 'GAAP'`;
+    expect(skillAfter!.source_count).toBe(1);
+    const [emailCount] = await admin`
+      SELECT count(*)::int AS n FROM master_emails WHERE master_person_id = ${personId}`;
+    expect(emailCount!.n).toBe(2);
   });
 
   test("3+4. pinned field survives a re-land; new employer flips primary + emits job_change", async () => {

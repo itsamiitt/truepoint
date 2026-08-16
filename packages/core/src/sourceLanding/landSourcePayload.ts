@@ -36,7 +36,15 @@ import {
   masterSignalsRepository,
   withErTx,
 } from "@leadwolf/db";
+import {
+  blindIndex,
+  emailDomainOf,
+  normalizeEmailForIndex,
+  normalizeEmailForStorage,
+} from "@leadwolf/identity";
 import { linkedinApiCompanyPayloadSchema, linkedinApiPersonPayloadSchema } from "@leadwolf/types";
+import { toE164 } from "../enrichment/matchKeys.ts";
+import { encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { acceptanceFor, resolveLawfulBasis } from "../provenance/lawfulBasis.ts";
 import { planProvenanceEvents } from "../provenance/planEvents.ts";
@@ -190,6 +198,67 @@ async function landPerson(
       LINKEDIN_API_SOURCE,
       input.fetchedAt,
     );
+
+    // 6a-ii. Multi-value skills + languages (0116; the C6 gate opened 2026-08-16 by user instruction).
+    // Rides the main landing flag — non-channel business-profile attributes, one row per value.
+    if (mapped.skills.length > 0) {
+      await masterProfileRepository.upsertPersonSkills(
+        tx,
+        masterPersonId,
+        mapped.skills,
+        LINKEDIN_API_SOURCE,
+        input.fetchedAt,
+      );
+    }
+    if (mapped.languages.length > 0) {
+      await masterProfileRepository.upsertPersonLanguages(
+        tx,
+        masterPersonId,
+        mapped.languages,
+        LINKEDIN_API_SOURCE,
+        input.fetchedAt,
+      );
+    }
+
+    // 6a-iii. Multi-value TYPED channels (0116) — behind their OWN gate: channel PII is the co-op
+    // boundary's sensitive half, and a paid provider's email_enc/phone_enc contribution is a separate
+    // decision from profile facts. Normalization here (not the mapper): canonical email / E.164, HMAC
+    // blind index, AES-GCM ciphertext. An unparseable value is skipped, never guessed; a value another
+    // person already owns is an ER merge signal, never a write.
+    if (env.LINKEDIN_CHANNELS_ENABLED) {
+      let landedEmail = false;
+      for (const e of mapped.emails) {
+        const storage = normalizeEmailForStorage(e.value);
+        if (!storage) continue;
+        const outcome = await masterProfileRepository.upsertPersonEmail(tx, {
+          masterPersonId,
+          emailEnc: encryptPii(storage),
+          emailBlindIndex: blindIndex(normalizeEmailForIndex(storage)),
+          emailDomain: emailDomainOf(storage) ?? null,
+          emailType: e.type,
+          isPrimary: e.isPrimary,
+        });
+        if (outcome === "landed") landedEmail = true;
+      }
+      let landedPhone = false;
+      for (const p of mapped.phones) {
+        const e164 = toE164(p.value);
+        if (!e164) continue;
+        const outcome = await masterProfileRepository.upsertPersonPhone(tx, {
+          masterPersonId,
+          phoneEnc: encryptPii(e164),
+          phoneBlindIndex: blindIndex(e164),
+          lineType: p.type,
+        });
+        if (outcome === "landed") landedPhone = true;
+      }
+      if (landedEmail || landedPhone) {
+        await masterProfileRepository.raisePersonChannelFacets(tx, masterPersonId, {
+          hasEmail: landedEmail,
+          hasPhone: landedPhone,
+        });
+      }
+    }
 
     // 6b. Employment stints — per-position employer LINK-or-MINT (domainless mint by linkedin company id),
     //     then the stint upsert. The primary transition is resolved AFTER all stints exist.

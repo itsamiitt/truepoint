@@ -16,6 +16,19 @@ import { z } from "zod";
 /** "YYYY" | "YYYY-MM" | (rare) "YYYY-MM-DD" | null — normalized by @leadwolf/types parsePartialDate. */
 const partialDateString = z.string().nullish();
 
+/** A typed channel value some vendors assert instead of a bare string: the value under any of the common
+ *  keys, plus an optional kind ("work" | "personal" | "mobile" | …). */
+export const linkedinApiTypedValueSchema = z
+  .object({
+    value: z.string().nullish(),
+    email: z.string().nullish(),
+    number: z.string().nullish(),
+    phone: z.string().nullish(),
+    type: z.string().nullish(),
+  })
+  .passthrough();
+export type LinkedinApiTypedValue = z.infer<typeof linkedinApiTypedValueSchema>;
+
 export const linkedinApiPositionSchema = z
   .object({
     title: z.string().nullish(),
@@ -64,10 +77,20 @@ export const linkedinApiPersonPayloadSchema = z
     contact: z
       .object({
         primary_email: z.string().nullish(),
-        emails: z.array(z.string()).nullish(),
-        phones: z.array(z.string()).nullish(),
+        // Bare strings in every recorded sample; typed objects tolerated forward-compatibly (a vendor
+        // that starts asserting kinds must not hard-fail parsing). The mapper normalizes both shapes.
+        emails: z.array(z.union([z.string(), linkedinApiTypedValueSchema])).nullish(),
+        phones: z.array(z.union([z.string(), linkedinApiTypedValueSchema])).nullish(),
       })
       .passthrough()
+      .nullish(),
+    // Structured multi-value attributes (C6 gate opened 2026-08-16 by user instruction): the mapper
+    // projects skills + languages into master_person_skills / master_person_languages.
+    skills: z.array(z.string()).nullish(),
+    languages: z
+      .array(
+        z.object({ name: z.string().nullish(), proficiency: z.string().nullish() }).passthrough(),
+      )
       .nullish(),
     // Parsed-but-never-projected (raw-only; see the header). Listed so the shape is documented, not so the
     // mapper may read them.
@@ -77,8 +100,6 @@ export const linkedinApiPersonPayloadSchema = z
     job_seeker: z.boolean().nullish(),
     profile_picture: z.string().nullish(),
     background_picture: z.string().nullish(),
-    skills: z.array(z.string()).nullish(),
-    languages: z.array(z.object({}).passthrough()).nullish(),
     volunteering: z.array(z.object({}).passthrough()).nullish(),
   })
   .passthrough();
