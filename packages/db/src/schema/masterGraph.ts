@@ -18,6 +18,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   char,
   check,
@@ -28,6 +29,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -71,6 +73,23 @@ export const masterCompanies = pgTable(
     employeeCount: integer("employee_count"), // raw value
     employeeBand: varchar("employee_band", { length: 20 }), // band ('11-50','51-200',…) = the search facet
     revenueRange: varchar("revenue_range", { length: 50 }),
+    // ── firmographic profile columns (0112, linkedin_api source). Column-per-field, NOT a jsonb blob — a blob
+    // here would repeat the technographics mistake repudiated above. External IDs do NOT get columns (they go
+    // to master_company_identifiers, the D8 axis); these are stable profile-page/filter facts.
+    description: text("description"),
+    websiteUrl: varchar("website_url", { length: 500 }), // as the source gives it; the PSL key stays primary_domain
+    // Legal/ownership form — a DIFFERENT axis from org_kind (institution kind). Mapper normalizes the source's
+    // display strings ("Public Company"→'public'); the raw string survives in source_records.raw_data.
+    ownershipType: varchar("ownership_type", { length: 30 }),
+    yearFounded: integer("year_founded"),
+    specialties: text("specialties").array(), // nullable — absent ≠ empty
+    logoUrl: text("logo_url"),
+    backgroundImageUrl: text("background_image_url"),
+    // Structured revenue band (0112) beside the display varchar — the varchar stays (rollback lever is a flag,
+    // never a DROP) and is dual-written with a canonical display string. Minor units (cents): amount×unit×100.
+    revenueMinMinor: bigint("revenue_min_minor", { mode: "number" }),
+    revenueMaxMinor: bigint("revenue_max_minor", { mode: "number" }),
+    revenueCurrency: char("revenue_currency", { length: 3 }),
     // NOTE: `technographics` jsonb was DROPPED in 0108. It never had a writer or a reader; the real store is
     // master_technology_adoptions (0101), which has per-detection grain, method, and displacement. Do not
     // re-add a blob here — the query "which companies run X" is what the edge table exists to answer.
@@ -110,6 +129,24 @@ export const masterCompanies = pgTable(
       "master_companies_org_kind_enum",
       sql`${t.orgKind} IN ('company','school','nonprofit','government','other')`,
     ),
+    // 0112 firmographics. ownership_type is normalized vocabulary (mapper-owned); year bounded sanity-only.
+    ownershipTypeEnum: check(
+      "master_companies_ownership_type_enum",
+      sql`${t.ownershipType} IS NULL OR ${t.ownershipType} IN ('public','private','nonprofit','government','partnership','sole_proprietorship','self_employed','educational','other')`,
+    ),
+    yearFoundedRange: check(
+      "master_companies_year_founded_range",
+      sql`${t.yearFounded} IS NULL OR ${t.yearFounded} BETWEEN 1000 AND 2100`,
+    ),
+    // Mirrors master_company_funding_amount_needs_currency: an amount without a currency is meaningless.
+    revenueNeedsCurrency: check(
+      "master_companies_revenue_needs_currency",
+      sql`(${t.revenueMinMinor} IS NULL AND ${t.revenueMaxMinor} IS NULL) OR ${t.revenueCurrency} IS NOT NULL`,
+    ),
+    revenueMinLeMax: check(
+      "master_companies_revenue_min_le_max",
+      sql`${t.revenueMinMinor} IS NULL OR ${t.revenueMaxMinor} IS NULL OR ${t.revenueMinMinor} <= ${t.revenueMaxMinor}`,
+    ),
   }),
 );
 
@@ -132,6 +169,13 @@ export const masterPersons = pgTable(
     jobTitle: varchar("job_title", { length: 255 }),
     seniorityLevel: varchar("seniority_level", { length: 50 }),
     department: varchar("department", { length: 100 }),
+    // ── professional self-description (0112, linkedin_api source). Business-contact class per 09-compliance
+    // rule 3 (same class as job_title); rides the existing person DSAR erasure path. The sensitive-adjacent
+    // payload fields (pronoun/premium/open_link/job_seeker/photos) deliberately have NO columns — they stay
+    // raw-only in source_records.raw_data behind a HUMAN GATE (see docs/planning/linkedin-source-ingestion/).
+    headline: varchar("headline", { length: 255 }),
+    summary: text("summary"),
+    locationRaw: varchar("location_raw", { length: 255 }), // source's unparsed location string ("Fort Lauderdale, Florida, United States")
     locationCountry: varchar("location_country", { length: 100 }),
     locationCity: varchar("location_city", { length: 100 }),
     hasEmail: boolean("has_email").notNull().default(false), // precomputed search facets (no channel join at query time)
@@ -219,11 +263,22 @@ export const masterEmployment = pgTable(
     title: varchar("title", { length: 255 }),
     department: varchar("department", { length: 100 }),
     seniorityLevel: varchar("seniority_level", { length: 50 }), // reuse the person enum (03:415-416)
+    // 0112 (linkedin_api source): per-stint facts the source asserts alongside the title.
+    location: varchar("location", { length: 255 }),
+    description: text("description"),
     // ── SCD2 validity + current/primary state (H1/H2) ──
     isCurrent: boolean("is_current").notNull().default(true), // ≥1 may be true/person (concurrent affiliations)
     isPrimary: boolean("is_primary").notNull().default(false), // the ONE edge that drives current_company_id
     startedOn: date("started_on").notNull().default(sql`'-infinity'`), // sentinel = "start unknown" → dedup collides
     endedOn: date("ended_on"), // NULL while current
+    // 0112: sources assert partial dates ("2018" vs "2018-03"). started_on/ended_on stay real `date`s (the
+    // '-infinity' sentinel and both stint uniques are load-bearing); precision records how much of the stored
+    // date the source actually asserted ('year' → normalized to Jan 1; 'month' → to the 1st). NULL precision
+    // on a sentinel start = "start unknown". ACCEPTED LIMIT (stated, not glossed): a source that later refines
+    // "2018" to "2018-03" produces a different started_on and therefore a second stint row — same failure
+    // class as the documented '-infinity' collision note above; cross-source variance is ER's job.
+    startPrecision: varchar("start_precision", { length: 5 }),
+    endPrecision: varchar("end_precision", { length: 5 }),
     // ── derived provenance cache (U2 seam; TRUTH is source_records + match_links) ──
     assertingSource: varchar("asserting_source", { length: 50 }), // winning source_name
     matchMethod: varchar("match_method", { length: 20 }), // deterministic_domain|deterministic_email|fuzzy_name_company|manual
@@ -252,6 +307,15 @@ export const masterEmployment = pgTable(
     primaryIsCurrent: check(
       "master_employment_primary_is_current",
       sql`${t.isPrimary} = false OR ${t.isCurrent} = true`, // a primary edge MUST be current
+    ),
+    // 0112 partial-date precision vocabulary.
+    startPrecisionEnum: check(
+      "master_employment_start_precision_enum",
+      sql`${t.startPrecision} IS NULL OR ${t.startPrecision} IN ('year','month','day')`,
+    ),
+    endPrecisionEnum: check(
+      "master_employment_end_precision_enum",
+      sql`${t.endPrecision} IS NULL OR ${t.endPrecision} IN ('year','month','day')`,
     ),
     // Since 0105 a stint must identify its employer SOMEHOW — resolved id, raw name, or both. Without this,
     // dropping the NOT NULL would admit a completely employerless row.

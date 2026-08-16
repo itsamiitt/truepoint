@@ -63,6 +63,10 @@ export const masterEducation = pgTable(
     fieldsOfStudy: text("fields_of_study").array(),
     startedOn: date("started_on").notNull().default(sql`'-infinity'`), // sentinel = "start unknown" → dedup collides
     endedOn: date("ended_on"), // NULL while enrolled; a past date IS alumnus
+    // 0112: partial-date precision, mirroring master_employment (educations usually carry bare years).
+    // 'year' → date normalized to Jan 1; 'month' → to the 1st. NULL precision on a sentinel = unknown.
+    startPrecision: varchar("start_precision", { length: 5 }),
+    endPrecision: varchar("end_precision", { length: 5 }),
     // ── derived provenance cache (TRUTH stays source_records + match_links) ──
     assertingSource: varchar("asserting_source", { length: 50 }),
     matchMethod: varchar("match_method", { length: 20 }),

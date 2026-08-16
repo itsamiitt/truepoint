@@ -312,6 +312,9 @@ const GRANTS = `
   -- ER join key — exactly the kind of table a raw query would mine for cross-tenant person enumeration.
   REVOKE ALL ON master_company_locations, master_company_contact_points, master_company_funding,
                 master_person_identifiers FROM leadwolf_app;
+  -- Company external-id table (0113) — the company twin of master_person_identifiers, and the same
+  -- enumeration-surface argument: a GLOBAL (id_type, id_value) join key over LinkedIn ids and slugs.
+  REVOKE ALL ON master_company_identifiers FROM leadwolf_app;
   -- master_confidence_policy (0107) is scoring config, not tenant data. The app never needs it: it reads the
   -- COMPUTED confidence stored in field_provenance, not the curve that produced it. Revoked so the scoring
   -- policy cannot be read or tampered with from a tenant-scoped connection.
@@ -353,6 +356,12 @@ const GRANTS = `
                                    master_signals, master_company_locations,
                                    master_company_contact_points, master_company_funding,
                                    master_person_identifiers TO leadwolf_er;
+  -- linkedin_api source tables (0113/0114): the company identifier twin and the headcount series, both
+  -- written by the landing path under withErTx. Same posture: SELECT/INSERT/UPDATE, never DELETE.
+  -- master_company_headcount is PARTITIONED — granted on the PARENT (what every query names; routed DML
+  -- checks the parent's privileges); its partitions pick the ACL up via mirror_partition_acl at the very
+  -- end of this block, same order-sensitivity note as the 0100-0107 grants above.
+  GRANT SELECT, INSERT, UPDATE ON master_company_identifiers, master_company_headcount TO leadwolf_er;
   -- master_education (0108) — the education stint edge, the sibling of master_employment above and written by
   -- the same resolver path (masterEducationRepository.recordEducation runs under withErTx). Same posture:
   -- SELECT/INSERT/UPDATE, never DELETE. It was created without this grant, and the failure mode is worth

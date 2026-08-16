@@ -12,6 +12,7 @@ export * from "./accountChildren.ts";
 export * from "./pipelineStages.ts";
 export * from "./customFields.ts";
 export * from "./fieldProvenance.ts";
+export * from "./partialDate.ts";
 export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";

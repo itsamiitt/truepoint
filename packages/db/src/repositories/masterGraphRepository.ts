@@ -46,6 +46,18 @@ export interface ResolveForImportInput {
   phoneBlindIndex?: Uint8Array; // DEFERRED — accepted for forward-compat, not read yet
   registrableDomain?: string; // PSL eTLD+1, free-mail-excluded by the caller (master_companies.primary_domain UNIQUE)
   companyName?: string; // display name for a freshly minted company (falls back to the domain)
+  // ── linkedin_api source keys (0113). LINK-ONLY for persons, deliberately: the slug can rotate while the
+  // urn/member id are immutable, so they outrank email in the ladder — but a MINT still requires
+  // linkedinPublicId or emailBlindIndex. A mint keyed only on an identifier-table row would leave the fresh
+  // master_persons row with no dedupable key of its own unless the CALLER remembers to attach the identifier
+  // afterwards — exactly the junk-identity trap the keyless guard exists to prevent. The linkedin_api payload
+  // always carries public_identifier, so nothing real is lost. Companies DO mint on linkedinCompanyId:
+  // positions carry a numeric company id with NO domain, and without that mint every position employer
+  // would be permanently unresolved.
+  linkedinMemberUrn?: string; // master_person_identifiers id_type='linkedin_member_urn' ("ACwAA…", immutable)
+  linkedinMemberId?: string; // master_person_identifiers id_type='linkedin_member_id' (canonical decimal string)
+  linkedinCompanyId?: string; // master_companies.linkedin_company_id (partial UNIQUE) — LINK + domainless MINT key
+  linkedinCompanySlug?: string; // master_company_identifiers id_type='linkedin_company_slug' — LINK only
 }
 
 /**
@@ -87,39 +99,97 @@ async function resolveCompany(
   opts?: ResolveForImportOptions,
 ): Promise<string | null> {
   const domain = input.registrableDomain;
-  if (!domain) return null;
 
-  // citext equality — primary_domain is citext, so the comparison is case-insensitive without lower().
-  const existing = (await tx.execute(
-    sql`SELECT id FROM master_companies WHERE primary_domain = ${domain} LIMIT 1`,
-  )) as unknown as Array<{ id: string }>;
-  if (existing[0]) return existing[0].id;
+  // LINK ladder, strongest first. citext equality — primary_domain is citext, so the comparison is
+  // case-insensitive without lower().
+  if (domain) {
+    const existing = (await tx.execute(
+      sql`SELECT id FROM master_companies WHERE primary_domain = ${domain} LIMIT 1`,
+    )) as unknown as Array<{ id: string }>;
+    if (existing[0]) return existing[0].id;
+  }
+  // 0113: LINK by the LinkedIn company id column — partial-unique since 0017, resolvable at last. This is
+  // what keeps a position employer (numeric company_id, NO domain) from re-minting beside an already-known
+  // company that has a domain.
+  if (input.linkedinCompanyId) {
+    const byLiId = (await tx.execute(
+      sql`SELECT id FROM master_companies WHERE linkedin_company_id = ${input.linkedinCompanyId} LIMIT 1`,
+    )) as unknown as Array<{ id: string }>;
+    if (byLiId[0]) return byLiId[0].id;
+  }
+  // 0113: LINK by the slug identifier row (LINK-only — a slug alone never mints).
+  if (input.linkedinCompanySlug) {
+    const bySlug = (await tx.execute(
+      sql`SELECT master_company_id FROM master_company_identifiers
+          WHERE id_type = 'linkedin_company_slug' AND id_value = ${input.linkedinCompanySlug} LIMIT 1`,
+    )) as unknown as Array<{ master_company_id: string }>;
+    if (bySlug[0]) return bySlug[0].master_company_id;
+  }
 
-  // A restricted caller LINKs but never mints — the lookup above already ran, so an existing company is still
+  // Mintable key required: a domain, or (0113) a LinkedIn company id.
+  if (!domain && !input.linkedinCompanyId) return null;
+
+  // A restricted caller LINKs but never mints — the lookups above already ran, so an existing company is still
   // returned and only the creation of a NEW one is withheld.
   if (opts?.matchOnly || opts?.withholdCompany) return null;
 
-  // MINT — primary_domain + name only (the co-op-safe boundary). ON CONFLICT on the partial unique
-  // (uniq_master_companies_primary_domain WHERE primary_domain IS NOT NULL) so a concurrent insert can't double up.
+  if (domain) {
+    // MINT — primary_domain + name (+ the LinkedIn id when the probe carried one — dual-keyed from birth,
+    // 0113) — still the co-op-safe boundary: identity + dedup keys only. ON CONFLICT on the partial unique
+    // (uniq_master_companies_primary_domain WHERE primary_domain IS NOT NULL) so a concurrent insert can't
+    // double up. (A concurrent race on uniq_master_companies_linkedin instead aborts the tx — same rare
+    // retry-converges posture as the person-slug mint race below.)
+    await tx.execute(
+      sql`INSERT INTO master_companies (primary_domain, name, linkedin_company_id)
+          VALUES (${domain}, ${input.companyName ?? domain}, ${input.linkedinCompanyId ?? null})
+          ON CONFLICT (primary_domain) WHERE primary_domain IS NOT NULL DO NOTHING`,
+    );
+    // Re-SELECT to get the id whether we won the insert or lost the race to a concurrent minter.
+    const minted = (await tx.execute(
+      sql`SELECT id FROM master_companies WHERE primary_domain = ${domain} LIMIT 1`,
+    )) as unknown as Array<{ id: string }>;
+    return minted[0]?.id ?? null;
+  }
+
+  // 0113: DOMAINLESS MINT keyed on the LinkedIn company id — the linkedin_api position-employer path.
+  // Identity + display name only, same co-op-safe boundary; ON CONFLICT on the partial unique
+  // (uniq_master_companies_linkedin WHERE linkedin_company_id IS NOT NULL) so concurrent landings converge.
   await tx.execute(
-    sql`INSERT INTO master_companies (primary_domain, name)
-        VALUES (${domain}, ${input.companyName ?? domain})
-        ON CONFLICT (primary_domain) WHERE primary_domain IS NOT NULL DO NOTHING`,
+    sql`INSERT INTO master_companies (linkedin_company_id, name)
+        VALUES (${input.linkedinCompanyId}, ${input.companyName ?? input.linkedinCompanyId})
+        ON CONFLICT (linkedin_company_id) WHERE linkedin_company_id IS NOT NULL DO NOTHING`,
   );
-  // Re-SELECT to get the id whether we won the insert or lost the race to a concurrent minter.
-  const minted = (await tx.execute(
-    sql`SELECT id FROM master_companies WHERE primary_domain = ${domain} LIMIT 1`,
+  const mintedByLiId = (await tx.execute(
+    sql`SELECT id FROM master_companies WHERE linkedin_company_id = ${input.linkedinCompanyId} LIMIT 1`,
   )) as unknown as Array<{ id: string }>;
-  return minted[0]?.id ?? null;
+  return mintedByLiId[0]?.id ?? null;
 }
 
-/** Find an existing golden person by a deterministic key (linkedin_public_id, then email_blind_index). LINK only. */
+/** Find an existing golden person by a deterministic key. LINK only — first hit wins; cross-key divergence
+ *  (slug hits A, urn hits B) is the ER sweep's job to detect, not this ladder's to adjudicate.
+ *  Ladder (0113): linkedin_public_id column (shipped order preserved) → identifier 'linkedin_member_urn' →
+ *  identifier 'linkedin_member_id' → email_blind_index. The urn/member id outrank email because they are
+ *  immutable person keys while an email can be shared or recycled. */
 async function findPerson(tx: Tx, input: ResolveForImportInput): Promise<string | null> {
   if (input.linkedinPublicId) {
     const r = (await tx.execute(
       sql`SELECT id FROM master_persons WHERE linkedin_public_id = ${input.linkedinPublicId} LIMIT 1`,
     )) as unknown as Array<{ id: string }>;
     if (r[0]) return r[0].id;
+  }
+  if (input.linkedinMemberUrn) {
+    const r = (await tx.execute(
+      sql`SELECT master_person_id FROM master_person_identifiers
+          WHERE id_type = 'linkedin_member_urn' AND id_value = ${input.linkedinMemberUrn} LIMIT 1`,
+    )) as unknown as Array<{ master_person_id: string }>;
+    if (r[0]) return r[0].master_person_id;
+  }
+  if (input.linkedinMemberId) {
+    const r = (await tx.execute(
+      sql`SELECT master_person_id FROM master_person_identifiers
+          WHERE id_type = 'linkedin_member_id' AND id_value = ${input.linkedinMemberId} LIMIT 1`,
+    )) as unknown as Array<{ master_person_id: string }>;
+    if (r[0]) return r[0].master_person_id;
   }
   if (input.emailBlindIndex) {
     const r = (await tx.execute(
@@ -145,21 +215,32 @@ export const masterGraphRepository = {
     //    person mint can point current_company_id at it and open the bare employment edge.
     const masterCompanyId = await resolveCompany(tx, input, opts);
 
-    // 1b) No person key at all (no linkedin_public_id AND no email_blind_index) → there is nothing to dedup on,
-    //     so do NOT mint an anonymous master_persons: it could never be matched or merged by later ER, so every
-    //     keyless row would mint its own permanent junk identity. Resolve the company (if any) and leave the
-    //     person UNRESOLVED (the overlay master_person_id stays NULL — in-flight staging, ADR-0021). A
-    //     sales-nav-only / name-only contact thus resolves its company but not (yet) its golden person.
-    if (!input.linkedinPublicId && !input.emailBlindIndex) {
-      return { masterPersonId: null, masterCompanyId };
+    // 2) Person — LINK if ANY deterministic key hits (mutate NOTHING). Runs BEFORE the mint guard since 0113:
+    //    the identifier keys (member urn / member id) are LINK-only, so an urn-only probe must still get its
+    //    read even though it could never mint.
+    if (
+      input.linkedinPublicId ||
+      input.emailBlindIndex ||
+      input.linkedinMemberUrn ||
+      input.linkedinMemberId
+    ) {
+      const existingPersonId = await findPerson(tx, input);
+      if (existingPersonId) {
+        // LINK — pure read + return; zero contribution (no field write, no edge upsert). PLAN_01 §5.3. Reached
+        // by restricted callers too: the link is a read of what is already shared, not a contribution.
+        return { masterPersonId: existingPersonId, masterCompanyId };
+      }
     }
 
-    // 2) Person — LINK if a deterministic key hits (mutate NOTHING), else MINT a co-op-safe golden node.
-    const existingPersonId = await findPerson(tx, input);
-    if (existingPersonId) {
-      // LINK — pure read + return; zero contribution (no field write, no edge upsert). PLAN_01 §5.3. Reached
-      // by restricted callers too: the link is a read of what is already shared, not a contribution.
-      return { masterPersonId: existingPersonId, masterCompanyId };
+    // 2b) MINT guard: no MINTABLE person key (no linkedin_public_id AND no email_blind_index) → there is
+    //     nothing the fresh row itself could dedup on, so do NOT mint an anonymous master_persons: it could
+    //     never be matched or merged by later ER, so every keyless row would mint its own permanent junk
+    //     identity. (The 0113 identifier keys deliberately do NOT satisfy this guard — see the input-shape
+    //     comment.) Resolve the company (if any) and leave the person UNRESOLVED (the overlay
+    //     master_person_id stays NULL — in-flight staging, ADR-0021). A sales-nav-only / name-only contact
+    //     thus resolves its company but not (yet) its golden person.
+    if (!input.linkedinPublicId && !input.emailBlindIndex) {
+      return { masterPersonId: null, masterCompanyId };
     }
 
     // The contribution gate, at the one statement that actually contributes. Nothing matched, so continuing

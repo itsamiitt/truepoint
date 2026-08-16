@@ -190,6 +190,42 @@ export const masterCompanyFunding = pgTable(
   }),
 );
 
+// ── master_company_identifiers (0113, linkedin_api source) ────────────────────────────────────────────────
+// The COMPANY twin of master_person_identifiers below — the same audit-D8 argument applied to companies:
+// widening `master_companies.linkedin_company_id` would solve exactly one id kind, while the slug, the legacy
+// school-id namespace, and every next vendor need homes. The column STAYS (hot, partial-unique since 0017)
+// and is dual-written; migration 0113 backfills it here as id_type='linkedin_company_id' so both agree
+// (byte-for-byte the 0104 person pattern).
+//
+// id_type vocabulary written today (free-form varchar for the same D6 reason as the person table):
+//   'linkedin_company_id'   — the numeric LinkedIn company id (mirrors the column)
+//   'linkedin_company_slug' — the public_identifier slug ("antheminc")
+//   'linkedin_school_id'    — the legacy numeric school id namespace. NEVER written into the
+//                             linkedin_company_id column: the school-id namespace is not provably the
+//                             company-id namespace, and a cross-namespace collision on the partial unique
+//                             would silently merge a school into a company.
+// NOT stored (derivable from the id): entity_urn, sales_navigator_url.
+export const masterCompanyIdentifiers = pgTable(
+  "master_company_identifiers",
+  {
+    id: id(),
+    masterCompanyId: uuid("master_company_id")
+      .notNull()
+      .references(() => masterCompanies.id, { onDelete: "cascade" }),
+    idType: varchar("id_type", { length: 40 }).notNull(),
+    idValue: citext("id_value").notNull(),
+    sourceName: varchar("source_name", { length: 50 }),
+    observedAt: timestamp("observed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    // GLOBALLY unique per (type, value) — the ER join key posture, exactly like the person twin: two
+    // companies claiming one LinkedIn id is a merge to perform, not two rows to keep.
+    uniqIdentifier: uniqueIndex("uniq_master_company_identifier").on(t.idType, t.idValue),
+    companyIdx: index("idx_master_company_identifier_company").on(t.masterCompanyId),
+  }),
+);
+
 // ── master_person_identifiers (audit D8) ──────────────────────────────────────────────────────────────────
 // One row per (type, value) instead of one COLUMN per source. `id_type` is free-form varchar rather than a
 // CHECK enum for exactly the D6 reason: the set of sources is the part most expected to grow, and a closed
