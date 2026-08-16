@@ -25,14 +25,29 @@ export type FetchJson = (
   init: { method: "GET" | "POST"; headers: Record<string, string>; body?: unknown },
 ) => Promise<{ status: number; json: unknown; headers?: Record<string, string> }>;
 
-/** The only hosts the default transport will speak to. Adding a vendor = adding its API host here. */
-export const ALLOWED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
-  "api.apollo.io",
-  "api.zoominfo.com",
-  "person.clearbit.com",
-  "api.peopledatalabs.com",
-  "api.coresignal.com",
-]);
+/** The only hosts the default transport will speak to. Adding a vendor = adding its API host here.
+ *  The one env-derived member: LINKEDIN_API_BASE_URL's host — that vendor is deliberately unnamed until its
+ *  ToS/DPA review (HUMAN GATE), so its host cannot be a literal; the value is still operator-supplied config
+ *  validated as a URL at boot, never request input, so the SSRF posture is unchanged. */
+export const ALLOWED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(
+  [
+    "api.apollo.io",
+    "api.zoominfo.com",
+    "person.clearbit.com",
+    "api.peopledatalabs.com",
+    "api.coresignal.com",
+    linkedinApiHost(),
+  ].filter((h): h is string => h != null),
+);
+
+function linkedinApiHost(): string | null {
+  if (!env.LINKEDIN_API_BASE_URL) return null;
+  try {
+    return new URL(env.LINKEDIN_API_BASE_URL).host;
+  } catch {
+    return null;
+  }
+}
 
 /** Thrown by the default transport on a policy violation (bad scheme/host) — surfaces as a zero-cost error. */
 export class ProviderTransportError extends Error {

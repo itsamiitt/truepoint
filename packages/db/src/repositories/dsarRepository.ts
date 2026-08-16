@@ -296,10 +296,24 @@ export const dsarFanoutRepository = {
       DELETE FROM master_signals
        WHERE subject_type = 'person'
          AND subject_id = ANY(${ids}::uuid[])`);
+    // EXTERNAL IDENTIFIERS (master_person_identifiers, 0104; fed by the linkedin_api landing since 0113).
+    // Public profile handles keyed to a person are personal data AND a recognition surface: a surviving
+    // (id_type, id_value) row would re-link the subject on the very next ingest of the same profile —
+    // the same argument as the email blind index above. Recognition belongs in the deny list.
+    await tx.execute(
+      sql`DELETE FROM master_person_identifiers WHERE master_person_id = ANY(${ids}::uuid[])`,
+    );
+    // STINT FREE-TEXT (0112): position location/description are subject-authored prose; the stint itself
+    // (an anonymous node held a role at a company) survives as business fact, its self-description does not.
+    await tx.execute(sql`
+      UPDATE master_employment SET location = NULL, description = NULL
+       WHERE master_person_id = ANY(${ids}::uuid[])
+         AND (location IS NOT NULL OR description IS NOT NULL)`);
     const rows = (await tx.execute(sql`
       UPDATE master_persons
          SET is_suppressed = true, has_email = false, has_phone = false,
-             full_name = NULL, first_name = NULL, last_name = NULL, linkedin_public_id = NULL
+             full_name = NULL, first_name = NULL, last_name = NULL, linkedin_public_id = NULL,
+             headline = NULL, summary = NULL, location_raw = NULL
        WHERE id = ANY(${ids}::uuid[])
        RETURNING id
     `)) as unknown as Array<{ id: string }>;
@@ -332,6 +346,13 @@ export const dsarFanoutRepository = {
         ? sql`0`
         : sql`(SELECT count(*) FROM master_signals
                 WHERE subject_type = 'person' AND subject_id = ANY(${ids}::uuid[]))`;
+    // A scan that does not count a store cannot prove anything about it (the rule above) — the identifier
+    // rows the 0113 landing writes are counted here for the same reason the signals are.
+    const identifierResidual =
+      masterPersonIds.length === 0
+        ? sql`0`
+        : sql`(SELECT count(*) FROM master_person_identifiers
+                WHERE master_person_id = ANY(${ids}::uuid[]))`;
     const [r] = (await tx.execute(sql`
       SELECT ((SELECT count(*) FROM master_emails WHERE email_blind_index = ${emailBlindIndex})
             + (SELECT count(*) FROM master_persons p
@@ -339,7 +360,8 @@ export const dsarFanoutRepository = {
                   AND EXISTS (SELECT 1 FROM master_emails e
                                WHERE e.master_person_id = p.id
                                  AND e.email_blind_index = ${emailBlindIndex}))
-            + ${signalResidual})::int AS n
+            + ${signalResidual}
+            + ${identifierResidual})::int AS n
     `)) as unknown as Array<{ n: number }>;
     return Number(r?.n ?? 0);
   },

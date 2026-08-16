@@ -107,8 +107,20 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  audit_log_action_enum) and a unique-index REPLACEMENT (the (ws,hash)→(ws,hash,provider) ledger fix)
  *  are drop+recreate shapes drizzle-kit does not emit as written. Per the 2026-08-04 correction above, a
  *  retroactive snapshot cannot be generated for an already-committed file; the chain HEAD stays at 0107
- *  and the next rebaseline absorbs this link like 0091/0094. */
-const EXPECTED_DEFICIT = 70;
+ *  and the next rebaseline absorbs this link like 0091/0094.
+ *
+ *  70 → 74 for the linkedin_api source program (0112-0115), each stated per this test's protocol:
+ *    • 0112 profile columns — 0091's category for the masterGraph.ts half (barrel tables; drizzle COULD
+ *      see the column adds) BUT the same migration also adds precision columns to master_education, which
+ *      is deliberately OUT of the barrel — the 0108 "a snapshot cannot be emitted for half a migration"
+ *      case. Hand-authored per the 0105/0111 house pattern; the chain HEAD stays at 0107.
+ *    • 0113 master_company_identifiers — barrel table plus a hand-appended backfill INSERT (the 0104
+ *      pattern); the INSERT half is invisible to generate, so: half-a-migration again.
+ *    • 0114 master_company_headcount — the FIRST category verbatim: PARTITION BY HASH, which drizzle-kit
+ *      cannot express; the table object is kept OUT of schema/index.ts (masterSignals precedent).
+ *    • 0115 source_imports CHECK swap — 0111's category verbatim (drop+recreate CHECK widening).
+ *  The next rebaseline absorbs the 0112/0113 links exactly as it will 0091/0094/0111. */
+const EXPECTED_DEFICIT = 74;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

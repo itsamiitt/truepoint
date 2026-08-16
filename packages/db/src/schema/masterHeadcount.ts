@@ -66,10 +66,7 @@ export const masterCompanyHeadcount = pgTable(
       "master_company_headcount_month_canonical",
       sql`${t.month} = date_trunc('month', ${t.month})::date`,
     ),
-    countNonNegative: check(
-      "master_company_headcount_count_nonneg",
-      sql`${t.employeeCount} >= 0`,
-    ),
+    countNonNegative: check("master_company_headcount_count_nonneg", sql`${t.employeeCount} >= 0`),
     // The totals sparkline/latest read: index-only per-company scan of job_function='' rows, newest first.
     // Declared here for the type layer; the ACTUAL index is hand-authored in 0114 (partitioned parent).
     totalsIdx: index("idx_master_company_headcount_totals").on(t.masterCompanyId, t.month.desc()),

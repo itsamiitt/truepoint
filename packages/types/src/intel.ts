@@ -78,6 +78,9 @@ export const KNOWN_ENRICH_PROVIDERS = [
   { provider: "clearbit", label: "Clearbit" },
   { provider: "pdl", label: "People Data Labs" },
   { provider: "coresignal", label: "Coresignal" },
+  // Vendor-neutral LinkedIn-shaped source API (docs/planning/linkedin-source-ingestion/). Ships dark:
+  // no LINKEDIN_API_KEY in production until the vendor's DPA/ToS review is recorded (HUMAN GATE).
+  { provider: "linkedin_api", label: "LinkedIn Data API" },
 ] as const;
 export const knownEnrichProviderIds = KNOWN_ENRICH_PROVIDERS.map((p) => p.provider) as [
   string,
@@ -85,7 +88,7 @@ export const knownEnrichProviderIds = KNOWN_ENRICH_PROVIDERS.map((p) => p.provid
 ];
 /** A provider id from the known set — the validation for stored prefs and per-run overrides. */
 export const enrichProviderId = z.enum(
-  knownEnrichProviderIds as ["apollo", "zoominfo", "clearbit", "pdl", "coresignal"],
+  knownEnrichProviderIds as ["apollo", "zoominfo", "clearbit", "pdl", "coresignal", "linkedin_api"],
 );
 export type EnrichProviderId = z.infer<typeof enrichProviderId>;
 

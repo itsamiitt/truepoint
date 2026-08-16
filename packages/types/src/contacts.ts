@@ -20,6 +20,7 @@ export const sourceName = z.enum([
   "manual",
   "pdl",
   "coresignal",
+  "linkedin_api", // vendor-neutral LinkedIn-shaped source API (0115; dark until vendor ToS/DPA review)
 ]);
 export type SourceName = z.infer<typeof sourceName>;
 

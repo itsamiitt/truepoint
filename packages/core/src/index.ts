@@ -331,6 +331,30 @@ export {
 } from "./enrichment/enrichContactV2.ts";
 export { recordEnrichmentEvidence } from "./enrichment/enrichmentEvidence.ts";
 export { appendSourceImports } from "./enrichment/sourceImports.ts";
+// linkedin_api Layer-0 landing (docs/planning/linkedin-source-ingestion/): the payload→facts pipeline —
+// pure mapper + the one-withErTx landing. Dark behind LINKEDIN_SOURCE_LANDING_ENABLED.
+export {
+  landLinkedinPayload,
+  type LandLinkedinPayloadInput,
+  type LandLinkedinPayloadResult,
+} from "./sourceLanding/landSourcePayload.ts";
+export {
+  LINKEDIN_API_SOURCE,
+  LINKEDIN_API_PROVENANCE_SRC,
+  LINKEDIN_API_CONFIDENCE,
+  HEADCOUNT_SIGNAL_MIN_PCT,
+  mapLinkedinPerson,
+  mapLinkedinCompany,
+  mapOwnershipType,
+  revenueMinor,
+  revenueDisplay,
+  headcountDeltaPct,
+  type MappedPerson,
+  type MappedCompany,
+  type MappedPosition,
+  type MappedEducation,
+  type MappedHeadcountPoint,
+} from "./sourceLanding/mapLinkedinPayload.ts";
 export {
   registrableDomain,
   toE164,

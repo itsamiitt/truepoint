@@ -120,6 +120,16 @@ export {
   masterEmploymentReadRepository,
   type EmploymentStintRow,
 } from "./repositories/masterEmploymentReadRepository.ts";
+// Layer-0 profile/edge/series writers for the linkedin_api landing (0112-0115). Every function runs under
+// the CALLER's withErTx and writes NO provenance itself — core's landSourcePayload owns the full write-set
+// (evidence + events + facts, one transaction) and runs the planFieldWrite fold between read and write.
+export {
+  masterProfileRepository,
+  type PersonLandingRow,
+  type CompanyLandingRow,
+  type EmploymentStintInput,
+  type HeadcountPointInput,
+} from "./repositories/masterProfileRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

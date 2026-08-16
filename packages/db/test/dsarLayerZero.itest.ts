@@ -64,8 +64,10 @@ afterAll(async () => {
 async function seedSubject(email: string, linkedin: string): Promise<[string, string]> {
   const bi = core.blindIndex(email.trim().toLowerCase());
   const [mp] = await admin`
-    INSERT INTO master_persons (linkedin_public_id, has_email, has_phone, full_name)
-    VALUES (${linkedin}, true, false, ${`Person ${linkedin}`}) RETURNING id`;
+    INSERT INTO master_persons (linkedin_public_id, has_email, has_phone, full_name,
+                                headline, summary, location_raw)
+    VALUES (${linkedin}, true, false, ${`Person ${linkedin}`},
+            'A headline', 'A summary.', 'Somewhere, USA') RETURNING id`;
   const personId = (mp as { id: string }).id;
   await admin`INSERT INTO master_emails (master_person_id, email_blind_index, email_domain)
               VALUES (${personId}, ${bi}, 'acme.com')`;
@@ -73,6 +75,14 @@ async function seedSubject(email: string, linkedin: string): Promise<[string, st
   // carries no contact value, so erasure has to reach it — and the residual scan has to be able to see it.
   await admin`INSERT INTO master_signals (subject_type, subject_id, type_code, observed_at)
               VALUES ('person', ${personId}, 'job_change', now())`;
+  // External identifier rows (0104, fed by the 0113 landing) + subject-authored stint prose (0112) — both
+  // new erasure surfaces the fan-out must reach: a surviving identifier re-links the subject on the next
+  // ingest; a stint description is prose the subject wrote.
+  await admin`INSERT INTO master_person_identifiers (master_person_id, id_type, id_value)
+              VALUES (${personId}, 'linkedin_member_urn', ${`urn-${linkedin}`})`;
+  await admin`INSERT INTO master_employment (master_person_id, company_name_raw, company_name_normalized,
+                                             title, location, description, is_current)
+              VALUES (${personId}, 'Acme Inc', 'acme inc', 'VP', 'HQ, USA', 'I did things.', true)`;
   const [c] = await admin`
     INSERT INTO contacts (tenant_id, workspace_id, first_name, email_blind_index, email_domain,
                           email_enc, master_person_id)
@@ -112,6 +122,30 @@ describe("DSAR erasure reaches Layer 0", () => {
     // The name goes too. It is the field that makes a suppressed row still identify a person.
     expect(person.full_name).toBeNull();
     expect(person.linkedin_public_id).toBeNull();
+
+    // The 0112 self-description columns go with it — headline/summary/location_raw identify a person as
+    // surely as the name does.
+    const [prof] = await admin`
+      SELECT headline, summary, location_raw FROM master_persons WHERE id = ${subjectPersonId}`;
+    const profile = prof as Record<string, unknown>;
+    expect(profile.headline).toBeNull();
+    expect(profile.summary).toBeNull();
+    expect(profile.location_raw).toBeNull();
+
+    // Identifier rows deleted (recognition belongs in the deny list, not the golden record) …
+    const [idents] = await admin`
+      SELECT count(*)::int AS n FROM master_person_identifiers
+       WHERE master_person_id = ${subjectPersonId}`;
+    expect((idents as { n: number }).n).toBe(0);
+
+    // … and the stint keeps its business fact but loses the subject-authored prose.
+    const [stint] = await admin`
+      SELECT title, location, description FROM master_employment
+       WHERE master_person_id = ${subjectPersonId}`;
+    const stintRow = stint as Record<string, unknown>;
+    expect(stintRow.title).toBe("VP");
+    expect(stintRow.location).toBeNull();
+    expect(stintRow.description).toBeNull();
 
     // The email facet is gone, blind index and all. Keeping the index would leave the graph able to
     // recognise the subject on sight forever; recognition belongs in the deny list, not the golden record.

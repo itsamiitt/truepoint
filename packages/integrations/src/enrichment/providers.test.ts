@@ -15,6 +15,8 @@ import {
   apolloProvider,
   coresignalExtract,
   coresignalProvider,
+  linkedinApiExtract,
+  linkedinApiProvider,
   pdlExtract,
   pdlProvider,
 } from "./providers.ts";
@@ -298,5 +300,59 @@ describe("Coresignal adapter contract (recorded fixtures)", () => {
 
   test("coresignalExtract never yields phone even if asked (no capability, no mapping)", () => {
     expect(coresignalExtract({ ...CORESIGNAL_HIT, phone: "+15550100" }, ["phone"])).toEqual({});
+  });
+});
+
+// Shaped from `source plan/truepoint profile Response.txt` — the linkedin_api person document.
+const LINKEDIN_API_HIT = {
+  schema_version: 1,
+  profile_id: "ACwAAAkMo0QBIgbAXuFmUKhDjOGNw2hj0tjFPqg",
+  member_id: 151823172,
+  public_identifier: "william-gates-cpa-770a1842",
+  headline: "VP of Finance",
+  current_position: { title: "Senior Director of Accounting", company_id: 9338128 },
+  contact: { primary_email: "wgates@verticalbridge.example", emails: [], phones: [] },
+};
+
+describe("linkedin_api adapter contract (recorded fixtures)", () => {
+  test("declares email+profile capabilities but NOT phone (contact block is reveal-gated)", () => {
+    const provider = linkedinApiProvider();
+    expect(provider.name).toBe("linkedin_api");
+    expect(provider.capabilities).toContain("contact.email");
+    expect(provider.capabilities).toContain("contact.profile");
+    expect(provider.capabilities).not.toContain("contact.phone");
+  });
+
+  test("keyless short-circuit: miss, zero cost, no call — the compliance dark posture", async () => {
+    let called = false;
+    const spy: FetchJson = () => {
+      called = true;
+      return Promise.resolve({ status: 200, json: LINKEDIN_API_HIT });
+    };
+    const result = await linkedinApiProvider(spy).enrich(REQUEST);
+    expect(result.status).toBe("miss");
+    expect(result.costMicros).toBe(0);
+    expect(called).toBe(false);
+  });
+
+  test("the SHIPPED linkedinApiExtract pins the payload paths", () => {
+    const out = linkedinApiExtract(LINKEDIN_API_HIT, ["email", "jobTitle"]);
+    expect(out).toEqual({
+      email: "wgates@verticalbridge.example",
+      jobTitle: "Senior Director of Accounting",
+    });
+  });
+
+  test("jobTitle falls back to the headline when current_position is absent", () => {
+    const { current_position: _cp, ...noPosition } = LINKEDIN_API_HIT;
+    expect(linkedinApiExtract(noPosition, ["jobTitle"])).toEqual({ jobTitle: "VP of Finance" });
+  });
+
+  test("emails[0] serves when primary_email is null; phone never extracted", () => {
+    const alt = {
+      ...LINKEDIN_API_HIT,
+      contact: { primary_email: null, emails: ["alt@example.com"], phones: ["+15550100"] },
+    };
+    expect(linkedinApiExtract(alt, ["email", "phone"])).toEqual({ email: "alt@example.com" });
   });
 });

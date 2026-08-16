@@ -39,6 +39,9 @@ export interface RecordEducationInput {
   /** Month/day precision as the source gave it; omit for "start unknown" (the '-infinity' sentinel). */
   startedOn?: string | null;
   endedOn?: string | null;
+  /** 0112 partial-date precision ('year'|'month'|'day') for the normalized dates above. */
+  startPrecision?: string | null;
+  endPrecision?: string | null;
   assertingSource?: string | null;
   matchMethod?: string | null;
   confidence?: number | null;
@@ -80,14 +83,15 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
     const rows = (await tx.execute(sql`
       INSERT INTO master_education (
         master_person_id, master_company_id, school_name_raw, school_name_normalized,
-        degree, fields_of_study, started_on, ended_on,
+        degree, fields_of_study, started_on, ended_on, start_precision, end_precision,
         asserting_source, match_method, confidence, observed_at
       ) VALUES (
         ${input.masterPersonId}, ${input.masterCompanyId}, ${input.schoolNameRaw ?? null},
         ${input.schoolNameNormalized ?? null}, ${input.degree ?? null},
         ${sql.param(input.fieldsOfStudy ?? null)}::text[], ${startedOn}, ${input.endedOn ?? null},
+        ${input.startPrecision ?? null}, ${input.endPrecision ?? null},
         ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
-        ${input.confidence ?? null}, ${input.observedAt ?? null}
+        ${input.confidence ?? null}, ${input.observedAt ? input.observedAt.toISOString() : null}::timestamptz
       )
       ON CONFLICT (master_person_id, master_company_id, started_on)
         WHERE master_company_id IS NOT NULL
@@ -95,6 +99,7 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
         degree           = COALESCE(EXCLUDED.degree, master_education.degree),
         fields_of_study  = COALESCE(EXCLUDED.fields_of_study, master_education.fields_of_study),
         ended_on         = COALESCE(EXCLUDED.ended_on, master_education.ended_on),
+        end_precision    = COALESCE(EXCLUDED.end_precision, master_education.end_precision),
         source_count     = master_education.source_count + 1,
         confidence       = GREATEST(COALESCE(EXCLUDED.confidence, 0), COALESCE(master_education.confidence, 0)),
         updated_at       = now()
@@ -108,13 +113,14 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
   const rows = (await tx.execute(sql`
     INSERT INTO master_education (
       master_person_id, school_name_raw, school_name_normalized,
-      degree, fields_of_study, started_on, ended_on,
+      degree, fields_of_study, started_on, ended_on, start_precision, end_precision,
       asserting_source, match_method, confidence, observed_at
     ) VALUES (
       ${input.masterPersonId}, ${input.schoolNameRaw ?? null}, ${input.schoolNameNormalized},
       ${input.degree ?? null}, ${sql.param(input.fieldsOfStudy ?? null)}::text[], ${startedOn}, ${input.endedOn ?? null},
+      ${input.startPrecision ?? null}, ${input.endPrecision ?? null},
       ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
-      ${input.confidence ?? null}, ${input.observedAt ?? null}
+      ${input.confidence ?? null}, ${input.observedAt ? input.observedAt.toISOString() : null}::timestamptz
     )
     ON CONFLICT (master_person_id, school_name_normalized, started_on)
       WHERE master_company_id IS NULL AND school_name_normalized IS NOT NULL

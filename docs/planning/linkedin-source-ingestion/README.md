@@ -1,0 +1,274 @@
+# linkedin_api source ingestion — schema gap-closure + storage architecture
+
+**Status: BUILT DARK (2026-08-16).** Migrations 0112–0115 + the full landing vertical are on the branch,
+byte-identical off. Nothing fetches, lands, or emits until the flags below flip — and the first production
+`LINKEDIN_API_KEY` is itself a HUMAN GATE (§8).
+
+Outcomes: **[S-09]** (positions history + primary-edge transitions), **[S-13]** (job_change signal fed by a
+real producer), **[S-10]** (source_count/observed_at corroboration on every fact), **[S-04]/[S-08]**
+(reveal-gated contact block rides the shipped enrichment path), **[A-01]** (every landed field carries
+provenance + a lawful basis).
+
+Samples this design was cut against: `source plan/` at the repo root — 3 person payloads
+(`schema_version: 1`) + 3 company payloads (`schema_version: 2`). Payload contract:
+`packages/types/src/linkedinApi.ts` (zod, passthrough-tolerant, literal-pinned version).
+
+---
+
+## 1. What the source asserts vs what the schema could store (the gap analysis)
+
+### Person payload → schema
+
+| Source field | Pre-0112 state | Resolution |
+|---|---|---|
+| `profile_id` (urn), `member_id` | nowhere | `master_person_identifiers` rows: `linkedin_member_urn`, `linkedin_member_id` (zero DDL — the 0104 table was built for exactly this) |
+| `public_identifier` | `master_persons.linkedin_public_id` ✓ | dual-written: column stays the hot key, identifier row added |
+| `headline`, `summary`, `location` (free text) | nowhere | 0112 columns `headline`/`summary`/`location_raw` (business-contact class, 09-compliance rule 3) |
+| `positions[]` | `master_employment` ✓ (0105 raw-name survival) | + 0112 `location`/`description`/`start_precision`/`end_precision`; per-position employer resolved by numeric LinkedIn id (below) |
+| `educations[]` | `master_education` ✓ (0108) | + precision columns; school LINK-or-MINT by `linkedin_school_id` identifier (distinct namespace — never the company-id column) |
+| `contact.emails/phones` | `master_emails`/`master_phones` + dead channel tables | reveal-gated; rides the shipped enrichment waterfall + CH-INV-1 channel path — **not** written by the landing (§8 gate 5 for master-side contribution) |
+| `pronoun`, `premium`, `open_link`, `job_seeker`, photos | — | **raw-only, permanently** (user decision 2026-08-16): retained in `source_records.raw_data`, dropped at the mapper boundary, no columns. HUMAN GATE to ever structure |
+| `skills[]`, `languages[]`, `volunteering[]` | — (C6: "no listed outcome") | **raw-only** (same decision). Reversible by re-projection from the evidence log the day C6 opens; sketches live in the plan file, not in DDL |
+
+### Company payload → schema
+
+| Source field | Pre-0112 state | Resolution |
+|---|---|---|
+| `company_id` (numeric) | column + partial unique existed, **unresolvable** | resolver LINK ladder + the domainless MINT (§3) |
+| `public_identifier` (slug) | nowhere | `master_company_identifiers` (0113) `linkedin_company_slug` |
+| `description`, `website`, `type`, `specialties`, `year_founded`, `logo`, `background_picture` | nowhere | 0112 firmographic columns (`ownership_type` normalized to a CHECK vocabulary; raw display string survives in raw_data) |
+| `revenue_range {currency,min,max}` | flat varchar(50) | 0112 structured triple `revenue_min_minor`/`revenue_max_minor`/`revenue_currency` (minor units, funding-table precedent) beside the varchar, which stays and is dual-written ("$5M–$10M") |
+| `headquarters {…}` | `master_company_locations` kind='hq' ✓ | mapped; free-text country also fills `hq_country` |
+| `headcount.monthly[]` (+ growth, by_function) | **nowhere — the one genuinely new storage problem** | `master_company_headcount` (0114, §2) |
+| `entity_urn`, `sales_navigator_url` | — | not stored (derivable from `company_id`) |
+
+### Cross-cutting
+
+- **Partial dates** (`"2018"` / `"2026-05"` / null): dates stay real Postgres `date`s (the `'-infinity'`
+  sentinel and the stint-dedup uniques are load-bearing); `start_precision`/`end_precision` record what was
+  asserted. One normalizer: `parsePartialDate()` in `@leadwolf/types` (`packages/types/src/partialDate.ts`).
+  **Accepted limit, stated:** a source refining "2018" → "2018-03" produces a different stint identity —
+  same failure class as the documented sentinel-collision note; cross-source variance is ER's job and
+  `source_records` keeps the evidence to re-resolve.
+- **provenance_event + master_signals had DDL and zero producers.** This landing is a real producer for
+  both (the intelligence-platform handover's "populators are the high-value next work").
+
+---
+
+## 2. The headcount time series — `master_company_headcount` (0114)
+
+The only table in this program that was genuinely undecided anywhere in the planning corpus.
+
+**Shape:** `(id, master_company_id FK cascade, month date CHECK first-of-month, job_function varchar(60)
+DEFAULT '' — '' = whole-company total, employee_count int ≥0, source_name, observed_at, created_at)`,
+**PK (master_company_id, month, job_function)** = the upsert target.
+
+**PARTITION BY HASH (master_company_id), 32 static partitions.** Why not the 0103 RANGE precedent — three
+forcing facts, recorded so nobody "fixes" it back:
+
+1. It is an **upsert** table. A partitioned unique must include the partition key; RANGE on `observed_at`
+   would degrade "one row per month" into "one row per refetch" — the 0085 trap.
+2. RANGE on `month` satisfies the unique but `ensure_month_partitions` (0102) creates partitions
+   **forward-only**, and every first fetch carries ~24 months of history → the backfill lands in DEFAULT
+   and permanently blocks later partition creation (0103's own header warning).
+3. Every hot read is per-company → hash pruning = single-partition reads. The "who grew this month" feed
+   reads `master_signals`, never scans this table.
+
+**Convergence:** `ON CONFLICT … DO UPDATE … WHERE EXCLUDED.observed_at >= stored.observed_at` — overlapping
+25-month refetches converge; a stale queued replay no-ops (proven in `masterHeadcount.itest.ts`).
+
+**Growth windows are DERIVED, never stored** (the no-rollup rule): `lag()` over ≤25 rows/company at read
+time reproduces the vendor's numbers (itest proof #3); the vendor's growth block survives verbatim in
+`source_records.raw_data`. A materialized growth cache was considered and rejected — O(25) per profile read
+is cheaper than any cache's invalidation bug surface. Revisit only on p95 evidence.
+
+**Fact + event (the funding precedent):** the series is the fact; `headcount_surge`/`headcount_decline`
+(seeded in 0114, family `hiring`, directional-pair vocabulary) are the dated events, emitted only past
+`HEADCOUNT_SIGNAL_MIN_PCT` (5% — the samples show endless ±0% months) and idempotent per evidence row.
+
+**ACL:** parent + all `master_company_headcount_pNN` partitions match the `^master_` REVOKE convention
+loop; `leadwolf_er` granted on the parent (routed DML checks parent privileges); `mirror_partition_acl`
+(0102) sweeps partitions at the end of every migrate. Itest asserts partition-by-name denial.
+
+---
+
+## 3. Identity — resolver extension + `master_company_identifiers` (0113)
+
+`master_company_identifiers` is the company twin of the person table (audit-D8 argument verbatim: ids are
+the axis that grows per source; a column per id kind means a migration per vendor). `(id_type, id_value)`
+globally unique = the ER join key. The `linkedin_company_id` column **stays** (hot, partial-unique since
+0017) and is dual-written; 0113 backfills it into the table, byte-for-byte the 0104 person pattern.
+
+id_type vocabulary written today:
+
+| table | id_type | value |
+|---|---|---|
+| person | `linkedin_public_id` | slug (pre-existing) |
+| person | `linkedin_member_urn` | `profile_id` ("ACwAA…") — immutable, strongest |
+| person | `linkedin_member_id` | canonical decimal string |
+| company | `linkedin_company_id` | numeric id (mirrors the column) |
+| company | `linkedin_company_slug` | `public_identifier` |
+| company | `linkedin_school_id` | legacy school-id namespace — **never** written into the
+`linkedin_company_id` column (a cross-namespace collision on the partial unique would silently merge a
+school into a company) |
+
+**`resolveForImport` ladders** (`masterGraphRepository.ts`; byte-identical when the new keys are absent):
+
+- Person LINK: `linkedin_public_id` column → identifier `linkedin_member_urn` → identifier
+  `linkedin_member_id` → `email_blind_index`. Slug stays first (shipped behavior stable); urn/member-id
+  outrank email because they are immutable while an email can be shared or recycled. First hit wins;
+  cross-key divergence is the ER sweep's job.
+- Person MINT: **still requires slug or email** — the identifier keys are deliberately LINK-only. A mint
+  keyed only on an identifier-table row would leave the fresh row with no dedupable key of its own unless
+  the caller remembers to attach the identifier afterwards — the junk-identity trap the keyless guard
+  exists to prevent. (This deviates from the original plan sketch, which counted the new keys as mintable;
+  the payload always carries `public_identifier`, so nothing real is lost.)
+- Company LINK: `primary_domain` → `linkedin_company_id` column (**newly reachable** — the shipped partial
+  unique finally has a probe) → identifier `linkedin_company_slug`.
+- Company MINT: by domain (shipped, now also stamping the LinkedIn id when the probe carried one), or the
+  **new domainless mint keyed on `linkedin_company_id`** — required, else every position employer (numeric
+  id, no domain) would stay permanently unresolved. Schools mint via
+  `masterProfileRepository.resolveSchoolByExternalId` (org_kind='school', identifier-claim convergence).
+
+---
+
+## 4. The landing — `landLinkedinPayload` (one withErTx)
+
+`packages/core/src/sourceLanding/landSourcePayload.ts`, fed by the pure mapper
+`mapLinkedinPayload.ts` (the compliance boundary: pronoun/premium/open_link/job_seeker/photos/skills/
+languages/volunteering are dropped there and exist only in `source_records.raw_data`).
+
+Order inside the transaction (each step's reason in the file header): resolve → **appendSourceRecord**
+(content-hash idempotency chokepoint; `created:false` ⇒ stop — no double corroboration, ever) →
+**suppression guard** (an objected person gets the evidence row and *nothing* else — an objection stops
+processing, not just revealing) → linkToCluster → **planFieldWrite fold** (pins block the provider; only
+`writableFields` land; the map is stamped back in the same UPDATE) → employment stints (per-position
+LINK-or-MINT; plain upserts never flip a primary row's currency — only the demote-then-promote transition
+does, respecting `uniq_employment_primary`) → education → identifiers → headcount series →
+**appendProvenanceEvents** from the ACTUAL writable set (D7: a failed append fails the whole landing) →
+signals (`job_change` on a real employer transition; headcount pair past threshold) → enqueueProjection.
+
+Two lanes call it:
+
+1. **Tenant-triggered** — `enrichContactV2` after its evidence step: when `linkedin_api` was attempted and
+   returned a document, the cached rawPayload lands (spend already ledgered in `provider_calls`; a retry is
+   spend-safe via the per-field cache).
+2. **Platform sweep** — `apps/workers/src/queues/linkedinCompanyRefresh.ts`: leader-locked, 6h cadence,
+   ≤25 companies/tick (≈100/day deliberate trickle), enumerates LinkedIn-identified companies missing this
+   month's totals point (self-terminating each month). Spend control is structural (cap × cadence), NOT
+   `provider_calls` — that ledger is workspace-scoped by design and a platform lane must not wear a fake
+   workspace id.
+
+**The adapter** (`packages/integrations/src/enrichment/providers.ts linkedinApiProvider`) is an ordinary
+waterfall citizen: `vendorProvider()` over the hardened transport, capabilities
+`["contact.email","contact.profile"]` (no phone — the contact block is reveal-gated and phones are absent
+from every fixture; honest capabilities let the waterfall skip instead of paying a guaranteed miss), absent
+key ⇒ permanent miss ⇒ dark. Base URL is env-supplied (`LINKEDIN_API_BASE_URL`) because the vendor is
+unnamed until its review; its host joins the outbound allowlist at config time; the `/person` and
+`/company` endpoint paths are placeholders pinned at vendor onboarding.
+
+---
+
+## 5. Flags (env-only — Layer 0 has no tenant to key a per-tenant flag on)
+
+| Flag | Gates | Default |
+|---|---|---|
+| `LINKEDIN_API_KEY` / `LINKEDIN_API_BASE_URL` | any fetch at all (absent = permanent miss = the compliance enforcement) | unset |
+| `LINKEDIN_SOURCE_LANDING_ENABLED` | every structured Layer-0 write in `landLinkedinPayload` | off |
+| `LINKEDIN_SIGNALS_ENABLED` | master_signals emission from this lane | off |
+| `LINKEDIN_COMPANY_REFRESH_ENABLED` | registration of the platform sweep | off |
+| `PROVENANCE_EVENTS_ENABLED` (existing) | the event append inside the landing (shipped asymmetric posture) | off |
+
+Tenant-side participation needs no new flag: `provider_configs.enabled` + workspace `provider_prefs`
+(0111) already govern which workspaces' waterfalls may try the provider.
+
+**Flag-off proof:** with all of the above unset the tree is byte-identical dark — adapter misses without a
+call, the landing returns `flag_off` before touching the DB, the sweep is never registered.
+
+---
+
+## 6. DSAR / erasure (extended in this program)
+
+`dsarRepository.suppressMasterPersons` now also: deletes the subject's `master_person_identifiers` rows
+(a surviving handle would re-link the subject on the next ingest — recognition belongs in the deny list),
+NULLs the 0112 self-description columns (`headline`/`summary`/`location_raw` identify a person as surely as
+the name), and NULLs stint `location`/`description` (subject-authored prose; the stint's business fact —
+anonymous node held role at company — survives, the pre-existing posture). `scanMasterResiduals` counts
+surviving identifier rows (a scan that does not count a store cannot prove anything about it). Proven in
+`dsarLayerZero.itest.ts`.
+
+Company data (identifiers, headcount, firmographics) is business data — deliberately untouched by
+person-subject erasure.
+
+---
+
+## 7. Compliance impact statement (09-compliance PR gate)
+
+- **Data elements touched:** person name/headline/summary/location/positions/educations + external profile
+  identifiers; company firmographics + headcount. Reveal-gated work emails/phones ride the SHIPPED
+  enrichment/channel path, unchanged by this program. Sensitive-adjacent fields excluded from structured
+  storage by design (raw-only).
+- **Lawful basis:** D6 chain (`resolveLawfulBasis`) — declared ≻ workspace policy ≻ `legitimate_interest`;
+  stamped on every provenance event; `acceptance_state` guards untagged captures (n/a here — provider
+  source type).
+- **Consent surface:** n/a (licensed provider data, not contributor capture). The per-source legal review
+  is gate 1 below.
+- **Suppression enforcement point:** the landing's step-3 guard (belt) + the existing egress checks
+  (braces). `is_suppressed` blocks all fact writes.
+- **Erasure propagation:** §6; ≤72h SLA path unchanged, residual scan extended.
+- **Collection posture:** server-side licensed API pull — NOT extension scraping; hard-constraint 4
+  untouched (the extension's capture set is unchanged).
+
+---
+
+## 8. HUMAN GATES (nothing below ships/flips without a recorded human decision)
+
+1. **Vendor ToS / DPA / sub-processor review** before any production `LINKEDIN_API_KEY` exists
+   (08-compliance §10, 21 §4/§5 — the PDL/Coresignal posture; `provider_configs` compliance status is the
+   independently-pausable switch). The vendor-neutral `linkedin_api` label survives a vendor swap; the
+   review does not.
+2. **Person photo columns** — not shipped (user decision); photos stay raw-only.
+3. **pronoun / premium / open_link / job_seeker** ever leaving raw payload.
+4. **C6 skills/languages/volunteering module** — raw-only now; backfillable from `source_records` by
+   re-projection; `technology_skill_map` remains the preserved idea.
+5. **Master-side email/phone contribution from this provider** (`master_emails.email_enc` etc.) — the
+   landing deliberately writes no channel values; a follow-up behind its own flag.
+6. **Education provenance entity-type** — `provenance_event.entity_type` has `employment` but no
+   `education` member; education assertions currently ride the edge table's own provenance columns
+   (asserting_source/confidence/source_count). Adding the enum member is a one-line CHECK swap + zod edit
+   when field-grain education events are wanted.
+
+---
+
+## 9. Verification (all run 2026-08-16 on local PG17)
+
+- `packages/types/src/partialDate.test.ts` — 6 pass.
+- `packages/core/src/sourceLanding/mapLinkedinPayload.test.ts` — 13 pass (fixtures = the samples; the
+  raw-only boundary is asserted, not assumed).
+- `packages/integrations/src/enrichment/providers.test.ts` — 22 pass (incl. the 5 new linkedin_api
+  contract tests: capabilities honesty, keyless dark short-circuit, path pins, email fallback).
+- `packages/db/test/linkedinSourceLanding.itest.ts` — 5/5: person E2E (scalars/identifiers/stints/
+  precision/primary/education-school-mint/evidence/events), idempotent replay (no double corroboration),
+  pin survives re-land, job-change demote-then-promote + signal, suppressed ⇒ evidence-only, company E2E
+  (firmographics/revenue/HQ/series/identifiers) + replay convergence.
+- `packages/db/test/masterHeadcount.itest.ts` — 7/9 locally: convergence, stale no-op, derived-growth
+  lag() proof, er read path, identifier convergence, backfill agreement, slug LINK. The two 42501
+  ACL asserts fail locally with 28P01 — the pre-existing local app-role password mismatch that the shipped
+  `masterGraphResolve.itest.ts` shows identically on a clean tree; CI's fresh Postgres asserts them.
+- `packages/db/test/dsarLayerZero.itest.ts` — 10 pass (extended: identifiers deleted, self-description
+  NULLed, stint prose NULLed, business fact survives).
+- Gates: typecheck + typecheck:tests green; lint:boundaries / lint:import-pii / lint:lockfile green;
+  `bun run lint` red only on the known repo-wide CRLF issue (code-independent).
+- Migrations 0112–0115 apply end-to-end on every itest template build (applyMigrations → grants →
+  mirror_partition_acl).
+
+## 10. Enable runbook (when the gates open)
+
+1. Record the vendor review; set `provider_configs` row for `linkedin_api`; issue `LINKEDIN_API_KEY` +
+   `LINKEDIN_API_BASE_URL` (staging first).
+2. Flip `LINKEDIN_SOURCE_LANDING_ENABLED` (+ `PROVENANCE_EVENTS_ENABLED` if not already on). Watch:
+   source_records growth, provenance_event append failures (they fail landings loudly — D7), fold skip
+   counts (pins).
+3. Flip `LINKEDIN_SIGNALS_ENABLED`; verify job_change rows corroborate `jobChangeSweep` census.
+4. Flip `LINKEDIN_COMPANY_REFRESH_ENABLED`; watch the tick log line (due/landed/skipped) and raise
+   `MAX_COMPANIES_PER_TICK` only with the spend math updated here.

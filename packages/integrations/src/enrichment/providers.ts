@@ -207,6 +207,81 @@ export function coresignalProvider(fetchJson?: FetchJson): EnrichmentProvider {
   );
 }
 
+/**
+ * linkedin_api person-enrich — the vendor-neutral LinkedIn-shaped source (docs/planning/
+ * linkedin-source-ingestion/; payload contract = @leadwolf/types linkedinApiPersonPayloadSchema, fixtures =
+ * `source plan/`). GET with the key in `x-api-key`; base URL is env-supplied because the vendor is unnamed
+ * until its ToS/DPA review (HUMAN GATE) — no key + no base URL ⇒ permanent miss ⇒ dark, the PDL/Coresignal
+ * compliance posture. The endpoint path is pinned at vendor onboarding; `/person` is the placeholder the
+ * contract test exercises.
+ *
+ * The waterfall consumes only the flat port fields; the FULL payload rides out as rawPayload, which is what
+ * landSourcePayload (behind LINKEDIN_SOURCE_LANDING_ENABLED) turns into Layer-0 facts. Declares NO
+ * contact.phone capability: the source's contact block is reveal-gated and phones are absent from every
+ * recorded fixture — an honest capability set lets the waterfall skip rather than pay a guaranteed miss.
+ */
+/** The linkedin_api payload → port-field mapping, exported PURE for the contract test. */
+export function linkedinApiExtract(json: unknown, fields: EnrichField[]): Extracted {
+  if (typeof json !== "object" || json === null) return {};
+  const record = json as Record<string, unknown>;
+  const contact =
+    typeof record.contact === "object" && record.contact !== null
+      ? (record.contact as Record<string, unknown>)
+      : {};
+  const position =
+    typeof record.current_position === "object" && record.current_position !== null
+      ? (record.current_position as Record<string, unknown>)
+      : {};
+  const firstEmail = (): string | undefined => {
+    const primary = pick(contact, "primary_email");
+    if (primary) return primary;
+    const emails = contact.emails;
+    return Array.isArray(emails) && typeof emails[0] === "string" && emails[0].length > 0
+      ? emails[0]
+      : undefined;
+  };
+  const map: Record<EnrichField, () => string | undefined> = {
+    email: firstEmail,
+    phone: () => undefined, // no capability — never asked, never extracted
+    jobTitle: () => pick(position, "title") ?? pick(record, "headline"),
+    seniorityLevel: () => undefined, // not asserted by the source; derivation stays core-side
+    department: () => undefined,
+  };
+  const out: Extracted = {};
+  for (const field of fields) {
+    const value = map[field]();
+    if (value) out[field] = value;
+  }
+  return out;
+}
+
+export function linkedinApiProvider(fetchJson?: FetchJson): EnrichmentProvider {
+  const base = env.LINKEDIN_API_BASE_URL?.replace(/\/$/, "");
+  return vendorProvider(
+    {
+      name: "linkedin_api",
+      trust: 0.8,
+      costMicrosPerCall: 25_000, // $0.025 — placeholder unit cost; tuned from provider telemetry
+      // A missing base URL yields an unusable https://unconfigured.invalid URL that the transport's host
+      // allowlist rejects as a zero-cost error — but the apiKey guard short-circuits first (miss), so the
+      // URL is never fetched while the source is dark.
+      url: `${base ?? "https://unconfigured.invalid"}/person`,
+      method: "GET",
+      apiKey: env.LINKEDIN_API_KEY,
+      headers: (key) => ({ "x-api-key": key }),
+      capabilities: ["contact.email", "contact.profile"],
+      query: (req) => ({
+        linkedin_url: req.subject.linkedinUrl,
+        email: req.subject.email,
+        full_name: req.subject.fullName,
+        company_domain: req.subject.companyDomain,
+      }),
+      extract: linkedinApiExtract,
+    },
+    fetchJson,
+  );
+}
+
 /** The configured waterfall set (order is decided by core's waterfall + workspace prefs, not array order). */
 export function defaultProviders(): EnrichmentProvider[] {
   return [
@@ -215,5 +290,6 @@ export function defaultProviders(): EnrichmentProvider[] {
     clearbitProvider(),
     pdlProvider(),
     coresignalProvider(),
+    linkedinApiProvider(),
   ];
 }

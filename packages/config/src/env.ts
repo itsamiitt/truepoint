@@ -279,6 +279,13 @@ export const appEnvSchema = z
     CLEARBIT_API_KEY: z.string().optional(),
     PDL_API_KEY: z.string().optional(),
     CORESIGNAL_API_KEY: z.string().optional(),
+    // linkedin_api — the vendor-neutral LinkedIn-shaped profile/company source (docs/planning/
+    // linkedin-source-ingestion/). Same compliance gate as PDL/Coresignal: no production key until the
+    // vendor's DPA + sub-processor listing + ToS review are recorded (HUMAN GATE). The base URL is
+    // env-supplied because the vendor is deliberately unnamed until that review; its host joins the
+    // outbound allowlist at config time (httpProvider.ts).
+    LINKEDIN_API_KEY: z.string().optional(),
+    LINKEDIN_API_BASE_URL: z.string().url().optional(),
 
     // Waterfall v2 master switch (0111; explicit-"true"-only — the fleet-wide kill/rollback lever). Off ⇒
     // enrichContact runs the legacy path byte-identically. Under it sits the per-tenant canary flag
@@ -812,6 +819,28 @@ export const appEnvSchema = z
     // INSIDE the caller's existing transaction so metering can never drift from the action it records.
     // Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
     USAGE_EVENTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // linkedin_api Layer-0 landing (docs/planning/linkedin-source-ingestion/). Env-only gates — Layer 0 has
+    // no tenant_id to key a per-tenant flag on (the PROVENANCE_EVENTS_ENABLED asymmetry rationale). All
+    // DEFAULT-OFF, explicit-"true"-only; with every one off the source is byte-identical dark: the adapter
+    // reports a permanent miss without a key, no landing call exists, no signal is emitted, no sweep runs.
+    // LINKEDIN_SOURCE_LANDING_ENABLED — landSourcePayload writes structured Layer-0 facts from a fetched
+    // payload (evidence + resolve + upserts + provenance events in one withErTx).
+    LINKEDIN_SOURCE_LANDING_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // LINKEDIN_SIGNALS_ENABLED — master_signals emission from that landing (job_change on a primary-employer
+    // transition; headcount_surge/decline past the threshold).
+    LINKEDIN_SIGNALS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // LINKEDIN_COMPANY_REFRESH_ENABLED — registers the leader-locked platform sweep that re-fetches tracked
+    // companies' firmographics + headcount series on a cadence.
+    LINKEDIN_COMPANY_REFRESH_ENABLED: z
       .string()
       .optional()
       .transform((v) => v === "true"),

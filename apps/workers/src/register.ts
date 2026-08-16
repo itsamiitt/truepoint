@@ -193,6 +193,11 @@ import {
   makeProcessLedgerBackfillSweep,
 } from "./queues/ledgerBackfillSweep.ts";
 import {
+  LINKEDIN_COMPANY_REFRESH_QUEUE,
+  type LinkedinCompanyRefreshJobData,
+  makeProcessLinkedinCompanyRefresh,
+} from "./queues/linkedinCompanyRefresh.ts";
+import {
   LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
   type LowBalanceNotifierSweepJobData,
   makeProcessLowBalanceNotifierSweep,
@@ -2014,6 +2019,34 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "job-change-sweep" })
       .catch((e) =>
         log.error("failed to schedule the job-change sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // linkedin_api company-refresh sweep (docs/planning/linkedin-source-ingestion/) — TRIPLE-DARK: this env
+  // gate for registration, the key/base-URL pair for any fetch (absent until the vendor's ToS/DPA review,
+  // the HUMAN GATE), and LINKEDIN_SOURCE_LANDING_ENABLED for any structured write. Layer-0 lane: no tenant
+  // in scope, spend bounded structurally (MAX_COMPANIES_PER_TICK × cadence), leader-locked, self-terminating
+  // each month once every tracked company holds its current totals point.
+  if (env.LINKEDIN_COMPANY_REFRESH_ENABLED) {
+    const linkedinRefreshQueue = tracedQueue<LinkedinCompanyRefreshJobData>(
+      LINKEDIN_COMPANY_REFRESH_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        tracedWorker<LinkedinCompanyRefreshJobData>(
+          LINKEDIN_COMPANY_REFRESH_QUEUE,
+          makeProcessLinkedinCompanyRefresh(connection),
+          { connection },
+        ),
+        LINKEDIN_COMPANY_REFRESH_QUEUE,
+      ),
+    );
+    void linkedinRefreshQueue
+      .add("sweep", {}, { repeat: { every: 6 * 60 * 60_000 }, jobId: "linkedin-company-refresh" })
+      .catch((e) =>
+        log.error("failed to schedule the linkedin company refresh sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

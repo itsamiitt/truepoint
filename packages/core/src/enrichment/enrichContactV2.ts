@@ -49,6 +49,7 @@ import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import type { BreakerStore } from "./breakerStore.ts";
+import { landLinkedinPayload } from "../sourceLanding/landSourcePayload.ts";
 import { recordEnrichmentEvidence } from "./enrichmentEvidence.ts";
 import { type FieldWin, runFieldWaterfalls } from "./fieldWaterfall.ts";
 import type { ProviderGate, ProviderLimits } from "./providerGate.ts";
@@ -409,6 +410,21 @@ export async function runEnrichmentV2(run: EnrichmentV2Run): Promise<EnrichmentV
       emailDomain: pre.contact.emailDomain ?? undefined,
       workspaceLawfulBasis: policyRow?.lawfulBasis ?? null,
     });
+  }
+  // ── linkedin_api Layer-0 landing (docs/planning/linkedin-source-ingestion/): when THAT provider was
+  // attempted and returned a document, its full payload becomes structured Layer-0 facts — positions,
+  // educations, identifiers, headline/summary — in its OWN withErTx, behind its own env gate. Same failure
+  // posture as evidence: flag ON ⇒ the error propagates and fails the attempt (a retry is spend-safe via
+  // the per-field cache rows tx2 already committed). Gate checked inside landLinkedinPayload.
+  if (env.LINKEDIN_SOURCE_LANDING_ENABLED) {
+    const linkedinPayload = outcome.rawPayloadByProvider.get("linkedin_api");
+    if (linkedinPayload != null) {
+      await landLinkedinPayload({
+        payload: linkedinPayload,
+        workspaceLawfulBasis: policyRow?.lawfulBasis ?? null,
+        fetchedAt: new Date(),
+      });
+    }
   }
   void persisted;
 
