@@ -88,6 +88,7 @@
     "settings-tenant",
     "settings-user",
     "settings-workspace",
+    "sourceLanding",
     "staff",
     "storage",
     "system-health",
@@ -101,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2053,
-  "fileSetHash": "sha256:b9fe9a1263a23d874fdc7343a2bd7dc0776669b1f30b6a9ced8e3b3e57889484",
+  "fileCount": 2064,
+  "fileSetHash": "sha256:85e942660715d48b77c1b8a8a20f11c1c2abc7aca369e0d053c546fe755b3a47",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1234,10 +1235,12 @@
         "packages/db/src/repositories/masterEducationRepository.ts",
         "packages/db/src/repositories/masterEmploymentReadRepository.ts",
         "packages/db/src/repositories/masterGraphRepository.ts",
+        "packages/db/src/repositories/masterProfileRepository.ts",
         "packages/db/src/repositories/masterSignalsRepository.ts",
         "packages/db/src/repositories/masterTechnologyRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/linkedinCompanyRefresh.ts",
         "apps/workers/src/queues/masterBackfill.test.ts",
         "apps/workers/src/queues/masterBackfill.ts",
         "apps/workers/src/queues/masterBackfillSweep.ts"
@@ -1979,6 +1982,19 @@
       "admin": [],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "sourceLanding": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/sourceLanding/landSourcePayload.ts",
+        "packages/core/src/sourceLanding/mapLinkedinPayload.test.ts",
+        "packages/core/src/sourceLanding/mapLinkedinPayload.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []
@@ -2809,6 +2825,7 @@
       "packages/db/src/schema/masterConfidencePolicy.ts",
       "packages/db/src/schema/masterEducation.ts",
       "packages/db/src/schema/masterGraph.ts",
+      "packages/db/src/schema/masterHeadcount.ts",
       "packages/db/src/schema/masterSignals.ts",
       "packages/db/src/schema/masterTechnology.ts",
       "packages/db/src/schema/masterTechnologyAdoption.ts",
@@ -2903,6 +2920,7 @@
       "packages/db/test/jobChangeAlerts.itest.ts",
       "packages/db/test/jobChangeSweep.itest.ts",
       "packages/db/test/jobVisibility.itest.ts",
+      "packages/db/test/linkedinSourceLanding.itest.ts",
       "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
       "packages/db/test/listsStaffNoAccess.itest.ts",
@@ -2911,6 +2929,7 @@
       "packages/db/test/masterEducationAndProducts.itest.ts",
       "packages/db/test/masterGraphIsolation.itest.ts",
       "packages/db/test/masterGraphResolve.itest.ts",
+      "packages/db/test/masterHeadcount.itest.ts",
       "packages/db/test/members.itest.ts",
       "packages/db/test/meteringAccess.itest.ts",
       "packages/db/test/migrationSeedLengths.test.ts",
@@ -3084,11 +3103,14 @@
       "packages/types/src/intel.ts",
       "packages/types/src/jitElevation.ts",
       "packages/types/src/jobVisibility.ts",
+      "packages/types/src/linkedinApi.ts",
       "packages/types/src/listGovernance.ts",
       "packages/types/src/lists.ts",
       "packages/types/src/masterSync.ts",
       "packages/types/src/notifications.ts",
       "packages/types/src/outreach.ts",
+      "packages/types/src/partialDate.test.ts",
+      "packages/types/src/partialDate.ts",
       "packages/types/src/pipelineStages.ts",
       "packages/types/src/planTemplateAdmin.ts",
       "packages/types/src/platformAdmin.ts",
@@ -3203,6 +3225,7 @@
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-user' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-workspace' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'sourceLanding' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'staff' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'system-health' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'tags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

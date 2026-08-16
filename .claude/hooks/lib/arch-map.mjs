@@ -76,6 +76,9 @@ export const QUEUE_DOMAIN = {
   firmographics: "enrichment",
   masterBackfill: "master-sync",
   masterBackfillSweep: "master-sync",
+  // linkedin_api company-refresh sweep (docs/planning/linkedin-source-ingestion/): a Layer-0 platform lane
+  // feeding the same system-owned graph the master* queues do.
+  linkedinCompanyRefresh: "master-sync",
   partitionSweep: "data-ops",
   projectionSweep: "projection",
   retentionSweep: "retention",
@@ -178,6 +181,10 @@ export const REPO_DOMAIN = {
   // READ side of the Layer-0 employment edge (plan 33 · A2) — same system-owned graph, split from
   // masterGraphRepository because that module owns the ingest-critical write path.
   masterEmploymentRead: "master-sync",
+  // Layer-0 profile/edge/series writers for the linkedin_api landing (0112-0115) — same system-owned
+  // graph; split from masterGraphRepository for the same reason masterEmploymentRead is: that module owns
+  // the resolve chokepoint, this one owns the fold-applied fact writes.
+  masterProfile: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",

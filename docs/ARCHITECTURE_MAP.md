@@ -36,6 +36,14 @@
 > same migration dropped the dead `master_companies.technographics` blob (no reader, no writer), leaving
 > `master_technology_adoptions` as the single technographics store. `account-intelligence` is the first
 > customer-facing read surface over any of it.
+> **Migrations 0112–0115 add the `linkedin_api` source program** ([`docs/planning/linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)):
+> firmographic + profile columns, `master_company_identifiers` (the company twin of the 0104 person table),
+> the HASH-partitioned `master_company_headcount` monthly series (`schema/masterHeadcount.ts` — growth is
+> DERIVED via `lag()`, never stored), and the dark end-to-end landing
+> (`core/src/sourceLanding/landSourcePayload.ts`, one `withErTx`: evidence → resolve → suppression guard →
+> provenance fold → stints/education/identifiers/series → same-tx events → `job_change`/`headcount_*`
+> signals — the first real `master_signals` producer). All default-off behind `LINKEDIN_*` env gates; the
+> vendor key itself is a HUMAN GATE.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -47,16 +55,18 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2000 source files · 85 code-bearing domains · 38 shared areas · 54 domain-vocabulary warnings · 7
-> unbucketed.** Four of the seven are framework-root configs (`next.config.mjs` × 3, `postcss.config.mjs`),
-> which have no domain by nature and are expected to stay here. **The other three are unregistered
-> repositories** — `entitlementRepository`, `outcomeMetricsRepository`, `usageEventRepository` — which have a
-> domain but no `REPO_DOMAIN` entry in the generator. That is a registration gap, not misplaced code, and it
-> is the same class of backlog described below; fixing it is a generator edit, left as a tracked follow-up
-> rather than folded into an unrelated change. (`provenanceBadgeRepository` left this list when the
-> intelligence-platform work registered it under `data-health`, beside the freshness half of the same badge —
-> the other three are not registered here because no existing domain is clearly right for them, and the
-> generator's own rule is that a confidently wrong home is worse than an honest gap.)
+> **2064 source files · 83 code-bearing domains · 39 shared areas · 52 domain-vocabulary warnings · 2
+> unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
+> no domain by nature and are expected). **The two unregistered repositories** —
+> `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
+> generator. That is a registration gap, not misplaced code; fixing it is a generator edit, left as a
+> tracked follow-up rather than folded into an unrelated change. (`provenanceBadgeRepository` left this list
+> when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
+> when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
+> never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
+> that a Layer-0 module belongs to the one system-owned graph. The remaining two are not registered because
+> no existing domain is clearly right for them, and the generator's own rule is that a confidently wrong
+> home is worse than an honest gap.)
 >
 > That is down from 155. The backlog was never misplaced code: it was **unregistered** code. The map keys a
 > repository off `REPO_DOMAIN`, a queue off `QUEUE_DOMAIN` and a package off an explicit leaf-package list,
@@ -98,11 +108,13 @@ packages/                       # side-effect-free libraries, each exported via 
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
                                 #   data-health · scoring · activity · outreach · email · search · ai · home · prospect ·
+                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark) ·
                                 #   customFields · pipelineStages · savedSearches · webhooks · featureFlags · auth · sales-navigator
   auth/    src/                 # self-built auth primitives (no HTTP): login/mfa/registration/invitations/password(+policy/breach) /
                                 #   sso/switchWorkspace + ipBinding/ipAllowlist + sessionTimeout + revocation + auditEvent + log
   search/  src/                 # SearchPort adapters + field projection — inMemorySearchPort (dev/test); OpenSearch/Typesense later
-  integrations/ src/            # vendor adapters: enrichment (apollo/zoominfo/clearbit over httpProvider) + anthropic NL-search adapter
+  integrations/ src/            # vendor adapters: enrichment (apollo/zoominfo/clearbit/pdl/coresignal/linkedin_api over
+                                #   httpProvider — the last three dark until their ToS/DPA reviews) + anthropic NL-search adapter
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
     middleware/{requestId,authn,tenancy,error,rateLimit,revealRateLimit,idempotency,jobViewer,extensionScope,
@@ -190,10 +202,18 @@ apps/                           # deployable processes (thin transport adapters)
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
-- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal (dark until DPA'd
-  keys)** VendorSpecs over one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal/linkedin_api (dark
+  until DPA'd keys; linkedin_api's base URL is env-supplied and joins the host allowlist at config time)** VendorSpecs over
+  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
   `provider_configs`)
+- **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
+  `mapLinkedinPayload.ts` (pure mapper; the raw-only compliance boundary: pronoun/photos/skills etc. never leave
+  `source_records.raw_data`) + `landSourcePayload.ts` (one withErTx: evidence chokepoint → resolve → suppression guard →
+  provenance fold → stints/education/identifiers/headcount → same-tx events (D7) → `job_change`/`headcount_*` signals);
+  hooked post-evidence in `enrichContactV2` and driven fleet-wide by `queues/linkedinCompanyRefresh.ts` (leader-locked,
+  25/tick @ 6h). db writers: `masterProfileRepository` (master-sync). Design:
+  [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
@@ -818,18 +838,20 @@ flowchart TD
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
   — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
   constraint, not a placement error.
-- **Unmapped repositories (3, in `unassigned[]`):** `entitlementRepository`, `outcomeMetricsRepository`,
-  `usageEventRepository` — the Phase-1 metering spine. (`provenanceBadgeRepository` was listed here and is no
-  longer unassigned; `masterEducationRepository` never joined the list — 0108 added it to `REPO_DOMAIN` under
-  `master-sync` in the same change, per the rule that a Layer-0 repository belongs to the one system-owned graph.)
+- **Unmapped repositories (2, in `unassigned[]`):** `outcomeMetricsRepository`,
+  `usageEventRepository` — the Phase-1 metering spine. (`provenanceBadgeRepository` and
+  `entitlementRepository` were listed here and are no longer unassigned; `masterEducationRepository` never
+  joined the list — 0108 added it to `REPO_DOMAIN` under `master-sync` in the same change, per the rule that
+  a Layer-0 repository belongs to the one system-owned graph; `masterProfileRepository` and the
+  `linkedinCompanyRefresh` queue followed the same rule in the 0112–0115 change and never joined either.)
   Each is real and
-  intentional; none has an entity in `REPO_DOMAIN` yet because none has an obvious existing domain (they are
-  cross-cutting: entitlements sit above billing without being it, usage events meter every domain, the badge reads
-  Layer 0). Left honestly unassigned rather than filed under a confidently wrong home — the rule `REPO_DOMAIN`'s own
+  intentional; neither has an entity in `REPO_DOMAIN` yet because neither has an obvious existing domain
+  (they are cross-cutting: usage events meter every domain, outcome metrics read across them). Left honestly
+  unassigned rather than filed under a confidently wrong home — the rule `REPO_DOMAIN`'s own
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
+- **Domain-vocabulary warnings (52):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
   families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
   `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
   `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
