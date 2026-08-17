@@ -14,6 +14,7 @@ export * from "./customFields.ts";
 export * from "./fieldProvenance.ts";
 export * from "./partialDate.ts";
 export * from "./linkedinApi.ts";
+export * from "./providerOrigins.ts";
 export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";

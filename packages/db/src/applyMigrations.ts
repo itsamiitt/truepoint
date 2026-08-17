@@ -317,6 +317,11 @@ const GRANTS = `
   REVOKE ALL ON master_company_identifiers FROM leadwolf_app;
   -- Multi-value person attributes (0116) — a skill/language list keyed to a person is personal data.
   REVOKE ALL ON master_person_skills, master_person_languages FROM leadwolf_app;
+  -- Data-source origin fleet (0117). NOT master_*-prefixed, so the convention loop below does NOT cover
+  -- it — this explicit REVOKE is load-bearing: the table holds encrypted per-origin API keys, and the
+  -- blanket public-schema grant would otherwise hand the customer app role a secrets table. Reads run on
+  -- the owner connection (the core origin router); writes are staff-only via withPlatformTx.
+  REVOKE ALL ON provider_origins FROM leadwolf_app;
   -- master_confidence_policy (0107) is scoring config, not tenant data. The app never needs it: it reads the
   -- COMPUTED confidence stored in field_provenance, not the curve that produced it. Revoked so the scoring
   -- policy cannot be read or tampered with from a tenant-scoped connection.

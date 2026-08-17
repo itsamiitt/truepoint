@@ -42,6 +42,10 @@ export const prospectKeys = {
   accountAlumni: (accountId: string) => ["prospect", "account-alumni", accountId] as const,
   /** One contact's Layer-0 education edges (`GET /contacts/:id/education`). */
   contactEducation: (contactId: string) => ["prospect", "contact-education", contactId] as const,
+  /** One contact's Layer-0 skills + languages (`GET /contacts/:id/attributes`, 0116). */
+  contactAttributes: (contactId: string) => ["prospect", "contact-attributes", contactId] as const,
+  /** One account's monthly headcount totals series (`GET /accounts/:id/headcount`, 0114). */
+  accountHeadcount: (accountId: string) => ["prospect", "account-headcount", accountId] as const,
   /** One contact's Layer-0 employment stints (`GET /contacts/:id/employment`). */
   contactEmployment: (contactId: string) => ["prospect", "contact-employment", contactId] as const,
   /** One contact's observed signals (`GET /contacts/:id/signals`). */

@@ -8,6 +8,9 @@
 
 export const ENRICHMENT_QUEUE = "enrichment";
 export const ENRICHMENT_DLQ = "enrichment-dlq";
+/** Customer-triggered company refresh from the linkedin_api origin fleet (dark behind
+ *  LINKEDIN_ACCOUNT_REFRESH_ENABLED). */
+export const ACCOUNT_REFRESH_QUEUE = "account_refresh";
 export const SCORING_QUEUE = "scoring";
 export const SCORING_DLQ = "scoring-dlq";
 export const DSAR_QUEUE = "dsar";

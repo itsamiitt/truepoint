@@ -5,6 +5,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { EnrichRequest } from "@leadwolf/core";
+import type { fetchLinkedinProfile } from "@leadwolf/core";
 import {
   type FetchJson,
   ProviderTransportError,
@@ -323,16 +324,66 @@ describe("linkedin_api adapter contract (recorded fixtures)", () => {
     expect(provider.capabilities).not.toContain("contact.phone");
   });
 
-  test("keyless short-circuit: miss, zero cost, no call — the compliance dark posture", async () => {
+  test("URL-keyed: no subject linkedinUrl → miss, zero cost, no fetch (the dark posture)", async () => {
     let called = false;
-    const spy: FetchJson = () => {
+    const stub = (() => {
       called = true;
-      return Promise.resolve({ status: 200, json: LINKEDIN_API_HIT });
-    };
-    const result = await linkedinApiProvider(spy).enrich(REQUEST);
+      return Promise.resolve({ status: "ok", payload: LINKEDIN_API_HIT, originId: null } as const);
+    }) as typeof fetchLinkedinProfile;
+    // REQUEST carries no linkedinUrl — the adapter must not even consult the origin chain.
+    const result = await linkedinApiProvider(stub).enrich(REQUEST);
     expect(result.status).toBe("miss");
     expect(result.costMicros).toBe(0);
     expect(called).toBe(false);
+  });
+
+  test("origin-chain outcomes map onto the port taxonomy: ok→paid hit, rejected→free miss, unavailable→free error", async () => {
+    const urlReq = {
+      ...REQUEST,
+      subject: { ...REQUEST.subject, linkedinUrl: "https://www.linkedin.com/in/wgates" },
+    };
+    const ok = (() =>
+      Promise.resolve({
+        status: "ok",
+        payload: LINKEDIN_API_HIT,
+        originId: "o1",
+      } as const)) as typeof fetchLinkedinProfile;
+    const hit = await linkedinApiProvider(ok).enrich(urlReq);
+    expect(hit.status).toBe("hit");
+    expect(hit.costMicros).toBeGreaterThan(0);
+    expect(hit.rawPayload).toEqual(LINKEDIN_API_HIT); // the FULL document rides out to the landing
+
+    const rejected = (() =>
+      Promise.resolve({
+        status: "rejected",
+        httpStatus: 404,
+      } as const)) as typeof fetchLinkedinProfile;
+    const miss = await linkedinApiProvider(rejected).enrich(urlReq);
+    expect(miss.status).toBe("miss");
+    expect(miss.costMicros).toBe(0);
+
+    const down = (() =>
+      Promise.resolve({ status: "unavailable" } as const)) as typeof fetchLinkedinProfile;
+    const err = await linkedinApiProvider(down).enrich(urlReq);
+    expect(err.status).toBe("error");
+    expect(err.costMicros).toBe(0);
+  });
+
+  test("a successful capture with NO extractable flat fields is a PAID miss carrying the payload", async () => {
+    const bare = { schema_version: 1, profile_id: "X", public_identifier: "x" };
+    const ok = (() =>
+      Promise.resolve({
+        status: "ok",
+        payload: bare,
+        originId: null,
+      } as const)) as typeof fetchLinkedinProfile;
+    const result = await linkedinApiProvider(ok).enrich({
+      ...REQUEST,
+      subject: { ...REQUEST.subject, linkedinUrl: "https://www.linkedin.com/in/x" },
+    });
+    expect(result.status).toBe("miss");
+    expect(result.costMicros).toBeGreaterThan(0);
+    expect(result.rawPayload).toEqual(bare);
   });
 
   test("the SHIPPED linkedinApiExtract pins the payload paths", () => {

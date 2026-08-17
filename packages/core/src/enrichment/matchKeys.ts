@@ -125,6 +125,16 @@ export function linkedinPublicId(input: string | undefined | null): string | und
 }
 
 /**
+ * Canonical profile URL from any URL/slug variant (trailing slash, case, query params, www/locale hosts).
+ * ONE form per person, because this string is a hashed member of the enrichment request (requestHash) —
+ * two spellings of the same profile must not fracture the per-field cache into two keys.
+ */
+export function canonicalLinkedinUrl(input: string | undefined | null): string | undefined {
+  const slug = linkedinPublicIdOf(input);
+  return slug ? `https://www.linkedin.com/in/${slug}` : undefined;
+}
+
+/**
  * Reduce one sparse row to the full set of deterministic + fuzzy match keys; only facets the row supports
  * are set. Deterministic for a fixed BLIND_INDEX_KEY (which keys emailIndex). The registrable domain prefers
  * the email's domain (most reliable) and falls back to an explicit company website.

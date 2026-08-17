@@ -46,11 +46,13 @@ import {
   phoneStatusTone,
 } from "../types";
 import { AddToListDialog } from "./AddToListDialog";
+import { AttributesSection } from "./AttributesSection";
 import { CopyButton } from "./CopyButton";
 import { EducationSection } from "./EducationSection";
 import { EmploymentSection } from "./EmploymentSection";
 import { ProvenanceSection } from "./ProvenanceSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
+import { RefreshFromSourceButton } from "./RefreshFromSourceButton";
 import { RevealDialog } from "./RevealDialog";
 import { SignalsSection } from "./SignalsSection";
 import { StageSelector } from "./StageSelector";
@@ -523,6 +525,8 @@ export function RecordDetail({
             >
               Export
             </TpButton>
+            {/* linkedin-source-ingestion: pins providerOrder to linkedin_api; metered like any enrichment. */}
+            <RefreshFromSourceButton entity="contact" id={contact.id} />
           </div>
         ) : undefined
       }
@@ -579,6 +583,24 @@ export function RecordDetail({
                   </span>
                 )}
               </ContactField>
+              {/* S-CH4 multi-value lists: the arrays arrive ADDITIVELY behind the channel read gate —
+                  the scalar above stays THE PRIMARY (CH-INV-1); these are the secondaries with their
+                  asserted kinds. Absent arrays render nothing (gate-off = byte-identical UI). */}
+              {rd?.emails && rd.emails.length > 1
+                ? rd.emails
+                    .filter((e) => !e.isPrimary)
+                    .map((e) => (
+                      <ContactField key={e.value} label={`Email · ${e.type}`}>
+                        <span className={styles.revealedValueText}>{e.value}</span>
+                        {e.status ? (
+                          <StatusBadge tone={emailStatusTone(e.status)}>
+                            {emailStatusLabel(e.status)}
+                          </StatusBadge>
+                        ) : null}
+                        <CopyButton value={e.value} label="Email" />
+                      </ContactField>
+                    ))
+                : null}
               <ContactField label="Phone">
                 {rd?.phone ? (
                   <>
@@ -596,6 +618,21 @@ export function RecordDetail({
                   </span>
                 )}
               </ContactField>
+              {rd?.phones && rd.phones.length > 1
+                ? rd.phones
+                    .filter((p) => !p.isPrimary)
+                    .map((p) => (
+                      <ContactField key={p.value} label={`Phone · ${p.type}`}>
+                        <span className={styles.revealedValueText}>{p.value}</span>
+                        {phoneLineTypeLabel(p.lineType) ? (
+                          <StatusBadge tone={phoneStatusTone(p.status)}>
+                            {phoneLineTypeLabel(p.lineType)}
+                          </StatusBadge>
+                        ) : null}
+                        <CopyButton value={p.value} label="Phone" />
+                      </ContactField>
+                    ))
+                : null}
               {rd?.linkedinUrl ? (
                 <ContactField label="LinkedIn">
                   <a
@@ -705,6 +742,14 @@ export function RecordDetail({
             {/* The other person→organization edge (0108). Employment already appears above under Identity;
                 this is the same substrate, different payload. */}
             <EducationSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Skills & languages</h3>
+            </div>
+            {/* Multi-value attributes (0116) — chips that appear after a LinkedIn refresh lands. */}
+            <AttributesSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

@@ -7,7 +7,8 @@
 // (08-compliance §10, 21 §4/§5).
 
 import { env } from "@leadwolf/config";
-import type { EnrichmentProvider } from "@leadwolf/core";
+import type { EnrichRequest, EnrichmentProvider, ProviderResult } from "@leadwolf/core";
+import { fetchLinkedinProfile } from "@leadwolf/core";
 import type { EnrichField } from "@leadwolf/types";
 import { type FetchJson, vendorProvider } from "./httpProvider.ts";
 
@@ -210,10 +211,14 @@ export function coresignalProvider(fetchJson?: FetchJson): EnrichmentProvider {
 /**
  * linkedin_api person-enrich — the vendor-neutral LinkedIn-shaped source (docs/planning/
  * linkedin-source-ingestion/; payload contract = @leadwolf/types linkedinApiPersonPayloadSchema, fixtures =
- * `source plan/`). GET with the key in `x-api-key`; base URL is env-supplied because the vendor is unnamed
- * until its ToS/DPA review (HUMAN GATE) — no key + no base URL ⇒ permanent miss ⇒ dark, the PDL/Coresignal
- * compliance posture. The endpoint path is pinned at vendor onboarding; `/person` is the placeholder the
- * contract test exercises.
+ * `source plan/`). The REAL contract since the origin-fleet wiring: POST {url, include_raw:false,
+ * refresh:false, engine:"auto"} to <origin>/api/linkedin/profile, walked over the provider_origins
+ * FAILOVER CHAIN by core's linkedinSourceClient (per-origin x-api-key, host pinning, hardened transport).
+ * No registered origin and no env fallback ⇒ permanent miss ⇒ dark — the PDL/Coresignal compliance posture
+ * expressed at fleet level (HUMAN GATE: no production keys until the vendor ToS/DPA review).
+ *
+ * URL-KEYED, deliberately: the subject's linkedinUrl is the ONLY lookup key this vendor accepts. No URL on
+ * the subject ⇒ zero-cost miss, and the waterfall cascades to the email-keyed vendors.
  *
  * The waterfall consumes only the flat port fields; the FULL payload rides out as rawPayload, which is what
  * landSourcePayload (behind LINKEDIN_SOURCE_LANDING_ENABLED) turns into Layer-0 facts. Declares NO
@@ -255,31 +260,52 @@ export function linkedinApiExtract(json: unknown, fields: EnrichField[]): Extrac
   return out;
 }
 
-export function linkedinApiProvider(fetchJson?: FetchJson): EnrichmentProvider {
-  const base = env.LINKEDIN_API_BASE_URL?.replace(/\/$/, "");
-  return vendorProvider(
-    {
-      name: "linkedin_api",
-      trust: 0.8,
-      costMicrosPerCall: 25_000, // $0.025 — placeholder unit cost; tuned from provider telemetry
-      // A missing base URL yields an unusable https://unconfigured.invalid URL that the transport's host
-      // allowlist rejects as a zero-cost error — but the apiKey guard short-circuits first (miss), so the
-      // URL is never fetched while the source is dark.
-      url: `${base ?? "https://unconfigured.invalid"}/person`,
-      method: "GET",
-      apiKey: env.LINKEDIN_API_KEY,
-      headers: (key) => ({ "x-api-key": key }),
-      capabilities: ["contact.email", "contact.profile"],
-      query: (req) => ({
-        linkedin_url: req.subject.linkedinUrl,
-        email: req.subject.email,
-        full_name: req.subject.fullName,
-        company_domain: req.subject.companyDomain,
-      }),
-      extract: linkedinApiExtract,
+const LINKEDIN_API_COST_MICROS = 25_000; // $0.025 — placeholder unit cost; tuned from provider telemetry
+
+export function linkedinApiProvider(
+  fetchProfile: typeof fetchLinkedinProfile = fetchLinkedinProfile,
+): EnrichmentProvider {
+  return {
+    name: "linkedin_api",
+    capabilities: ["contact.email", "contact.profile"],
+    trust: 0.8,
+    estimateCostMicros: () => LINKEDIN_API_COST_MICROS,
+    async enrich(req: EnrichRequest): Promise<ProviderResult> {
+      const url = req.subject.linkedinUrl;
+      // URL-keyed vendor: no URL, no lookup — a zero-cost miss, never a guess by name/email.
+      if (!url) return { fields: [], rawPayload: null, costMicros: 0, status: "miss" };
+
+      const result = await fetchProfile(url);
+      if (result.status === "unavailable") {
+        // No origin answered (fleet dark, all paused, or all failing) — zero-cost error; the breaker
+        // counts it and the waterfall cascades.
+        return { fields: [], rawPayload: null, costMicros: 0, status: "error" };
+      }
+      if (result.status === "rejected") {
+        // The vendor answered and said no (unknown profile / bad url) — an honest zero-cost miss.
+        return { fields: [], rawPayload: null, costMicros: 0, status: "miss" };
+      }
+      const extracted = linkedinApiExtract(result.payload, req.fields);
+      const fields = Object.entries(extracted)
+        .filter(([, v]) => typeof v === "string" && v.length > 0)
+        .map(([field, value]) => ({ field: field as EnrichField, value: value as string }));
+      // A successful capture is PAID whether or not the requested flat fields were present — the payload
+      // still carries the full document (positions/education/skills…) into the landing via rawPayload.
+      return fields.length > 0
+        ? {
+            fields,
+            rawPayload: result.payload,
+            costMicros: LINKEDIN_API_COST_MICROS,
+            status: "hit",
+          }
+        : {
+            fields: [],
+            rawPayload: result.payload,
+            costMicros: LINKEDIN_API_COST_MICROS,
+            status: "miss",
+          };
     },
-    fetchJson,
-  );
+  };
 }
 
 /** The configured waterfall set (order is decided by core's waterfall + workspace prefs, not array order). */

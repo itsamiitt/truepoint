@@ -9,6 +9,9 @@ export * from "./masterCompanyDetail.ts";
 // Layer-0 multi-value person attributes (0116): skills + languages. In the barrel on purpose — plain
 // tables, so drizzle-kit generates their migration WITH a snapshot (ratchet-neutral).
 export * from "./masterPersonAttributes.ts";
+// Data-source origin fleet (0117): per-provider failover chain of interchangeable origins. Holds
+// encrypted per-origin API keys — leadwolf_app is REVOKEd entirely (see applyMigrations).
+export * from "./providerOrigins.ts";
 export * from "./masterConfidencePolicy.ts";
 export * from "./processedSyncEvents.ts";
 // NOTE: ./forge.ts is intentionally NOT re-exported here — its tables live in the `forge` Postgres schema and

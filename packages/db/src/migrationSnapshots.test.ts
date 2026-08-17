@@ -126,8 +126,12 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  lands on a barrel table — drizzle COULD see all of it. But the chain HEAD is 0107, so `generate`
  *  proposes every post-0107 change at once and dies on an interactive column-conflict prompt; per the
  *  2026-08-04 correction a retroactive snapshot cannot be emitted either. Hand-authored; the next
- *  rebaseline absorbs the link. */
-const EXPECTED_DEFICIT = 75;
+ *  rebaseline absorbs the link.
+ *
+ *  75 → 76 for 0117_provider_origins — the same 0116 case verbatim: a plain barrel table drizzle COULD
+ *  see, but the 0107 chain HEAD makes `generate` propose all post-0107 drift and die on the interactive
+ *  conflict prompt. Hand-authored; absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 76;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

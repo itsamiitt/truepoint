@@ -29,6 +29,7 @@ import {
   intentSignalRepository,
   masterEducationRepository,
   masterEmploymentReadRepository,
+  masterProfileRepository,
   masterTechnologyRepository,
   provenanceBadgeRepository,
   withErTx,
@@ -40,7 +41,9 @@ import {
   ValidationError,
   accountAlumniResponse,
   accountDisplacementResponse,
+  accountHeadcountResponse,
   accountTechnologiesResponse,
+  contactAttributesResponse,
   contactEducationResponse,
   contactEmploymentResponse,
   contactProvenanceResponse,
@@ -544,6 +547,76 @@ contactIntelligenceRoutes.get("/:contactId/signals", async (c) => {
         weight: s.weight,
         detected_at: s.detectedAt,
       })),
+    }),
+  );
+});
+
+/**
+ * GET /contacts/:contactId/attributes — skills + languages we hold for this person (0116;
+ * linkedin-source-ingestion §read surfaces).
+ *
+ * Same two-transaction shape as employment/education. Public professional facts only. Suppression-safe by
+ * construction: the DSAR fan-out DELETES the underlying rows, so a suppressed subject reads as empty —
+ * there is nothing here for a suppressed person that the route would need to mask.
+ */
+contactIntelligenceRoutes.get("/:contactId/attributes", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view contact attributes.");
+  }
+
+  const contact = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, async (tx: Tx) =>
+    contactRepository.getMasterPersonBridge(tx, c.req.param("contactId")),
+  );
+  if (!contact) throw new NotFoundError("Contact not found.");
+
+  if (!contact.masterPersonId) {
+    return c.json(contactAttributesResponse.parse({ resolved: false, skills: [], languages: [] }));
+  }
+  const masterPersonId = contact.masterPersonId;
+
+  const { skills, languages } = await withErTx(async (tx: Tx) => ({
+    skills: await masterProfileRepository.listPersonSkills(tx, masterPersonId),
+    languages: await masterProfileRepository.listPersonLanguages(tx, masterPersonId),
+  }));
+
+  return c.json(
+    contactAttributesResponse.parse({
+      resolved: true,
+      skills: skills.map((s) => ({ skill: s.skill, source_count: s.sourceCount })),
+      languages: languages.map((l) => ({ name: l.name, proficiency: l.proficiency })),
+    }),
+  );
+});
+
+/**
+ * GET /:accountId/headcount — the monthly headcount totals series for this account's company (0114).
+ *
+ * Newest-first; growth windows are DERIVED by the client over ≤36 points (the no-rollup rule — storing a
+ * growth number would just be a second copy that drifts). Company-level business data: no person, no PII.
+ */
+accountIntelligenceRoutes.get("/:accountId/headcount", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view headcount.");
+  }
+
+  const { masterCompanyId } = await resolveBridge(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("accountId"),
+  );
+  if (!masterCompanyId) {
+    return c.json(accountHeadcountResponse.parse({ resolved: false, series: [] }));
+  }
+
+  const series = await withErTx(async (tx: Tx) =>
+    masterProfileRepository.listHeadcountTotals(tx, masterCompanyId, 36),
+  );
+
+  return c.json(
+    accountHeadcountResponse.parse({
+      resolved: true,
+      series: series.map((p) => ({ month: p.month, employee_count: p.employeeCount })),
     }),
   );
 });

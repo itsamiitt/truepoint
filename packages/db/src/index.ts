@@ -123,6 +123,16 @@ export {
 // Layer-0 profile/edge/series writers for the linkedin_api landing (0112-0115). Every function runs under
 // the CALLER's withErTx and writes NO provenance itself — core's landSourcePayload owns the full write-set
 // (evidence + events + facts, one transaction) and runs the planFieldWrite fold between read and write.
+// Data-source origin fleet (0117): the per-provider failover chain. app-REVOKEd (holds encrypted keys);
+// fetch-path reads on the owner connection, staff writes under withPlatformTx. Ciphertext crosses this
+// boundary as bytea only — encryption lives at the core boundary.
+export {
+  providerOriginRepository,
+  type ProviderOriginActive,
+  type ProviderOriginAdminView,
+  type CreateOriginInput,
+  type UpdateOriginInput,
+} from "./repositories/providerOriginRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,

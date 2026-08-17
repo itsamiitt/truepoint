@@ -48,10 +48,11 @@ import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
 import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
-import type { BreakerStore } from "./breakerStore.ts";
 import { landLinkedinPayload } from "../sourceLanding/landSourcePayload.ts";
+import type { BreakerStore } from "./breakerStore.ts";
 import { recordEnrichmentEvidence } from "./enrichmentEvidence.ts";
 import { type FieldWin, runFieldWaterfalls } from "./fieldWaterfall.ts";
+import { canonicalLinkedinUrl } from "./matchKeys.ts";
 import type { ProviderGate, ProviderLimits } from "./providerGate.ts";
 import type { EnrichRequest, EnrichmentProvider } from "./providerPort.ts";
 import { requestHash } from "./requestHash.ts";
@@ -191,6 +192,11 @@ export async function runEnrichmentV2(run: EnrichmentV2Run): Promise<EnrichmentV
       subject: {
         email: contact.emailEnc ? decryptPii(contact.emailEnc) : undefined,
         companyDomain: contact.emailDomain ?? undefined,
+        // URL-keyed vendors (linkedin_api). Canonicalized so URL spelling variants share one cache key.
+        // KNOWN ONE-TIME CAVEAT: this member was previously always undefined, so contacts that have a
+        // LinkedIn identity get a NEW request_hash on first run after this change — a cold per-field
+        // cache start, not data loss.
+        linkedinUrl: canonicalLinkedinUrl(contact.linkedinUrl ?? contact.linkedinPublicId),
       },
     };
     const hash = requestHash(request);

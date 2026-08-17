@@ -13,6 +13,8 @@ import { isNotableOrgKind, orgKindCopy } from "../orgKindCopy";
 import styles from "../prospect.module.css";
 import { AccountAlumniSection, AccountDisplacementSection } from "./AccountGraphSections";
 import { AccountTechnologySection } from "./AccountTechnologySections";
+import { HeadcountSection } from "./HeadcountSection";
+import { RefreshFromSourceButton } from "./RefreshFromSourceButton";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -68,17 +70,22 @@ export function AccountDetailDrawer({
       title={account ? account.name : "Company"}
       width={420}
       footer={
-        account && onViewContacts ? (
+        account ? (
           <div className={styles.drawerActions}>
-            <TpButton
-              variant="primary"
-              size="sm"
-              leftIcon={<Users size={15} />}
-              onClick={() => onViewContacts(account)}
-            >
-              View {account.contactCount.toLocaleString()}{" "}
-              {account.contactCount === 1 ? "contact" : "contacts"}
-            </TpButton>
+            {onViewContacts ? (
+              <TpButton
+                variant="primary"
+                size="sm"
+                leftIcon={<Users size={15} />}
+                onClick={() => onViewContacts(account)}
+              >
+                View {account.contactCount.toLocaleString()}{" "}
+                {account.contactCount === 1 ? "contact" : "contacts"}
+              </TpButton>
+            ) : null}
+            {/* linkedin-source-ingestion §account lane: 202-queued company refresh; the server 422s
+                honestly when the account has no LinkedIn identity, and 400s while the lane is dark. */}
+            <RefreshFromSourceButton entity="account" id={account.id} />
           </div>
         ) : undefined
       }
@@ -122,6 +129,15 @@ export function AccountDetailDrawer({
               "what they run" are different facts from different tables. Each fetches independently, so a
               slow or empty answer on one side never blanks the other. Both render nothing until ER has
               bridged this account to the shared graph. */}
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Headcount trend</h3>
+            </div>
+            {/* The 0114 monthly series; deltas derived client-side. Empty-states until a company refresh
+                lands the series. */}
+            <HeadcountSection accountId={account.id} />
+          </section>
+
           <AccountTechnologySection accountId={account.id} relationship="develops" />
           <AccountTechnologySection accountId={account.id} relationship="uses" />
           {/* Conditional siblings: each renders NOTHING unless it has something to report — a permanent

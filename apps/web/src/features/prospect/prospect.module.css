@@ -855,3 +855,30 @@
   font-size: 13px;
   color: var(--tp-ink-3);
 }
+
+/* Attributes (0116): skill/language chip rows — wraps naturally from 2 chips to 60. */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.attributeGroup + .attributeGroup {
+  margin-top: 12px;
+}
+
+/* Headcount (0114): 12-month CSS sparkbar row. Height is % of the row; hover title carries the number. */
+.headcountBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 48px;
+  margin-top: 10px;
+}
+.headcountBar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  background: var(--tp-accent, #4f6ef7);
+  opacity: 0.85;
+}

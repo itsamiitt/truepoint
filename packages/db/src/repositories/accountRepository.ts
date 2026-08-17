@@ -2,7 +2,7 @@
 // contact's company by its per-workspace dedup key (domain), so a contact links to one shared account row.
 // Methods take the caller's transaction (Tx) so the whole per-row import runs in one withTenantTx (03 §9).
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { accounts } from "../schema/contacts.ts";
 
@@ -158,6 +158,27 @@ export const accountRepository = {
    * carries no personal data, which is why this projection is broader than the contact one. A foreign or
    * absent id yields {} (RLS-scoped via the caller's tx), which the runner reads as "entity gone".
    */
+  /** The identity inputs the linkedin_api account-refresh lane needs (RLS-scoped; live rows only). */
+  async getForRefresh(
+    tx: Tx,
+    accountId: string,
+  ): Promise<{
+    id: string;
+    linkedinCompanyUrl: string | null;
+    masterCompanyId: string | null;
+  } | null> {
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        linkedinCompanyUrl: accounts.linkedinCompanyUrl,
+        masterCompanyId: accounts.masterCompanyId,
+      })
+      .from(accounts)
+      .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   async getScalarValues(tx: Tx, accountId: string): Promise<Record<string, unknown>> {
     const rows = await tx
       .select({

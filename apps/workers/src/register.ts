@@ -33,6 +33,8 @@ import {
   s3FileStoreFromEnv,
 } from "@leadwolf/integrations";
 import {
+  ACCOUNT_REFRESH_QUEUE,
+  type AccountRefreshJobData,
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type BulkEnrichmentDeadLetter,
   type BulkImportDeadLetter,
@@ -73,6 +75,7 @@ import {
   type AccountBackfillSweepJobData,
   makeProcessAccountBackfillSweep,
 } from "./queues/accountBackfillSweep.ts";
+import { processAccountRefresh } from "./queues/accountRefresh.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -2050,6 +2053,19 @@ export function startWorkers(): Worker[] {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+  }
+  // linkedin_api ACCOUNT refresh (docs/planning/linkedin-source-ingestion/ §account lane) — the
+  // customer-triggered per-account company fetch. DARK behind LINKEDIN_ACCOUNT_REFRESH_ENABLED (the API
+  // producer checks the same gate; the processor re-checks it so an operator flip drains quietly).
+  if (env.LINKEDIN_ACCOUNT_REFRESH_ENABLED) {
+    workers.push(
+      instrument(
+        tracedWorker<AccountRefreshJobData>(ACCOUNT_REFRESH_QUEUE, processAccountRefresh, {
+          connection,
+        }),
+        ACCOUNT_REFRESH_QUEUE,
+      ),
+    );
   }
   // S-A1/S-A3 account-backfill sweep (import-redesign 15 §M-SEQ seq 55/56, mechanics 15 §2.2) — DARK by
   // default, double env-gated: ACCOUNT_DOMAINS_DUAL_WRITE (the backfill runs strictly after S-A2, the S-CH3

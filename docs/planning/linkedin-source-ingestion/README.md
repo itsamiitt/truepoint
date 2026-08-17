@@ -164,24 +164,49 @@ does, respecting `uniq_employment_primary`) → education → identifiers → he
 **appendProvenanceEvents** from the ACTUAL writable set (D7: a failed append fails the whole landing) →
 signals (`job_change` on a real employer transition; headcount pair past threshold) → enqueueProjection.
 
-Two lanes call it:
+Three lanes call it:
 
-1. **Tenant-triggered** — `enrichContactV2` after its evidence step: when `linkedin_api` was attempted and
-   returned a document, the cached rawPayload lands (spend already ledgered in `provider_calls`; a retry is
-   spend-safe via the per-field cache).
-2. **Platform sweep** — `apps/workers/src/queues/linkedinCompanyRefresh.ts`: leader-locked, 6h cadence,
+1. **Tenant-triggered (contact)** — `enrichContactV2` after its evidence step: when `linkedin_api` was
+   attempted and returned a document, the cached rawPayload lands (spend already ledgered in
+   `provider_calls`; a retry is spend-safe via the per-field cache). The customer trigger is the
+   `RefreshFromSourceButton` on the contact drawer → the SHIPPED `POST /enrichment/contact/:id` with
+   `providerOrder:["linkedin_api"]` (a prefix — the waterfall still cascades on a miss).
+2. **Tenant-triggered (account)** — `POST /api/v1/enrichment/account/:id` (dark behind
+   `LINKEDIN_ACCOUNT_REFRESH_ENABLED`), 202 → the `account_refresh` queue → `core refreshAccount`:
+   tenant URL ladder (own `linkedin_company_url`, else the master bridge's numeric id → sales-nav URL;
+   neither ⇒ 422), 24h `provider_calls` cache window, daily-budget wall BEFORE spend, one workspace-scoped
+   ledger row per fetch (`entityType:"account"` — requestHash namespaces it), then the landing. The button
+   lives on the account drawer.
+3. **Platform sweep** — `apps/workers/src/queues/linkedinCompanyRefresh.ts`: leader-locked, 6h cadence,
    ≤25 companies/tick (≈100/day deliberate trickle), enumerates LinkedIn-identified companies missing this
    month's totals point (self-terminating each month). Spend control is structural (cap × cadence), NOT
    `provider_calls` — that ledger is workspace-scoped by design and a platform lane must not wear a fake
-   workspace id.
+   workspace id. Skips the tick when the origin chain is empty.
 
-**The adapter** (`packages/integrations/src/enrichment/providers.ts linkedinApiProvider`) is an ordinary
-waterfall citizen: `vendorProvider()` over the hardened transport, capabilities
-`["contact.email","contact.profile"]` (no phone — the contact block is reveal-gated and phones are absent
-from every fixture; honest capabilities let the waterfall skip instead of paying a guaranteed miss), absent
-key ⇒ permanent miss ⇒ dark. Base URL is env-supplied (`LINKEDIN_API_BASE_URL`) because the vendor is
-unnamed until its review; its host joins the outbound allowlist at config time; the `/person` and
-`/company` endpoint paths are placeholders pinned at vendor onboarding.
+**The fetch layer (REAL vendor contract + origin fleet — second amendment, same day):**
+
+- Contract, verbatim: `POST <origin>/api/linkedin/profile` (prospect) and `POST <origin>/api/linkedin/company`
+  with body `{url, include_raw:false, refresh:false, engine:"auto"}` where `url` is any LinkedIn /
+  Sales-Navigator URL; responses are the schema_version 1/2 payloads unchanged. `include_raw` stays false
+  always (it echoes vendor-side intercepted payloads — the response body already carries everything);
+  `refresh:true` bypasses the vendor's 6h capture cache and is used ONLY by the admin test probe.
+- **Origin fleet** (`provider_origins`, 0117): many interchangeable origins (data.truepoint.in,
+  expo.truepoint.in, …), same contract each, walked as a FAILOVER CHAIN in priority order (recorded user
+  decision). Per-origin `x-api-key`, AES-GCM-sealed in the DB (crm-token precedent) with a masked hint for
+  the console; the table is app-REVOKEd (explicit — it is NOT master_*-prefixed, so the convention loop
+  does not cover it). `core/sourceLanding/originRouter.ts` loads the chain (60s TTL cache; pausing an
+  origin takes effect fleet-wide within a minute) with the legacy `LINKEDIN_API_BASE_URL`/`_KEY` env pair
+  as the zero-row dev fallback. Outcome taxonomy per attempt: 2xx ⇒ done; 429/5xx/transport ⇒ next origin;
+  other 4xx ⇒ the REQUEST is bad, chain STOPS (a different mirror won't disagree); exhausted ⇒ unavailable.
+  Passive per-origin health (consecutive_failures / last_ok / last_error) is written on every attempt.
+- **The adapter** (`linkedinApiProvider`) is now a thin wrapper over `fetchLinkedinProfile`: URL-keyed
+  (subject.linkedinUrl only — no URL, zero-cost miss and the waterfall cascades), ok⇒paid hit/miss with the
+  full document as rawPayload, rejected⇒free miss, unavailable⇒free error (breaker counts it). The
+  **subject gap is closed**: `getContactForReveal` now selects `linkedin_url`/`linkedin_public_id` and both
+  engines set `subject.linkedinUrl = canonicalLinkedinUrl(...)` (one canonical spelling per person so cache
+  keys don't fracture; one-time request_hash cold start for contacts with a LinkedIn identity — stated in
+  code). The platform sweep fetches companies through the same client via the sales-nav URL built from the
+  stored numeric id.
 
 ---
 
@@ -194,6 +219,14 @@ unnamed until its review; its host joins the outbound allowlist at config time; 
 | `LINKEDIN_SIGNALS_ENABLED` | master_signals emission from this lane | off |
 | `LINKEDIN_CHANNELS_ENABLED` | the landing's master_emails/master_phones contribution (multi-value, typed, encrypted) — separate because channel PII is the co-op boundary's sensitive half | off |
 | `LINKEDIN_COMPANY_REFRESH_ENABLED` | registration of the platform sweep | off |
+| `LINKEDIN_ACCOUNT_REFRESH_ENABLED` | the customer per-account refresh route + queue | off |
+
+All five surface read-only in the admin console's Env gates panel. **Read surfaces + UI** shipped with the
+fleet wiring: `GET /contacts/:id/attributes` (skills+languages) and `GET /accounts/:id/headcount` (series;
+growth derived client-side) on the account-intelligence seam; web renders Skills & languages chips, the
+multi-value typed email/phone lists (S-CH4 arrays), the headcount trend sparkbars, and the two refresh
+buttons; admin gets the **Data sources** console (origins CRUD, sealed write-only keys, pause/resume,
+passive health, live test probe returning status+latency only).
 | `PROVENANCE_EVENTS_ENABLED` (existing) | the event append inside the landing (shipped asymmetric posture) | off |
 
 Tenant-side participation needs no new flag: `provider_configs.enabled` + workspace `provider_prefs`

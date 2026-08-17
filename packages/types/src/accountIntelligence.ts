@@ -225,6 +225,39 @@ export const contactEmploymentResponse = z.object({
 });
 export type ContactEmploymentResponse = z.infer<typeof contactEmploymentResponse>;
 
+// ── Multi-value person attributes (0116; linkedin-source-ingestion §read surfaces) ────────────────────
+// Public professional facts only — no contact values, no Layer-0 ids. Suppression-safe by construction:
+// erasure DELETES the underlying rows, so a suppressed subject reads as empty.
+export const contactSkillDto = z.object({
+  skill: z.string(),
+  /** Corroboration count — how many independent assertions agree (the S-10 signal, not a ranking). */
+  source_count: z.number().int().nonnegative(),
+});
+export const contactLanguageDto = z.object({
+  name: z.string(),
+  /** LinkedIn's five-level vocabulary, or null when the source asserted no level. */
+  proficiency: z.string().nullable(),
+});
+export const contactAttributesResponse = z.object({
+  resolved: z.boolean(),
+  skills: z.array(contactSkillDto),
+  languages: z.array(contactLanguageDto),
+});
+export type ContactAttributesResponse = z.infer<typeof contactAttributesResponse>;
+
+// ── Company headcount series (0114; growth is DERIVED client-side — no stored rollups) ────────────────
+export const headcountPointDto = z.object({
+  /** First-of-month ISO date. */
+  month: z.string(),
+  employee_count: z.number().int().nonnegative(),
+});
+export const accountHeadcountResponse = z.object({
+  resolved: z.boolean(),
+  /** Newest-first monthly totals (job_function='' rows only). */
+  series: z.array(headcountPointDto),
+});
+export type AccountHeadcountResponse = z.infer<typeof accountHeadcountResponse>;
+
 // ── Provenance / confidence (plan 33 · A1) ────────────────────────────────────────────────────────────────
 // The evidence behind a field, readable WITHOUT spending a credit. Until now the confidence model surfaced
 // only inside RevealDialog, so a customer saw it at the moment they paid and never again.

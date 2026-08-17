@@ -16,7 +16,7 @@ import {
   isFlagEnabledForTenant,
   listEnrichmentJobs,
 } from "@leadwolf/core";
-import { revealRepository, withTenantTx } from "@leadwolf/db";
+import { accountRepository, revealRepository, withTenantTx } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import {
   AppError,
@@ -37,7 +37,7 @@ import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
-import { enqueueEnrichmentJob } from "./enrichmentQueue.ts";
+import { enqueueAccountRefreshJob, enqueueEnrichmentJob } from "./enrichmentQueue.ts";
 
 export const enrichmentRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -147,6 +147,32 @@ enrichmentRoutes.post("/:entity/:id", requireRole("owner", "admin", "member"), a
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before enriching.");
+
+  // Account refresh (docs/planning/linkedin-source-ingestion/ §account lane): 202-only — company
+  // documents come from the linkedin_api origin fleet and provider I/O never runs on a request thread.
+  // Dark behind LINKEDIN_ACCOUNT_REFRESH_ENABLED; flag off keeps the shipped contact-only contract
+  // byte-identical (the same ValidationError text callers already handle).
+  if (c.req.param("entity") === "account" && env.LINKEDIN_ACCOUNT_REFRESH_ENABLED) {
+    const scope = { tenantId: c.get("tenantId"), workspaceId };
+    const accountId = c.req.param("id");
+    const account = await withTenantTx(scope, (tx) =>
+      accountRepository.getForRefresh(tx, accountId),
+    );
+    if (!account) throw new NotFoundError("Account not found in this workspace.");
+    if (!account.linkedinCompanyUrl && !account.masterCompanyId) {
+      // No LinkedIn identity to address — a 422 the UI can explain, not a retryable failure.
+      throw new ValidationError("This account has no LinkedIn identity to refresh from.");
+    }
+    const jobId = await enqueueAccountRefreshJob({
+      tenantId: scope.tenantId,
+      workspaceId,
+      accountId,
+      requestedByUserId: c.get("claims").sub,
+    });
+    const ack: EnrichmentTriggerAck = { queued: true, jobId };
+    return c.json(enrichmentTriggerAckSchema.parse(ack), 202);
+  }
+
   if (c.req.param("entity") !== "contact") {
     throw new ValidationError("Only entity 'contact' is enrichable at M4 (accounts land later).");
   }

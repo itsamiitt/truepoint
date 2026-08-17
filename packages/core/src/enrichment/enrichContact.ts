@@ -34,6 +34,7 @@ import {
   runEnrichmentV2,
   waterfallV2EnabledForScope,
 } from "./enrichContactV2.ts";
+import { canonicalLinkedinUrl } from "./matchKeys.ts";
 import { type AutoEnrichDenyReason, enforceAutoEnrichPolicy } from "./policy.ts";
 import { passThroughGate } from "./providerGate.ts";
 import type { EnrichRequest, EnrichmentProvider, ProviderFieldResult } from "./providerPort.ts";
@@ -163,6 +164,9 @@ export async function enrichContact(
       subject: {
         email: contact.emailEnc ? decryptPii(contact.emailEnc) : undefined,
         companyDomain: contact.emailDomain ?? undefined,
+        // URL-keyed vendors (linkedin_api); canonicalized — same caveat as the v2 builder: contacts with
+        // a LinkedIn identity re-key their request_hash once (cold cache, no data loss).
+        linkedinUrl: canonicalLinkedinUrl(contact.linkedinUrl ?? contact.linkedinPublicId),
       },
     };
     const hash = requestHash(request);

@@ -131,6 +131,16 @@ export const enrichmentJobDataSchema = z.object({
 });
 export type EnrichmentJobData = z.infer<typeof enrichmentJobDataSchema>;
 
+/** Payload for ACCOUNT_REFRESH_QUEUE — the customer-triggered company refresh from the linkedin_api
+ *  fleet (docs/planning/linkedin-source-ingestion/ §account lane). PII-free: ids only. */
+export const accountRefreshJobDataSchema = z.object({
+  tenantId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  accountId: z.string().uuid(),
+  requestedByUserId: z.string().nullable().optional(),
+});
+export type AccountRefreshJobData = z.infer<typeof accountRefreshJobDataSchema>;
+
 // ── Data quality & freshness (22, ADR-0025) ────────────────────────────────────────────────────────────
 // freshness_status derives from age / re-verify-SLA (22 §3): <0.5 fresh, <1.0 aging, <1.5 stale, else expired.
 // Distinct from data_quality_score (the 0–100 composite) and from email_status (single-field correctness).

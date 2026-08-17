@@ -7,7 +7,12 @@
 // the enrichment router never dials Redis (the home/reverificationQueue.ts precedent).
 
 import { env } from "@leadwolf/config";
-import { ENRICHMENT_QUEUE, type EnrichmentJobData } from "@leadwolf/types";
+import {
+  ACCOUNT_REFRESH_QUEUE,
+  type AccountRefreshJobData,
+  ENRICHMENT_QUEUE,
+  type EnrichmentJobData,
+} from "@leadwolf/types";
 import type { Queue } from "bullmq";
 import IORedis from "ioredis";
 import { tracedQueue } from "../../lib/tracedQueue.ts";
@@ -35,5 +40,28 @@ function enrichmentQueue(): Queue<EnrichmentJobData> {
 /** Enqueue an on-demand single-contact enrichment; the worker runs the same core enrichContact. */
 export async function enqueueEnrichmentJob(data: EnrichmentJobData): Promise<string> {
   const job = await enrichmentQueue().add("enrich", data);
+  return String(job.id);
+}
+
+let accountQueue: Queue<AccountRefreshJobData> | undefined;
+function accountRefreshQueue(): Queue<AccountRefreshJobData> {
+  if (!accountQueue) {
+    const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    accountQueue = tracedQueue<AccountRefreshJobData>(ACCOUNT_REFRESH_QUEUE, {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 30_000, jitter: 0.5 },
+        removeOnComplete: { age: 24 * 3600, count: 1000 },
+        removeOnFail: false,
+      },
+    });
+  }
+  return accountQueue;
+}
+
+/** Enqueue a customer-triggered account (company) refresh from the linkedin_api fleet. */
+export async function enqueueAccountRefreshJob(data: AccountRefreshJobData): Promise<string> {
+  const job = await accountRefreshQueue().add("refresh", data);
   return String(job.id);
 }

@@ -77,6 +77,7 @@ import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
 import { complianceRoutes } from "./compliance.ts";
 import { dataRoutes } from "./dataRoutes.ts";
+import { dataSourceRoutes } from "./dataSources.ts";
 import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { pricingRoutes } from "./pricing.ts";
@@ -1433,6 +1434,48 @@ adminRoutes.get("/feature-flags/env-gates", (c) => {
       enabled: env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true",
       flagKey: null,
     },
+    // linkedin_api source gates (docs/planning/linkedin-source-ingestion/). Env-only — Layer 0 has no
+    // tenant to key a per-tenant flag on; the vendor key itself is the HUMAN GATE upstream of all of them.
+    {
+      key: "LINKEDIN_SOURCE_LANDING_ENABLED",
+      label: "LinkedIn source: Layer-0 landing",
+      description:
+        "Master switch for landLinkedinPayload — every structured Layer-0 write from a fetched linkedin_api document. Env-only.",
+      enabled: env.LINKEDIN_SOURCE_LANDING_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "LINKEDIN_SIGNALS_ENABLED",
+      label: "LinkedIn source: signals",
+      description:
+        "master_signals emission from the landing (job_change on employer transitions; thresholded headcount surge/decline). Env-only.",
+      enabled: env.LINKEDIN_SIGNALS_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "LINKEDIN_CHANNELS_ENABLED",
+      label: "LinkedIn source: channel contribution",
+      description:
+        "The landing's encrypted multi-value email/phone contribution to master_emails/master_phones — the co-op boundary's sensitive half. Env-only.",
+      enabled: env.LINKEDIN_CHANNELS_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "LINKEDIN_COMPANY_REFRESH_ENABLED",
+      label: "LinkedIn source: platform sweep",
+      description:
+        "Registers the leader-locked company-refresh sweep (25/tick @ 6h) that keeps tracked companies' firmographics + headcount fresh. Env-only.",
+      enabled: env.LINKEDIN_COMPANY_REFRESH_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "LINKEDIN_ACCOUNT_REFRESH_ENABLED",
+      label: "LinkedIn source: account refresh",
+      description:
+        "The customer-triggered per-account company refresh (POST /enrichment/account/:id → account_refresh queue). Env-only.",
+      enabled: env.LINKEDIN_ACCOUNT_REFRESH_ENABLED,
+      flagKey: null,
+    },
   ];
   return c.json({ gates });
 });
@@ -1489,6 +1532,9 @@ adminRoutes.put("/retention-policies", requireCapability("platform:configure"), 
 // ── Provider configs (13 §3.6) — enable/disable + monthly budget, super_admin-gated. Own module to keep
 // this file focused; the parent authn + platformAdmin middleware already apply to the mounted sub-routes. ──
 adminRoutes.route("/provider-configs", providerConfigRoutes);
+// Data-source ORIGIN fleet (provider_origins, 0117) — the linkedin_api failover chain: origins, sealed
+// keys (write-only), pause/resume, live test probe. Same super_admin capability as provider-configs.
+adminRoutes.route("/data-sources", dataSourceRoutes);
 // Platform audit-log viewer (super_admin|compliance_officer), staff RBAC + impersonation (super_admin/support).
 adminRoutes.route("/audit-log", auditLogRoutes);
 adminRoutes.route("/staff", staffRoutes);

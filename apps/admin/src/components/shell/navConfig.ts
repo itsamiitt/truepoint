@@ -37,6 +37,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Plans", href: "/plans", match: "/plans", icon: Layers },
   { label: "Pricing", href: "/pricing", match: "/pricing", icon: Tag },
   { label: "Providers", href: "/provider-configs", match: "/provider-configs", icon: Plug },
+  { label: "Data sources", href: "/data-sources", match: "/data-sources", icon: Database },
   { label: "Feature flags", href: "/feature-flags", match: "/feature-flags", icon: Flag },
   { label: "Content", href: "/content", match: "/content", icon: Megaphone },
   { label: "Retention", href: "/retention", match: "/retention", icon: Timer },

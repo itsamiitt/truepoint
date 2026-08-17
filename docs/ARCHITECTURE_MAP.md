@@ -46,7 +46,11 @@
 > vendor key itself is a HUMAN GATE. **Amended same day (0116, user instruction):** multi-value
 > `master_person_skills`/`master_person_languages` (`schema/masterPersonAttributes.ts` — the C6 gate,
 > opened) and typed multi-channel contribution (`master_emails.email_type`; encrypted multi-row
-> emails/phones behind `LINKEDIN_CHANNELS_ENABLED`).
+> emails/phones behind `LINKEDIN_CHANNELS_ENABLED`). **Second amendment (0117, the real vendor contract):**
+> the `provider_origins` FAILOVER FLEET (`schema/providerOrigins.ts`, app-REVOKEd — sealed per-origin keys)
+> + core's origin router/`linkedinSourceClient` (POST `/api/linkedin/{profile,company}`), the customer
+> account-refresh lane (`account_refresh` queue behind `LINKEDIN_ACCOUNT_REFRESH_ENABLED`), the
+> attributes/headcount read surfaces + prospect-drawer UI, and the admin **data-sources** console.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -58,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2065 source files · 83 code-bearing domains · 39 shared areas · 52 domain-vocabulary warnings · 2
+> **2086 source files · 84 code-bearing domains · 39 shared areas · 53 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -854,8 +858,9 @@ flowchart TD
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (52):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
+- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
   families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
+  `data-sources` (the 0117 origin console),
   `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
   `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
   `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical list can be

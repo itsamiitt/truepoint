@@ -37,6 +37,8 @@ export interface ProviderCallRecord {
 export interface CachedCall {
   providerName: string;
   responsePayload: unknown;
+  /** When the cached answer was recorded — freshness input for URL-keyed lanes (account refresh). */
+  calledAt: Date;
 }
 
 /** One cached hit row of a per-field cache read (waterfall v2). */
@@ -71,6 +73,7 @@ export const providerCallRepository = {
       .select({
         providerName: providerCalls.providerName,
         responsePayload: providerCalls.responsePayload,
+        calledAt: providerCalls.calledAt,
       })
       .from(providerCalls)
       .where(

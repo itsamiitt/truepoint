@@ -853,6 +853,13 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // LINKEDIN_ACCOUNT_REFRESH_ENABLED — the CUSTOMER-triggered per-account company refresh
+    // (POST /api/v1/enrichment/account/:id → the account_refresh queue). Distinct from the platform sweep
+    // above: tenant-scoped, metered through provider_calls, and visible in the product UI.
+    LINKEDIN_ACCOUNT_REFRESH_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Entitlement cap enforcement (06-roadmap Phase 1 "Free caps enforced"; S-10). Global half; per-tenant half is
     // the `entitlements_enforced` flag seeded off in 0088. DEFAULT-OFF: while off, the requireEntitlement
     // middleware is not mounted at all. With this on but the tenant flag off, it runs in SHADOW mode — computing

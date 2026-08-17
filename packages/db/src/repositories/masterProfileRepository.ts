@@ -523,6 +523,36 @@ export const masterProfileRepository = {
     `);
   },
 
+  /** The customer read over the 0116 attributes (account-intelligence seam; suppression-safe by
+   *  construction: a suppressed subject's rows were DELETED by the DSAR fan-out, so this reads empty). */
+  async listPersonSkills(
+    tx: Tx,
+    masterPersonId: string,
+    limit = 100,
+  ): Promise<Array<{ skill: string; sourceCount: number }>> {
+    const rows = (await tx.execute(sql`
+      SELECT skill, source_count FROM master_person_skills
+       WHERE master_person_id = ${masterPersonId}
+       ORDER BY source_count DESC, skill ASC
+       LIMIT ${limit}
+    `)) as unknown as Array<{ skill: string; source_count: number }>;
+    return rows.map((r) => ({ skill: r.skill, sourceCount: r.source_count }));
+  },
+
+  async listPersonLanguages(
+    tx: Tx,
+    masterPersonId: string,
+    limit = 50,
+  ): Promise<Array<{ name: string; proficiency: string | null }>> {
+    const rows = (await tx.execute(sql`
+      SELECT name, proficiency FROM master_person_languages
+       WHERE master_person_id = ${masterPersonId}
+       ORDER BY name ASC
+       LIMIT ${limit}
+    `)) as unknown as Array<{ name: string; proficiency: string | null }>;
+    return rows.map((r) => ({ name: r.name, proficiency: r.proficiency ?? null }));
+  },
+
   /** Multi-value skills (0116; one row per (person, skill), citext-deduped; re-assert corroborates). */
   async upsertPersonSkills(
     tx: Tx,

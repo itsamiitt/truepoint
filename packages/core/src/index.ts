@@ -338,6 +338,30 @@ export {
   type LandLinkedinPayloadInput,
   type LandLinkedinPayloadResult,
 } from "./sourceLanding/landSourcePayload.ts";
+// The origin fleet (0117): failover-chain fetch client for the real vendor contract
+// (POST <origin>/api/linkedin/{profile,company}), the origin router (60s cache + env fallback), and the
+// console's key-ingest boundary (sealOriginKey — cleartext key never leaves apps/api unencrypted).
+export {
+  fetchLinkedinProfile,
+  fetchLinkedinCompany,
+  salesNavCompanyUrl,
+  defaultLinkedinTransport,
+  type LinkedinFetchOptions,
+  type LinkedinFetchResult,
+  type LinkedinTransport,
+} from "./sourceLanding/linkedinSourceClient.ts";
+export {
+  loadOrigins,
+  invalidateOriginCache,
+  recordOriginOutcome,
+  sealOriginKey,
+  type ResolvedOrigin,
+} from "./sourceLanding/originRouter.ts";
+export {
+  refreshAccount,
+  type RefreshAccountInput,
+  type RefreshAccountResult,
+} from "./sourceLanding/refreshAccount.ts";
 export {
   LINKEDIN_API_SOURCE,
   LINKEDIN_API_PROVENANCE_SRC,

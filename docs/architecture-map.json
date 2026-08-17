@@ -39,6 +39,7 @@
     "data-health",
     "data-ops",
     "data-quality",
+    "data-sources",
     "email",
     "enrichment",
     "enrichment-jobs",
@@ -102,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2065,
-  "fileSetHash": "sha256:64baed1b0190370c90c2fe2ea78cf1a97520fd584817f26e5af1482d66968f7f",
+  "fileCount": 2086,
+  "fileSetHash": "sha256:5105bd5bf21707a625e21819941cd54ffea150e58202ecfbe33b2875ae1a5f37",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -172,6 +173,7 @@
         "apps/api/src/features/admin/billing.ts",
         "apps/api/src/features/admin/compliance.ts",
         "apps/api/src/features/admin/dataRoutes.ts",
+        "apps/api/src/features/admin/dataSources.ts",
         "apps/api/src/features/admin/dsarQueue.ts",
         "apps/api/src/features/admin/elevations.ts",
         "apps/api/src/features/admin/impersonation.ts",
@@ -691,6 +693,21 @@
       "workers": [],
       "integrations": []
     },
+    "data-sources": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/data-sources/api.ts",
+        "apps/admin/src/features/data-sources/components/DataSourceOriginsPage.tsx",
+        "apps/admin/src/features/data-sources/hooks/useDataSourceOrigins.ts",
+        "apps/admin/src/features/data-sources/index.ts",
+        "apps/admin/src/features/data-sources/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "email": {
       "web": [],
       "admin": [],
@@ -820,6 +837,7 @@
         "packages/db/src/repositories/providerCallRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/accountRefresh.ts",
         "apps/workers/src/queues/bulkEnrichment.ts",
         "apps/workers/src/queues/enrichment.ts",
         "apps/workers/src/queues/firmographics.ts"
@@ -1378,6 +1396,7 @@
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
         "apps/web/src/features/prospect/components/AddToListDialog.tsx",
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
+        "apps/web/src/features/prospect/components/AttributesSection.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
@@ -1387,6 +1406,7 @@
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
+        "apps/web/src/features/prospect/components/HeadcountSection.tsx",
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
         "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
@@ -1395,6 +1415,7 @@
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
+        "apps/web/src/features/prospect/components/RefreshFromSourceButton.tsx",
         "apps/web/src/features/prospect/components/RevealCell.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
@@ -1406,15 +1427,18 @@
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/components/TermFacetField.tsx",
         "apps/web/src/features/prospect/components/TermOptionChips.tsx",
+        "apps/web/src/features/prospect/enrichApi.ts",
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
         "apps/web/src/features/prospect/hooks/useAccountFacetCounts.ts",
+        "apps/web/src/features/prospect/hooks/useAccountHeadcount.ts",
         "apps/web/src/features/prospect/hooks/useAccountSearch.ts",
         "apps/web/src/features/prospect/hooks/useAccountTechnologies.ts",
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
+        "apps/web/src/features/prospect/hooks/useContactAttributes.ts",
         "apps/web/src/features/prospect/hooks/useContactEducation.ts",
         "apps/web/src/features/prospect/hooks/useContactEmployment.ts",
         "apps/web/src/features/prospect/hooks/useContactProvenance.ts",
@@ -1505,7 +1529,8 @@
       "api": [],
       "core": [],
       "db": [
-        "packages/db/src/repositories/providerConfigRepository.ts"
+        "packages/db/src/repositories/providerConfigRepository.ts",
+        "packages/db/src/repositories/providerOriginRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -1992,8 +2017,11 @@
       "api": [],
       "core": [
         "packages/core/src/sourceLanding/landSourcePayload.ts",
+        "packages/core/src/sourceLanding/linkedinSourceClient.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.test.ts",
-        "packages/core/src/sourceLanding/mapLinkedinPayload.ts"
+        "packages/core/src/sourceLanding/mapLinkedinPayload.ts",
+        "packages/core/src/sourceLanding/originRouter.ts",
+        "packages/core/src/sourceLanding/refreshAccount.ts"
       ],
       "db": [],
       "workers": [],
@@ -2201,6 +2229,7 @@
       "apps/admin/src/app/(shell)/data-ops/validation/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/verification/page.tsx",
       "apps/admin/src/app/(shell)/data-quality/page.tsx",
+      "apps/admin/src/app/(shell)/data-sources/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
@@ -2837,6 +2866,7 @@
       "packages/db/src/schema/processedSyncEvents.ts",
       "packages/db/src/schema/projectionOutbox.ts",
       "packages/db/src/schema/provenanceEvent.ts",
+      "packages/db/src/schema/providerOrigins.ts",
       "packages/db/src/schema/retention.ts",
       "packages/db/src/schema/revealJobs.ts",
       "packages/db/src/schema/salesnav.ts",
@@ -2943,6 +2973,7 @@
       "packages/db/test/provenanceEvent.itest.ts",
       "packages/db/test/providerCallsLedger.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
+      "packages/db/test/providerOrigins.itest.ts",
       "packages/db/test/reportsRepository.itest.ts",
       "packages/db/test/retention.itest.ts",
       "packages/db/test/reveal.itest.ts",
@@ -3123,6 +3154,7 @@
       "packages/types/src/provenanceEvent.ts",
       "packages/types/src/providerConfigs.test.ts",
       "packages/types/src/providerConfigs.ts",
+      "packages/types/src/providerOrigins.ts",
       "packages/types/src/realtimeEvents.ts",
       "packages/types/src/reports.ts",
       "packages/types/src/retention.ts",
@@ -3198,6 +3230,7 @@
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'data-ops' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'data-sources' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'entitlements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

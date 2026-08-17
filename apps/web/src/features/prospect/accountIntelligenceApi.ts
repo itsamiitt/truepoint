@@ -11,7 +11,9 @@ import { API_BASE } from "@/lib/publicConfig";
 import type {
   AccountAlumniResponse,
   AccountDisplacementResponse,
+  AccountHeadcountResponse,
   AccountTechnologiesResponse,
+  ContactAttributesResponse,
   ContactEducationResponse,
   ContactEmploymentResponse,
   ContactProvenanceResponse,
@@ -88,4 +90,22 @@ export async function fetchContactSignals(contactId: string): Promise<ContactSig
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/signals`);
   if (!res.ok) throw await toApiError(res, "Could not load signals");
   return (await res.json()) as ContactSignalsResponse;
+}
+
+/** Skills + languages we hold for this person (0116). Empty until the linkedin_api landing runs; a
+ *  suppressed subject reads as empty by construction (erasure deletes the rows). */
+export async function fetchContactAttributes(
+  contactId: string,
+): Promise<ContactAttributesResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/attributes`);
+  if (!res.ok) throw await toApiError(res, "Could not load attributes");
+  return (await res.json()) as ContactAttributesResponse;
+}
+
+/** Monthly headcount totals for this account's company (0114), newest-first. Growth deltas are computed
+ *  client-side over the series — the server deliberately stores no rollups. */
+export async function fetchAccountHeadcount(accountId: string): Promise<AccountHeadcountResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/headcount`);
+  if (!res.ok) throw await toApiError(res, "Could not load headcount");
+  return (await res.json()) as AccountHeadcountResponse;
 }

@@ -79,6 +79,8 @@ export const QUEUE_DOMAIN = {
   // linkedin_api company-refresh sweep (docs/planning/linkedin-source-ingestion/): a Layer-0 platform lane
   // feeding the same system-owned graph the master* queues do.
   linkedinCompanyRefresh: "master-sync",
+  // The customer-triggered per-account company refresh — tenant-metered like enrichment, so it lives there.
+  accountRefresh: "enrichment",
   partitionSweep: "data-ops",
   projectionSweep: "projection",
   retentionSweep: "retention",
@@ -147,6 +149,9 @@ export const REPO_DOMAIN = {
   creditPack: "pricing",
   planTemplate: "plans",
   providerConfig: "provider-configs",
+  // The data-source origin fleet (0117) — provider infrastructure beside providerConfig; the admin
+  // surface is the data-sources slice, the consumer is core's origin router.
+  providerOrigin: "provider-configs",
   accountSearch: "account-search",
   contactExternalId: "contacts-resolve",
   contactMerge: "contacts-merge",

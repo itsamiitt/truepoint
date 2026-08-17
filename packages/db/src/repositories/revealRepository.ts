@@ -23,6 +23,10 @@ export interface ContactForReveal {
   /** The Layer-0 bridge, for the badge's corroboration half. Null while the contact is unresolved in-flight,
    *  which is why the badge omits the source clause rather than rendering a zero. */
   masterPersonId: string | null;
+  /** URL-keyed enrichment subject inputs (linkedin_api is URL-only). Public profile data, not channel PII —
+   *  selected here so the subject builders stop sending `linkedinUrl: undefined` to every adapter. */
+  linkedinUrl: string | null;
+  linkedinPublicId: string | null;
 }
 
 /** What the STAFF cross-tenant export needs per contact (database-management-research export; audit A1, Phase 2):
@@ -133,6 +137,8 @@ export const revealRepository = {
         isRevealed: contacts.isRevealed,
         lastVerifiedAt: contacts.lastVerifiedAt,
         masterPersonId: contacts.masterPersonId,
+        linkedinUrl: contacts.linkedinUrl,
+        linkedinPublicId: contacts.linkedinPublicId,
       })
       .from(contacts)
       .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt))) // tombstones are gone (08 §4.2)
