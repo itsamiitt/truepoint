@@ -107,6 +107,14 @@ the axis that grows per source; a column per id kind means a migration per vendo
 globally unique = the ER join key. The `linkedin_company_id` column **stays** (hot, partial-unique since
 0017) and is dual-written; 0113 backfills it into the table, byte-for-byte the 0104 person pattern.
 
+**FRONT-END CONTRACT (recorded user decision, 2026-08-16): external numeric ids are INTERNAL LINK METADATA
+ONLY.** `linkedin_company_id`, `linkedin_school_id` and the member id/urn exist purely to raise
+prospect↔company and prospect↔school link accuracy in the resolver ladders — they are never surfaced in any
+customer-facing DTO, API response, or UI. Enforcement is structural, not conventional: they live only on
+Layer-0 `master_*` tables, from which `leadwolf_app` is REVOKEd on every migrate; no `apps/api` feature or
+`@leadwolf/types` customer DTO references them (verified by grep). What the front-end may show stays
+URL-shaped (profile slug, company page URL).
+
 id_type vocabulary written today:
 
 | table | id_type | value |
