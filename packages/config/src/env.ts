@@ -860,6 +860,20 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // LINKEDIN_LINK_CAPTURE_ENABLED — the extension's Sales-Nav URL harvest → the link-ingest route that
+    // writes source_fetch_registry (0118). URLs only, no PII. Rides the extension gates
+    // (CHROME_EXTENSION_ENABLED + EXTENSION_ORIGINS + per-tenant flag) on top of this env switch.
+    LINKEDIN_LINK_CAPTURE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // LINKEDIN_LINK_FETCH_ENABLED — the leader-locked platform sweep that fetches registry URLs new-or-
+    // older-than-30-days from the origin fleet and lands them (the 30-day freshness rule). Also gates the
+    // on-view fetch path. Layer-0 lane — unmetered, structurally bounded.
+    LINKEDIN_LINK_FETCH_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Entitlement cap enforcement (06-roadmap Phase 1 "Free caps enforced"; S-10). Global half; per-tenant half is
     // the `entitlements_enforced` flag seeded off in 0088. DEFAULT-OFF: while off, the requireEntitlement
     // middleware is not mounted at all. With this on but the tenant flag off, it runs in SHADOW mode — computing

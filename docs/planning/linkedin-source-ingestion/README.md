@@ -221,7 +221,37 @@ Three lanes call it:
 | `LINKEDIN_COMPANY_REFRESH_ENABLED` | registration of the platform sweep | off |
 | `LINKEDIN_ACCOUNT_REFRESH_ENABLED` | the customer per-account refresh route + queue | off |
 
-All five surface read-only in the admin console's Env gates panel. **Read surfaces + UI** shipped with the
+All five surface read-only in the admin console's Env gates panel.
+
+## Ecosystem: extension link-harvest → 30-day fetch → intel hover card (0118)
+
+The full loop between the Chrome extension, the dashboard, and the fetch orchestration (docs/planning
+ecosystem; Apollo teardown in `chrome-extension/01a-apollo-teardown-16.3.1.md`):
+
+1. **Capture (URL-only).** On a Sales-Nav search/list page the extension adapter harvests the visible
+   result-row anchor URLs (`harvestLinks`, DOM-only — the ADR-0043 gate-free posture) and posts them to
+   `POST /api/v1/ingest/linkedin-links` (extension-scoped). The route canonicalizes each via
+   `linkedinUrlKey` (all lead/people/slug forms of one profile collapse to one key) and upserts the Layer-0
+   **`source_fetch_registry`** (0118) — first-seen only, no fetch inline. Dark behind
+   `LINKEDIN_LINK_CAPTURE_ENABLED`. URLs only; the licensed data comes from the origin fleet, never scraped.
+2. **30-day fetch.** `source_fetch_registry` has a real `last_fetched_at` written on the fetch ATTEMPT — the
+   freshness clock nothing existing could provide (`source_records` skips byte-identical refetches;
+   `provider_calls` is workspace-scoped and never advances `called_at` on a hit). The leader-locked worker
+   sweep `linkedinLinkFetchSweep` (`LINKEDIN_LINK_FETCH_ENABLED`) selects rows new-or-older-than-30-days and
+   runs the shared **`fetchAndLandUrl`** (origin-fleet fetch → `landLinkedinPayload` → `recordFetch`). A
+   person landing DERIVES its employer company ids into the registry as company targets, so the same sweep
+   fetches companies on the same rule. Layer-0 lane — unmetered, structurally bounded (cap × cadence ×
+   registry dedup).
+3. **Fetch-on-view.** Opening a profile/company fires `POST /api/v1/ingest/linkedin-links/:kind/fetch`,
+   which registers + (unless fresh within 30d) fetches+lands immediately, then re-resolves the caller's
+   tenant contact so the card can read the intel by id. Fresh URL ⇒ no vendor call.
+4. **Intel hover card.** `resolveByLinkedin` now keeps the resolved masked identity (title/seniority/
+   location) on `SubjectStatus`; the account-intelligence reads (employment/education/attributes/headcount)
+   are on the extension-scope allow-list for the deep panel. A profile not in the workspace's CRM lands the
+   golden data but has no contactId — the card offers the reveal/add path (the reveal-miss posture).
+
+**Model A (ADR-0046 full-payload interception → forge medallion → human verify) stays decided-dark;** the
+Phase-B URL-only harvest is the lighter, compliant path that keeps the scraped-payload firewall intact. **Read surfaces + UI** shipped with the
 fleet wiring: `GET /contacts/:id/attributes` (skills+languages) and `GET /accounts/:id/headcount` (series;
 growth derived client-side) on the account-intelligence seam; web renders Skills & languages chips, the
 multi-value typed email/phone lists (S-CH4 arrays), the headcount trend sparkbars, and the two refresh

@@ -322,6 +322,10 @@ const GRANTS = `
   -- blanket public-schema grant would otherwise hand the customer app role a secrets table. Reads run on
   -- the owner connection (the core origin router); writes are staff-only via withPlatformTx.
   REVOKE ALL ON provider_origins FROM leadwolf_app;
+  -- URL fetch registry (0118) — platform-global freshness clock. Same posture as provider_origins: NOT
+  -- master_*-prefixed, so this explicit REVOKE is load-bearing. Holds URLs + ids only, written by the
+  -- capture route + the worker sweep on the owner connection.
+  REVOKE ALL ON source_fetch_registry FROM leadwolf_app;
   -- master_confidence_policy (0107) is scoring config, not tenant data. The app never needs it: it reads the
   -- COMPUTED confidence stored in field_provenance, not the curve that produced it. Revoked so the scoring
   -- policy cannot be read or tampered with from a tenant-scoped connection.

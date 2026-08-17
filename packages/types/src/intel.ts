@@ -141,6 +141,27 @@ export const accountRefreshJobDataSchema = z.object({
 });
 export type AccountRefreshJobData = z.infer<typeof accountRefreshJobDataSchema>;
 
+// ── Ecosystem link capture (docs/planning ecosystem) — the extension's Sales-Nav URL harvest ─────────────
+/** One captured URL. `entityKind` is a hint; the server re-derives the canonical key + kind via linkedinUrlKey. */
+export const capturedLinkSchema = z.object({
+  url: z.string().url().max(1000),
+  entityKind: z.enum(["person", "company"]).optional(),
+});
+export const linkCaptureRequestSchema = z.object({
+  urls: z.array(capturedLinkSchema).min(1).max(200),
+  sourceUrl: z.string().url().max(1000).optional(),
+  capturedAt: z.string().datetime({ offset: true }).optional(),
+});
+export type LinkCaptureRequest = z.infer<typeof linkCaptureRequestSchema>;
+
+/** On-view fetch ack: what happened + the resolved ids so the hover card can read the intel back. */
+export const linkFetchAckSchema = z.object({
+  outcome: z.enum(["fresh", "landed", "duplicate", "rejected", "unavailable", "not_a_target"]),
+  contactId: z.string().uuid().nullable(),
+  accountId: z.string().uuid().nullable(),
+});
+export type LinkFetchAck = z.infer<typeof linkFetchAckSchema>;
+
 // ── Data quality & freshness (22, ADR-0025) ────────────────────────────────────────────────────────────
 // freshness_status derives from age / re-verify-SLA (22 §3): <0.5 fresh, <1.0 aging, <1.5 stale, else expired.
 // Distinct from data_quality_score (the 0–100 composite) and from email_status (single-field correctness).

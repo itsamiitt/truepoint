@@ -102,6 +102,27 @@ async function handle(
       }
     }
 
+    case "LINKS_CAPTURED": {
+      // Sales-Nav URL harvest (docs/planning ecosystem): URLs only, posted to the fetch registry. Degrade
+      // to zero on any failure so a signed-out/offline session never blocks browsing.
+      try {
+        const res = await ctx.api.captureLinks(msg.links, msg.sourceUrl);
+        await ctx.telemetry.event("links_captured", { count: msg.links.length });
+        return res;
+      } catch {
+        return { registered: 0, dropped: msg.links.length };
+      }
+    }
+
+    case "VIEW_FETCH": {
+      // Fetch-on-view: ensure the viewed profile/company is fresh, then hand back the resolved contact id.
+      try {
+        return await ctx.api.viewFetch(msg.entityKind, msg.url);
+      } catch {
+        return { outcome: "unavailable", contactId: null };
+      }
+    }
+
     case "AUTH_LOGIN": {
       try {
         const state = await ctx.auth.login();

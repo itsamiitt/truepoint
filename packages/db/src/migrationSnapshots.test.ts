@@ -130,8 +130,11 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  75 → 76 for 0117_provider_origins — the same 0116 case verbatim: a plain barrel table drizzle COULD
  *  see, but the 0107 chain HEAD makes `generate` propose all post-0107 drift and die on the interactive
- *  conflict prompt. Hand-authored; absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 76;
+ *  conflict prompt. Hand-authored; absorbed by the next rebaseline.
+ *
+ *  76 → 77 for 0118_source_fetch_registry — identical case to 0117: a plain barrel table hand-authored
+ *  only because the 0107 chain HEAD makes `generate` unusable. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 77;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

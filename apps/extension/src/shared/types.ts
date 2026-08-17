@@ -6,9 +6,18 @@ import { z } from "zod";
 export const adapterId = z.enum(["linkedin", "generic"]);
 export type AdapterId = z.infer<typeof adapterId>;
 
-/** The kind of page the adapter matched. */
-export const pageType = z.enum(["profile", "company", "search", "unsupported"]);
+/** The kind of page the adapter matched. Sales-Nav surfaces (docs/planning ecosystem): a lead/people page
+ *  is a `profile`, a `/sales/company` page a `company`, and the search/list results a `sales_search` from
+ *  which we harvest result-row URLs (visible-DOM anchors only). */
+export const pageType = z.enum(["profile", "company", "search", "sales_search", "unsupported"]);
 export type PageType = z.infer<typeof pageType>;
+
+/** A harvested LinkedIn/Sales-Nav link — the URL the user is viewing, nothing more. */
+export const capturedLink = z.object({
+  url: z.string().url(),
+  entityKind: z.enum(["person", "company"]).optional(),
+});
+export type CapturedLink = z.infer<typeof capturedLink>;
 
 /** The visible, user-facing fields an adapter extracts from the rendered DOM. No private-API reads. */
 export const capturedFields = z.object({
@@ -48,6 +57,18 @@ export const subjectStatus = z.object({
   emailAvailable: z.boolean().optional(),
   phoneAvailable: z.boolean().optional(),
   score: z.number().int().min(0).max(100).nullable().optional(),
+  // Masked identity from the resolved contact (docs/planning ecosystem) — richer than the DOM capture, all
+  // non-PII. Present only when the workspace holds this contact (contactId non-null). The card shows these
+  // and, keyed on contactId, can fetch the deep intel (employment/skills/headcount) via the allow-listed reads.
+  identity: z
+    .object({
+      jobTitle: z.string().nullable(),
+      seniority: z.string().nullable(),
+      department: z.string().nullable(),
+      location: z.string().nullable(),
+      emailStatus: z.string().nullable(),
+    })
+    .optional(),
 });
 export type SubjectStatus = z.infer<typeof subjectStatus>;
 

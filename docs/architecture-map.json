@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2086,
-  "fileSetHash": "sha256:5105bd5bf21707a625e21819941cd54ffea150e58202ecfbe33b2875ae1a5f37",
+  "fileCount": 2093,
+  "fileSetHash": "sha256:b2a3fe1ed7047fd9483b65b01a3e959a15ebdf490ee92f552ad96e009e31adf4",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1255,10 +1255,12 @@
         "packages/db/src/repositories/masterGraphRepository.ts",
         "packages/db/src/repositories/masterProfileRepository.ts",
         "packages/db/src/repositories/masterSignalsRepository.ts",
-        "packages/db/src/repositories/masterTechnologyRepository.ts"
+        "packages/db/src/repositories/masterTechnologyRepository.ts",
+        "packages/db/src/repositories/sourceFetchRegistryRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/linkedinCompanyRefresh.ts",
+        "apps/workers/src/queues/linkedinLinkFetchSweep.ts",
         "apps/workers/src/queues/masterBackfill.test.ts",
         "apps/workers/src/queues/masterBackfill.ts",
         "apps/workers/src/queues/masterBackfillSweep.ts"
@@ -2016,8 +2018,11 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/sourceLanding/fetchAndLand.ts",
         "packages/core/src/sourceLanding/landSourcePayload.ts",
         "packages/core/src/sourceLanding/linkedinSourceClient.ts",
+        "packages/core/src/sourceLanding/linkedinUrlKey.test.ts",
+        "packages/core/src/sourceLanding/linkedinUrlKey.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.test.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.ts",
         "packages/core/src/sourceLanding/originRouter.ts",
@@ -2873,6 +2878,7 @@
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scheduledImports.ts",
       "packages/db/src/schema/scim.ts",
+      "packages/db/src/schema/sourceFetchRegistry.ts",
       "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/teams.ts",
@@ -2986,6 +2992,7 @@
       "packages/db/test/scim.itest.ts",
       "packages/db/test/search.itest.ts",
       "packages/db/test/sendGate.itest.ts",
+      "packages/db/test/sourceFetchRegistry.itest.ts",
       "packages/db/test/suppressionExport.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",

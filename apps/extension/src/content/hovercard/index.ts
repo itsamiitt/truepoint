@@ -92,6 +92,11 @@ export class HoverCard {
 
   setStatus(status: SubjectStatus): void {
     this.status = status;
+    // Prefer the RESOLVED masked identity (richer + server-authoritative) over the DOM capture when present.
+    if (status.identity) {
+      const parts = [status.identity.jobTitle, status.identity.location].filter(Boolean);
+      if (parts.length > 0) this.subEl.textContent = parts.join(" · ");
+    }
     this.renderPrimary();
   }
 

@@ -399,6 +399,20 @@ export const masterProfileRepository = {
     return rows.map((r) => ({ month: r.month, employeeCount: r.employee_count }));
   },
 
+  /** The linkedin_company_id of every company this person is employed at — the company-derivation input for
+   *  the fetch registry (0118). Reads the resolved employer companies' hot id column; unresolved stints have
+   *  no id and are skipped. */
+  async listPersonEmployerLinkedinCompanyIds(tx: Tx, masterPersonId: string): Promise<string[]> {
+    const rows = (await tx.execute(sql`
+      SELECT DISTINCT c.linkedin_company_id AS id
+        FROM master_employment e
+        JOIN master_companies c ON c.id = e.master_company_id
+       WHERE e.master_person_id = ${masterPersonId}
+         AND c.linkedin_company_id IS NOT NULL
+    `)) as unknown as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  },
+
   /** Attach identifier rows (ON CONFLICT DO NOTHING — the global unique is the convergence point). */
   async upsertPersonIdentifiers(
     tx: Tx,

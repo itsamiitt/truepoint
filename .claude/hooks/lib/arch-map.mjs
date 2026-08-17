@@ -79,6 +79,9 @@ export const QUEUE_DOMAIN = {
   // linkedin_api company-refresh sweep (docs/planning/linkedin-source-ingestion/): a Layer-0 platform lane
   // feeding the same system-owned graph the master* queues do.
   linkedinCompanyRefresh: "master-sync",
+  // The 30-day URL-registry fetch sweep (docs/planning ecosystem) — a Layer-0 platform lane feeding the
+  // same system-owned graph the master* queues do.
+  linkedinLinkFetchSweep: "master-sync",
   // The customer-triggered per-account company refresh — tenant-metered like enrichment, so it lives there.
   accountRefresh: "enrichment",
   partitionSweep: "data-ops",
@@ -152,6 +155,9 @@ export const REPO_DOMAIN = {
   // The data-source origin fleet (0117) — provider infrastructure beside providerConfig; the admin
   // surface is the data-sources slice, the consumer is core's origin router.
   providerOrigin: "provider-configs",
+  // The URL fetch registry (0118, docs/planning ecosystem) — the 30-day freshness clock feeding the
+  // linkedin_api landing; belongs with the master-sync graph population.
+  sourceFetchRegistry: "master-sync",
   accountSearch: "account-search",
   contactExternalId: "contacts-resolve",
   contactMerge: "contacts-merge",

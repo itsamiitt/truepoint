@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   type ErrorClass,
   type RevealType,
+  capturedLink,
   capturedRecord,
   revealType,
   type subjectStatus,
@@ -19,6 +20,18 @@ export const requestMessage = z.discriminatedUnion("type", [
     sourceUrl: z.string().url(),
   }),
   z.object({ type: z.literal("CAPTURE"), record: capturedRecord }),
+  // Sales-Nav URL harvest (docs/planning ecosystem): a batch of visible links from a search/list page.
+  z.object({
+    type: z.literal("LINKS_CAPTURED"),
+    links: z.array(capturedLink).min(1).max(200),
+    sourceUrl: z.string().url(),
+  }),
+  // Fetch-on-view: the rep opened a profile/company page; ensure the licensed document is fresh.
+  z.object({
+    type: z.literal("VIEW_FETCH"),
+    entityKind: z.enum(["person", "company"]),
+    url: z.string().url(),
+  }),
   z.object({ type: z.literal("REVEAL"), contactId: z.string().min(1), revealType }),
   z.object({ type: z.literal("AUTH_LOGIN") }),
   z.object({ type: z.literal("AUTH_LOGOUT") }),
@@ -108,7 +121,11 @@ export type ResponseFor<T extends RequestType> = T extends "PING"
               ? { orgs: OrgSummary[]; activeTenantId: string | null }
               : T extends "OPEN_PANEL"
                 ? { ok: boolean }
-                : never;
+                : T extends "LINKS_CAPTURED"
+                  ? { registered: number; dropped: number }
+                  : T extends "VIEW_FETCH"
+                    ? { outcome: string; contactId: string | null }
+                    : never;
 
 /** SW → surfaces broadcasts (state fan-out; no request/response). */
 export type BroadcastMessage =

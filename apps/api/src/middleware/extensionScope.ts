@@ -42,7 +42,18 @@ const rule = (method: string, path: string): RouteRule => ({
 // that review is the deny-by-default control working as intended, not friction to route around.
 const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   rule("POST", "/api/v1/ingest"),
+  // Ecosystem link harvest (docs/planning ecosystem): the SW posts captured Sales-Nav URLs to the
+  // registry, and the hover card triggers an on-view fetch of the profile it is viewing. Both URL-only.
+  rule("POST", "/api/v1/ingest/linkedin-links"),
+  rule("POST", "/api/v1/ingest/linkedin-links/:kind/fetch"),
   rule("POST", "/api/v1/contacts/:id/reveal"),
+  // The deep-intel hover-card reads (docs/planning ecosystem) — all masked, suppression-safe,
+  // account-intelligence routes, addressed by the resolved contact/account id from the by-linkedin lookup.
+  rule("GET", "/api/v1/contacts/:id/employment"),
+  rule("GET", "/api/v1/contacts/:id/education"),
+  rule("GET", "/api/v1/contacts/:id/attributes"),
+  rule("GET", "/api/v1/contacts/:id/signals"),
+  rule("GET", "/api/v1/accounts/:id/headcount"),
   // NO `GET /api/v1/contacts/:id` rule, deliberately (audit 32 · C9). No such endpoint exists — the only
   // bare `GET /:id` in apps/api belongs to import-mapping-templates — and the extension never asks for one:
   // background/api/client.ts calls exactly the reveal POST above and the by-linkedin GET below. A grant for a

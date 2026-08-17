@@ -201,6 +201,11 @@ import {
   makeProcessLinkedinCompanyRefresh,
 } from "./queues/linkedinCompanyRefresh.ts";
 import {
+  LINKEDIN_LINK_FETCH_QUEUE,
+  type LinkedinLinkFetchJobData,
+  makeProcessLinkedinLinkFetch,
+} from "./queues/linkedinLinkFetchSweep.ts";
+import {
   LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
   type LowBalanceNotifierSweepJobData,
   makeProcessLowBalanceNotifierSweep,
@@ -2050,6 +2055,31 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 6 * 60 * 60_000 }, jobId: "linkedin-company-refresh" })
       .catch((e) =>
         log.error("failed to schedule the linkedin company refresh sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // linkedin_api link-fetch sweep (docs/planning ecosystem) — the 30-day freshness sweep over the URL
+  // registry (source_fetch_registry, 0118). Same triple-dark posture as the company sweep; replaces the
+  // month-boundary predicate with a real per-URL last_fetched_at rule. Persons derive company targets.
+  if (env.LINKEDIN_LINK_FETCH_ENABLED) {
+    const linkFetchQueue = tracedQueue<LinkedinLinkFetchJobData>(LINKEDIN_LINK_FETCH_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<LinkedinLinkFetchJobData>(
+          LINKEDIN_LINK_FETCH_QUEUE,
+          makeProcessLinkedinLinkFetch(connection),
+          { connection },
+        ),
+        LINKEDIN_LINK_FETCH_QUEUE,
+      ),
+    );
+    void linkFetchQueue
+      .add("sweep", {}, { repeat: { every: 60 * 60_000 }, jobId: "linkedin-link-fetch" })
+      .catch((e) =>
+        log.error("failed to schedule the linkedin link fetch sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

@@ -190,17 +190,58 @@ export class ApiClient {
       `/contacts/by-linkedin/${encodeURIComponent(publicId)}`,
       { method: "GET" },
     );
+    const c = resp.contact;
     return {
       contactId: resp.contactId,
       known: resp.known,
       owned: resp.owned,
       // A lookup is not a capture outcome; the known/owned booleans carry the real signal.
       outcome: "unknown",
-      emailAvailable: resp.contact?.hasEmail ?? false,
-      phoneAvailable: resp.contact?.hasPhone ?? false,
+      emailAvailable: c?.hasEmail ?? false,
+      phoneAvailable: c?.hasPhone ?? false,
       // score (a buying-signal) is intentionally deferred until the signals feature is built.
       score: null,
+      // Masked identity for the richer card (docs/planning ecosystem) — all non-PII.
+      identity: c
+        ? {
+            jobTitle: c.jobTitle ?? null,
+            seniority: c.seniorityLevel ?? null,
+            department: c.department ?? null,
+            location: [c.locationCity, c.locationCountry].filter(Boolean).join(", ") || null,
+            emailStatus: c.emailStatus ?? null,
+          }
+        : undefined,
     };
+  }
+
+  /** Post harvested Sales-Nav URLs to the fetch registry (POST /ingest/linkedin-links; docs/planning
+   *  ecosystem). URLs only, never profile data — the server canonicalizes + dedups. */
+  async captureLinks(
+    links: Array<{ url: string; entityKind?: "person" | "company" }>,
+    sourceUrl: string,
+  ): Promise<{ registered: number; dropped: number }> {
+    const resp = await this.request<{ registered: number; dropped: number }>(
+      "/ingest/linkedin-links",
+      {
+        method: "POST",
+        body: JSON.stringify({ urls: links, sourceUrl, capturedAt: new Date().toISOString() }),
+      },
+    );
+    return { registered: resp.registered, dropped: resp.dropped };
+  }
+
+  /** Fetch-on-view: ensure the licensed document for the viewed profile/company is fresh
+   *  (POST /ingest/linkedin-links/:kind/fetch). Returns the resolved tenant contact id (if any) so the
+   *  hover card can read the intel back. */
+  async viewFetch(
+    entityKind: "person" | "company",
+    url: string,
+  ): Promise<{ outcome: string; contactId: string | null }> {
+    const resp = await this.request<{ outcome: string; contactId: string | null }>(
+      `/ingest/linkedin-links/${entityKind}/fetch`,
+      { method: "POST", body: JSON.stringify({ url }) },
+    );
+    return { outcome: resp.outcome, contactId: resp.contactId };
   }
 
   /** The caller's orgs (across tenants) for the org switcher — GET /orgs (chrome-extension/14 X04). Degrades to

@@ -14,19 +14,40 @@ const card = new HoverCard();
 
 function evaluate(url: URL): void {
   const adapter = registry.match(url);
-  if (!adapter || adapter.pageType(url) !== "profile") {
+  if (!adapter) {
     card.hide();
     return;
   }
+  const kind = adapter.pageType(url);
+
+  // Sales-Nav search/list: harvest the visible result URLs (URLs only) and register them. No card.
+  if (kind === "sales_search") {
+    card.hide();
+    const links = adapter.harvestLinks?.(url, document) ?? [];
+    if (links.length > 0) {
+      void send({ type: "LINKS_CAPTURED", links, sourceUrl: url.href }).catch(() => undefined);
+    }
+    return;
+  }
+
+  if (kind !== "profile" && kind !== "company") {
+    card.hide();
+    return;
+  }
+
+  // Fetch-on-view: ensure the licensed document for the viewed entity is fresh, then read the intel back.
+  const entityKind = kind === "company" ? "company" : "person";
+  void send({ type: "VIEW_FETCH", entityKind, url: url.href }).catch(() => undefined);
+
   const record = adapter.extract(url, document);
-  if (!record) {
+  if (record) {
+    card.showForRecord(record);
+    void send({ type: "LOOKUP", subjectKey: record.subjectKey, sourceUrl: record.sourceUrl })
+      .then((res) => card.setStatus(res.status))
+      .catch(() => undefined);
+  } else {
     card.hide();
-    return;
   }
-  card.showForRecord(record);
-  void send({ type: "LOOKUP", subjectKey: record.subjectKey, sourceUrl: record.sourceUrl })
-    .then((res) => card.setStatus(res.status))
-    .catch(() => undefined);
 }
 
 const observer = new NavigationObserver((url) => evaluate(url));

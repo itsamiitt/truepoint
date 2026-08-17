@@ -133,6 +133,14 @@ export {
   type CreateOriginInput,
   type UpdateOriginInput,
 } from "./repositories/providerOriginRepository.ts";
+// URL fetch registry (0118): the 30-day freshness clock, one row per canonical LinkedIn/Sales-Nav URL.
+// app-REVOKEd; capture route + worker sweep write on the owner connection.
+export {
+  sourceFetchRegistryRepository,
+  type RegisterUrlInput,
+  type DueUrl,
+  type RegistryRow,
+} from "./repositories/sourceFetchRegistryRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,

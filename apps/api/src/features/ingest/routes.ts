@@ -5,8 +5,22 @@
 // the existing /import path or runImport. The async processing pipeline (evidence -> resolve -> enrich -> land) is
 // wired per connector in later slices (audit P05); v1 validates + accepts.
 import { checkCaptureRate } from "@leadwolf/auth";
-import { getConnector, registerBuiltinConnectors } from "@leadwolf/core";
-import { ForbiddenError, ValidationError, ingestionEnvelope } from "@leadwolf/types";
+import { env } from "@leadwolf/config";
+import {
+  fetchAndLandUrl,
+  getConnector,
+  linkedinUrlKey,
+  registerBuiltinConnectors,
+} from "@leadwolf/core";
+import { contactRepository, sourceFetchRegistryRepository, withPrivilegedTx } from "@leadwolf/db";
+import {
+  ForbiddenError,
+  type LinkFetchAck,
+  ValidationError,
+  ingestionEnvelope,
+  linkCaptureRequestSchema,
+  linkFetchAckSchema,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
@@ -56,4 +70,93 @@ ingestRoutes.post("/", async (c) => {
   // v1 acks with the accepted count. The per-connector async processing (evidence -> resolve -> enrich -> land)
   // is a later slice; this endpoint is additive and leaves the existing /import path byte-identical.
   return c.json({ accepted: true, source: envelope.source, records: observations.length }, 202);
+});
+
+/**
+ * POST /api/v1/ingest/linkedin-links — the extension's Sales-Nav URL harvest (docs/planning ecosystem).
+ * Writes ONLY the fetch registry (source_fetch_registry, 0118); never fetches inline. URLs are canonicalized
+ * server-side (linkedinUrlKey), so lead/people/slug forms of one profile collapse to one target. Dark behind
+ * LINKEDIN_LINK_CAPTURE_ENABLED; the extension-scope allow-list gates who may call it. Abuse-throttled by
+ * URL volume like the capture connector.
+ */
+ingestRoutes.post("/linkedin-links", async (c) => {
+  if (!env.LINKEDIN_LINK_CAPTURE_ENABLED) {
+    throw new ValidationError("Link capture is not enabled.");
+  }
+  const parsed = linkCaptureRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? "Invalid link capture body.");
+  }
+  await checkCaptureRate(`links:${c.get("claims").sub}`, parsed.data.urls.length);
+
+  // Canonicalize + dedup within the batch; unrecognized (search/list) URLs are dropped, not errored.
+  const targets = new Map<
+    string,
+    { entityKind: "person" | "company"; url: string; ext: string | null }
+  >();
+  for (const item of parsed.data.urls) {
+    const key = linkedinUrlKey(item.url);
+    if (!key) continue;
+    targets.set(`${key.entityKind}:${key.normalizedUrl}`, {
+      entityKind: key.entityKind,
+      url: key.normalizedUrl,
+      ext: key.externalId,
+    });
+  }
+  let registered = 0;
+  for (const t of targets.values()) {
+    await withPrivilegedTx((tx) =>
+      sourceFetchRegistryRepository.registerUrl(tx, {
+        entityKind: t.entityKind,
+        normalizedUrl: t.url,
+        externalId: t.ext,
+      }),
+    );
+    registered += 1;
+  }
+  return c.json({ accepted: true, registered, dropped: parsed.data.urls.length - registered }, 202);
+});
+
+/**
+ * POST /api/v1/ingest/linkedin-links/:kind/fetch — the fetch-on-view fast path (docs/planning ecosystem).
+ * Body `{ url }`. Registers + (unless fresh within 30d) fetches the licensed document and lands it, then
+ * re-resolves the caller's tenant contact so the hover card can read the intel back. Fresh URL ⇒ no vendor
+ * call. Dark behind LINKEDIN_LINK_FETCH_ENABLED.
+ */
+ingestRoutes.post("/linkedin-links/:kind/fetch", async (c) => {
+  if (!env.LINKEDIN_LINK_FETCH_ENABLED) {
+    throw new ValidationError("Link fetch is not enabled.");
+  }
+  const kindParam = c.req.param("kind");
+  if (kindParam !== "person" && kindParam !== "company") {
+    throw new ValidationError("kind must be 'person' or 'company'.");
+  }
+  const body = (await c.req.json().catch(() => null)) as { url?: unknown } | null;
+  if (!body || typeof body.url !== "string") throw new ValidationError("Body must be { url }.");
+  const key = linkedinUrlKey(body.url);
+  if (!key || key.entityKind !== kindParam) {
+    const ack: LinkFetchAck = { outcome: "not_a_target", contactId: null, accountId: null };
+    return c.json(linkFetchAckSchema.parse(ack));
+  }
+
+  await checkCaptureRate(`link-fetch:${c.get("claims").sub}`, 1);
+  const result = await fetchAndLandUrl({
+    entityKind: key.entityKind,
+    normalizedUrl: key.normalizedUrl,
+  });
+
+  // Re-resolve to the caller's tenant contact (the by-linkedin resolver) so the card can address the intel
+  // reads by contactId. A profile the workspace does not hold in its CRM lands golden data but has no
+  // contactId — the card then offers "add to workspace" (the reveal-miss posture).
+  const claims = c.get("claims");
+  let contactId: string | null = null;
+  if (key.entityKind === "person" && key.externalId && claims.wid) {
+    const contact = await contactRepository.resolveByLinkedinPublicId(
+      { tenantId: claims.tid, workspaceId: claims.wid },
+      key.externalId,
+    );
+    contactId = contact?.id ?? null;
+  }
+  const ack: LinkFetchAck = { outcome: result.outcome, contactId, accountId: null };
+  return c.json(linkFetchAckSchema.parse(ack));
 });

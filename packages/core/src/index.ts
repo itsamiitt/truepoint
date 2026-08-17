@@ -362,6 +362,21 @@ export {
   type RefreshAccountInput,
   type RefreshAccountResult,
 } from "./sourceLanding/refreshAccount.ts";
+// The ecosystem link→fetch layer: the canonical URL key (registry dedup), the person URL builder, and the
+// ONE fetch-and-land function the on-view path + the 30-day sweep share.
+export {
+  linkedinUrlKey,
+  salesNavProfileUrl,
+  type LinkedinEntityKind,
+  type LinkedinUrlKey,
+} from "./sourceLanding/linkedinUrlKey.ts";
+export {
+  fetchAndLandUrl,
+  FRESHNESS_DAYS,
+  type FetchAndLandInput,
+  type FetchAndLandOutcome,
+  type FetchAndLandResult,
+} from "./sourceLanding/fetchAndLand.ts";
 export {
   LINKEDIN_API_SOURCE,
   LINKEDIN_API_PROVENANCE_SRC,

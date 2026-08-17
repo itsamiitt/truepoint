@@ -12,6 +12,9 @@ export * from "./masterPersonAttributes.ts";
 // Data-source origin fleet (0117): per-provider failover chain of interchangeable origins. Holds
 // encrypted per-origin API keys — leadwolf_app is REVOKEd entirely (see applyMigrations).
 export * from "./providerOrigins.ts";
+// URL fetch registry (0118): one row per canonical LinkedIn/Sales-Nav URL with a real last_fetched_at —
+// the 30-day freshness clock. Platform-global, app-REVOKEd (see applyMigrations).
+export * from "./sourceFetchRegistry.ts";
 export * from "./masterConfidencePolicy.ts";
 export * from "./processedSyncEvents.ts";
 // NOTE: ./forge.ts is intentionally NOT re-exported here — its tables live in the `forge` Postgres schema and
