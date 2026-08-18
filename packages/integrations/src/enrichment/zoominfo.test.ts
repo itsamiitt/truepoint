@@ -10,7 +10,12 @@ import { generateKeyPairSync } from "node:crypto";
 import type { EnrichRequest } from "@leadwolf/core";
 import type { EnrichField } from "@leadwolf/types";
 import { type FetchJson, vendorProvider } from "./httpProvider.ts";
-import { extractZoominfo, zoominfoMatchBody, zoominfoProvider } from "./providers.ts";
+import {
+  extractZoominfo,
+  zoominfoHeaders,
+  zoominfoMatchBody,
+  zoominfoProvider,
+} from "./providers.ts";
 import {
   buildClientAssertion,
   parseTokenResponse,
@@ -203,6 +208,12 @@ describe("zoominfoProvider", () => {
     expect(body.data.attributes.outputFields).toContain("managementLevel");
     // requiredFields must stay absent: it makes ZoomInfo WITHHOLD partially-populated records.
     expect("requiredFields" in body.data.attributes).toBe(false);
+  });
+
+  test("asks for the JSON:API media type — plain application/json is a 406 from the gateway", () => {
+    const headers = zoominfoHeaders("tok");
+    expect(headers.accept).toBe("application/vnd.api+json");
+    expect(headers.authorization).toBe("Bearer tok");
   });
 
   test("falls back to the company domain when no company name is known", () => {

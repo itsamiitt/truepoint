@@ -231,6 +231,15 @@ export function zoominfoMatchBody(req: EnrichRequest): {
 }
 
 /**
+ * Request headers for GTM enrich. The gateway REFUSES `accept: application/json` with a 406 — verified
+ * live against the endpoint — because it is a JSON:API surface and wants the JSON:API media type. Exported
+ * so that stays under test: the 406 is invisible in CI, where the provider never authenticates.
+ */
+export function zoominfoHeaders(token: string): Record<string, string> {
+  return { authorization: `Bearer ${token}`, accept: "application/vnd.api+json" };
+}
+
+/**
  * ZoomInfo contact enrich, on the GTM API. Unlike every other adapter here the credential is a MINTED
  * token (zoominfoAuth: client-credentials → Bearer access_token), not a static key. The match input is
  * sent best-first: a verified email or a LinkedIn URL is what lifts ZoomInfo's match rate, and
@@ -246,7 +255,7 @@ export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
       // Static key is only the pre-minted escape hatch; the resolver owns the real flow.
       apiKey: env.ZOOMINFO_API_KEY,
       resolveApiKey: () => zoominfoToken(),
-      headers: (token) => ({ authorization: `Bearer ${token}`, accept: "application/json" }),
+      headers: zoominfoHeaders,
       body: zoominfoMatchBody,
       extract: extractZoominfo,
     },
