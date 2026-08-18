@@ -214,7 +214,9 @@ apps/                           # deployable processes (thin transport adapters)
   until DPA'd keys; linkedin_api's base URL is env-supplied and joins the host allowlist at config time)** VendorSpecs over
   one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
-  `provider_configs`)
+  `provider_configs`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
+  `/authenticate` — PKI-signed assertion or username/password — cached and re-minted pre-expiry behind the
+  VendorSpec `resolveApiKey` seam; unconfigured ⇒ the same zero-cost `miss` as an absent key)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
   `mapLinkedinPayload.ts` (pure mapper; the raw-only compliance boundary: pronoun/photos/skills etc. never leave
   `source_records.raw_data`) + `landSourcePayload.ts` (one withErTx: evidence chokepoint → resolve → suppression guard →
@@ -820,7 +822,7 @@ flowchart TD
   ships with a hole that stays silent until the day someone arms enforcement.
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
-- **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
+- **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `enrichment/zoominfoAuth.ts` (the minted-jwt credential for ZoomInfo) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
 - **`apps/api`** — `app.ts`, `server.ts`, `instrumentation.ts`; **`apps/api/middleware`** — `authn`, `tenancy`, `error`,
   `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
 - **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
@@ -958,4 +960,13 @@ flowchart TD
   one-line purposes above were updated for the v2 split (legacy waterfall vs the flag-gated per-field
   engine). Post-merge with main's concurrent hook fixes (edf64d2d…27578b28) the regenerated map reads
   unassigned 2 / warnings 51 — main's REPO_DOMAIN/config-placement fixes absorbed the earlier seven.
+
+  2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
+  `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
+  `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,
+  and these live under the existing `enrichment/` area alongside `httpProvider`/`providers`/the Redis
+  stores — so the placement is the rule working, not a gap. No new domain and no new warning (55 before
+  and after this change — the 51 recorded in the entry above is stale, not a regression here). Unassigned
+  holds at **2** (`usageEventRepository`, `outcomeMetricsRepository` — the two honest gaps described
+  above, unchanged by this work).
 ```

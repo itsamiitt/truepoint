@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2133,
-  "fileSetHash": "sha256:79ee2b46a611ab2626e54bd41110ce318adf44656c5ec2086771b3dad2e391b0",
+  "fileCount": 2135,
+  "fileSetHash": "sha256:aa2426b86a9ca62c8af52063bd83ebecf22f38b50acf442cf02e78a05b42358f",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3123,6 +3123,8 @@
       "packages/integrations/src/enrichment/redisBreakerStore.ts",
       "packages/integrations/src/enrichment/redisProviderGate.ts",
       "packages/integrations/src/enrichment/redisStores.test.ts",
+      "packages/integrations/src/enrichment/zoominfo.test.ts",
+      "packages/integrations/src/enrichment/zoominfoAuth.ts",
       "packages/integrations/src/forgeAiBudgetStore.test.ts",
       "packages/integrations/src/forgeAiBudgetStore.ts",
       "packages/integrations/src/forgeAnthropicExtraction.test.ts",
