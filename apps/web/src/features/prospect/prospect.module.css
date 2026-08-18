@@ -882,24 +882,3 @@
   background: var(--tp-accent, #4f6ef7);
   opacity: 0.85;
 }
-
-/* Database scope (Layer-0-as-database): a narrow rail for the scope switch + a filter strip above the grid. */
-.databaseRail {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tp-space-3, 12px);
-  padding: var(--tp-space-4, 16px);
-  border-inline-end: 1px solid var(--tp-hairline-2, #e5e7eb);
-  min-width: 220px;
-}
-.databaseScope {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tp-space-3, 12px);
-  padding: var(--tp-space-4, 16px);
-}
-.databaseFilters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--tp-space-2, 8px);
-}

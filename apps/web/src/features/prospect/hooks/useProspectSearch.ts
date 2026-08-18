@@ -13,9 +13,11 @@
 "use client";
 
 import type { ContactHit, ContactQuery, SearchPage } from "@leadwolf/types";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
+import { type ProspectRow, mergeRows, toDatabaseQuery } from "../databaseRows";
+import { searchDatabase } from "../databaseSearchApi";
 import { prospectKeys } from "../keys";
 import { searchContacts } from "../searchApi";
 import { paramsToQuery, queryToSearchString } from "../searchUrlState";
@@ -25,7 +27,10 @@ const PAGE_SIZE = 50;
 export interface ProspectSearch {
   query: ContactQuery;
   setQuery: (next: ContactQuery) => void;
-  hits: ContactHit[];
+  /** Workspace contacts FIRST, then people from the platform database the workspace does not hold. */
+  hits: ProspectRow[];
+  /** How many of `hits` come from the platform database (not yet in the workspace). */
+  databaseCount: number;
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -85,7 +90,27 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
-  const hits = useMemo(() => search.data?.pages.flatMap((page) => page.hits) ?? [], [search.data]);
+  const owned = useMemo(() => search.data?.pages.flatMap((page) => page.hits) ?? [], [search.data]);
+
+  // THE PLATFORM DATABASE, in the SAME list (Layer-0-as-database). A sales-intelligence search is one
+  // filtered list of people; whether a row is already in the workspace is a property of the row, not a
+  // different screen. The database half runs as its own query so a slow/failed global search can never
+  // stall or break the workspace results — it simply contributes nothing.
+  const databaseQuery = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
+  const databaseSearch = useQuery({
+    queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
+    // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…).
+    enabled: enabled && databaseQuery !== null,
+    queryFn: ({ signal }) =>
+      searchDatabase(databaseQuery as NonNullable<typeof databaseQuery>, signal),
+    staleTime: 30_000,
+  });
+
+  const hits = useMemo(
+    () => mergeRows(owned, databaseSearch.data?.hits ?? []),
+    [owned, databaseSearch.data],
+  );
+  const databaseCount = hits.length - owned.length;
 
   const markRevealed = useCallback(
     (id: string) => {
@@ -110,6 +135,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     query,
     setQuery,
     hits,
+    databaseCount,
     // A filter edit is a NEW cache entry, so isPending covers exactly what the old cold-load flag did; a
     // "load more" is deliberately not a full-grid loading state.
     loading: search.isPending && enabled,

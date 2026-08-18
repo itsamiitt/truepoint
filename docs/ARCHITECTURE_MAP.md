@@ -229,7 +229,10 @@ apps/                           # deployable processes (thin transport adapters)
   `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
   core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
   `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
-  web: `features/prospect/` Database scope (`DatabaseScope`/`DatabaseTable`/`useDatabaseSearch`).
+  web: ONE prospect search covers both — `databaseRows.ts` maps the workspace ContactQuery onto the graph's
+  facets and adapts a database person into a grid row; `useProspectSearch` merges owned rows first, then
+  people the workspace does not hold, each carrying an `Add` action (`AddToWorkspaceButton`). There is no
+  separate Database tab: "already in my workspace" is a state of a row, not another surface.
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·

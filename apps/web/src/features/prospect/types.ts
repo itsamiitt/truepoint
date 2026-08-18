@@ -105,7 +105,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: OutreachStatus; label: string }[]
 ).map((value) => ({ value, label: OUTREACH_STATUS_LABELS[value] }));
 
 /** The map between the two grid scopes shown by the Contacts⇄Accounts segmented control. */
-export type ResultScope = "contacts" | "accounts" | "database";
+export type ResultScope = "contacts" | "accounts";
 
 /**
  * The faceted, client-side filter the rail applies to the loaded rows (search is list-only at MVP — 05 §5).

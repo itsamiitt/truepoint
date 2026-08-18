@@ -8,13 +8,7 @@
 // the slice (api/bulkActionsApi).
 "use client";
 
-import type {
-  AccountFacetKey,
-  ContactHit,
-  ContactQuery,
-  FacetKey,
-  MaskedAccount,
-} from "@leadwolf/types";
+import type { AccountFacetKey, ContactQuery, FacetKey, MaskedAccount } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
@@ -48,7 +42,6 @@ import { AccountFilterPanel } from "./AccountFilterPanel";
 import { AccountsTable } from "./AccountsTable";
 import { AiSearchBox } from "./AiSearchBox";
 import type { RowBulkAction } from "./BulkActionBar";
-import { DatabaseScope } from "./DatabaseScope";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
 // business in the initial chunk of the surface every prospect session lands on. `next/dynamic` defers it to
@@ -60,6 +53,8 @@ import { DatabaseScope } from "./DatabaseScope";
 const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.BulkActionBar), {
   ssr: false,
 });
+import type { ProspectRow } from "../databaseRows";
+import { AddToWorkspaceButton } from "./AddToWorkspaceButton";
 import { FilterPanel } from "./FilterPanel";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
@@ -72,8 +67,6 @@ import { SaveSearchPanel } from "./SaveSearchPanel";
 const SCOPES = [
   { value: "contacts", label: "Contacts" },
   { value: "accounts", label: "Accounts" },
-  // The platform-wide database (Layer-0-as-database): people the workspace does not hold yet.
-  { value: "database", label: "Database" },
 ];
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
@@ -108,14 +101,23 @@ function ProspectPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const scopeParam = searchParams?.get("scope");
-  const scope: ResultScope =
-    scopeParam === "accounts" ? "accounts" : scopeParam === "database" ? "database" : "contacts";
+  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
   const contactsActive = scope === "contacts";
   const accountsActive = scope === "accounts";
 
   const search = useProspectSearch({ enabled: contactsActive });
-  const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
+  const {
+    query,
+    setQuery,
+    hits,
+    databaseCount,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    reload,
+    markRevealed,
+  } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
@@ -217,7 +219,8 @@ function ProspectPageInner() {
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection).
   const bulk = useBulkSelection();
-  const shownIds = useMemo(() => hits.map((c) => c.id), [hits]);
+  // Only OWNED rows are selectable: bulk actions address contacts by id, and a database row has none.
+  const shownIds = useMemo(() => hits.filter((c) => !c.databaseSlug).map((c) => c.id), [hits]);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
   const selectedContacts = useMemo(
     () => hits.filter((c) => bulk.selectedIds.has(c.id)),
@@ -238,7 +241,7 @@ function ProspectPageInner() {
     [bulk.clear, bulk.setMany],
   );
 
-  const allColumns: Column<ContactHit>[] = useMemo(
+  const allColumns: Column<ProspectRow>[] = useMemo(
     () => [
       {
         key: "select",
@@ -353,12 +356,16 @@ function ProspectPageInner() {
             onKeyDown={(e) => e.stopPropagation()}
             role="presentation"
           >
-            <RowActions
-              contact={c}
-              onAddToList={() => startRowAction(c.id, "list")}
-              onTag={() => startRowAction(c.id, "addTags")}
-              onChangeStatus={() => startRowAction(c.id, "status")}
-            />
+            {c.databaseSlug ? (
+              <AddToWorkspaceButton slug={c.databaseSlug} name={displayName(c)} />
+            ) : (
+              <RowActions
+                contact={c}
+                onAddToList={() => startRowAction(c.id, "list")}
+                onTag={() => startRowAction(c.id, "addTags")}
+                onChangeStatus={() => startRowAction(c.id, "status")}
+              />
+            )}
           </span>
         ),
       },
@@ -384,20 +391,6 @@ function ProspectPageInner() {
       aria-label="Result type"
     />
   );
-
-  // The DATABASE scope is a self-contained surface (its own URL-derived query, filters, count and add
-  // action), so it renders as the whole results area rather than threading a third case through the
-  // contacts/accounts branches below. The scope switch is shared so navigation stays in one place.
-  if (scope === "database") {
-    return (
-      <div className={styles.page} data-density={density}>
-        <aside className={styles.databaseRail}>{scopeSwitch}</aside>
-        <section className={styles.results}>
-          <DatabaseScope />
-        </section>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.page} data-density={density}>
@@ -430,9 +423,13 @@ function ProspectPageInner() {
               <span className={styles.count}>
                 {loading
                   ? "Loading…"
-                  : totalCount !== undefined
-                    ? `${totalCount.toLocaleString()} contacts`
-                    : `${hits.length.toLocaleString()}${hasMore ? "+" : ""} contacts`}
+                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
+                      totalCount === undefined && hasMore ? "+" : ""
+                    } in your workspace${
+                      databaseCount > 0
+                        ? ` · ${databaseCount.toLocaleString()} more in the database`
+                        : ""
+                    }`}
               </span>
             ) : (
               <span className={styles.count}>
@@ -537,7 +534,8 @@ function ProspectPageInner() {
               columns={columns}
               rows={hits}
               rowKey={(c) => c.id}
-              onRowClick={(c) => setPreviewId(c.id)}
+              // A database row has no workspace record to open — add it first, then it behaves like any contact.
+              onRowClick={(c) => (c.databaseSlug ? undefined : setPreviewId(c.id))}
               isSelected={(c) => c.id === previewId}
             />
             {hasMore && (
