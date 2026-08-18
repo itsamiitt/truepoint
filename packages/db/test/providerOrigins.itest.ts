@@ -231,6 +231,11 @@ describe("provider_origins — the origin fleet (0117)", () => {
       accountId,
       fetchCompany: stubFetch,
     });
+    // Only the landed/duplicate arms carry cacheHit — narrow first, or a "no_identity" regression would
+    // read `undefined` and quietly pass nothing.
+    if (second.status !== "landed" && second.status !== "duplicate") {
+      throw new Error(`expected a landed or duplicate refresh, got ${second.status}`);
+    }
     expect(second.cacheHit).toBe(true);
     expect(vendorCalls).toBe(1);
   });

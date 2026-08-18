@@ -97,6 +97,11 @@ export interface VendorSpec {
   /** HTTP verb — default POST (the original shape). GET vendors supply `query` instead of `body`. */
   method?: "GET" | "POST";
   apiKey: string | undefined;
+  /** Vendors whose credential is a SHORT-LIVED token rather than a static key (ZoomInfo mints a ~60-minute
+   *  JWT) supply this instead of `apiKey`; it is consulted per call and owns its own caching. Returning
+   *  null means "not configured / could not authenticate" → the same permanent `miss` as a missing key,
+   *  never an exception into the waterfall. */
+  resolveApiKey?(): Promise<string | null>;
   headers(apiKey: string): Record<string, string>;
   /** POST body (ignored for GET). */
   body?(req: EnrichRequest): unknown;
@@ -127,7 +132,16 @@ export function vendorProvider(
     trust: spec.trust,
     estimateCostMicros: () => spec.costMicrosPerCall,
     async enrich(req: EnrichRequest): Promise<ProviderResult> {
-      if (!spec.apiKey) return { fields: [], rawPayload: null, costMicros: 0, status: "miss" };
+      // A minted-token vendor authenticates here; a static-key vendor is unchanged.
+      let apiKey = spec.apiKey;
+      if (spec.resolveApiKey) {
+        try {
+          apiKey = (await spec.resolveApiKey()) ?? undefined;
+        } catch {
+          apiKey = undefined; // an auth failure is a quiet miss, exactly like an absent key
+        }
+      }
+      if (!apiKey) return { fields: [], rawPayload: null, costMicros: 0, status: "miss" };
 
       let url = spec.url;
       if (method === "GET" && spec.query) {
@@ -143,7 +157,7 @@ export function vendorProvider(
       try {
         response = await fetchJson(url, {
           method,
-          headers: spec.headers(spec.apiKey),
+          headers: spec.headers(apiKey),
           body: method === "POST" ? (spec.body?.(req) ?? {}) : undefined,
         });
       } catch {

@@ -11,6 +11,7 @@ import type { EnrichRequest, EnrichmentProvider, ProviderResult } from "@leadwol
 import { fetchLinkedinProfile } from "@leadwolf/core";
 import type { EnrichField } from "@leadwolf/types";
 import { type FetchJson, vendorProvider } from "./httpProvider.ts";
+import { zoominfoToken } from "./zoominfoAuth.ts";
 
 type Extracted = Partial<Record<EnrichField, string>>;
 
@@ -66,6 +67,146 @@ export function apolloProvider(fetchJson?: FetchJson): EnrichmentProvider {
   );
 }
 
+/** ZoomInfo's own field names, which do not match the generic FIELD_MAP: seniority is `managementLevel`
+ *  (an array), department comes from `jobFunction`, and the mobile number is a separate field. */
+const ZOOMINFO_FIELD_MAP: Record<EnrichField, string> = {
+  email: "email",
+  phone: "phone",
+  jobTitle: "jobTitle",
+  seniorityLevel: "managementLevel",
+  department: "jobFunction",
+};
+
+/** The `outputFields` ZoomInfo will return. Requested explicitly — ZoomInfo returns only what is asked
+ *  for, and every returned record is billable, so we ask for exactly what the waterfall can store. */
+const ZOOMINFO_OUTPUT_FIELDS = [
+  "id",
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "mobilePhone",
+  "jobTitle",
+  "jobFunction",
+  "managementLevel",
+  "companyName",
+  "companyId",
+] as const;
+
+/** EnrichSubject carries only `fullName`; ZoomInfo matches better on the split pair, so derive it —
+ *  first token / remainder, which is all a single display string can honestly support. */
+function splitFullName(fullName: string | undefined): [string | undefined, string | undefined] {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length === 0) return [undefined, undefined];
+  if (parts.length === 1) return [parts[0], undefined];
+  return [parts[0], parts.slice(1).join(" ")];
+}
+
+/** A ZoomInfo value may be a string, an array (managementLevel), or an object (jobFunction). Narrow all
+ *  three to a single string — the payload is untrusted input and only strings may reach storage. */
+function zoominfoValue(raw: unknown): string | undefined {
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  if (Array.isArray(raw)) {
+    const first = raw.find((v) => typeof v === "string" && v.length > 0);
+    if (typeof first === "string") return first;
+    const nested = raw.find((v) => typeof v === "object" && v !== null);
+    if (nested) return zoominfoValue(nested);
+    return undefined;
+  }
+  if (typeof raw === "object" && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    // jobFunction arrives as { name, department } — the department is the field we store.
+    return zoominfoValue(obj.department ?? obj.name ?? obj.value);
+  }
+  return undefined;
+}
+
+/**
+ * Pull the matched record out of a ZoomInfo enrich response. Two shapes are accepted deliberately: the
+ * Enterprise API answers `data.result[].data[]` with a sibling `matchStatus`, while the newer documented
+ * shape is a JSON:API-style `data[].attributes` with `meta.matchStatus`. Supporting both means a vendor-side
+ * migration does not silently zero our hit rate (the envelope lesson from the linkedin_api lane).
+ * A non-match is treated as no fields — a paid miss, which is exactly what it is.
+ */
+export function extractZoominfo(
+  json: unknown,
+  fields: EnrichField[],
+): Partial<Record<EnrichField, string>> {
+  if (typeof json !== "object" || json === null) return {};
+  const root = json as Record<string, unknown>;
+
+  let record: Record<string, unknown> | undefined;
+  let matchStatus: string | undefined;
+
+  const data = root.data;
+  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+    // Enterprise: { data: { result: [ { data: [ {...} ], matchStatus } ] } }
+    const result = (data as Record<string, unknown>).result;
+    const first = Array.isArray(result) ? result[0] : undefined;
+    if (typeof first === "object" && first !== null) {
+      const entry = first as Record<string, unknown>;
+      matchStatus = typeof entry.matchStatus === "string" ? entry.matchStatus : undefined;
+      const inner = entry.data;
+      const one = Array.isArray(inner) ? inner[0] : inner;
+      if (typeof one === "object" && one !== null) record = one as Record<string, unknown>;
+    }
+  } else if (Array.isArray(data)) {
+    // Documented v1: { data: [ { attributes: {...}, meta: { matchStatus } } ] }
+    const first = data[0];
+    if (typeof first === "object" && first !== null) {
+      const entry = first as Record<string, unknown>;
+      const attrs = entry.attributes;
+      if (typeof attrs === "object" && attrs !== null) record = attrs as Record<string, unknown>;
+      const meta = entry.meta as Record<string, unknown> | undefined;
+      if (meta && typeof meta.matchStatus === "string") matchStatus = meta.matchStatus;
+    }
+  }
+
+  if (!record) return {};
+  if (matchStatus?.toUpperCase().includes("NO_MATCH")) return {};
+
+  const out: Partial<Record<EnrichField, string>> = {};
+  for (const field of fields) {
+    // Phone: prefer the direct dial, fall back to mobile — S-04 wants a number that reaches a human.
+    const value =
+      field === "phone"
+        ? (zoominfoValue(record.phone) ?? zoominfoValue(record.mobilePhone))
+        : zoominfoValue(record[ZOOMINFO_FIELD_MAP[field]]);
+    if (value) out[field] = value;
+  }
+  return out;
+}
+
+/** The `/enrich/contact` request body: a one-element match batch plus the fields we want back. Exported
+ *  so the shape is testable without credentials — the provider itself short-circuits to a miss when
+ *  ZoomInfo is unconfigured, which is the normal state in CI. */
+export function zoominfoMatchBody(req: EnrichRequest): {
+  matchPersonInput: Array<Record<string, string | undefined>>;
+  outputFields: string[];
+} {
+  const [firstName, lastName] = splitFullName(req.subject.fullName);
+  return {
+    matchPersonInput: [
+      {
+        emailAddress: req.subject.email,
+        firstName,
+        lastName,
+        fullName: req.subject.fullName,
+        companyName: req.subject.companyName,
+        companyDomain: req.subject.companyDomain,
+        externalURL: req.subject.linkedinUrl,
+      },
+    ],
+    outputFields: [...ZOOMINFO_OUTPUT_FIELDS],
+  };
+}
+
+/**
+ * ZoomInfo contact enrich. Unlike every other adapter here, the credential is a MINTED JWT
+ * (zoominfoAuth) rather than a static key — see that module for why. The match input is sent
+ * best-first: ZoomInfo's own guidance is that a verified email or a LinkedIn URL lifts match rates from
+ * roughly two-thirds to over 90%, and `externalURL` is where a LinkedIn profile belongs.
+ */
 export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
   return vendorProvider(
     {
@@ -73,14 +214,12 @@ export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
       trust: 0.85,
       costMicrosPerCall: 60_000,
       url: "https://api.zoominfo.com/enrich/contact",
+      // Static key is only the pre-minted escape hatch; the resolver owns the real flow.
       apiKey: env.ZOOMINFO_API_KEY,
-      headers: (key) => ({ authorization: `Bearer ${key}` }),
-      body: (req) => ({
-        emailAddress: req.subject.email,
-        fullName: req.subject.fullName,
-        companyDomain: req.subject.companyDomain,
-      }),
-      extract: (json, fields) => extractFlat(json, "data", FIELD_MAP, fields),
+      resolveApiKey: () => zoominfoToken(),
+      headers: (jwt) => ({ authorization: `Bearer ${jwt}` }),
+      body: zoominfoMatchBody,
+      extract: extractZoominfo,
     },
     fetchJson,
   );

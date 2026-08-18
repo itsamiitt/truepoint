@@ -275,7 +275,24 @@ export const appEnvSchema = z
     // DPA is executed, it is on the sub-processor list, and its ToS review is recorded — the absent-key→miss
     // behavior IS the enforcement mechanism for PDL/Coresignal landing dark.
     APOLLO_API_KEY: z.string().optional(),
+    // ZoomInfo does NOT take a static API key. Every call carries a short-lived JWT minted at
+    // https://api.zoominfo.com/authenticate (~60 min, no refresh token), by one of two flows:
+    //   • username + password — the documented basic flow;
+    //   • PKI — username + client id + an RS256 PRIVATE KEY, which signs the assertion posted to the same
+    //     endpoint. ZoomInfo's own guidance prefers this for production automation, because no user
+    //     password is then stored in our infrastructure.
+    // A client id ALONE ("0oa…", the Okta app identifier) cannot authenticate: it names the application,
+    // it does not prove anything. Absent/incomplete credentials ⇒ the adapter reports a permanent `miss`
+    // and the waterfall moves on — the same fail-quiet posture as every other unconfigured provider.
+    // ZOOMINFO_API_KEY stays as an escape hatch for a PRE-MINTED jwt (useful in a fixture/staging probe).
     ZOOMINFO_API_KEY: z.string().optional(),
+    ZOOMINFO_USERNAME: z.string().optional(),
+    ZOOMINFO_PASSWORD: z.string().optional(),
+    ZOOMINFO_CLIENT_ID: z.string().optional(),
+    /** RS256 private key (PEM). Base64 variant for container transport — a multi-line PEM cannot survive
+     *  docker compose ${VAR} interpolation (the JWT_PRIVATE_KEY_PEM_B64 precedent). */
+    ZOOMINFO_PRIVATE_KEY: z.string().optional(),
+    ZOOMINFO_PRIVATE_KEY_B64: z.string().optional(),
     CLEARBIT_API_KEY: z.string().optional(),
     PDL_API_KEY: z.string().optional(),
     CORESIGNAL_API_KEY: z.string().optional(),
