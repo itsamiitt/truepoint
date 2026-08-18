@@ -14,7 +14,6 @@ import {
   emailStatus,
   outreachStatus,
   seniorityLevel,
-  sourceName,
 } from "@leadwolf/types";
 
 export type TermOp = "include" | "exclude";
@@ -53,6 +52,23 @@ function humanize(v: string): string {
 
 const optionsOf = (values: readonly string[]): FacetOption[] =>
   values.map((v) => ({ value: v, label: humanize(v) }));
+
+/**
+ * How a record ENTERED this workspace (slice 7). Two classes, and the distinction is the whole point:
+ *  • USER-DECLARED — a system the customer connected (their CRM) or their own manual/extension entry.
+ *  • PLATFORM-SOURCED — anything TruePoint acquired (`linkedin_api`, `pdl`, `coresignal`, `coop`, `forge`).
+ *    Which vendor the platform buys from is internal, so these are deliberately NOT offered as separate
+ *    filter values; a record sourced that way reads as the TruePoint database, which is what it is.
+ */
+const SOURCE_FACET_OPTIONS: FacetOption[] = [
+  { value: "manual", label: "Manual entry" },
+  { value: "chrome_extension", label: "Browser extension" },
+  { value: "database", label: "TruePoint database" },
+  { value: "hubspot", label: "HubSpot" },
+  { value: "salesforce", label: "Salesforce" },
+  { value: "linkedin", label: "LinkedIn export" },
+  { value: "sales_navigator", label: "Sales Navigator export" },
+];
 
 // ── The five groups (only contract-backed facets) ──────────────────────────────────────────────────────
 export const FILTER_GROUPS: FilterGroup[] = [
@@ -135,7 +151,7 @@ export const FILTER_GROUPS: FilterGroup[] = [
         field: "source",
         label: "Source",
         input: "options",
-        options: optionsOf(sourceName.options),
+        options: SOURCE_FACET_OPTIONS,
       },
       { kind: "range", field: "created_at", label: "Created", valueKind: "date" },
       { kind: "range", field: "score", label: "Score", valueKind: "number" },

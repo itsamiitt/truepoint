@@ -7,8 +7,10 @@
 import { checkCaptureRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import {
+  type CaptureLandingResult,
   fetchAndLandUrl,
   getConnector,
+  landCapturedObservation,
   linkedinUrlKey,
   registerBuiltinConnectors,
 } from "@leadwolf/core";
@@ -67,8 +69,28 @@ ingestRoutes.post("/", async (c) => {
   };
   connector.validateEnvelope(envelope);
   const observations = connector.toRawObservations(envelope);
-  // v1 acks with the accepted count. The per-connector async processing (evidence -> resolve -> enrich -> land)
-  // is a later slice; this endpoint is additive and leaves the existing /import path byte-identical.
+
+  // chrome_extension captures LAND (extension-intelligence-loop slice A): each observation becomes (or
+  // refreshes) one overlay contact through the shared dedup/provenance/master-bridge path, and the response
+  // carries per-record outcomes so the extension can show the truth instead of assuming "saved". Landing
+  // needs a workspace; a workspace-less session degrades to the validate-and-ack behaviour below.
+  if (envelope.source === "chrome_extension" && envelope.scope.workspaceId) {
+    const scope = {
+      tenantId,
+      workspaceId: envelope.scope.workspaceId,
+      capturedByUserId: c.get("claims").sub ?? null,
+    };
+    const results: CaptureLandingResult[] = [];
+    for (const observation of observations) {
+      results.push(await landCapturedObservation(scope, observation));
+    }
+    return c.json(
+      { accepted: true, source: envelope.source, records: observations.length, results },
+      202,
+    );
+  }
+
+  // Other sources: v1 acks with the accepted count (their async processing is a later slice).
   return c.json({ accepted: true, source: envelope.source, records: observations.length }, 202);
 });
 

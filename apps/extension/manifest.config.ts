@@ -16,6 +16,11 @@ export default defineManifest((env) => ({
   name: "TruePoint — Prospect Capture",
   short_name: "TruePoint",
   version: pkg.version,
+  // Fixed public key so every unpacked/zip install resolves to the SAME extension id
+  // (icdgalkafhhbgalmahjmibgbjkcmbkif) — the id EXTENSION_ORIGINS pins and the mint route's audience
+  // requires (X15). The Chrome Web Store ignores/strips `key` on publish and assigns its own id; if the
+  // extension is ever published, add the store-assigned id to EXTENSION_ORIGINS alongside this one.
+  key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvAtK1A0J5HEI0C5HNOVFsfYsoYlxOjfZ/QMDkUPh766NXxGSzGxEtl7cMrOS8bVOZOqw1YqITt56q5xeK/Lho9D66NFgjSPYMyQKnb9JsGlekuzS91fLq0Zj25EFUuMDc9tSgIWjWNethmIwZQYZqfkzEQ69OU3wiFj2pEmAuZiZQsVrJzoK64WiqN0sYfUgvpcoYuhfGnxlnPNdHVGELjK56YElq7WVQQ1burL/OWCvpjMp9M6oc4PfZ0WIq+vxFMZyIa/whCVTQWe1CcHVXHmRmNO8PmFoQmbrVofI8OWggGbuDaeC0GxqE8XzqPSoUooOMMy9ACOy/afLkug0FwIDAQAB",
   // User-facing (chrome://extensions + store) — brand voice: find/reveal/score/pursue, verified, precise.
   description: "Find, reveal, score and pursue — capture verified prospects from anywhere.",
   minimum_chrome_version: "116",

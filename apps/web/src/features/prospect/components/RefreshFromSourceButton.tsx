@@ -84,7 +84,7 @@ export function RefreshFromSourceButton({
       onClick={() => void run()}
       disabled={busy}
     >
-      {busy ? "Refreshing…" : entity === "contact" ? "Refresh from LinkedIn" : "Refresh company"}
+      {busy ? "Refreshing…" : entity === "contact" ? "Refresh contact" : "Refresh company"}
     </TpButton>
   );
 }

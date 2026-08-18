@@ -2076,8 +2076,16 @@ export function startWorkers(): Worker[] {
         LINKEDIN_LINK_FETCH_QUEUE,
       ),
     );
+    // Interval is operator-tunable (slice 9): default hourly; a "build fast" deploy sets 10min.
+    // upsertJobScheduler (BullMQ v5) keys the schedule by its ID, so a changed interval REPLACES the old
+    // schedule on next boot — the legacy add({repeat, jobId}) form keyed by the options hash and would have
+    // left both schedules running.
     void linkFetchQueue
-      .add("sweep", {}, { repeat: { every: 60 * 60_000 }, jobId: "linkedin-link-fetch" })
+      .upsertJobScheduler(
+        "linkedin-link-fetch",
+        { every: env.LINKEDIN_LINK_FETCH_INTERVAL_MIN * 60_000 },
+        { name: "sweep", data: {} },
+      )
       .catch((e) =>
         log.error("failed to schedule the linkedin link fetch sweep", {
           error: e instanceof Error ? e.message : String(e),

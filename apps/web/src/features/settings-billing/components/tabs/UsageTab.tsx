@@ -7,7 +7,7 @@ import { Card, EmptyState, StateSwitch, TpButton, TpSelect } from "@leadwolf/ui"
 import { Download } from "lucide-react";
 import styles from "../../billing.module.css";
 import { useUsageHistory } from "../../hooks/useUsageHistory";
-import type { RevealDataSource, RevealType } from "../../types";
+import type { RevealType } from "../../types";
 import { UsageTable } from "../UsageTable";
 
 export function UsageTab() {
@@ -44,22 +44,6 @@ export function UsageTab() {
             <option value="email">Email</option>
             <option value="phone">Phone</option>
             <option value="full_profile">Full profile</option>
-          </TpSelect>
-          <TpSelect
-            aria-label="Filter by data source"
-            value={filters.dataSource ?? ""}
-            onChange={(e) =>
-              setFilters({
-                ...filters,
-                dataSource: (e.target.value || undefined) as RevealDataSource | undefined,
-              })
-            }
-          >
-            <option value="">All sources</option>
-            <option value="apollo">Apollo</option>
-            <option value="zoominfo">ZoomInfo</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="internal">Internal</option>
           </TpSelect>
           <TpButton
             variant="ghost"

@@ -39,9 +39,18 @@ export function maskedEmail(c: MaskedContact): string {
   return c.emailDomain ? `•••@${c.emailDomain}` : "••• (hidden)";
 }
 
-/** A contact's display name, falling back to an em dash when both parts are absent. */
+/** A contact's display name — name parts, else the LinkedIn slug (a name-less capture row must still be
+ *  identifiable, D4), else an em dash. */
 export function displayName(c: MaskedContact): string {
-  return [c.firstName, c.lastName].filter(Boolean).join(" ") || "—";
+  const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+  if (name) return name;
+  if (c.linkedinPublicId) return `linkedin.com/in/${c.linkedinPublicId}`;
+  return "—";
+}
+
+/** The best public profile link for a contact (public URL, else Sales-Nav lead URL), or null. */
+export function profileHref(c: MaskedContact): string | null {
+  return c.linkedinUrl ?? c.salesNavProfileUrl ?? null;
 }
 
 /** Human label for the seniority enum (filter-rail facets + detail panel). */

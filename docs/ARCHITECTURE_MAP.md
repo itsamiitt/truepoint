@@ -85,8 +85,8 @@
 >
 > `forge` is now a declared canonical domain — it has its own apps, its own package and its own Postgres
 > schema, so scattering its files across neighbouring domains would have been the dishonest option. The Forge
-> console's slices are bucketed as SHARED (like `apps/extension`) rather than minting five new domains
-> (overview/captures/parsers/review/sync-status) that would pollute the vocabulary the rest of the map
+> console's slices are bucketed as SHARED (like `apps/extension`) rather than minting six new domains
+> (overview/captures/source-fetches/parsers/review/sync-status) that would pollute the vocabulary the rest of the map
 > navigates by. The leaf-package list stays explicit rather than a catch-all, so a genuinely new package
 > shows up unassigned and gets a deliberate decision instead of silently becoming "shared".
 > See the generated [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the
@@ -139,11 +139,12 @@ apps/                           # deployable processes (thin transport adapters)
                                               problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,EntityPicker,TenantPicker,UserPicker}  lib/{adminGate,authClient,pkce}
-    app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,system-health}  features/*
+    app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,extension,system-health}  features/*
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach · firmographics ·
                                 #   dedup · retentionSweep · sequenceTick · tokenRefresh queues + leaderLock +
                                 #   mailboxThrottle (Redis token-bucket) + health/logger  [LIVE]
   extension/ src/               # MV3 browser extension (Vite + CRXJS) — thin compliant prospect capture  [LIVE]
+  extension/ scripts/           # gen-icons + pack-zip (portable forward-slash zip packer for the admin download)
     background/{index,bus,api,auth,queue,config,telemetry,eventStream,events}  # SW hub: bus·ApiClient·PKCE·IndexedDB queue·SSE
     content/{index,observer,adapters/linkedin,extract,hovercard}              # isolated world: adapter + shadow-DOM hover-card
     ui/{popup,panel}  shared/{messages,storage,idb,client,env,types}  i18n/   # React surfaces · Zod bus · storage · i18n
@@ -221,6 +222,20 @@ apps/                           # deployable processes (thin transport adapters)
   hooked post-evidence in `enrichContactV2` and driven fleet-wide by `queues/linkedinCompanyRefresh.ts` (leader-locked,
   25/tick @ 6h). db writers: `masterProfileRepository` (master-sync). Design:
   [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)
+- **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
+  customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
+  unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
+  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database`;
+  `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
+  core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
+  `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
+  web: ONE prospect search covers both — `databaseRows.ts` maps the workspace ContactQuery onto the graph's
+  facets and adapts a database person into a grid row; `useProspectSearch` merges owned rows first, then
+  people the workspace does not hold, each carrying an `Add` action (`AddToWorkspaceButton`). There is no
+  separate Database tab: "already in my workspace" is a state of a row, not another surface.
+  api: `features/contacts-from-database/` — `POST /contacts/from-database`, the workspace-scoped write the `Add`
+  action posts to (transport only; the visibility policy and write discipline live in core's materializer, and one
+  row per explicit user gesture). Its own slice, so the read path `POST /search/database` and the write stay apart.
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
@@ -644,6 +659,7 @@ apps/                           # deployable processes (thin transport adapters)
 - **staff** — grant/revoke platform staff roles (super_admin/support/billing_ops/compliance_officer/read_only)
 - **provider-configs** — enrichment provider enable/disable + monthly budget + rate-limit (mtd spend masked)
 - **feature-flags** — create/list/toggle global flags + per-tenant overrides (`NewFlagDialog`/`OverrideDialog`)
+- **extension** — Chrome-extension distribution surface: packaged build version/pinned id + zip download (static `public/downloads/`, no API)
 - **audit-log** — read-only append-only privileged-action log viewer
 - **system-health** — service indicators (ECS/Aurora/Redis/Typesense/OpenSearch) + queue depth + worker status
 

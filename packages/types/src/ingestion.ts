@@ -61,3 +61,23 @@ export const ingestionJobStatus = z.enum([
   "failed",
 ]);
 export type IngestionJobStatus = z.infer<typeof ingestionJobStatus>;
+
+/** Per-record landing outcome for a chrome_extension capture (extension-intelligence-loop slice A):
+ *  the record became a new contact, refreshed an existing one, was an identical re-observation of one
+ *  already landed, or carried no dedupable identity key. */
+export const captureLandingResultSchema = z.object({
+  outcome: z.enum(["created", "updated", "known", "skipped"]),
+  contactId: z.string().uuid().nullable(),
+  reason: z.string().optional(),
+});
+export type CaptureLandingResultDto = z.infer<typeof captureLandingResultSchema>;
+
+/** The /api/v1/ingest ack. `results` is present for landing sources (chrome_extension with a workspace);
+ *  validate-and-ack sources return the counts alone. */
+export const ingestAckSchema = z.object({
+  accepted: z.literal(true),
+  source: connectorId,
+  records: z.number().int().min(0),
+  results: z.array(captureLandingResultSchema).optional(),
+});
+export type IngestAck = z.infer<typeof ingestAckSchema>;

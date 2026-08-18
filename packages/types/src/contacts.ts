@@ -21,6 +21,8 @@ export const sourceName = z.enum([
   "pdl",
   "coresignal",
   "linkedin_api", // vendor-neutral LinkedIn-shaped source API (0115; dark until vendor ToS/DPA review)
+  "chrome_extension", // user-initiated page capture landed by the extension (0120; extension-intelligence-loop)
+  "database", // materialized from the TruePoint database ("Add to workspace"; 0122) — vendor-neutral by construction
 ]);
 export type SourceName = z.infer<typeof sourceName>;
 
@@ -462,6 +464,16 @@ export const maskedContactSchema = z.object({
   lastName: z.string().nullable(),
   jobTitle: z.string().nullable(),
   emailDomain: z.string().nullable(),
+  // The linked account's display name (non-PII). Optional-populated: the search projection computes it
+  // (via its live-account join) so the grid's Company column can render for email-less contacts; surfaces
+  // that don't join accounts omit it.
+  companyName: z.string().nullable().optional(),
+  // URL-shaped identity (Layer-0-as-database plan D4; README front-end contract: URL-shaped identifiers
+  // may be shown, numeric ids/urns never). Lets a name-less capture row still be identifiable, and gives
+  // the grid an "open on LinkedIn" affordance. Optional-populated by the search/list projections.
+  linkedinPublicId: z.string().nullable().optional(),
+  linkedinUrl: z.string().nullable().optional(),
+  salesNavProfileUrl: z.string().nullable().optional(),
   emailStatus: emailStatus,
   // Phone field-correctness verdict (list-plan/06 §3.2) — non-PII (a status label, never the number). Null
   // until a verification has graded the phone. Feeds the verification sub-score + the Data Health column.
@@ -516,3 +528,62 @@ export const linkedinResolveResponseSchema = z.object({
   contact: maskedContactSchema.nullable(),
 });
 export type LinkedinResolveResponse = z.infer<typeof linkedinResolveResponseSchema>;
+
+// ── One-round-trip lookup (POST /contacts/lookup — extension-intelligence-loop slice B) ──────────────────
+/** DB-first / vendor-fallback lookup by LinkedIn URL (public or Sales-Nav form). `found` carries the masked
+ *  workspace contact + freshness; `fetched` means the licensed source landed intel into the master graph and
+ *  a Save will add the contact to the workspace; `unavailable` = source fleet dark/down. Never PII. */
+/** The masked DATABASE person carried on an `in_database` lookup answer (Layer-0-as-database slice 4):
+ *  profile facts + the URL-shaped addressing key — never Layer-0 ids, never channel values. Structurally a
+ *  subset of the database search's maskedDatabasePerson. */
+export const lookupDatabasePersonSchema = z.object({
+  linkedinPublicId: z.string(),
+  linkedinUrl: z.string(),
+  fullName: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  headline: z.string().nullable().optional(),
+  seniorityLevel: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  locationRaw: z.string().nullable().optional(),
+  locationCity: z.string().nullable().optional(),
+  locationCountry: z.string().nullable().optional(),
+  hasEmail: z.boolean().optional(),
+  hasPhone: z.boolean().optional(),
+});
+export type LookupDatabasePerson = z.infer<typeof lookupDatabasePersonSchema>;
+
+export const contactLookupResponseSchema = z.object({
+  // "in_database" = the platform database holds the person (Add to workspace materializes it). It
+  // replaces the transitional "fetched" (which carried no data): after a landing the lookup RE-READS and
+  // answers with the masked identity.
+  status: z.enum(["found", "in_database", "not_found", "unavailable", "not_supported"]),
+  contactId: z.string().uuid().nullable(),
+  owned: z.boolean().optional(),
+  contact: maskedContactSchema.nullable(),
+  person: lookupDatabasePersonSchema.nullable().optional(),
+  /** lastVerifiedAt ?? createdAt of the workspace copy (ISO-8601) — the "updated 2 hours ago" signal. */
+  lastUpdatedAt: z.string().nullable().optional(),
+});
+export type ContactLookupResponse = z.infer<typeof contactLookupResponseSchema>;
+
+// ── Add to workspace (POST /contacts/from-database — Layer-0-as-database slice 3) ─────────────────────────
+/** Address a database person by its public slug OR any LinkedIn/Sales-Nav URL (server canonicalizes).
+ *  Exactly one — a Layer-0 id is never accepted from a client. */
+export const contactFromDatabaseRequestSchema = z
+  .object({
+    linkedinPublicId: z.string().trim().min(1).max(255).optional(),
+    url: z.string().url().optional(),
+  })
+  .refine(
+    (v) => Boolean(v.linkedinPublicId) !== Boolean(v.url),
+    "Provide exactly one of linkedinPublicId or url.",
+  );
+export type ContactFromDatabaseRequest = z.infer<typeof contactFromDatabaseRequestSchema>;
+
+export const contactFromDatabaseResponseSchema = z.object({
+  contactId: z.string().uuid().nullable(),
+  outcome: z.enum(["created", "updated", "known", "skipped"]),
+  /** Present on `skipped`: not_in_database | not_supported | no_person_data. */
+  reason: z.string().optional(),
+});
+export type ContactFromDatabaseResponse = z.infer<typeof contactFromDatabaseResponseSchema>;

@@ -57,6 +57,10 @@ export const platformAuditAction = z.enum([
   "forge.read_parsers",
   "forge.read_sync_status",
   "forge.read_captures",
+  "forge.read_source_fetches",
+  // Junk-capture cleanup (Layer-0-as-database plan slice 8): a staff-triggered, per-workspace, reversible
+  // soft-archive of no-data capture residue. The tenant-level audit rides the same tx (contact.delete).
+  "maintenance.archive_junk_captures",
   // CRM bidirectional sync (crm-sync 00 §4.11 / 01 Block C.3) — staff-side enablement via withPlatformTx,
   // super_admin-gated: turning the integration on for a tenant, and setting a connection's spend/rate
   // budget. Both are cross-tenant staff mutations, which is exactly the ADR-0032 auditable event. Per this

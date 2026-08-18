@@ -47,11 +47,12 @@ export const REVEAL_LABEL: Record<RevealType, string> = {
   full_profile: "Full profile",
 };
 
+// Vendor names are internal (slice 7): the customer sees what the platform did, not who it bought from.
 export const REVEAL_DATA_SOURCE_LABEL: Record<RevealDataSource, string> = {
-  apollo: "Apollo",
-  zoominfo: "ZoomInfo",
-  linkedin: "LinkedIn",
-  internal: "Internal",
+  apollo: "Data source",
+  zoominfo: "Data source",
+  linkedin: "Data source",
+  internal: "TruePoint",
 };
 
 /** Render a "used / limit" string, treating a null/undefined limit as unlimited (∞). */

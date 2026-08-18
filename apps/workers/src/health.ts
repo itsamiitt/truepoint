@@ -9,9 +9,10 @@
 // provider (a PING raced against a timeout) and gated by a CONSECUTIVE-failure threshold (re-audit F14): a
 // single transient blip must not flip every replica to 503 at once and cascade into a fleet-wide restart storm.
 
-/** Port the workers health endpoint listens on. A constant (not process.env) to honor the
- *  "no process.env outside @leadwolf/config" rule; promote to @leadwolf/config if it must be tunable. */
-export const WORKERS_HEALTH_PORT = 3002;
+/** Port the workers health endpoint listens on. Env-overridable (mirrors forge-worker's
+ *  FORGE_WORKER_HEALTH_PORT): on a single-host native deploy the web app owns 3002, so the
+ *  workers health server must be movable without a code change. */
+export const WORKERS_HEALTH_PORT = Number(process.env.WORKERS_HEALTH_PORT ?? 3002);
 
 /** A bounded, never-throwing reachability check (register.ts's redisReadinessProbe). Must resolve false —
  *  not hang — when the dependency is wedged; the caller owns the timeout. */

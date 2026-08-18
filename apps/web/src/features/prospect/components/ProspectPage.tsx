@@ -8,13 +8,7 @@
 // the slice (api/bulkActionsApi).
 "use client";
 
-import type {
-  AccountFacetKey,
-  ContactHit,
-  ContactQuery,
-  FacetKey,
-  MaskedAccount,
-} from "@leadwolf/types";
+import type { AccountFacetKey, ContactQuery, FacetKey, MaskedAccount } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
@@ -26,10 +20,12 @@ import {
   TpCheckbox,
   TpInput,
 } from "@leadwolf/ui";
+import { useQuery } from "@tanstack/react-query";
 import { Building2, Users } from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { searchCount } from "../bulkActionsApi";
 import { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 import { useAccountSearch } from "../hooks/useAccountSearch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -38,8 +34,9 @@ import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
 import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
+import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { type ResultScope, displayName, emailGlyphFor } from "../types";
+import { type ResultScope, displayName, emailGlyphFor, profileHref } from "../types";
 import { AccountDetailDrawer } from "./AccountDetailDrawer";
 import { AccountFilterPanel } from "./AccountFilterPanel";
 import { AccountsTable } from "./AccountsTable";
@@ -56,6 +53,8 @@ import type { RowBulkAction } from "./BulkActionBar";
 const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.BulkActionBar), {
   ssr: false,
 });
+import type { ProspectRow } from "../databaseRows";
+import { AddToWorkspaceButton } from "./AddToWorkspaceButton";
 import { FilterPanel } from "./FilterPanel";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
@@ -107,8 +106,27 @@ function ProspectPageInner() {
   const accountsActive = scope === "accounts";
 
   const search = useProspectSearch({ enabled: contactsActive });
-  const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
+  const {
+    query,
+    setQuery,
+    hits,
+    databaseCount,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    reload,
+    markRevealed,
+  } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
+  // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
+  // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
+  const totalCount = useQuery({
+    queryKey: prospectKeys.contactCount(query),
+    queryFn: () => searchCount(query),
+    enabled: contactsActive,
+    staleTime: 30_000,
+  }).data?.total;
   const recent = useRecentSearches();
   const { tags } = useTags();
 
@@ -201,7 +219,8 @@ function ProspectPageInner() {
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection).
   const bulk = useBulkSelection();
-  const shownIds = useMemo(() => hits.map((c) => c.id), [hits]);
+  // Only OWNED rows are selectable: bulk actions address contacts by id, and a database row has none.
+  const shownIds = useMemo(() => hits.filter((c) => !c.databaseSlug).map((c) => c.id), [hits]);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
   const selectedContacts = useMemo(
     () => hits.filter((c) => bulk.selectedIds.has(c.id)),
@@ -222,7 +241,7 @@ function ProspectPageInner() {
     [bulk.clear, bulk.setMany],
   );
 
-  const allColumns: Column<ContactHit>[] = useMemo(
+  const allColumns: Column<ProspectRow>[] = useMemo(
     () => [
       {
         key: "select",
@@ -250,20 +269,46 @@ function ProspectPageInner() {
         key: "name",
         header: "Name",
         sortValue: (c) => displayName(c),
-        cell: (c) => (
-          <span className={styles.nameCell}>
-            <span className={styles.nameMeta}>
-              <span className={styles.name}>{displayName(c)}</span>
-              <span className={styles.title}>{c.jobTitle ?? "—"}</span>
+        cell: (c) => {
+          const href = profileHref(c);
+          return (
+            <span className={styles.nameCell}>
+              <span className={styles.nameMeta}>
+                <span className={styles.name}>{displayName(c)}</span>
+                <span className={styles.title}>
+                  {c.jobTitle ?? "—"}
+                  {href ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Open profile"
+                      >
+                        profile
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </span>
             </span>
-          </span>
-        ),
+          );
+        },
       },
       {
         key: "company",
         header: "Company",
-        sortValue: (c) => c.emailDomain ?? "",
-        cell: (c) => <span className={styles.mono}>{c.emailDomain ?? "—"}</span>,
+        // Account name first (works for email-less contacts — capture/import rows), email domain as the
+        // fallback facet the column used to show exclusively.
+        sortValue: (c) => c.companyName ?? c.emailDomain ?? "",
+        cell: (c) =>
+          c.companyName ? (
+            <span>{c.companyName}</span>
+          ) : (
+            <span className={styles.mono}>{c.emailDomain ?? "—"}</span>
+          ),
       },
       {
         key: "email",
@@ -311,12 +356,16 @@ function ProspectPageInner() {
             onKeyDown={(e) => e.stopPropagation()}
             role="presentation"
           >
-            <RowActions
-              contact={c}
-              onAddToList={() => startRowAction(c.id, "list")}
-              onTag={() => startRowAction(c.id, "addTags")}
-              onChangeStatus={() => startRowAction(c.id, "status")}
-            />
+            {c.databaseSlug ? (
+              <AddToWorkspaceButton slug={c.databaseSlug} name={displayName(c)} />
+            ) : (
+              <RowActions
+                contact={c}
+                onAddToList={() => startRowAction(c.id, "list")}
+                onTag={() => startRowAction(c.id, "addTags")}
+                onChangeStatus={() => startRowAction(c.id, "status")}
+              />
+            )}
           </span>
         ),
       },
@@ -374,7 +423,13 @@ function ProspectPageInner() {
               <span className={styles.count}>
                 {loading
                   ? "Loading…"
-                  : `${hits.length.toLocaleString()}${hasMore ? "+" : ""} contacts`}
+                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
+                      totalCount === undefined && hasMore ? "+" : ""
+                    } in your workspace${
+                      databaseCount > 0
+                        ? ` · ${databaseCount.toLocaleString()} more in the database`
+                        : ""
+                    }`}
               </span>
             ) : (
               <span className={styles.count}>
@@ -479,7 +534,8 @@ function ProspectPageInner() {
               columns={columns}
               rows={hits}
               rowKey={(c) => c.id}
-              onRowClick={(c) => setPreviewId(c.id)}
+              // A database row has no workspace record to open — add it first, then it behaves like any contact.
+              onRowClick={(c) => (c.databaseSlug ? undefined : setPreviewId(c.id))}
               isSelected={(c) => c.id === previewId}
             />
             {hasMore && (

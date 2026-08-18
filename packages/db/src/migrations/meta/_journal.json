@@ -827,6 +827,48 @@
       "when": 1787179806000,
       "tag": "0118_source_fetch_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1787179807000,
+      "tag": "0119_enable_all_flags",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1787179808000,
+      "tag": "0120_source_name_chrome_extension",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1787179809000,
+      "tag": "0121_master_visibility_and_channel_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1787179810000,
+      "tag": "0122_source_name_database",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1787179811000,
+      "tag": "0123_master_search_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1787179812000,
+      "tag": "0124_reset_unresolved_fetch_clock",
+      "breakpoints": true
     }
   ]
 }

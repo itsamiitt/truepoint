@@ -25,6 +25,7 @@ import {
   parsePartialDate,
 } from "@leadwolf/types";
 import { canonicalName, linkedinPublicId, registrableDomain } from "../enrichment/matchKeys.ts";
+import { inferSeniorityFromTitle } from "../search/inferSeniority.ts";
 
 /** The source label every descriptor/event/evidence row from this source carries (C-02: never a workspace). */
 export const LINKEDIN_API_SOURCE = "linkedin_api";
@@ -313,6 +314,9 @@ export function mapLinkedinPerson(payload: LinkedinApiPersonPayload): MappedPers
   const primary = primaryIndex(payload, positions);
   if (primary != null && positions[primary]?.title) {
     put("jobTitle", positions[primary].title);
+    // The source asserts a title, never a rung; the database search's seniority facet needs the rung.
+    // Conservative inference (null when unrecognizable) — a filter never matches on a guess.
+    put("seniorityLevel", inferSeniorityFromTitle(positions[primary].title));
   }
 
   // Emails: primary_email first (flagged), then the list; dedup case-insensitively on the raw value.

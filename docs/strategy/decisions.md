@@ -276,3 +276,36 @@ all of 03/04 remains analytical hypothesis; (b) no beachhead is chosen, so Phase
 checked at EVERY egress) is NOT satisfied today — searchRepository's own header
 says suppression is "NOT yet covered" and assertNotSuppressed is called from
 three sites only.
+
+## 2026-08-18 — Forge capture/egress env switches armed on the preview instance (operator decision)
+
+The operator (Sunil) directed in-session that every feature gate be enabled on the
+production preview host, explicitly including the Forge pipeline switches that ship
+dark (FORGE_CAPTURE_ENABLED / FORGE_SYNC_EGRESS_ENABLED — the OQ-2 posture). Recorded
+here per the dark-pipeline governance rule. Bounding facts: FORGE_CAPTURE_TENANTS
+remains EMPTY, so the per-tenant half of the capture gate still refuses every tenant;
+the extract stage has no ANTHROPIC_API_KEY and no S3 object store configured, so no
+capture could progress past ingest even if a tenant were listed. Legal sign-off for GA
+of capture (ADR-0043 §9) remains OUTSTANDING — arming the env switch does not waive
+it; listing a real tenant in FORGE_CAPTURE_TENANTS before that sign-off is the line
+that must not be crossed.
+
+## 2026-08-18 — Layer-0 becomes THE product database (operator decision; plan: image-png-the-data-storage)
+
+The operator directed that the licensed-vendor master graph is the product database: globally searchable
+(Apollo-style /prospect Database scope), materializable into a workspace ("Add to workspace"), and served
+to the extension as instant hits. Two prior code decisions are REVERSED by this, recorded per rule 6:
+
+(a) D4 — URL-shaped identity is free. getRevealedContact gated linkedinUrl behind the email reveal
+    ("must not hand back the LinkedIn URL for free"). Under the database model the profile URL is the
+    ADDRESSING key (masked projections carry slug/linkedinUrl/salesNavProfileUrl); the paid product is
+    the channels. Numeric ids/urns remain internal-only.
+(b) D10 — Postgres is the global read path. masterGraph.ts deferred fuzzy-name GINs to an OpenSearch
+    adapter; the trgm indexes (0123, partial on the visible predicate) are built now, with the engine
+    adapter as the kill-date successor.
+
+New READ-side policy layer (0121): master_persons.visibility ('private'|'licensed'|'coop') + is_suppressed
++ merge tombstone = MASTER_PERSON_VISIBLE, applied inside every Layer-0 customer read. Workspace-minted
+persons stay 'private' (the co-op boundary holds); only provider-landed rows are 'licensed'. Channel rows
+carry source_name; only licensed channels are revealable across workspaces (pay-once copy on reveal,
+gated MASTER_CHANNEL_REVEAL_ENABLED). Suppression is now enforced at READ as well as landing.

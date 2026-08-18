@@ -71,6 +71,8 @@ const WRITTEN = new Set<string>([
   "forge.read_parsers",
   "forge.read_sync_status",
   "forge.read_captures",
+  "forge.read_source_fetches",
+  "maintenance.archive_junk_captures",
   // The staff CRM-sync monitor (GET /admin/crm/sync-health) — one audited cross-tenant read per request,
   // written by withPlatformTx BEFORE the read runs.
   "crm.read_sync_health",

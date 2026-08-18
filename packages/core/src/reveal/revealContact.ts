@@ -15,6 +15,7 @@ import {
   eventOutboxRepository,
   provenanceBadgeRepository,
   revealRepository,
+  sourceImportRepository,
   usageEventRepository,
   withErTx,
   withTenantTx,
@@ -38,6 +39,7 @@ import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emai
 import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
 import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
 import { decryptPii } from "../import/encryptPii.ts";
+import { type RevealableChannels, loadMasterChannels } from "./masterChannelFallback.ts";
 import { revealCharge } from "./revealCharge.ts";
 
 export interface RevealInput {
@@ -76,10 +78,14 @@ export function revealCostFor(revealType: RevealType): number {
 const wantsEmail = (t: RevealType): boolean => t === "email" || t === "full_profile";
 const wantsPhone = (t: RevealType): boolean => t === "phone" || t === "full_profile";
 
-function revealedFieldsFor(revealType: RevealType, contact: ContactForReveal): string[] {
+function revealedFieldsFor(
+  revealType: RevealType,
+  contact: ContactForReveal,
+  fallback: RevealableChannels | null,
+): string[] {
   const fields: string[] = [];
-  if (wantsEmail(revealType) && contact.emailEnc) fields.push("email");
-  if (wantsPhone(revealType) && contact.phoneEnc) fields.push("phone");
+  if (wantsEmail(revealType) && (contact.emailEnc || fallback?.email)) fields.push("email");
+  if (wantsPhone(revealType) && (contact.phoneEnc || fallback?.phone)) fields.push("phone");
   return fields;
 }
 
@@ -97,9 +103,13 @@ async function verifyForReveal(
   revealType: RevealType,
   verifier: EmailVerifierPort,
   phoneVerifier: PhoneVerifierPort,
+  fallback: RevealableChannels | null,
 ): Promise<VerifiedState> {
-  const email = wantsEmail(revealType) && contact.emailEnc ? decryptPii(contact.emailEnc) : null;
-  const phone = wantsPhone(revealType) && contact.phoneEnc ? decryptPii(contact.phoneEnc) : null;
+  // The workspace copy wins; a licensed Layer-0 channel fills the gap when it holds none (slice 6).
+  const emailEnc = contact.emailEnc ?? fallback?.email?.enc ?? null;
+  const phoneEnc = contact.phoneEnc ?? fallback?.phone?.enc ?? null;
+  const email = wantsEmail(revealType) && emailEnc ? decryptPii(emailEnc) : null;
+  const phone = wantsPhone(revealType) && phoneEnc ? decryptPii(phoneEnc) : null;
   const emailStatus = email
     ? await verifier.verify(email, contact.emailStatus as EmailStatus)
     : (contact.emailStatus as EmailStatus);
@@ -131,7 +141,17 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
     revealRepository.getContactForReveal(tx, input.contactId),
   );
   if (!contact) throw new NotFoundError("Contact not found in this workspace.");
-  const verified = await verifyForReveal(contact, input.revealType, verifier, phoneVerifier);
+  // Layer-0 channel fallback (slice 6): a bridged contact whose workspace copy holds no value can be
+  // served the platform's LICENSED value. Read on the ER connection, outside any tenant tx — same posture
+  // as the provenance badge below. Null (gate off / unbridged / nothing missing) ⇒ behaviour unchanged.
+  const fallback = await loadMasterChannels(contact, input.revealType);
+  const verified = await verifyForReveal(
+    contact,
+    input.revealType,
+    verifier,
+    phoneVerifier,
+    fallback,
+  );
 
   // Confidence badge v0 (S-10: "badge visible on 100% of reveals"). Computed BEFORE buildResponse rather than
   // after: buildResponse closes over it, and a `const` declared later would be a temporal-dead-zone hazard the
@@ -176,17 +196,61 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         emailBlindIndex: contact.emailBlindIndex,
         emailDomain: contact.emailDomain,
       });
+      // The fallback value is a DIFFERENT identity key than the overlay row's — check it too, or a
+      // suppressed address could be served through the Layer-0 lane (the read-side obligation).
+      if (fallback?.email) {
+        await assertNotSuppressed(tx, {
+          contactId: contact.id,
+          emailBlindIndex: fallback.email.blindIndex,
+          emailDomain: fallback.email.domain,
+        });
+      }
 
       // Persist the verification outcome on the workspace copy (06 §9) whatever the charge turns out to be.
       // Stamp `last_verified_at` so the Data Health freshness clock resets (list-plan/06 §3.3) — a reveal
       // verifies the field(s), so the record is now freshly graded.
       const verifiedAt = new Date();
+      // PAY-ONCE COPY (slice 6): when the value came from Layer-0, persist it onto the workspace copy in
+      // this same tx, so every later read/reveal is served locally and the vendor is never paid twice for
+      // the same value. Refused when ANOTHER live contact in this workspace already owns that blind index
+      // (the partial ws-unique would reject the write) — the reveal still returns the value.
+      let copySkipped = false;
+      const copy: Record<string, unknown> = {};
+      if (fallback?.email && !contact.emailEnc) {
+        const owner = await contactRepository.findByDedupKeys(tx, input.scope.workspaceId, {
+          emailBlindIndex: fallback.email.blindIndex,
+        });
+        if (!owner || owner.id === contact.id) {
+          copy.emailEnc = fallback.email.enc;
+          copy.emailBlindIndex = fallback.email.blindIndex;
+          copy.emailDomain = fallback.email.domain;
+        } else {
+          copySkipped = true;
+        }
+      }
+      if (fallback?.phone && !contact.phoneEnc) {
+        copy.phoneEnc = fallback.phone.enc;
+      }
       await contactRepository.update(tx, contact.id, {
+        ...copy,
         emailStatus: verified.emailStatus,
         ...(verified.phoneStatus ? { phoneStatus: verified.phoneStatus } : {}),
         ...(verified.phoneLineType ? { phoneLineType: verified.phoneLineType } : {}),
         lastVerifiedAt: verifiedAt,
       });
+      if (Object.keys(copy).length > 0) {
+        // Provenance for the copied value — the workspace learns it came from the TruePoint database.
+        await sourceImportRepository.append(tx, {
+          tenantId: input.scope.tenantId,
+          workspaceId: input.scope.workspaceId,
+          contactId: contact.id,
+          importedByUserId: input.userId,
+          sourceName: "database",
+          sourceFile: null,
+          rawData: { copiedFrom: "database", channels: Object.keys(copy) },
+          contentHash: null,
+        });
+      }
 
       // S-CH2 channel dual-write (05 §5): mirror the SAME grades just written flat onto the live PRIMARY
       // child row(s), in this same tx — the verify-update op keeps CH-INV-1's status half in step. Mirrors
@@ -233,8 +297,9 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       );
       const charge = revealCharge({
         revealType: input.revealType,
-        hasEmail: contact.emailEnc != null,
-        hasPhone: contact.phoneEnc != null,
+        // A Layer-0 fallback value IS a value — the reveal uncovered something, so it charges like one.
+        hasEmail: contact.emailEnc != null || fallback?.email != null,
+        hasPhone: contact.phoneEnc != null || fallback?.phone != null,
         ownedEmail: owned.email,
         ownedPhone: owned.phone,
         emailStatus: verified.emailStatus,
@@ -257,7 +322,7 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         revealType: input.revealType,
         dataSource: "internal",
         creditsConsumed: cost,
-        revealedFields: revealedFieldsFor(input.revealType, contact),
+        revealedFields: revealedFieldsFor(input.revealType, contact, fallback),
       });
 
       // Already owned by this workspace copy → return the owned fields, charge 0 (free forever).
@@ -314,8 +379,11 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
           cost,
           emailStatus: verified.emailStatus,
           verifier: verifier.name,
-          fields: revealedFieldsFor(input.revealType, contact),
+          fields: revealedFieldsFor(input.revealType, contact, fallback),
           newFields: charge.newFields,
+          // Slice 6 forensics: was this served from the platform database, and did the pay-once copy land?
+          ...(fallback ? { fromDatabase: true } : {}),
+          ...(copySkipped ? { copySkipped: true } : {}),
         },
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,

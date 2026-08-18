@@ -78,6 +78,55 @@ export const sourceFetchRegistryRepository = {
     }));
   },
 
+  /** The operator-console telemetry read (forge /bff/source-fetches): the most recently touched targets,
+   *  activity first (fetched-latest, then newest-registered). URLs + outcomes only — the table holds no PII. */
+  async listRecent(
+    tx: Tx,
+    limit = 50,
+  ): Promise<
+    Array<{
+      id: string;
+      entityKind: "person" | "company";
+      normalizedUrl: string;
+      externalId: string | null;
+      firstSeenAt: Date;
+      lastFetchedAt: Date | null;
+      lastOutcome: string | null;
+      fetchCount: number;
+      resolved: boolean;
+    }>
+  > {
+    const rows = (await tx.execute(sql`
+      SELECT id, entity_kind, normalized_url, external_id, first_seen_at, last_fetched_at,
+             last_outcome, fetch_count,
+             (resolved_person_id IS NOT NULL OR resolved_company_id IS NOT NULL) AS resolved
+        FROM source_fetch_registry
+       ORDER BY COALESCE(last_fetched_at, first_seen_at) DESC
+       LIMIT ${limit}
+    `)) as unknown as Array<{
+      id: string;
+      entity_kind: "person" | "company";
+      normalized_url: string;
+      external_id: string | null;
+      first_seen_at: string | Date;
+      last_fetched_at: string | Date | null;
+      last_outcome: string | null;
+      fetch_count: number;
+      resolved: boolean;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      entityKind: r.entity_kind,
+      normalizedUrl: r.normalized_url,
+      externalId: r.external_id,
+      firstSeenAt: new Date(r.first_seen_at),
+      lastFetchedAt: r.last_fetched_at == null ? null : new Date(r.last_fetched_at),
+      lastOutcome: r.last_outcome,
+      fetchCount: r.fetch_count,
+      resolved: r.resolved,
+    }));
+  },
+
   /** Stamp a fetch attempt: advance the clock, bump the count, record the outcome + resolved golden ids.
    *  Written whatever happened (ok/rejected/unavailable) so a failing URL still moves off the sweep head. */
   async recordFetch(

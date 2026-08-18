@@ -28,8 +28,10 @@ import {
   listReviewTasks,
   promoteVerifiedRecord,
   recordPlatformEvent,
+  sourceFetchRegistryRepository,
   userRepository,
   withForgeTx,
+  withPrivilegedTx,
 } from "@leadwolf/db";
 import { type LandDeps, type PromotionCandidate, landEnvelope } from "@leadwolf/forge-core";
 import { forgeObjectStore, forgeRateLimiter } from "@leadwolf/integrations";
@@ -114,13 +116,76 @@ const app = createForgeApi({
             })),
           };
         }),
-      reviewTasks: () => withForgeTx((tx) => listReviewTasks(tx)),
-      parsers: () => withForgeTx((tx) => listParsers(tx)),
-      syncStatus: () => withForgeTx((tx) => getSyncStatusCounts(tx)),
+      // Each read below is RESHAPED here to the console slice's view model (the Overview precedent above —
+      // serving the raw repository row crashed the page on a named-key unwrap that never existed).
+      reviewTasks: () =>
+        withForgeTx(async (tx) => {
+          const rows = await listReviewTasks(tx);
+          return {
+            tasks: rows.map((r) => ({
+              id: r.id,
+              captureId: r.subjectRef,
+              reason: r.taskType,
+              priority: String(r.priority),
+              assignedTo: r.assigneeUserId,
+              createdAt: r.createdAt.toISOString(),
+            })),
+          };
+        }),
+      parsers: () =>
+        withForgeTx(async (tx) => {
+          const rows = await listParsers(tx);
+          return {
+            parsers: rows.map((r) => ({
+              id: r.id,
+              name: r.source,
+              kind: r.endpoint,
+              status: r.activeVersion ? "active" : "draft",
+              // Run-rate metrics are not tracked per parser yet — honest zeros, not fabricated health.
+              successRate: 0,
+              lastRunAt: null,
+            })),
+          };
+        }),
+      syncStatus: () =>
+        withForgeTx(async (tx) => {
+          const counts = await getSyncStatusCounts(tx);
+          return {
+            targets: [
+              {
+                id: "master-graph",
+                destination: "Master graph (in-process promotion)",
+                status: counts.failed > 0 ? "failed" : counts.pending > 0 ? "pending" : "synced",
+                pending: counts.pending,
+                lastSyncedAt: null,
+              },
+            ],
+          };
+        }),
       captures: () =>
         withForgeTx(async (tx) => {
           const rows = await listRecentCaptures(tx);
           return { captures: rows.map((r) => ({ ...r, capturedAt: r.capturedAt.toISOString() })) };
+        }),
+      // The LIVE capture surface (extension-intelligence-loop): the platform URL fetch registry — what the
+      // extension harvested/viewed, what the fleet fetched, with what outcome. Owner connection: the table
+      // is app-REVOKEd and holds URLs + ids only (no PII), same posture as the API's registry writes.
+      sourceFetches: () =>
+        withPrivilegedTx(async (tx) => {
+          const rows = await sourceFetchRegistryRepository.listRecent(tx, 50);
+          return {
+            fetches: rows.map((r) => ({
+              id: r.id,
+              entityKind: r.entityKind,
+              normalizedUrl: r.normalizedUrl,
+              externalId: r.externalId,
+              firstSeenAt: r.firstSeenAt.toISOString(),
+              lastFetchedAt: r.lastFetchedAt?.toISOString() ?? null,
+              lastOutcome: r.lastOutcome,
+              fetchCount: r.fetchCount,
+              resolved: r.resolved,
+            })),
+          };
         }),
       // Owner-connection read of the caller's OWN identity (same posture as resolveStaff's platform_staff
       // read). Mapped to { email } only — UserRecord carries passwordHash and must never cross this seam.

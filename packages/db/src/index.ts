@@ -141,6 +141,23 @@ export {
   type DueUrl,
   type RegistryRow,
 } from "./repositories/sourceFetchRegistryRepository.ts";
+// The CUSTOMER read seam over Layer-0 persons (Layer-0 as THE product database, D2/D5): the visibility
+// predicate + masked projection every global read inherits. Runs under withErTx.
+export {
+  masterPersonReadRepository,
+  MASTER_PERSON_VISIBLE,
+  toMasterPersonRow,
+  PERSON_FROM,
+  PERSON_SELECT,
+  type MasterPersonRow,
+  type MasterPersonCompany,
+  type RawPersonRow,
+} from "./repositories/masterPersonReadRepository.ts";
+// The global DATABASE search (sibling of searchRepository; visibility predicate applied inside).
+export {
+  masterPersonSearchRepository,
+  type DatabaseSearchRows,
+} from "./repositories/masterPersonSearchRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,
@@ -866,3 +883,11 @@ export {
   crmHealthRepository,
   type CrmHealthRow,
 } from "./repositories/crmHealthRepository.ts";
+// Layer-0 channel VALUES for the reveal fallback (Layer-0-as-database slice 6) — licensed contributions
+// only, visibility-filtered inside the query. Runs under withErTx.
+export {
+  masterChannelReadRepository,
+  type MasterEmailChannel,
+  type MasterPhoneChannel,
+  type RevealableChannels,
+} from "./repositories/masterChannelReadRepository.ts";

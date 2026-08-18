@@ -3,6 +3,8 @@
 // Tenancy is taken from token claims (never sent by the caller as trusted input).
 import type {
   ConsentContext,
+  ContactLookupResponse,
+  IngestAck,
   IngestionEnvelope,
   LinkedinResolveResponse,
   RawObservation,
@@ -111,6 +113,7 @@ export class ApiClient {
       subjectKey: record.subjectKey,
       adapter: record.adapter,
       pageType: record.pageType,
+      sourceUrl: record.sourceUrl, // provenance: the page the capture was taken from (source_imports.source_file)
     };
     const envelope: IngestionEnvelope = {
       source: "chrome_extension",
@@ -123,11 +126,22 @@ export class ApiClient {
       consent,
       records: [observation],
     };
-    await this.request<{ accepted: number }>(
+    const ack = await this.request<IngestAck>(
       "/ingest",
       { method: "POST", body: JSON.stringify(envelope) },
       { idempotencyKey: item.idempotencyKey },
     );
+    // The server now LANDS chrome_extension captures and answers per record (extension-intelligence-loop
+    // slice A) — report what actually happened instead of assuming "saved". A skipped record (no dedupable
+    // identity key) is surfaced as rejected so the panel doesn't show a phantom save.
+    const landed = ack.results?.[0];
+    if (landed && landed.outcome !== "skipped") {
+      return { contactId: landed.contactId, known: true, owned: false, outcome: "saved" };
+    }
+    if (landed?.outcome === "skipped") {
+      return { contactId: null, known: false, owned: false, outcome: "rejected" };
+    }
+    // Older server (no results array): the ack means validated-and-accepted only.
     return { contactId: null, known: true, owned: false, outcome: "saved" };
   }
 
@@ -212,6 +226,87 @@ export class ApiClient {
           }
         : undefined,
     };
+  }
+
+  /** The one-round-trip DB-first / vendor-fallback lookup (POST /contacts/lookup; extension-intelligence-loop
+   *  slice B). Sends the profile URL (public or Sales-Nav form — the server canonicalizes); maps the response
+   *  onto SubjectStatus: `found` carries the masked identity + freshness, `fetched` means the licensed source
+   *  just landed intel and Save will add the contact to the workspace. Throws ApiError on 401/offline so the
+   *  bus can fall back to the slug resolve. */
+  async lookupByUrl(url: string): Promise<SubjectStatus> {
+    const resp = await this.request<ContactLookupResponse>("/contacts/lookup", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+    const c = resp.contact;
+    if (resp.status === "found" && resp.contactId) {
+      return {
+        contactId: resp.contactId,
+        known: true,
+        owned: resp.owned ?? false,
+        outcome: "found",
+        lastUpdatedAt: resp.lastUpdatedAt ?? null,
+        emailAvailable: c?.hasEmail ?? false,
+        phoneAvailable: c?.hasPhone ?? false,
+        score: null,
+        identity: c
+          ? {
+              jobTitle: c.jobTitle ?? null,
+              seniority: c.seniorityLevel ?? null,
+              department: c.department ?? null,
+              location: [c.locationCity, c.locationCountry].filter(Boolean).join(", ") || null,
+              emailStatus: c.emailStatus ?? null,
+            }
+          : undefined,
+      };
+    }
+    // In the DATABASE but not the workspace (Layer-0-as-database slice 4): carry the masked identity so
+    // the card can show the real name/title/company and offer "Add to workspace".
+    if (resp.status === "in_database") {
+      const p = resp.person;
+      return {
+        contactId: null,
+        known: false,
+        owned: false,
+        outcome: "in_database",
+        score: null,
+        identity: p
+          ? {
+              fullName: p.fullName ?? null,
+              company: p.companyName ?? null,
+              linkedinPublicId: p.linkedinPublicId ?? null,
+              jobTitle: p.jobTitle ?? null,
+              seniority: p.seniorityLevel ?? null,
+              department: null,
+              location:
+                [p.locationCity, p.locationCountry].filter(Boolean).join(", ") ||
+                (p.locationRaw ?? null),
+              emailStatus: null,
+            }
+          : undefined,
+      };
+    }
+    const outcome =
+      resp.status === "unavailable"
+        ? "unavailable"
+        : resp.status === "not_found"
+          ? "not_found"
+          : "unknown";
+    return { contactId: null, known: false, owned: false, outcome, score: null };
+  }
+
+  /** Materialize a database person into the workspace (POST /contacts/from-database; Layer-0-as-database
+   *  slice 4). Addressed by the page URL — the server canonicalizes public and Sales-Nav forms. */
+  async addFromDatabase(url: string, idempotencyKey: string): Promise<SubjectStatus> {
+    const resp = await this.request<{ contactId: string | null; outcome: string }>(
+      "/contacts/from-database",
+      { method: "POST", body: JSON.stringify({ url }) },
+      { idempotencyKey },
+    );
+    if (resp.contactId && resp.outcome !== "skipped") {
+      return { contactId: resp.contactId, known: true, owned: false, outcome: "saved" };
+    }
+    return { contactId: null, known: false, owned: false, outcome: "rejected" };
   }
 
   /** Post harvested Sales-Nav URLs to the fetch registry (POST /ingest/linkedin-links; docs/planning

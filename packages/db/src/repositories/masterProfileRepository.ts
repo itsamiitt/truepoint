@@ -26,6 +26,7 @@ const PERSON_COLUMNS: Readonly<Record<string, string>> = {
   summary: "summary",
   locationRaw: "location_raw",
   jobTitle: "job_title",
+  seniorityLevel: "seniority_level", // inferred from the title by the mapper (the database search's seniority facet)
   locationCity: "location_city",
   locationCountry: "location_country",
 };
@@ -462,12 +463,17 @@ export const masterProfileRepository = {
       emailDomain: string | null;
       emailType: string | null;
       isPrimary: boolean;
+      /** Contributor of the VALUE (0121 D3) — 'linkedin_api' for the licensed landing. Stamped on insert and
+       *  when this write is the one filling a value-less row; never overwrites an existing contributor. */
+      sourceName?: string;
     },
   ): Promise<"landed" | "other_owner"> {
+    const src = input.sourceName ?? null;
     await tx.execute(sql`
-      INSERT INTO master_emails (master_person_id, email_enc, email_blind_index, email_domain, email_type, is_primary)
+      INSERT INTO master_emails (master_person_id, email_enc, email_blind_index, email_domain, email_type, is_primary, source_name)
       VALUES (${input.masterPersonId}, ${input.emailEnc}, ${input.emailBlindIndex},
-              ${input.emailDomain}, ${input.emailType}, ${input.isPrimary})
+              ${input.emailDomain}, ${input.emailType}, ${input.isPrimary},
+              CASE WHEN ${input.emailEnc}::bytea IS NULL THEN NULL ELSE ${src} END)
       ON CONFLICT (email_blind_index) DO NOTHING
     `);
     const owner = (await tx.execute(sql`
@@ -480,6 +486,8 @@ export const masterProfileRepository = {
     await tx.execute(sql`
       UPDATE master_emails
          SET source_count = source_count + 1,
+             source_name  = CASE WHEN email_enc IS NULL AND ${input.emailEnc}::bytea IS NOT NULL
+                                 THEN COALESCE(source_name, ${src}) ELSE source_name END,
              email_enc    = COALESCE(email_enc, ${input.emailEnc}),
              email_type   = COALESCE(${input.emailType}, email_type),
              is_primary   = is_primary OR ${input.isPrimary}
@@ -496,11 +504,14 @@ export const masterProfileRepository = {
       phoneEnc: Uint8Array | null;
       phoneBlindIndex: Uint8Array;
       lineType: string | null;
+      sourceName?: string;
     },
   ): Promise<"landed" | "other_owner"> {
+    const src = input.sourceName ?? null;
     await tx.execute(sql`
-      INSERT INTO master_phones (master_person_id, phone_enc, phone_blind_index, line_type)
-      VALUES (${input.masterPersonId}, ${input.phoneEnc}, ${input.phoneBlindIndex}, ${input.lineType})
+      INSERT INTO master_phones (master_person_id, phone_enc, phone_blind_index, line_type, source_name)
+      VALUES (${input.masterPersonId}, ${input.phoneEnc}, ${input.phoneBlindIndex}, ${input.lineType},
+              CASE WHEN ${input.phoneEnc}::bytea IS NULL THEN NULL ELSE ${src} END)
       ON CONFLICT (phone_blind_index) DO NOTHING
     `);
     const owner = (await tx.execute(sql`
@@ -513,11 +524,40 @@ export const masterProfileRepository = {
     await tx.execute(sql`
       UPDATE master_phones
          SET source_count = source_count + 1,
+             source_name  = CASE WHEN phone_enc IS NULL AND ${input.phoneEnc}::bytea IS NOT NULL
+                                 THEN COALESCE(source_name, ${src}) ELSE source_name END,
              phone_enc    = COALESCE(phone_enc, ${input.phoneEnc}),
              line_type    = COALESCE(${input.lineType}, line_type)
        WHERE id = ${row.id} AND master_person_id = ${input.masterPersonId}
     `);
     return "landed";
+  },
+
+  /**
+   * Mark a person LICENSED (0121 D2): landed from a licensed provider, servable to every tenant through
+   * the read-side visibility predicate. One-way from 'private' only — never demotes 'coop', never touches a
+   * suppressed person (suppression is enforced by the predicate independently; this just avoids the churn).
+   */
+  async markPersonLicensed(tx: Tx, masterPersonId: string): Promise<void> {
+    await tx.execute(sql`
+      UPDATE master_persons SET visibility = 'licensed', updated_at = now()
+       WHERE id = ${masterPersonId} AND visibility = 'private' AND is_suppressed = false
+    `);
+  },
+
+  /**
+   * Fill a company's registrable domain when it was minted domainless (a position's numeric linkedin
+   * company id, resolveCompany's domainless MINT) and the later company document supplies a website. FILL
+   * ONLY — never overwrites; refuses if another company already holds that primary_domain (that is an ER
+   * merge, not a fill). Without this the add-to-workspace materializer can never upsert an account for
+   * the employer, because accounts are keyed by domain.
+   */
+  async fillCompanyPrimaryDomain(tx: Tx, masterCompanyId: string, domain: string): Promise<void> {
+    await tx.execute(sql`
+      UPDATE master_companies SET primary_domain = ${domain}, updated_at = now()
+       WHERE id = ${masterCompanyId} AND primary_domain IS NULL
+         AND NOT EXISTS (SELECT 1 FROM master_companies c2 WHERE c2.primary_domain = ${domain})
+    `);
   },
 
   /** Raise the masked-search facets after a channel contribution. TRUE-only — facets are recomputed by the

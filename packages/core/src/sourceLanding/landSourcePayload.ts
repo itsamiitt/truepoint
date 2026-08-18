@@ -189,6 +189,10 @@ async function landPerson(
       writableValues,
       fold.provenance,
     );
+    // 5b. Read-side visibility (0121 D2): a person the licensed provider documented is servable to every
+    // tenant — the global database search / extension hit / reveal fallback all key off this. One-way, and
+    // the predicate re-checks suppression at read time regardless.
+    await masterProfileRepository.markPersonLicensed(tx, masterPersonId);
 
     // 6a. Identifiers (urn / member id / slug rows — the LINK keys for every later refetch).
     await masterProfileRepository.upsertPersonIdentifiers(
@@ -237,6 +241,7 @@ async function landPerson(
           emailDomain: emailDomainOf(storage) ?? null,
           emailType: e.type,
           isPrimary: e.isPrimary,
+          sourceName: LINKEDIN_API_SOURCE, // 0121 D3 — the reveal fallback serves only licensed channels
         });
         if (outcome === "landed") landedEmail = true;
       }
@@ -249,6 +254,7 @@ async function landPerson(
           phoneEnc: encryptPii(e164),
           phoneBlindIndex: blindIndex(e164),
           lineType: p.type,
+          sourceName: LINKEDIN_API_SOURCE,
         });
         if (outcome === "landed") landedPhone = true;
       }
@@ -474,6 +480,17 @@ async function landCompany(
       writableValues,
       fold.provenance,
     );
+    // 4b. Domain fill for a company minted domainless (from a position's numeric id): the company document
+    // carries the website, and accounts are keyed by registrable domain — without this the add-to-workspace
+    // materializer could never upsert the employer account. FILL only; a domain another company holds is an
+    // ER merge, not a fill (fillCompanyPrimaryDomain refuses).
+    if (mapped.registrableDomain) {
+      await masterProfileRepository.fillCompanyPrimaryDomain(
+        tx,
+        masterCompanyId,
+        mapped.registrableDomain,
+      );
+    }
 
     // 5. Identifiers + HQ + the headcount series.
     await masterProfileRepository.upsertCompanyIdentifiers(

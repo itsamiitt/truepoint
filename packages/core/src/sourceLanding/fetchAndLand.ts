@@ -11,6 +11,7 @@
 // its linkedin_company_id; after a person lands we read those ids back off master_company_identifiers and
 // register each as a company target, so the SAME sweep fetches company documents on the same 30-day rule.
 
+import { env } from "@leadwolf/config";
 import {
   type Tx,
   masterProfileRepository,
@@ -56,6 +57,14 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   const fetchProfile = input.fetchProfile ?? fetchLinkedinProfile;
   const fetchCompany = input.fetchCompany ?? fetchLinkedinCompany;
 
+  // Landing dark ⇒ do not spend a vendor call whose document could not land anyway, and do not burn the
+  // URL's 30-day clock. Previously the flag was discovered only inside landLinkedinPayload, AFTER the
+  // fetch — the call was paid, recordFetch stamped "ok", and the {landed:false, reason:"flag_off"} result
+  // was mislabelled "duplicate". Checked here, before the registry is even touched.
+  if (!env.LINKEDIN_SOURCE_LANDING_ENABLED) {
+    return { outcome: "unavailable", resolvedPersonId: null, resolvedCompanyId: null };
+  }
+
   // Register (first-seen) + read freshness, on the owner connection (the table is app-REVOKEd).
   const reg = await withPrivilegedTx((tx) =>
     sourceFetchRegistryRepository.registerUrl(tx, {
@@ -85,8 +94,19 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   const personId = landed.masterPersonId ?? null;
   const companyId = landed.masterCompanyId ?? null;
 
+  // HONEST OUTCOME. `ok` used to be stamped whatever the landing did, so a payload the parser could not
+  // read looked identical in the registry to one that landed cleanly — the whole fleet reported success
+  // while storing nothing, and the 30-day clock hid it for a month. A payload we could not parse is a
+  // REJECTED fetch: the vendor answered, we cannot use it, and no other origin would answer differently.
+  const registryOutcome = landed.reason === "shape_drift" ? "rejected" : "ok";
+  if (landed.reason === "shape_drift") {
+    console.error("[source-landing] payload did not match any known contract", {
+      entityKind: input.entityKind,
+      normalizedUrl: input.normalizedUrl,
+    });
+  }
   await withPrivilegedTx((tx) =>
-    sourceFetchRegistryRepository.recordFetch(tx, reg.id, "ok", {
+    sourceFetchRegistryRepository.recordFetch(tx, reg.id, registryOutcome, {
       personId,
       companyId,
     }),
@@ -98,7 +118,9 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   }
 
   return {
-    outcome: landed.landed ? "landed" : "duplicate",
+    // "duplicate" means "we already hold this exact document" — it must not double as "we could not read
+    // it", which is what made the failure invisible from the caller's side too.
+    outcome: landed.landed ? "landed" : landed.reason === "shape_drift" ? "rejected" : "duplicate",
     resolvedPersonId: personId,
     resolvedCompanyId: companyId,
   };

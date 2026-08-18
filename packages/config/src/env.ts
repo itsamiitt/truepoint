@@ -874,6 +874,26 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Sweep throughput knobs (Layer-0-as-database plan, slice 9). The shipped defaults (25/kind, hourly)
+    // were sized for a dark pilot; a "build the database fast" operator raises them (prod: 200 + 10min ⇒
+    // ~1,200 persons + 1,200 companies/hour, still bounded by the 30-day registry dedup). The sweep also
+    // backs off when the origin fleet is down — see linkedinLinkFetchSweep.
+    // MASTER_CHANNEL_REVEAL_ENABLED — the READ half of the Layer-0 channel gate (Layer-0-as-database
+    // slice 6). LINKEDIN_CHANNELS_ENABLED decides whether licensed email/phone values are WRITTEN into
+    // master_emails/master_phones; this decides whether a reveal may SERVE one when the workspace copy has
+    // none (and copy it onto the contact, so the platform pays the vendor once per value, not once per
+    // workspace). Off ⇒ reveal is byte-identical to today: the overlay copy or nothing.
+    MASTER_CHANNEL_REVEAL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    LINKEDIN_LINK_FETCH_BATCH: z.coerce.number().int().min(1).max(1000).default(25),
+    LINKEDIN_LINK_FETCH_INTERVAL_MIN: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 60)
+      .default(60),
     // Entitlement cap enforcement (06-roadmap Phase 1 "Free caps enforced"; S-10). Global half; per-tenant half is
     // the `entitlements_enforced` flag seeded off in 0088. DEFAULT-OFF: while off, the requireEntitlement
     // middleware is not mounted at all. With this on but the tenant flag off, it runs in SHADOW mode — computing

@@ -41,15 +41,23 @@ async function handle(
     }
 
     case "LOOKUP": {
-      // Resolve the LinkedIn slug against this workspace's contacts (chrome-extension/14 X01). Broadcast the
-      // result so the side panel's Reveal tab can render it; degrade to "unknown" on any failure (offline /
-      // signed-out) so the in-page card never blocks the profile.
+      // The one-round-trip DB-first / vendor-fallback lookup (extension-intelligence-loop slice C): the
+      // server canonicalizes the page URL (public AND Sales-Nav forms), answers from the workspace when it
+      // can, and otherwise pulls the licensed document so a Save lands enriched. Falls back to the plain
+      // slug resolve (older server), then degrades to "unknown" (offline / signed-out) so the in-page card
+      // never blocks the profile.
       try {
-        const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
+        const status = await ctx.api.lookupByUrl(msg.sourceUrl);
         ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
         return { status };
       } catch {
-        return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+        try {
+          const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
+          ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
+          return { status };
+        } catch {
+          return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+        }
       }
     }
 
@@ -67,6 +75,19 @@ async function handle(
       // single byte left the browser. The real outcome arrives later via the SUBJECT_STATUS broadcast the
       // scheduler emits once /ingest answers.
       return { status: { contactId: null, known: false, owned: false, outcome: "queued" } };
+    }
+
+    case "ADD_FROM_DATABASE": {
+      // Materialize a database person into the workspace (Layer-0-as-database slice 4). Server-side verb;
+      // degrade to "rejected" on any failure so the card shows the truth.
+      try {
+        const status = await ctx.api.addFromDatabase(msg.url, crypto.randomUUID());
+        await ctx.telemetry.event("database_add", {});
+        ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
+        return { status };
+      } catch {
+        return { status: { contactId: null, known: false, owned: false, outcome: "rejected" } };
+      }
     }
 
     case "REVEAL": {

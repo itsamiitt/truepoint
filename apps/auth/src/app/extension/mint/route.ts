@@ -11,7 +11,7 @@
 // validated against the server allow-list; a platform-admin bit is deliberately NOT carried into the
 // extension token (a scoped prospecting credential, not an admin one).
 import { clientIp } from "@/lib/clientIp";
-import { REFRESH_COOKIE } from "@/lib/cookies";
+import { readRefreshTokenFromHeader } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { createSession, hashRefreshToken, mintAccessToken, recordAuthEvent } from "@leadwolf/auth";
 import { isAllowedOrigin } from "@leadwolf/config";
@@ -19,15 +19,12 @@ import { sessionRepository, userRepository } from "@leadwolf/db";
 
 const EXT_ID_RE = /^[a-p]{32}$/;
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+// DUAL-READ (AUTH-074): the refresh cookie may arrive under either name — `__Host-lw_refresh` once the
+// write flip (REFRESH_COOKIE_HOST_WRITE) is armed, legacy `lw_refresh` before/during the window. A
+// legacy-only parser here 401'd every mint the moment the flip landed, which read as "extension sign-in
+// broken" while the web session itself (dual-read since the readers-first stage) kept working.
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });

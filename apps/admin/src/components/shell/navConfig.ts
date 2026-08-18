@@ -14,6 +14,7 @@ import {
   Layers,
   Megaphone,
   Plug,
+  Puzzle,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
@@ -52,6 +53,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Data quality", href: "/data-quality", match: "/data-quality", icon: Gauge },
   { label: "Trust & abuse", href: "/trust-abuse", match: "/trust-abuse", icon: Siren },
   { label: "AI usage", href: "/ai-usage", match: "/ai-usage", icon: Sparkles },
+  { label: "Extension", href: "/extension", match: "/extension", icon: Puzzle },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 

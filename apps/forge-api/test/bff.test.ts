@@ -14,6 +14,7 @@ function deps(caps: Capability[]): BffDeps {
       reviewTasks: async () => ({ ok: "review" }),
       parsers: async () => ({ ok: "parsers" }),
       syncStatus: async () => ({ ok: "sync" }),
+      sourceFetches: async () => ({ fetches: [] }),
       captures: async () => ({
         captures: [
           {

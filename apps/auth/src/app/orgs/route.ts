@@ -6,20 +6,14 @@
 // org plus the currently-active tenant id (from the session) so the switcher can mark the active one.
 // Cross-origin, credentialed (CORS to app origins). A GET read of the caller's OWN memberships — no mutation.
 
-import { REFRESH_COOKIE } from "@/lib/cookies";
+import { readRefreshTokenFromHeader } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { hashRefreshToken } from "@leadwolf/auth";
 import { sessionRepository, tenantMemberRepository } from "@leadwolf/db";
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+// DUAL-READ (AUTH-074): accept both cookie names — the __Host- write flip must not break this route.
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });

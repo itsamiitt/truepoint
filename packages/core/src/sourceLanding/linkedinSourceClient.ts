@@ -139,7 +139,37 @@ async function attemptOrigin(
   if (typeof res.json !== "object" || res.json === null) {
     return { kind: "failed", error: "non-json response" };
   }
-  return { kind: "ok", payload: res.json };
+  return unwrapEnvelope(res.json);
+}
+
+/**
+ * The vendor answers 200 with an ENVELOPE — `{ success, data, meta }` — where `data` is the document and
+ * `meta` is capture telemetry (captured_at, engine, counts). Everything downstream (the zod contracts, the
+ * mapper, the content hash) is defined over the DOCUMENT, so the envelope is peeled off here, at the one
+ * place that owns the vendor's wire format.
+ *
+ * This was a SILENT total failure before: the envelope has no `schema_version` at its root, so every
+ * payload failed both payload schemas, `landLinkedinPayload` returned `shape_drift`, and `fetchAndLandUrl`
+ * still stamped the registry `ok` — fetches "succeeded", nothing was ever stored, and the 30-day freshness
+ * clock was burned on each URL.
+ *
+ * `success: false` is the vendor's own refusal (unknown profile, unsupported URL): a REJECTED request, not
+ * a sick origin — a different mirror would answer identically, so the chain must stop rather than retry.
+ * A bare document (no envelope) is still accepted, so a vendor that drops the wrapper keeps working.
+ */
+export function unwrapEnvelope(json: object): AttemptOutcome {
+  const body = json as Record<string, unknown>;
+  if ("success" in body) {
+    if (body.success !== true) {
+      return { kind: "rejected", httpStatus: 200 };
+    }
+    const data = body.data;
+    if (typeof data !== "object" || data === null) {
+      return { kind: "failed", error: "envelope success without a data object" };
+    }
+    return { kind: "ok", payload: data };
+  }
+  return { kind: "ok", payload: body };
 }
 
 /** Fetch one prospect profile document by LinkedIn/Sales-Navigator URL. */

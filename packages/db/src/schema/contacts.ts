@@ -357,7 +357,7 @@ export const sourceImports = pgTable(
     ),
     sourceNameEnum: check(
       "source_imports_source_name_enum",
-      sql`${t.sourceName} IN ('apollo','zoominfo','linkedin','sales_navigator','hubspot','salesforce','clearbit','manual','pdl','coresignal')`,
+      sql`${t.sourceName} IN ('apollo','zoominfo','linkedin','sales_navigator','hubspot','salesforce','clearbit','manual','pdl','coresignal','linkedin_api','chrome_extension','database')`,
     ),
   }),
 );

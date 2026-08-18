@@ -23,8 +23,14 @@ import { log } from "../logger.ts";
 export const LINKEDIN_LINK_FETCH_QUEUE = "linkedin_link_fetch";
 const LEADER_KEY = "leader:linkedin_link_fetch";
 const LEADER_TTL_MS = 10 * 60_000;
-// Persons + companies each get their own bounded slice per tick.
-const MAX_PER_KIND_PER_TICK = 25;
+// Persons + companies each get their own bounded slice per tick (operator-tunable; slice 9).
+const MAX_PER_KIND_PER_TICK = env.LINKEDIN_LINK_FETCH_BATCH;
+// Origin-down backoff: after this many consecutive all-unavailable ticks, skip ticks until the next
+// success (a Redis flag with a TTL) — a dead fleet must not burn a full batch of registry clocks hourly.
+const BACKOFF_AFTER_CONSECUTIVE_UNAVAILABLE = 5;
+const BACKOFF_KEY = "linkedin_link_fetch:unavailable_streak";
+const BACKOFF_SKIP_KEY = "linkedin_link_fetch:backoff";
+const BACKOFF_TTL_S = 30 * 60;
 
 export type LinkedinLinkFetchJobData = Record<string, never>;
 
@@ -38,9 +44,18 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
       return;
     }
 
+    // Origin-down backoff (slice 9): a fleet returning nothing but `unavailable` for several consecutive
+    // ticks sets a TTL'd skip flag — the sweep goes quiet for BACKOFF_TTL_S instead of burning a batch of
+    // registry clocks every tick against a dead vendor. Any success clears the streak.
+    if (await redis.get(BACKOFF_SKIP_KEY)) {
+      log.info("linkedin link fetch skipped (origin backoff)");
+      return;
+    }
+
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
       let landed = 0;
       let skipped = 0;
+      let unavailable = 0;
       // Persons first (they DERIVE company targets), then companies — so a company minted this tick can be
       // fetched next tick, not starved.
       for (const kind of ["person", "company"] as const) {
@@ -61,6 +76,7 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
             });
             if (result.outcome === "landed" || result.outcome === "duplicate") landed += 1;
             else skipped += 1;
+            if (result.outcome === "unavailable") unavailable += 1;
           } catch (e) {
             // One URL's failure must not starve the tick; the registry clock was NOT advanced (fetchAndLand
             // stamps inside its own tx), so the next tick retries it.
@@ -72,7 +88,21 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
           }
         }
       }
-      log.info("linkedin link fetch tick", { landed, skipped });
+      // Streak accounting: an all-unavailable non-empty tick bumps the streak; anything landing resets it.
+      if (landed > 0) {
+        await redis.del(BACKOFF_KEY);
+      } else if (unavailable > 0 && unavailable === skipped) {
+        const streak = await redis.incr(BACKOFF_KEY);
+        if (streak >= BACKOFF_AFTER_CONSECUTIVE_UNAVAILABLE) {
+          await redis.set(BACKOFF_SKIP_KEY, "1", "EX", BACKOFF_TTL_S);
+          await redis.del(BACKOFF_KEY);
+          log.warn("linkedin link fetch: origin fleet unavailable — backing off", {
+            streak,
+            backoffSeconds: BACKOFF_TTL_S,
+          });
+        }
+      }
+      log.info("linkedin link fetch tick", { landed, skipped, unavailable });
     });
   };
 }
