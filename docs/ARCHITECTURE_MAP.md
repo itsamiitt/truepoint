@@ -85,8 +85,8 @@
 >
 > `forge` is now a declared canonical domain — it has its own apps, its own package and its own Postgres
 > schema, so scattering its files across neighbouring domains would have been the dishonest option. The Forge
-> console's slices are bucketed as SHARED (like `apps/extension`) rather than minting five new domains
-> (overview/captures/parsers/review/sync-status) that would pollute the vocabulary the rest of the map
+> console's slices are bucketed as SHARED (like `apps/extension`) rather than minting six new domains
+> (overview/captures/source-fetches/parsers/review/sync-status) that would pollute the vocabulary the rest of the map
 > navigates by. The leaf-package list stays explicit rather than a catch-all, so a genuinely new package
 > shows up unassigned and gets a deliberate decision instead of silently becoming "shared".
 > See the generated [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the
@@ -139,11 +139,12 @@ apps/                           # deployable processes (thin transport adapters)
                                               problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,EntityPicker,TenantPicker,UserPicker}  lib/{adminGate,authClient,pkce}
-    app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,system-health}  features/*
+    app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,extension,system-health}  features/*
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach · firmographics ·
                                 #   dedup · retentionSweep · sequenceTick · tokenRefresh queues + leaderLock +
                                 #   mailboxThrottle (Redis token-bucket) + health/logger  [LIVE]
   extension/ src/               # MV3 browser extension (Vite + CRXJS) — thin compliant prospect capture  [LIVE]
+  extension/ scripts/           # gen-icons + pack-zip (portable forward-slash zip packer for the admin download)
     background/{index,bus,api,auth,queue,config,telemetry,eventStream,events}  # SW hub: bus·ApiClient·PKCE·IndexedDB queue·SSE
     content/{index,observer,adapters/linkedin,extract,hovercard}              # isolated world: adapter + shadow-DOM hover-card
     ui/{popup,panel}  shared/{messages,storage,idb,client,env,types}  i18n/   # React surfaces · Zod bus · storage · i18n
@@ -644,6 +645,7 @@ apps/                           # deployable processes (thin transport adapters)
 - **staff** — grant/revoke platform staff roles (super_admin/support/billing_ops/compliance_officer/read_only)
 - **provider-configs** — enrichment provider enable/disable + monthly budget + rate-limit (mtd spend masked)
 - **feature-flags** — create/list/toggle global flags + per-tenant overrides (`NewFlagDialog`/`OverrideDialog`)
+- **extension** — Chrome-extension distribution surface: packaged build version/pinned id + zip download (static `public/downloads/`, no API)
 - **audit-log** — read-only append-only privileged-action log viewer
 - **system-health** — service indicators (ECS/Aurora/Redis/Typesense/OpenSearch) + queue depth + worker status
 

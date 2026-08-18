@@ -131,6 +131,14 @@ export {
   registeredConnectorIds,
   registerBuiltinConnectors,
 } from "./ingestion/index.ts";
+// Capture landing (extension-intelligence-loop slice A) — a chrome_extension observation becomes an
+// overlay contact through the shared dedup/provenance/master-bridge discipline.
+export {
+  landCapturedObservation,
+  type CaptureLandingOutcome,
+  type CaptureLandingResult,
+  type CaptureScope,
+} from "./ingestion/landCapture.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,

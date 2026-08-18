@@ -26,10 +26,12 @@ import {
   TpCheckbox,
   TpInput,
 } from "@leadwolf/ui";
+import { useQuery } from "@tanstack/react-query";
 import { Building2, Users } from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { searchCount } from "../bulkActionsApi";
 import { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 import { useAccountSearch } from "../hooks/useAccountSearch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -38,6 +40,7 @@ import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
 import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
+import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
 import { type ResultScope, displayName, emailGlyphFor } from "../types";
 import { AccountDetailDrawer } from "./AccountDetailDrawer";
@@ -109,6 +112,14 @@ function ProspectPageInner() {
   const search = useProspectSearch({ enabled: contactsActive });
   const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
+  // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
+  // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
+  const totalCount = useQuery({
+    queryKey: prospectKeys.contactCount(query),
+    queryFn: () => searchCount(query),
+    enabled: contactsActive,
+    staleTime: 30_000,
+  }).data?.total;
   const recent = useRecentSearches();
   const { tags } = useTags();
 
@@ -262,8 +273,15 @@ function ProspectPageInner() {
       {
         key: "company",
         header: "Company",
-        sortValue: (c) => c.emailDomain ?? "",
-        cell: (c) => <span className={styles.mono}>{c.emailDomain ?? "—"}</span>,
+        // Account name first (works for email-less contacts — capture/import rows), email domain as the
+        // fallback facet the column used to show exclusively.
+        sortValue: (c) => c.companyName ?? c.emailDomain ?? "",
+        cell: (c) =>
+          c.companyName ? (
+            <span>{c.companyName}</span>
+          ) : (
+            <span className={styles.mono}>{c.emailDomain ?? "—"}</span>
+          ),
       },
       {
         key: "email",
@@ -374,7 +392,9 @@ function ProspectPageInner() {
               <span className={styles.count}>
                 {loading
                   ? "Loading…"
-                  : `${hits.length.toLocaleString()}${hasMore ? "+" : ""} contacts`}
+                  : totalCount !== undefined
+                    ? `${totalCount.toLocaleString()} contacts`
+                    : `${hits.length.toLocaleString()}${hasMore ? "+" : ""} contacts`}
               </span>
             ) : (
               <span className={styles.count}>

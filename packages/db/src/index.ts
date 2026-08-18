@@ -141,6 +141,18 @@ export {
   type DueUrl,
   type RegistryRow,
 } from "./repositories/sourceFetchRegistryRepository.ts";
+// The CUSTOMER read seam over Layer-0 persons (Layer-0 as THE product database, D2/D5): the visibility
+// predicate + masked projection every global read inherits. Runs under withErTx.
+export {
+  masterPersonReadRepository,
+  MASTER_PERSON_VISIBLE,
+  toMasterPersonRow,
+  PERSON_FROM,
+  PERSON_SELECT,
+  type MasterPersonRow,
+  type MasterPersonCompany,
+  type RawPersonRow,
+} from "./repositories/masterPersonReadRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,

@@ -41,15 +41,23 @@ async function handle(
     }
 
     case "LOOKUP": {
-      // Resolve the LinkedIn slug against this workspace's contacts (chrome-extension/14 X01). Broadcast the
-      // result so the side panel's Reveal tab can render it; degrade to "unknown" on any failure (offline /
-      // signed-out) so the in-page card never blocks the profile.
+      // The one-round-trip DB-first / vendor-fallback lookup (extension-intelligence-loop slice C): the
+      // server canonicalizes the page URL (public AND Sales-Nav forms), answers from the workspace when it
+      // can, and otherwise pulls the licensed document so a Save lands enriched. Falls back to the plain
+      // slug resolve (older server), then degrades to "unknown" (offline / signed-out) so the in-page card
+      // never blocks the profile.
       try {
-        const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
+        const status = await ctx.api.lookupByUrl(msg.sourceUrl);
         ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
         return { status };
       } catch {
-        return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+        try {
+          const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
+          ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
+          return { status };
+        } catch {
+          return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+        }
       }
     }
 

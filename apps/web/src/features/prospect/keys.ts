@@ -17,6 +17,8 @@ export const prospectKeys = {
   /** Facet counts for one contact search + field set (they change together, so they key together). */
   contactFacets: (query: ContactQuery, fields: FacetKey[]) =>
     ["prospect", "contact-facets", query, fields] as const,
+  /** The exact total for one contact search (POST /search/count) — the grid header's real count. */
+  contactCount: (query: ContactQuery) => ["prospect", "contact-count", query] as const,
   /** The workspace's tags (`GET /tags`). */
   tags: () => ["prospect", "tags"] as const,
   /** The record ids carrying one tag (`GET /tags/:id/records`). */

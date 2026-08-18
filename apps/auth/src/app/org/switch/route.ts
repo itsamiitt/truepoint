@@ -6,20 +6,14 @@
 // tenant the user may not access → 403 (the session stays valid). Cross-origin, credentialed (CORS to apps).
 // Mirrors workspace/switch/route.ts.
 
-import { REFRESH_COOKIE, clearRefreshCookie, refreshCookie } from "@/lib/cookies";
+import { clearRefreshCookie, readRefreshTokenFromHeader, refreshCookie } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { switchOrg } from "@leadwolf/auth";
 import { AppError, InvalidTokenError, orgSelectionSchema } from "@leadwolf/types";
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+// DUAL-READ (AUTH-074): accept both cookie names — the __Host- write flip must not break this route.
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });

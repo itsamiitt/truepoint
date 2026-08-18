@@ -6,7 +6,7 @@
 // workspace-wide under RLS). The slug alone is never trusted: RLS pins the read to the caller's workspace.
 import { checkCaptureRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
-import { blindIndex } from "@leadwolf/core";
+import { blindIndex, fetchAndLandUrl, linkedinUrlKey } from "@leadwolf/core";
 import { contactRepository, usageEventRepository, withTenantTx } from "@leadwolf/db";
 import { ForbiddenError, ValidationError } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -26,7 +26,9 @@ contactsResolveRoutes.get("/by-linkedin/:publicId", async (c) => {
   const workspaceId = claims.wid;
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to look up a prospect.");
-  const publicId = c.req.param("publicId");
+  // Lowercase = the canonical slug form every write path stores (linkedinPublicIdOf); without this a
+  // mixed-case page slug misses a stored lowercase row and the card wrongly offers "Save" on a known contact.
+  const publicId = c.req.param("publicId")?.toLowerCase();
   if (!publicId) throw new ValidationError("A LinkedIn public id is required.");
 
   const contact = await contactRepository.resolveByLinkedinPublicId(
@@ -76,4 +78,72 @@ contactsResolveRoutes.get("/by-linkedin/:publicId", async (c) => {
     contactId: contact?.id ?? null,
     contact,
   });
+});
+
+/**
+ * POST /lookup — the one-round-trip DB-first / vendor-fallback lookup behind the extension's card
+ * (extension-intelligence-loop slice B). Body `{ url }` — any LinkedIn profile form (public slug or
+ * Sales-Nav lead/people). Ladder:
+ *   1. canonicalize (linkedinUrlKey) — Sales-Nav and public forms of one person collapse;
+ *   2. resolve in THIS workspace (slug rung, then sales-nav rung) → `found` + masked contact + freshness;
+ *   3. miss → (flag-gated) fetch-and-land from the licensed origin fleet into the master graph, then
+ *      report `fetched` — the extension's Save then lands the overlay row whose master bridge LINKs to
+ *      what just landed. Landing to the workspace is deliberately NOT automatic: a workspace write stays
+ *      behind the user's explicit Save gesture (hard constraint 4).
+ * Statuses: found | fetched | not_found | unavailable | not_supported.
+ */
+contactsResolveRoutes.post("/lookup", async (c) => {
+  const claims = c.get("claims");
+  const workspaceId = claims.wid;
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to look up a prospect.");
+  const body = (await c.req.json().catch(() => null)) as { url?: unknown } | null;
+  if (!body || typeof body.url !== "string") throw new ValidationError("Body must be { url }.");
+
+  const key = linkedinUrlKey(body.url);
+  if (!key || key.entityKind !== "person") {
+    return c.json({ status: "not_supported", contactId: null, contact: null });
+  }
+  const isSlugForm = key.normalizedUrl.includes("/in/");
+  const slug = isSlugForm ? key.externalId?.toLowerCase() : undefined;
+  const salesNavLeadId = isSlugForm ? undefined : (key.externalId ?? undefined);
+
+  const scope = { tenantId: claims.tid, workspaceId };
+  const found = await withTenantTx(scope, async (tx) => {
+    const match = await contactRepository.findByDedupKeys(tx, workspaceId, {
+      linkedinPublicId: slug,
+      salesNavLeadId,
+    });
+    if (!match) return null;
+    const [masked] = await contactRepository.listMaskedByIds(tx, [match.id]);
+    return masked ?? null;
+  });
+  if (found) {
+    return c.json({
+      status: "found",
+      contactId: found.id,
+      owned: found.isRevealed,
+      contact: found,
+      lastUpdatedAt: found.lastVerifiedAt ?? found.createdAt,
+    });
+  }
+
+  // Not in the workspace — pull the licensed document into the master graph (bounded; 30-day freshness
+  // clock inside fetchAndLandUrl means a repeat view costs no vendor call). Flag-off degrades to a plain
+  // not_found so the card still renders truthfully.
+  if (!env.LINKEDIN_LINK_FETCH_ENABLED) {
+    return c.json({ status: "not_found", contactId: null, contact: null });
+  }
+  await checkCaptureRate(`link-fetch:${claims.sub}`, 1);
+  const result = await fetchAndLandUrl({
+    entityKind: "person",
+    normalizedUrl: key.normalizedUrl,
+  });
+  const status =
+    result.outcome === "landed" || result.outcome === "fresh" || result.outcome === "duplicate"
+      ? "fetched"
+      : result.outcome === "unavailable"
+        ? "unavailable"
+        : "not_found";
+  return c.json({ status, contactId: null, contact: null });
 });

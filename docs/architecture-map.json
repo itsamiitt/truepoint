@@ -47,6 +47,7 @@
     "er",
     "events",
     "export",
+    "extension",
     "feature-flags",
     "forge",
     "home",
@@ -103,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2093,
-  "fileSetHash": "sha256:b2a3fe1ed7047fd9483b65b01a3e959a15ebdf490ee92f552ad96e009e31adf4",
+  "fileCount": 2107,
+  "fileSetHash": "sha256:cd3e510affe4b43a8cdde9ac9bb469e44b14d58c288f2d683c340ad02689a228",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -915,6 +916,21 @@
       "workers": [],
       "integrations": []
     },
+    "extension": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/extension/api.ts",
+        "apps/admin/src/features/extension/components/ExtensionPage.tsx",
+        "apps/admin/src/features/extension/hooks/useExtensionMeta.ts",
+        "apps/admin/src/features/extension/index.ts",
+        "apps/admin/src/features/extension/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "feature-flags": {
       "web": [],
       "admin": [
@@ -1205,6 +1221,7 @@
         "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.ts",
         "packages/core/src/ingestion/index.ts",
+        "packages/core/src/ingestion/landCapture.ts",
         "packages/core/src/ingestion/registerBuiltins.ts",
         "packages/core/src/ingestion/registry.ts"
       ],
@@ -2235,6 +2252,7 @@
       "apps/admin/src/app/(shell)/data-ops/verification/page.tsx",
       "apps/admin/src/app/(shell)/data-quality/page.tsx",
       "apps/admin/src/app/(shell)/data-sources/page.tsx",
+      "apps/admin/src/app/(shell)/extension/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
@@ -2431,6 +2449,7 @@
     "apps/extension": [
       "apps/extension/manifest.config.ts",
       "apps/extension/scripts/gen-icons.mjs",
+      "apps/extension/scripts/pack-zip.mjs",
       "apps/extension/vite.config.ts"
     ],
     "apps/extension/background": [
@@ -2494,6 +2513,7 @@
       "apps/forge/src/app/(shell)/overview/page.tsx",
       "apps/forge/src/app/(shell)/parsers/page.tsx",
       "apps/forge/src/app/(shell)/review/page.tsx",
+      "apps/forge/src/app/(shell)/source-fetches/page.tsx",
       "apps/forge/src/app/(shell)/sync-status/page.tsx",
       "apps/forge/src/app/auth/callback/page.tsx",
       "apps/forge/src/app/layout.tsx",
@@ -2554,6 +2574,11 @@
       "apps/forge/src/features/review/hooks/useReview.ts",
       "apps/forge/src/features/review/index.ts",
       "apps/forge/src/features/review/types.ts",
+      "apps/forge/src/features/source-fetches/api.ts",
+      "apps/forge/src/features/source-fetches/components/SourceFetchesPage.tsx",
+      "apps/forge/src/features/source-fetches/hooks/useSourceFetches.ts",
+      "apps/forge/src/features/source-fetches/index.ts",
+      "apps/forge/src/features/source-fetches/types.ts",
       "apps/forge/src/features/sync-status/api.ts",
       "apps/forge/src/features/sync-status/components/SyncStatusPage.tsx",
       "apps/forge/src/features/sync-status/hooks/useSyncStatus.ts",
@@ -3243,6 +3268,7 @@
     "undeclared domain 'entitlements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'er' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'events' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'extension' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'identity' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

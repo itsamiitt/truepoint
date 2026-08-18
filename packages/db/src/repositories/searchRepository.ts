@@ -329,6 +329,10 @@ const MASKED = {
   priorityScore: contacts.priorityScore,
   createdAt: contacts.createdAt,
   lastVerifiedAt: contacts.lastVerifiedAt,
+  // The linked account's display name (via the live-account left join every search query already makes).
+  // Before this, the grid's "Company" column had only email_domain to render, so an email-less contact —
+  // exactly what a capture/import without an email produces — displayed as company "—" while plainly saved.
+  companyName: accounts.name,
 };
 
 type MaskedRow = {
@@ -362,6 +366,7 @@ function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedConta
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
     lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,
+    companyName: (r.companyName as string | null) ?? null,
     // Additive, gate-on only: the masked per-value channel summaries (counts + type/status/lineType/
     // isPrimary — never values/domains). ABSENT gate-off ⇒ the payload is byte-identical to pre-S-CH4.
     ...(channels ? { channels } : {}),

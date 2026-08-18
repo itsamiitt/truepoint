@@ -173,6 +173,8 @@ export interface ReviewTaskRow {
   confidence: number;
   priority: number;
   subjectRef: string;
+  assigneeUserId: string | null;
+  createdAt: Date;
 }
 
 /** The agreement-ranked open review queue (priority desc). */
@@ -184,6 +186,8 @@ export async function listReviewTasks(tx: Tx, limit = 50): Promise<ReviewTaskRow
       confidence: sql<number>`coalesce(${reviewTasks.confidence}, 0)::float8`,
       priority: reviewTasks.priority,
       subjectRef: reviewTasks.subjectRef,
+      assigneeUserId: reviewTasks.assigneeUserId,
+      createdAt: reviewTasks.createdAt,
     })
     .from(reviewTasks)
     .where(eq(reviewTasks.status, "open"))

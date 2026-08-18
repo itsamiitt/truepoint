@@ -4,13 +4,17 @@
 // when the dual gate is on, falling back to the legacy poll `status` for gate-off / legacy numeric ids.
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { fetchImportJobDetail } from "../apiV2";
 import { isTerminalV2, legacyStatusToV2 } from "../components/shared/stateCopy";
 import { importKeys } from "../keys";
 
 export function useImportJob(jobId: string | null) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const invalidatedFor = useRef<string | null>(null);
+
+  const query = useQuery({
     queryKey: importKeys.detail(jobId ?? "none"),
     queryFn: () => fetchImportJobDetail(jobId as string),
     enabled: jobId != null,
@@ -22,4 +26,23 @@ export function useImportJob(jobId: string | null) {
       return status === "queued" || status === "deferred" ? 10_000 : 2_500;
     },
   });
+
+  // Cross-feature cache sync (extension-intelligence-loop slice D): the import lands contacts on a WORKER,
+  // so no mutation hook ever sees the write — this poll is the only place the client learns it finished.
+  // On the transition to terminal, invalidate every surface that lists contacts (the Prospect grid's search
+  // entries + the post-import table), once per job, so freshly imported rows appear without a manual refresh.
+  const data = query.data;
+  useEffect(() => {
+    if (!jobId || !data) return;
+    const status = data.statusV2 ?? legacyStatusToV2(data.status);
+    if (!isTerminalV2(status) || invalidatedFor.current === jobId) return;
+    invalidatedFor.current = jobId;
+    // Literal root key mirroring prospectKeys.all — a keys import would be a cross-feature dependency
+    // (import → prospect) the boundary rules forbid; the key ARRAY is the stable public contract here.
+    void queryClient.invalidateQueries({ queryKey: ["prospect"] });
+    void queryClient.invalidateQueries({ queryKey: importKeys.contacts() });
+    void queryClient.invalidateQueries({ queryKey: importKeys.list() });
+  }, [jobId, data, queryClient]);
+
+  return query;
 }

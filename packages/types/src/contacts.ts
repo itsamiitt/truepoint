@@ -21,6 +21,8 @@ export const sourceName = z.enum([
   "pdl",
   "coresignal",
   "linkedin_api", // vendor-neutral LinkedIn-shaped source API (0115; dark until vendor ToS/DPA review)
+  "chrome_extension", // user-initiated page capture landed by the extension (0120; extension-intelligence-loop)
+  "database", // materialized from the TruePoint database ("Add to workspace"; 0122) — vendor-neutral by construction
 ]);
 export type SourceName = z.infer<typeof sourceName>;
 
@@ -462,6 +464,10 @@ export const maskedContactSchema = z.object({
   lastName: z.string().nullable(),
   jobTitle: z.string().nullable(),
   emailDomain: z.string().nullable(),
+  // The linked account's display name (non-PII). Optional-populated: the search projection computes it
+  // (via its live-account join) so the grid's Company column can render for email-less contacts; surfaces
+  // that don't join accounts omit it.
+  companyName: z.string().nullable().optional(),
   emailStatus: emailStatus,
   // Phone field-correctness verdict (list-plan/06 §3.2) — non-PII (a status label, never the number). Null
   // until a verification has graded the phone. Feeds the verification sub-score + the Data Health column.
@@ -516,3 +522,17 @@ export const linkedinResolveResponseSchema = z.object({
   contact: maskedContactSchema.nullable(),
 });
 export type LinkedinResolveResponse = z.infer<typeof linkedinResolveResponseSchema>;
+
+// ── One-round-trip lookup (POST /contacts/lookup — extension-intelligence-loop slice B) ──────────────────
+/** DB-first / vendor-fallback lookup by LinkedIn URL (public or Sales-Nav form). `found` carries the masked
+ *  workspace contact + freshness; `fetched` means the licensed source landed intel into the master graph and
+ *  a Save will add the contact to the workspace; `unavailable` = source fleet dark/down. Never PII. */
+export const contactLookupResponseSchema = z.object({
+  status: z.enum(["found", "fetched", "not_found", "unavailable", "not_supported"]),
+  contactId: z.string().uuid().nullable(),
+  owned: z.boolean().optional(),
+  contact: maskedContactSchema.nullable(),
+  /** lastVerifiedAt ?? createdAt of the workspace copy (ISO-8601) — the "updated 2 hours ago" signal. */
+  lastUpdatedAt: z.string().nullable().optional(),
+});
+export type ContactLookupResponse = z.infer<typeof contactLookupResponseSchema>;

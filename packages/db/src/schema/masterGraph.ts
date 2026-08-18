@@ -11,9 +11,17 @@
 // PII (email/phone) lives only in the normalized channel tables (master_emails/master_phones) as bytea
 // ciphertext + an HMAC blind index; the blind index is the GLOBAL dedup + DSAR/suppression lookup key.
 //
-// DEFERRED (do not add): the pg_trgm GIN fuzzy-name indexes (03:407 on name_normalized, 03:425 on full_name)
-// are intentionally NOT built — pg_trgm is not bootstrapped, OpenSearch owns user fuzzy search, and the trgm
-// GIN is scale-track / ER-blocking-only (PLAN_01 §6 scale-gate, C9, ADR-0021:72-73). Per-table notes below.
+// READ-SIDE POLICY (0121, D2): Layer-0 is THE product database. Every CUSTOMER read over master_persons —
+// the global database search, the extension "in database" hit, the reveal channel fallback — goes through
+// masterPersonReadRepository.MASTER_PERSON_VISIBLE: visibility IN ('licensed','coop') AND is_suppressed =
+// false AND merged_into_person_id IS NULL. Import/capture-minted persons stay 'private' (the co-op boundary
+// below); the linkedin_api landing marks 'licensed'. Channel rows carry source_name (who contributed the
+// value) — only licensed-provider channels are revealable across workspaces.
+//
+// INDEXES (0123, D10): trgm GINs on full_name / job_title / location_raw + the keyset + slug btrees, all
+// PARTIAL on the visible predicate — the operator's decision made Postgres the global read path, superseding
+// the earlier "defer fuzzy search to an engine adapter" note (pg_trgm IS bootstrapped by 0081). Kill date:
+// when a search engine adapter takes over the database scope, drop them.
 
 import { sql } from "drizzle-orm";
 import {
@@ -182,6 +190,9 @@ export const masterPersons = pgTable(
     hasPhone: boolean("has_phone").notNull().default(false),
     dataQualityScore: integer("data_quality_score"),
     isSuppressed: boolean("is_suppressed").notNull().default(false), // global suppression mirror; gates reveal (08 §3)
+    // 0121 (D2): who may READ this person — private (workspace-minted; never surfaced globally) | licensed
+    // (provider-landed; servable to every tenant) | coop (reserved, Phase-3 CONTRIBUTE-TO). See header.
+    visibility: varchar("visibility", { length: 10 }).notNull().default("private"),
     region: char("region", { length: 2 }),
     jurisdiction: char("jurisdiction", { length: 2 }),
     blockKey: varchar("block_key", { length: 255 }), // [RESERVED, UNINDEXED — PLAN_01 §2.8] ER blocking key
@@ -208,6 +219,10 @@ export const masterPersons = pgTable(
     seniorityEnum: check(
       "master_persons_seniority_enum",
       sql`${t.seniorityLevel} IS NULL OR ${t.seniorityLevel} IN ${SENIORITY_LEVELS}`,
+    ),
+    visibilityEnum: check(
+      "master_persons_visibility_enum",
+      sql`${t.visibility} IN ('private','licensed','coop')`,
     ),
     // ER merge tombstone (Phase 2). Self-merge is a caller bug that would create a record resolving to
     // itself forever, so the database refuses it rather than trusting the survivor/loser choice.
@@ -384,6 +399,10 @@ export const masterEmails = pgTable(
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
     verificationSource: varchar("verification_source", { length: 50 }),
     isPrimary: boolean("is_primary").notNull().default(false),
+    // 0121 (D3): WHO contributed the value ('linkedin_api' for the licensed landing). The reveal fallback
+    // serves only licensed-provider channels; a co-op/import row (email_enc NULL today) is never revealable
+    // across workspaces. Nullable = pre-0121 rows with no value.
+    sourceName: varchar("source_name", { length: 50 }),
     createdAt: createdAt(), // channel rows are append-only — no updated_at (PLAN_01 §2.8)
   },
   (t) => ({
@@ -417,6 +436,7 @@ export const masterPhones = pgTable(
     phoneStatus: varchar("phone_status", { length: 50 }),
     sourceCount: integer("source_count").notNull().default(1),
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+    sourceName: varchar("source_name", { length: 50 }), // 0121 (D3): contributor of the value — see master_emails
     createdAt: createdAt(), // append-only
   },
   (t) => ({

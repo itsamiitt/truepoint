@@ -47,15 +47,19 @@ export const linkedinAdapter: SiteAdapter = {
 
   subjectKey(url: URL): string | null {
     const match = url.pathname.match(PROFILE_RE);
-    return match?.[1] ? decodeURIComponent(match[1]) : null;
+    if (match?.[1]) return decodeURIComponent(match[1]);
+    // Sales-Nav lead/people pages carry no public slug — the lead id is the subject key there, so the
+    // card/lookup/capture flow works on Sales-Nav too (previously these pages had no subject at all).
+    const sales = url.pathname.match(SALES_PROFILE_RE);
+    return sales?.[2] ? `sales-lead:${decodeURIComponent(sales[2])}` : null;
   },
 
   extract(url: URL, doc: Document): CapturedRecord | null {
     if (this.pageType(url) !== "profile") {
       return null;
     }
-    const publicId = this.subjectKey(url);
-    if (!publicId) {
+    const subjectKey = this.subjectKey(url);
+    if (!subjectKey) {
       return null;
     }
     const fullName = firstText(doc, ["h1", "main h1", "section h1"]);
@@ -64,8 +68,28 @@ export const linkedinAdapter: SiteAdapter = {
       ".text-body-small.inline.t-black--light",
       "span.text-body-small",
     ]);
-    const profileUrl = `${url.origin}/in/${encodeURIComponent(publicId)}`;
 
+    const salesMatch = url.pathname.match(SALES_PROFILE_RE);
+    if (salesMatch?.[2]) {
+      const leadId = decodeURIComponent(salesMatch[2]);
+      return {
+        subjectKey,
+        adapter: "linkedin",
+        pageType: "profile",
+        fields: {
+          fullName,
+          jobTitle,
+          location,
+          profileUrl: `https://www.linkedin.com/sales/lead/${encodeURIComponent(leadId)}`,
+          salesNavLeadId: leadId,
+        },
+        sourceUrl: url.href,
+        capturedAt: new Date().toISOString(),
+      };
+    }
+
+    const publicId = subjectKey;
+    const profileUrl = `${url.origin}/in/${encodeURIComponent(publicId)}`;
     return {
       subjectKey: publicId,
       adapter: "linkedin",

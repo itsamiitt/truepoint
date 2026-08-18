@@ -9,6 +9,7 @@
 
 import type { List } from "@leadwolf/types";
 import { Dialog, FieldGroup, TpButton, TpInput, TpSelect, useToast } from "@leadwolf/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { bulkAddToList } from "../bulkActionsApi";
 import { createList, fetchLists } from "../bulkResourcesApi";
@@ -28,6 +29,7 @@ export function AddToListDialog({
   onAdded?: (affected: number) => void;
 }) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [lists, setLists] = useState<List[] | null>(null);
   const [listId, setListId] = useState("");
   const [newName, setNewName] = useState("");
@@ -65,6 +67,12 @@ export function AddToListDialog({
       }
       if (!targetId) return;
       const { affected } = await bulkAddToList(targetId, contactIds);
+      // The membership write bypasses every mutation hook, so sync the lists caches here — without this
+      // the list index count and the open list's member table stay stale for staleTime and the user reads
+      // it as "my contacts weren't added" (extension-intelligence-loop slice D). The literal root key
+      // mirrors listKeys.all — imported as a literal because lists → prospect is the allowed dependency
+      // direction (this file's header) and a keys import the other way would create the cycle.
+      void queryClient.invalidateQueries({ queryKey: ["lists"] });
       toast.success(
         `Added to list — ${affected.toLocaleString()} contact${affected === 1 ? "" : "s"}`,
       );

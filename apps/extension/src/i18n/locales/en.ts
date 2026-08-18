@@ -20,6 +20,16 @@ export const en = {
   "card.openInApp": "Open in TruePoint",
   "card.noMatch": "No TruePoint match",
   "card.noMatchHint": "We couldn't find this profile.",
+  // Lookup-ladder states (extension-intelligence-loop): the card always says which stage the lookup is in.
+  "card.checking": "Checking TruePoint…",
+  "card.inTruePoint": "In TruePoint",
+  "card.updatedToday": "Found in TruePoint · updated today",
+  "card.updatedDaysAgo": "Found in TruePoint · updated {n} days ago",
+  "card.fetchedPill": "Intel fetched",
+  "card.fetchedHint": "Fetched from data source — save to add to your workspace",
+  "card.notFoundPill": "Not in TruePoint",
+  "card.unavailablePill": "Source unavailable",
+  "card.unavailableHint": "Data source unreachable — save captures the visible page",
   "card.verified": "verified",
   // Confidence badge v0 (S-10) + the S-12 empty-record case. Placeholders are substituted by the caller
   // rather than interpolated here, so the catalogue stays plain strings a translator can read.

@@ -13,6 +13,8 @@ export interface BffReaders {
   parsers: () => Promise<unknown>;
   syncStatus: () => Promise<unknown>;
   captures: () => Promise<unknown>;
+  /** The live source-fetch registry telemetry (URLs + outcomes, no PII) — extension-intelligence-loop. */
+  sourceFetches: () => Promise<unknown>;
   /** Directory identity for /bff/me — email only, never the full user record. */
   identity: (userId: string) => Promise<{ email: string | null }>;
 }
@@ -79,6 +81,10 @@ export function createBffApp(deps: BffDeps): Hono {
     gated("data:read", "forge.read_sync_status", deps.readers.syncStatus),
   );
   app.get("/bff/captures", gated("data:read", "forge.read_captures", deps.readers.captures));
+  app.get(
+    "/bff/source-fetches",
+    gated("data:read", "forge.read_source_fetches", deps.readers.sourceFetches),
+  );
 
   // Authn-only (no capability): the caller reads their OWN role/capabilities/identity, like the main api's
   // /admin/me — a zero-capability staff account still gets its (empty) matrix so the console can render.

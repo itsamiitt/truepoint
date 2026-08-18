@@ -385,6 +385,10 @@ const GRANTS = `
   -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
   -- policy are authored by staff, not by an ingest path.
   GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
+  -- source_fetch_registry (0118) — URLs + ids only, no PII. READ by the ER role so the database lookup and
+  -- the add-to-workspace materializer can hop a Sales-Nav lead URL → resolved_person_id in the same withErTx
+  -- as the person read (D8). Writes stay on the owner/withPrivilegedTx path (registerUrl/recordFetch).
+  GRANT SELECT ON source_fetch_registry TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
   -- leadwolf_forge (ADR-0047) owns the forge schema data plane end-to-end (raw to parsed to verified + ER +
   -- governance). Full DML there (DELETE included — raw-layer DSAR erasure runs in-schema), but NO grant on the

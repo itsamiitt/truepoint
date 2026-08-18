@@ -86,7 +86,10 @@ export class HoverCard {
     const parts = [record.fields.jobTitle, record.fields.company].filter(Boolean);
     this.subEl.textContent = parts.join(" · ");
     this.revealEl.textContent = "";
-    this.renderPrimary();
+    // Honest initial state: the LOOKUP is in flight — say so instead of pre-rendering "Not revealed"
+    // and swapping (the reader can't tell a pending answer from a miss).
+    this.pillEl.textContent = t("card.checking");
+    this.button.style.display = "none";
     this.host.style.display = "block";
   }
 
@@ -117,6 +120,30 @@ export class HoverCard {
     // the real outcome via SUBJECT_STATUS.
     if (this.status?.outcome === "queued") {
       this.pillEl.textContent = t("card.queued");
+      this.button.textContent = t("card.save");
+      return;
+    }
+    // The lookup ladder (extension-intelligence-loop): found-in-workspace shows freshness; a vendor fetch
+    // or a miss both offer Save (the fetched intel LINKs into the saved contact's master bridge).
+    if (this.status?.outcome === "found" && this.status.contactId) {
+      this.pillEl.textContent = freshnessLabel(this.status.lastUpdatedAt ?? null);
+      this.button.textContent = this.status.owned ? t("card.openInApp") : t("card.reveal");
+      return;
+    }
+    if (this.status?.outcome === "fetched") {
+      this.pillEl.textContent = t("card.fetchedPill");
+      this.revealEl.textContent = t("card.fetchedHint");
+      this.button.textContent = t("card.save");
+      return;
+    }
+    if (this.status?.outcome === "not_found") {
+      this.pillEl.textContent = t("card.notFoundPill");
+      this.button.textContent = t("card.save");
+      return;
+    }
+    if (this.status?.outcome === "unavailable") {
+      this.pillEl.textContent = t("card.unavailablePill");
+      this.revealEl.textContent = t("card.unavailableHint");
       this.button.textContent = t("card.save");
       return;
     }
@@ -175,6 +202,15 @@ function el(tag: string, className?: string): HTMLElement {
     node.className = className;
   }
   return node;
+}
+
+/** "Found in TruePoint · updated N days ago" from the workspace copy's freshness stamp. */
+function freshnessLabel(lastUpdatedAt: string | null): string {
+  if (!lastUpdatedAt) return t("card.inTruePoint");
+  const days = Math.floor((Date.now() - new Date(lastUpdatedAt).getTime()) / 86_400_000);
+  if (Number.isNaN(days) || days < 0) return t("card.inTruePoint");
+  if (days === 0) return t("card.updatedToday");
+  return t("card.updatedDaysAgo").replace("{n}", String(days));
 }
 
 function errorMessage(errorClass?: string): string {

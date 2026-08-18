@@ -64,6 +64,9 @@ const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   // a one-segment `:id` rule could never have matched it (`:id` → `[^/]+`) — it needs its own rule or the
   // hover card's lookup 403s the moment EXTENSION_SCOPE_ENFORCE flips.
   rule("GET", "/api/v1/contacts/by-linkedin/:publicId"),
+  // The one-round-trip DB-first / vendor-fallback lookup behind the card (extension-intelligence-loop
+  // slice B) — body is a LinkedIn URL, response is masked-or-status, no PII either direction.
+  rule("POST", "/api/v1/contacts/lookup"),
   rule("GET", "/api/v1/credits/balance"),
   rule("GET", "/api/v1/credits/reveal-costs"),
   rule("GET", "/api/v1/me"),

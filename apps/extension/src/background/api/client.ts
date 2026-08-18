@@ -3,6 +3,8 @@
 // Tenancy is taken from token claims (never sent by the caller as trusted input).
 import type {
   ConsentContext,
+  ContactLookupResponse,
+  IngestAck,
   IngestionEnvelope,
   LinkedinResolveResponse,
   RawObservation,
@@ -123,11 +125,22 @@ export class ApiClient {
       consent,
       records: [observation],
     };
-    await this.request<{ accepted: number }>(
+    const ack = await this.request<IngestAck>(
       "/ingest",
       { method: "POST", body: JSON.stringify(envelope) },
       { idempotencyKey: item.idempotencyKey },
     );
+    // The server now LANDS chrome_extension captures and answers per record (extension-intelligence-loop
+    // slice A) — report what actually happened instead of assuming "saved". A skipped record (no dedupable
+    // identity key) is surfaced as rejected so the panel doesn't show a phantom save.
+    const landed = ack.results?.[0];
+    if (landed && landed.outcome !== "skipped") {
+      return { contactId: landed.contactId, known: true, owned: false, outcome: "saved" };
+    }
+    if (landed?.outcome === "skipped") {
+      return { contactId: null, known: false, owned: false, outcome: "rejected" };
+    }
+    // Older server (no results array): the ack means validated-and-accepted only.
     return { contactId: null, known: true, owned: false, outcome: "saved" };
   }
 
@@ -212,6 +225,49 @@ export class ApiClient {
           }
         : undefined,
     };
+  }
+
+  /** The one-round-trip DB-first / vendor-fallback lookup (POST /contacts/lookup; extension-intelligence-loop
+   *  slice B). Sends the profile URL (public or Sales-Nav form — the server canonicalizes); maps the response
+   *  onto SubjectStatus: `found` carries the masked identity + freshness, `fetched` means the licensed source
+   *  just landed intel and Save will add the contact to the workspace. Throws ApiError on 401/offline so the
+   *  bus can fall back to the slug resolve. */
+  async lookupByUrl(url: string): Promise<SubjectStatus> {
+    const resp = await this.request<ContactLookupResponse>("/contacts/lookup", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+    const c = resp.contact;
+    if (resp.status === "found" && resp.contactId) {
+      return {
+        contactId: resp.contactId,
+        known: true,
+        owned: resp.owned ?? false,
+        outcome: "found",
+        lastUpdatedAt: resp.lastUpdatedAt ?? null,
+        emailAvailable: c?.hasEmail ?? false,
+        phoneAvailable: c?.hasPhone ?? false,
+        score: null,
+        identity: c
+          ? {
+              jobTitle: c.jobTitle ?? null,
+              seniority: c.seniorityLevel ?? null,
+              department: c.department ?? null,
+              location: [c.locationCity, c.locationCountry].filter(Boolean).join(", ") || null,
+              emailStatus: c.emailStatus ?? null,
+            }
+          : undefined,
+      };
+    }
+    const outcome =
+      resp.status === "fetched"
+        ? "fetched"
+        : resp.status === "unavailable"
+          ? "unavailable"
+          : resp.status === "not_found"
+            ? "not_found"
+            : "unknown";
+    return { contactId: null, known: false, owned: false, outcome, score: null };
   }
 
   /** Post harvested Sales-Nav URLs to the fetch registry (POST /ingest/linkedin-links; docs/planning
