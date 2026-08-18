@@ -6,6 +6,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -63,7 +64,7 @@ export function CapturesPage() {
   const { captures, loading, error, reload } = useCaptures();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Captures"
         subtitle="Everything the sources have captured — what parsed cleanly, what failed, and what is waiting."
@@ -84,6 +85,6 @@ export function CapturesPage() {
       >
         <DataTable columns={columns} rows={captures ?? []} rowKey={(c) => c.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

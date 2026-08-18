@@ -5,6 +5,7 @@
 
 import {
   Card,
+  PageContainer,
   PageHeader,
   StatTile,
   StateSwitch,
@@ -24,7 +25,7 @@ export function TrustAbusePage() {
   const { data, loading, error, reload } = useTrustAbuse();
 
   return (
-    <div className="tp-page">
+    <PageContainer>
       <PageHeader
         title="Trust & abuse"
         subtitle="Cross-tenant abuse signals — signup velocity, non-business email signups, active holds and the tenant-status mix. Counts only; no identities are shown."
@@ -93,6 +94,6 @@ export function TrustAbusePage() {
           </>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

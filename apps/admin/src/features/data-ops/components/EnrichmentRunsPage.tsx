@@ -6,7 +6,14 @@
 // same). Statuses render as plain text (no tone mapping); every async state goes through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
+} from "@leadwolf/ui";
 import { Sparkles } from "lucide-react";
 import { formatCredits, formatInt, shortDate } from "../format";
 import { useEnrichmentRuns } from "../hooks/useEnrichmentRuns";
@@ -92,7 +99,7 @@ export function EnrichmentRunsPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Enrichment runs"
         subtitle="Cross-tenant bulk-enrichment monitor — recent runs, match/enrich outcomes and credit spend across all orgs. Read-only; counts only."
@@ -113,6 +120,6 @@ export function EnrichmentRunsPage() {
       >
         <DataTable columns={columns} rows={runs ?? []} rowKey={(r) => r.jobId} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

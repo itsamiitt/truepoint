@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -86,7 +87,7 @@ export function TenantsPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Tenants"
         subtitle="Cross-tenant directory — plan, status, seats and credits per org."
@@ -168,6 +169,6 @@ export function TenantsPage() {
           </div>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

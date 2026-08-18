@@ -9,6 +9,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -162,7 +163,7 @@ export function CompliancePage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Compliance"
         subtitle="DSAR oversight — the data-subject request queue across the platform. Subject identity is never shown here."
@@ -225,6 +226,6 @@ export function CompliancePage() {
       <GlobalSuppression />
       <RetentionPolicies />
       <SubProcessors />
-    </div>
+    </PageContainer>
   );
 }

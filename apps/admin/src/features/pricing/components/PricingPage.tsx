@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -189,7 +190,7 @@ export function PricingPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Pricing"
         subtitle="The credit-pack catalog the product sells — transparent, public pricing (no demo gate)."
@@ -281,7 +282,7 @@ export function PricingPage() {
           </div>
         ) : null}
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }
 

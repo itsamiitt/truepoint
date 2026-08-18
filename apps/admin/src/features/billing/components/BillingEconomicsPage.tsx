@@ -6,6 +6,7 @@
 import {
   type Column,
   DataTable,
+  PageContainer,
   PageHeader,
   StatTile,
   StateSwitch,
@@ -113,7 +114,7 @@ export function BillingEconomicsPage() {
   }
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Billing economics"
         subtitle="Gross credits sold vs consumed, revenue vs metered provider spend, cost-per-reveal and margin — across all tenants."
@@ -206,6 +207,6 @@ export function BillingEconomicsPage() {
           </>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

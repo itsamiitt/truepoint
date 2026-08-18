@@ -7,7 +7,7 @@
 // through the shared State Kit.
 "use client";
 
-import { PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
+import { PageContainer, PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
 import Link from "next/link";
 import { formatInt } from "../format";
 import { useDataOpsOverview } from "../hooks/useDataOpsOverview";
@@ -16,7 +16,7 @@ export function DataOpsOverviewPage() {
   const { overview, loading, error, reload } = useDataOpsOverview();
 
   return (
-    <div className="tp-page">
+    <PageContainer>
       <PageHeader
         title="Data management"
         subtitle="Cross-tenant data-operations overview — pipeline jobs, bulk-import outcomes and retention shadow runs at a glance. Read-only; counts and tallies only."
@@ -83,6 +83,6 @@ export function DataOpsOverviewPage() {
           Dedup review →
         </Link>
       </div>
-    </div>
+    </PageContainer>
   );
 }

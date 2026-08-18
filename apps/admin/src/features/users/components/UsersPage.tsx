@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -137,7 +138,7 @@ export function UsersPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Users"
         subtitle="Cross-tenant user directory — status and platform-admin grants across all orgs."
@@ -256,6 +257,6 @@ export function UsersPage() {
           />
         </label>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

@@ -9,6 +9,7 @@ import {
   Card,
   type Column,
   DataTable,
+  PageContainer,
   PageHeader,
   StatTile,
   StateSwitch,
@@ -122,7 +123,7 @@ export function SystemHealthPage() {
   const queues = health?.queues ?? [];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="System health"
         subtitle="Service status, the live job queues, and the bulk-enrichment job sample."
@@ -212,6 +213,6 @@ export function SystemHealthPage() {
           </>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

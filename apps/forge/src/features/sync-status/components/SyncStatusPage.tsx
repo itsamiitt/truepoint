@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -61,7 +62,7 @@ export function SyncStatusPage() {
   const { targets, loading, error, reload } = useSyncStatus();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Sync status"
         subtitle="How parsed records are flowing to each downstream destination — and where they are backing up."
@@ -82,6 +83,6 @@ export function SyncStatusPage() {
       >
         <DataTable columns={columns} rows={targets ?? []} rowKey={(t) => t.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

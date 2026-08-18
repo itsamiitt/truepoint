@@ -8,6 +8,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   TpSelect,
@@ -105,7 +106,7 @@ export function DataQualityPage() {
   const totals = data?.verification.totals;
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Data quality"
         subtitle="Cross-tenant data health — coverage, validity and freshness from the latest per-workspace snapshots, plus the re-verification ledger. Counts only; no contact data is shown."
@@ -194,6 +195,6 @@ export function DataQualityPage() {
           </div>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

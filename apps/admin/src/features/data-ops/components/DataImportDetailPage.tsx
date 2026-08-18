@@ -5,7 +5,14 @@
 // async state goes through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  PageContainer,
+  PageHeader,
+  StatTile,
+  StateSwitch,
+} from "@leadwolf/ui";
 import Link from "next/link";
 import { formatInt } from "../format";
 import { useDataImportDetail } from "../hooks/useDataImportDetail";
@@ -48,7 +55,7 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Import job"
         subtitle={
@@ -128,6 +135,6 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
           </div>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

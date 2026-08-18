@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -217,7 +218,7 @@ export function ContentPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Content"
         subtitle="In-app announcements / banners shown to customers — to all tenants or a targeted org."
@@ -365,7 +366,7 @@ export function ContentPage() {
           </div>
         ) : null}
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }
 

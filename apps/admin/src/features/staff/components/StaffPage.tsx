@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -126,7 +127,7 @@ export function StaffPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Staff"
         subtitle="Platform staff roles — who can operate TruePoint across tenants, and at what role. Grants and revokes are audited."
@@ -221,6 +222,6 @@ export function StaffPage() {
           </div>
         }
       />
-    </div>
+    </PageContainer>
   );
 }

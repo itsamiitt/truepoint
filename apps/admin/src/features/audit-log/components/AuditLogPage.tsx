@@ -8,6 +8,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   TpButton,
@@ -122,7 +123,7 @@ export function AuditLogPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Audit log"
         subtitle="Privileged platform actions across all tenants — append-only, read-only. Filter and export for review."
@@ -220,7 +221,7 @@ export function AuditLogPage() {
           </div>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }
 

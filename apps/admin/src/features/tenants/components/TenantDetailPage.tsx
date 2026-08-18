@@ -4,7 +4,15 @@
 // through the shared State Kit.
 "use client";
 
-import { Card, type Column, DataTable, PageHeader, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import {
+  Card,
+  type Column,
+  DataTable,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
+  StatusBadge,
+} from "@leadwolf/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { formatInt, shortDate, statusTone } from "../format";
@@ -84,7 +92,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <Link href="/tenants" className="tp-link-back">
         <ArrowLeft size={14} /> Tenants
       </Link>
@@ -165,6 +173,6 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           </>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

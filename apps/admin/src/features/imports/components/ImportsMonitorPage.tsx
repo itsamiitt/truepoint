@@ -10,6 +10,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -104,7 +105,7 @@ export function ImportsMonitorPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Bulk imports"
         subtitle="Cross-tenant bulk-import monitor — recent jobs, AV scan, row outcomes and failures across all orgs."
@@ -125,6 +126,6 @@ export function ImportsMonitorPage() {
       >
         <DataTable columns={columns} rows={jobs ?? []} rowKey={(j) => j.jobId} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

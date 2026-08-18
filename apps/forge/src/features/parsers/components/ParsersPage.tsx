@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -72,7 +73,7 @@ export function ParsersPage() {
   const { parsers, loading, error, reload } = useParsers();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Parsers"
         subtitle="The registered parsers that turn captures into structured records, and how they are faring."
@@ -93,6 +94,6 @@ export function ParsersPage() {
       >
         <DataTable columns={columns} rows={parsers ?? []} rowKey={(p) => p.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

@@ -12,6 +12,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   TpButton,
@@ -120,7 +121,7 @@ export function ApprovalsPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Approvals"
         subtitle="Maker-checker review queue — high-risk data operations awaiting a second operator. You cannot decide a request you filed (separation of duties, enforced server-side)."
@@ -181,6 +182,6 @@ export function ApprovalsPage() {
           />
         </label>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -65,7 +66,7 @@ export function ReviewPage() {
   const { tasks, loading, error, reload } = useReview();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Review"
         subtitle="Captures a parser couldn't resolve on its own — triaged here for a human decision."
@@ -86,6 +87,6 @@ export function ReviewPage() {
       >
         <DataTable columns={columns} rows={tasks ?? []} rowKey={(t) => t.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }
