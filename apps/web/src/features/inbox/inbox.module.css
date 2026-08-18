@@ -1,13 +1,6 @@
 /* inbox.module.css — layout for the Inbox slice (replies + tasks). Color comes from --tp-* tokens + the
  * @leadwolf/ui primitives; this file is layout/structure only. */
 
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 28px 32px 48px;
-  max-width: 980px;
-}
 .body {
   min-height: 320px;
 }

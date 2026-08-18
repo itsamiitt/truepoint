@@ -4,14 +4,6 @@
  * StatusBadge tones. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows, no chart lib.
  */
 
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 28px 32px 48px;
-  max-width: 960px;
-}
-
 .card {
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
@@ -332,7 +324,7 @@
   border-top: 1px solid var(--tp-hairline);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .tiles,
   .rates,
   .scoreGrid {

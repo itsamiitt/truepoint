@@ -5,7 +5,7 @@
 // endpoint. A pure composition shell. Public slice component.
 "use client";
 
-import { PageHeader, Tabs, TpButton } from "@leadwolf/ui";
+import { PageContainer, PageHeader, Tabs, TpButton } from "@leadwolf/ui";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import styles from "../data-health.module.css";
@@ -56,7 +56,7 @@ export function DataHealthPage() {
   };
 
   return (
-    <main className={styles.page}>
+    <PageContainer>
       <PageHeader
         title="Data Health"
         subtitle="Coverage, deliverability, and freshness across this workspace's contacts."
@@ -172,6 +172,6 @@ export function DataHealthPage() {
           </SectionCard>
         </div>
       ) : null}
-    </main>
+    </PageContainer>
   );
 }

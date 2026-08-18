@@ -236,8 +236,11 @@
 }
 .tp-settings-panel {
   min-width: 0;
-  max-width: 760px;
-  padding: 28px 32px;
+  /* The single owner of settings-page geometry. The four settings modules used to ALSO set
+     max-width:880px, which never applied because this cap is narrower — two owners, one dead. */
+  max-width: var(--tp-page-max-narrow);
+  margin-inline: auto;
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x);
   overflow-y: auto; /* the panel is the scroll region — the scope nav and top bar stay fixed */
 }
 .tp-settings-title {

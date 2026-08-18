@@ -2,7 +2,7 @@
 // Composition only; each tab owns its own data + states.
 "use client";
 
-import { PageHeader, Tabs } from "@leadwolf/ui";
+import { PageContainer, PageHeader, Tabs } from "@leadwolf/ui";
 import { useState } from "react";
 import styles from "../inbox.module.css";
 import { TasksPanel } from "./TasksPanel";
@@ -16,10 +16,10 @@ const TABS = [
 export function InboxPage() {
   const [tab, setTab] = useState("replies");
   return (
-    <div className={styles.page}>
+    <PageContainer width="fluid">
       <PageHeader title="Inbox" subtitle="Unified replies + tasks" />
       <Tabs items={TABS} value={tab} onChange={setTab} aria-label="Inbox sections" />
       <div className={styles.body}>{tab === "replies" ? <ThreadList /> : <TasksPanel />}</div>
-    </div>
+    </PageContainer>
   );
 }

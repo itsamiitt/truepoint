@@ -8,7 +8,14 @@
 "use client";
 
 import type { BulkImportJobStatusResponse } from "@leadwolf/types";
-import { EmptyState, PageHeader, Progress, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import {
+  EmptyState,
+  PageContainer,
+  PageHeader,
+  Progress,
+  StateSwitch,
+  StatusBadge,
+} from "@leadwolf/ui";
 import { Inbox, Upload } from "lucide-react";
 import { useBulkImport } from "../hooks/useBulkImport";
 import styles from "./BulkImportProgress.module.css";
@@ -63,7 +70,7 @@ export function BulkImportProgress({ jobId }: { jobId: string }) {
   const { job, error, loading, disabled } = useBulkImport(jobId);
 
   return (
-    <main className={styles.page}>
+    <PageContainer width="narrow">
       <PageHeader
         title="Bulk import"
         subtitle="Your import runs in the background — status, progress, and results update live."
@@ -93,6 +100,6 @@ export function BulkImportProgress({ jobId }: { jobId: string }) {
           </StateSwitch>
         )}
       </section>
-    </main>
+    </PageContainer>
   );
 }

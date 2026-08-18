@@ -4,14 +4,6 @@
  * StatusBadge / Progress tones. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows, 8px radius.
  */
 
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 28px 32px 48px;
-  max-width: 1040px;
-}
-
 .refresh {
   display: flex;
   align-items: center;
@@ -132,7 +124,7 @@
   color: var(--tp-ink);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .statGrid {
     grid-template-columns: 1fr;
   }

@@ -13,6 +13,7 @@ import type { ImportJobListItem } from "@leadwolf/types";
 import {
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   Progress,
   StateSwitch,
@@ -131,7 +132,7 @@ export function ImportJobsHistoryPage() {
   ];
 
   return (
-    <main className={styles.page}>
+    <PageContainer width="fluid">
       <PageHeader
         title="Imports"
         subtitle="Your imports — status, progress, and results update live."
@@ -223,6 +224,6 @@ export function ImportJobsHistoryPage() {
         open={selectedId != null}
         onClose={() => setSelectedId(null)}
       />
-    </main>
+    </PageContainer>
   );
 }

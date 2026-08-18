@@ -6,7 +6,6 @@
   display: flex;
   flex-direction: column;
   gap: 32px;
-  max-width: 880px;
 }
 
 /* ── Identity ──────────────────────────────────────────────────────────────────────────────────── */
@@ -125,7 +124,7 @@
   margin-top: 2px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 480px) {
   .summaryTiles {
     grid-template-columns: 1fr;
   }

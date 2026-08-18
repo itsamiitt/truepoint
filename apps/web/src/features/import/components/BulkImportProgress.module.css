@@ -4,14 +4,6 @@
  * Progress tones. Calm, flat: hairline borders, whitespace, no shadows, 8px radius. Mirrors EnrichmentJobsPage.
  */
 
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 28px 32px 48px;
-  max-width: 760px;
-}
-
 .card {
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
@@ -95,7 +87,7 @@
   color: var(--tp-ink);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .statGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

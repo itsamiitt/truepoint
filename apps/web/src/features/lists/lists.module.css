@@ -7,7 +7,9 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px 28px 96px;
+  /* Page gutters from the shared tokens so this lines up with every other surface; the deep bottom
+     padding stays — it clears the floating bulk bar. */
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x) 96px;
   min-width: 0;
 }
 

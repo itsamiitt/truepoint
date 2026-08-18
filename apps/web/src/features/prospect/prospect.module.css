@@ -6,10 +6,12 @@
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
   gap: 24px;
-  padding: 24px 28px 96px;
+  /* Page gutters from the shared tokens so this lines up with every other surface; the deep bottom
+     padding stays — it clears the floating bulk bar. */
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x) 96px;
   align-items: start;
 }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .page {
     grid-template-columns: minmax(0, 1fr);
   }
