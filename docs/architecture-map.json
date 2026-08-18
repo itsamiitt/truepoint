@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2133,
-  "fileSetHash": "sha256:db9a0ea4f1c86e9c864cfef2f9076b5685e5161042691a0f30fb40770b659202",
+  "fileCount": 2134,
+  "fileSetHash": "sha256:4c423915692330ebc684af193d0281887082fef9a538dcd859008f5e9c98ed64",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2066,6 +2066,7 @@
       "core": [
         "packages/core/src/sourceLanding/fetchAndLand.ts",
         "packages/core/src/sourceLanding/landSourcePayload.ts",
+        "packages/core/src/sourceLanding/linkedinSourceClient.test.ts",
         "packages/core/src/sourceLanding/linkedinSourceClient.ts",
         "packages/core/src/sourceLanding/linkedinUrlKey.test.ts",
         "packages/core/src/sourceLanding/linkedinUrlKey.ts",

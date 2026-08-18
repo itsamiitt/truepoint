@@ -140,8 +140,11 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  swaps on source_imports.source_name, and 0123 is CREATE INDEX CONCURRENTLY with expression/partial
  *  predicates and gin_trgm_ops — none of which drizzle-kit emits. 0121 alone (two columns + a CHECK) could
  *  have been generated, but the 0107 chain HEAD makes `generate` propose every post-0107 change at once and
- *  die on the interactive prompt, exactly as 0116–0118 record. All absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 82;
+ *  die on the interactive prompt, exactly as 0116–0118 record. All absorbed by the next rebaseline.
+ *
+ *  82 → 83 for 0124_reset_unresolved_fetch_clock — pure DATA repair (clearing a freshness clock the
+ *  envelope bug burned); there is no schema change for drizzle to snapshot at all. */
+const EXPECTED_DEFICIT = 83;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

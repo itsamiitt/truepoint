@@ -94,8 +94,19 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   const personId = landed.masterPersonId ?? null;
   const companyId = landed.masterCompanyId ?? null;
 
+  // HONEST OUTCOME. `ok` used to be stamped whatever the landing did, so a payload the parser could not
+  // read looked identical in the registry to one that landed cleanly — the whole fleet reported success
+  // while storing nothing, and the 30-day clock hid it for a month. A payload we could not parse is a
+  // REJECTED fetch: the vendor answered, we cannot use it, and no other origin would answer differently.
+  const registryOutcome = landed.reason === "shape_drift" ? "rejected" : "ok";
+  if (landed.reason === "shape_drift") {
+    console.error("[source-landing] payload did not match any known contract", {
+      entityKind: input.entityKind,
+      normalizedUrl: input.normalizedUrl,
+    });
+  }
   await withPrivilegedTx((tx) =>
-    sourceFetchRegistryRepository.recordFetch(tx, reg.id, "ok", {
+    sourceFetchRegistryRepository.recordFetch(tx, reg.id, registryOutcome, {
       personId,
       companyId,
     }),
@@ -107,7 +118,9 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   }
 
   return {
-    outcome: landed.landed ? "landed" : "duplicate",
+    // "duplicate" means "we already hold this exact document" — it must not double as "we could not read
+    // it", which is what made the failure invisible from the caller's side too.
+    outcome: landed.landed ? "landed" : landed.reason === "shape_drift" ? "rejected" : "duplicate",
     resolvedPersonId: personId,
     resolvedCompanyId: companyId,
   };
