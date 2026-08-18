@@ -3,6 +3,7 @@
 // Submitting provisions the global identity + its org placement and completes the login. SSR + WCAG AA.
 import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { getSignupTransaction } from "@leadwolf/auth";
 import { Alert, Badge, Button, Input, Label } from "@leadwolf/ui";
 import { cookies } from "next/headers";
@@ -27,12 +28,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
 
   return (
     <AuthShell title="Finish setting up" subtitle="A few details and you're in.">
-      <Badge className="mb-4">
+      <Badge className={styles.spaced}>
         <span>{txn.email}</span>
       </Badge>
 
       <form action={completeSignup} noValidate>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="full_name">Full name</Label>
           <Input
             id="full_name"
@@ -43,9 +44,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
             autoFocus
           />
         </div>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="username">
-            Username <span className="text-muted-foreground">(optional)</span>
+            Username <span style={{ color: "var(--tp-ink-3)" }}>(optional)</span>
           </Label>
           <Input
             id="username"
@@ -59,7 +60,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
             aria-invalid={sp.error === "username" ? "true" : undefined}
           />
         </div>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -72,7 +73,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
           />
         </div>
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             {errorMessage}
           </Alert>
         ) : null}

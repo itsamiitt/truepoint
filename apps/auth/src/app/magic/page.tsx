@@ -5,6 +5,7 @@
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
+import styles from "@/shared/auth.module.css";
 import { Alert, Badge, Button } from "@leadwolf/ui";
 import { sendMagic } from "./actions";
 
@@ -48,27 +49,24 @@ export default async function MagicPage({ searchParams }: { searchParams: Search
           : "We'll email you a one-click link to sign in — no password needed."
       }
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/login?${carry}`}
-        >
+        <a className={styles.link} href={`/login?${carry}`}>
           Use a different account
         </a>
       }
     >
-      <Badge className="mb-4">
+      <Badge className={styles.spaced}>
         <span>{email || "your account"}</span>
       </Badge>
 
       {errorMessage ? (
-        <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
+        <Alert variant="destructive" role="alert" className={`${styles.spaced} tp-shake`}>
           {errorMessage}
         </Alert>
       ) : null}
 
       {sent ? (
         <>
-          <Alert aria-live="polite" className="mb-4">
+          <Alert aria-live="polite" className={styles.spaced}>
             The link expires in 15 minutes. Didn't get it? Check your spam folder, then resend.
           </Alert>
           <form action={sendMagic} noValidate>

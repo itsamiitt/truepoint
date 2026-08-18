@@ -3,6 +3,7 @@
 // passkey prompt are progressive enhancements layered on top of this base render.
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
+import styles from "@/shared/auth.module.css";
 import { Alert, Badge, Input, Label } from "@leadwolf/ui";
 import { submitPassword } from "./actions";
 
@@ -22,20 +23,14 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
     <AuthShell
       title="Enter your password"
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/forgot?${carry}`}
-        >
+        <a className={styles.link} href={`/forgot?${carry}`}>
           Forgot password?
         </a>
       }
     >
-      <Badge className="mb-4">
+      <Badge className={styles.spaced}>
         <span>{email || "your account"}</span>
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/login?${carry}`}
-        >
+        <a className={styles.link} href={`/login?${carry}`}>
           change
         </a>
       </Badge>
@@ -45,7 +40,7 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
         <input type="hidden" name="app_origin" value={sp.app_origin ?? ""} />
         <input type="hidden" name="code_challenge" value={sp.code_challenge ?? ""} />
         <input type="hidden" name="state" value={sp.state ?? ""} />
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -58,7 +53,7 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
           />
         </div>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
+          <Alert variant="destructive" role="alert" className={`${styles.spaced} tp-shake`}>
             {sp.error === "unavailable"
               ? "Sign-in is temporarily unavailable. Please try again in a moment."
               : "Check your credentials and try again."}

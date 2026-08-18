@@ -8,6 +8,7 @@
 
 import { AUTH_BASE_PATH } from "@/lib/authUrl";
 import { AccountSectionCard } from "@/shared/AccountShell";
+import styles from "@/shared/auth.module.css";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import {
   type PublicKeyCredentialCreationOptionsJSON,
@@ -106,15 +107,31 @@ export function PasskeySection(): React.JSX.Element {
     >
       {msg ? (
         // biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region
-        <Alert variant={msg.ok ? "default" : "destructive"} role="status" className="mb-4">
+        <Alert variant={msg.ok ? "default" : "destructive"} role="status" className={styles.spaced}>
           {msg.text}
         </Alert>
       ) : null}
 
       {passkeys.length > 0 ? (
-        <ul className="mb-4 flex flex-col gap-2">
+        <ul
+          style={{
+            marginBottom: "var(--tp-space-4)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-2)",
+          }}
+        >
           {passkeys.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
+            <li
+              key={p.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--tp-space-3)",
+                fontSize: 14,
+              }}
+            >
               <span>
                 {p.label ?? "Passkey"}
                 {p.backedUp ? " · synced" : ""}
@@ -134,12 +151,12 @@ export function PasskeySection(): React.JSX.Element {
           ))}
         </ul>
       ) : (
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p style={{ marginBottom: "var(--tp-space-4)", fontSize: 14, color: "var(--tp-ink-3)" }}>
           You haven&apos;t added any passkeys yet.
         </p>
       )}
 
-      <div className="mb-3">
+      <div style={{ marginBottom: "var(--tp-space-3)" }}>
         <Label htmlFor="passkey_stepup">Confirm it&apos;s you</Label>
         <Input
           id="passkey_stepup"

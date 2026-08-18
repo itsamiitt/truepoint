@@ -6,6 +6,7 @@
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
+import styles from "@/shared/auth.module.css";
 import { getLoginTransaction } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import { webauthnCredentialRepository } from "@leadwolf/db";
@@ -39,40 +40,46 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           : "Enter the 6-digit code from your authenticator app."
       }
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href="/mfa/recovery"
-        >
+        <a className={styles.link} href="/mfa/recovery">
           Use a recovery code instead
         </a>
       }
     >
       <form action={submitMfa} noValidate>
         {isEmailOtp ? <input type="hidden" name="method" value="email_otp" /> : null}
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="code">Verification code</Label>
           <OtpInput />
         </div>
         {/* Trusted-device MFA skip is OFF until its backend is built + reviewed (MFA-bypass surface). Hidden
             rather than shown as a no-op — a checkbox that silently does nothing is a trust bug. */}
         {env.TRUSTED_DEVICES_ENABLED === "true" ? (
-          <label className="mb-4 flex items-center gap-2 text-sm" htmlFor="trust_device">
+          <label
+            style={{
+              marginBottom: "var(--tp-space-4)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--tp-space-2)",
+              fontSize: 14,
+            }}
+            htmlFor="trust_device"
+          >
             <Checkbox id="trust_device" name="trust_device" value="1" /> Trust this device for 30
             days
           </label>
         ) : null}
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             That code didn&apos;t match. Try again.
           </Alert>
         ) : null}
         {isEmailOtp && sp.sent === "1" ? (
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p style={{ marginBottom: "var(--tp-space-4)", fontSize: 14, color: "var(--tp-ink-3)" }}>
             We emailed a code to your address. It expires in 15 minutes.
           </p>
         ) : null}
         {isEmailOtp && sp.sent === "rate" ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             Too many code requests. Wait a moment, or use your authenticator.
           </Alert>
         ) : null}
@@ -82,13 +89,13 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
       </form>
 
       {isEmailOtp ? (
-        <div className="mt-3 text-center text-sm">
-          <a className="underline underline-offset-2 hover:text-muted-foreground" href="/mfa">
+        <div style={{ marginTop: "var(--tp-space-3)", textAlign: "center", fontSize: 14 }}>
+          <a className={styles.link} href="/mfa">
             Use your authenticator instead
           </a>
         </div>
       ) : (
-        <form action={sendEmailOtp} className="mt-3">
+        <form action={sendEmailOtp} style={{ marginTop: "var(--tp-space-3)" }}>
           <Button type="submit" variant="ghost" size="full">
             Email me a code instead
           </Button>
@@ -96,7 +103,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
       )}
 
       {hasPasskeys && !isEmailOtp ? (
-        <div className="mt-3">
+        <div style={{ marginTop: "var(--tp-space-3)" }}>
           <PasskeySignIn />
         </div>
       ) : null}

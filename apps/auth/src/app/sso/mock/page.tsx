@@ -3,6 +3,7 @@
 // the protocol callback. Disabled in production (the real IdP handles this). Requires a pending SSO transaction.
 import { SSO_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { getSsoTransaction } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import { Button, Input, Label } from "@leadwolf/ui";
@@ -22,7 +23,7 @@ export default async function MockIdpPage() {
       subtitle="Development only — this stands in for your organization's real SSO login."
     >
       <form action={submitMockAssertion} noValidate>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="email">Sign in as</Label>
           <Input
             id="email"
@@ -35,9 +36,9 @@ export default async function MockIdpPage() {
             autoFocus
           />
         </div>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="full_name">
-            Full name <span className="text-[var(--tp-ink-4)]">(optional)</span>
+            Full name <span style={{ color: "var(--tp-ink-4)" }}>(optional)</span>
           </Label>
           <Input id="full_name" name="full_name" type="text" autoComplete="name" />
         </div>

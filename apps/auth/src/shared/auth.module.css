@@ -1,0 +1,146 @@
+/*
+ * auth.module.css — the auth origin's shared, token-driven styling. It exists because these idioms need
+ * pseudo-classes, pseudo-elements or descendant selectors, which a style prop cannot express; everything
+ * else on the auth screens is a token-driven inline style.
+ *
+ * This replaces the Tailwind utility classes that used to carry the auth UI in app JSX — banned by
+ * truepoint-design — and, with them, the four repeats of a hardcoded shadow literal and the type scale
+ * expressed as arbitrary px (text-[12px], text-[13px], text-[17px], text-[22px], text-[26px]).
+ * Structure and colour only; every value is a --tp-* token.
+ */
+
+/* Visually hidden but reachable by screen readers — the <caption> and label pattern the tables rely on. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Quiet inline link — the auth screens' "Back to sign in" / "Use a different method" affordances. */
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link:hover {
+  color: var(--tp-ink-3);
+}
+
+.linkDanger {
+  font-size: 13px;
+  color: var(--danger);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.linkDanger:hover {
+  opacity: 0.8;
+}
+
+/* Read-only data tables (sessions, login history). These stay real SSR tables rather than the DS DataTable,
+   which is a client component taking function props — it cannot cross the server/client boundary, and these
+   surfaces are deliberately server-rendered. The wrapper owns the horizontal scroll. */
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+  border-collapse: collapse;
+}
+.table thead tr {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+.table th {
+  padding: var(--tp-space-2) var(--tp-space-3) var(--tp-space-2) 0;
+  font-weight: 500;
+}
+.table td {
+  padding: var(--tp-space-2) var(--tp-space-3) var(--tp-space-2) 0;
+}
+.table tbody tr {
+  border-top: 1px solid var(--tp-hairline-2);
+}
+.cellMuted {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+.cellMono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+.cellRight {
+  text-align: right;
+}
+
+/* A value the user is meant to copy: a recovery code, a secret, a device id. */
+.selectable {
+  user-select: all;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.selectableBox {
+  user-select: all;
+  padding: var(--tp-space-2) var(--tp-space-3);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+
+/* The standard gap between stacked blocks on an auth screen — a field, an alert, a paragraph. This was
+   Tailwind's mb-4, by far the most repeated utility in the app (42 uses). It stays a class rather than an
+   inline style because it is applied to DS components (Alert, Input) as well as plain elements, and not
+   every component forwards a style prop. */
+.spaced {
+  margin-bottom: var(--tp-space-4);
+}
+.spacedSm {
+  margin-bottom: var(--tp-space-3);
+}
+.spacedLg {
+  margin-bottom: var(--tp-space-5);
+}
+
+/* A link that looks like a secondary button — needs :hover, so it cannot be an inline style. */
+.buttonLink {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  height: 36px;
+  padding: 0 var(--tp-space-3);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  text-decoration: none;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+.buttonLink:hover {
+  background: var(--tp-surface-2);
+}
+
+/* The one-time-code field: a wide, centred, letter-spaced mono input. Needs ::placeholder and :focus-visible. */
+.otpInput {
+  width: 100%;
+  height: 48px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.5em;
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+.otpInput:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

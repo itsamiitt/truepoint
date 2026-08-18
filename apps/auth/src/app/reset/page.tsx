@@ -3,6 +3,7 @@
 // code ride as hidden fields. A bad/expired link or mismatched passwords re-render with a neutral error.
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { completeReset } from "./actions";
 
@@ -33,7 +34,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Search
         <input type="hidden" name="app_origin" value={appOrigin} />
         <input type="hidden" name="code_challenge" value={codeChallenge} />
         <input type="hidden" name="state" value={state} />
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="password">New password</Label>
           <Input
             id="password"
@@ -46,7 +47,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Search
             aria-invalid={errorMessage ? "true" : undefined}
           />
         </div>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="confirm">Confirm new password</Label>
           <Input
             id="confirm"
@@ -59,7 +60,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Search
           />
         </div>
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             {errorMessage}
           </Alert>
         ) : null}

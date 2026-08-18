@@ -15,6 +15,7 @@
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
+import styles from "@/shared/auth.module.css";
 import { getLoginTransaction, totpKeyUri } from "@leadwolf/auth";
 import { userRepository } from "@leadwolf/db";
 import { Alert, Button } from "@leadwolf/ui";
@@ -46,7 +47,7 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
         subtitle="Your organization requires multi-factor authentication. Add an authenticator app to finish signing in."
       >
         {sp.error === "expired" ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             That enrollment timed out. Start again.
           </Alert>
         ) : null}
@@ -68,25 +69,41 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
         title="Add your authenticator"
         subtitle="In your authenticator app, add an account using this setup key (or the link below), then enter the 6-digit code it shows."
       >
-        <dl className="mb-5 flex flex-col gap-2 text-sm">
+        <dl
+          style={{
+            marginBottom: "var(--tp-space-5)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-2)",
+            fontSize: 14,
+          }}
+        >
           <div>
-            <dt className="text-[12px] text-[var(--tp-ink-3)]">Setup key</dt>
-            <dd className="select-all break-all font-mono text-[13px]">{result.secret}</dd>
+            <dt style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Setup key</dt>
+            <dd className={styles.selectable}>{result.secret}</dd>
           </div>
           <div>
-            <dt className="text-[12px] text-[var(--tp-ink-3)]">Setup link (otpauth)</dt>
-            <dd className="select-all break-all font-mono text-[12px] text-[var(--tp-ink-3)]">
+            <dt style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Setup link (otpauth)</dt>
+            <dd
+              style={{
+                userSelect: "all",
+                wordBreak: "break-all",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                color: "var(--tp-ink-3)",
+              }}
+            >
               {uri}
             </dd>
           </div>
         </dl>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             That code didn&apos;t match. Check your app&apos;s time sync and try again.
           </Alert>
         ) : null}
         <form action={verifyMfaEnroll} noValidate>
-          <div className="mb-4">
+          <div className={styles.spaced}>
             <OtpInput />
           </div>
           <Button type="submit" size="full">
@@ -104,15 +121,22 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
       subtitle="Store these somewhere safe — each one signs you in once if you lose your authenticator."
     >
       {/* biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region */}
-      <Alert variant="default" role="status" className="mb-4">
+      <Alert variant="default" role="status" className={styles.spaced}>
         These codes are shown once. Each one works only a single time.
       </Alert>
-      <ul className="mb-5 grid grid-cols-2 gap-2 font-mono text-[14px]" aria-label="Recovery codes">
+      <ul
+        style={{
+          marginBottom: "var(--tp-space-5)",
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: "var(--tp-space-2)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 14,
+        }}
+        aria-label="Recovery codes"
+      >
         {result.codes.map((c) => (
-          <li
-            key={c}
-            className="select-all rounded-[var(--radius)] border border-[var(--tp-hairline-2)] px-3 py-2"
-          >
+          <li key={c} className={styles.selectableBox}>
             {c}
           </li>
         ))}

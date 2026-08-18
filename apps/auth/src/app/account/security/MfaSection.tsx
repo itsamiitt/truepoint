@@ -4,6 +4,7 @@
 // The QR/secret display + "show recovery codes once" render on the dedicated /account/security/enroll screen.
 import { AccountSectionCard } from "@/shared/AccountShell";
 import { SubmitButton } from "@/shared/SubmitButton";
+import styles from "@/shared/auth.module.css";
 import { Alert, Badge, Input, Label, StatusBadge } from "@leadwolf/ui";
 import { disableMfaMethod, regenerateRecoveryCodes, startTotpEnroll } from "./actions";
 import type { MfaMethodView } from "./data";
@@ -73,35 +74,58 @@ export function MfaSection({
         <Alert
           variant={msg.tone === "ok" ? "default" : "destructive"}
           role={msg.tone === "ok" ? "status" : "alert"}
-          className="mb-4"
+          className={styles.spaced}
         >
           {msg.text}
         </Alert>
       ) : null}
 
       {/* Enrolled methods */}
-      <ul className="mb-5 flex flex-col gap-2" aria-label="Enrolled two-step methods">
+      <ul
+        style={{
+          marginBottom: "var(--tp-space-5)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--tp-space-2)",
+        }}
+        aria-label="Enrolled two-step methods"
+      >
         {verified.length === 0 ? (
-          <li className="text-sm text-[var(--tp-ink-3)]">No two-step method is set up yet.</li>
+          <li style={{ fontSize: 14, color: "var(--tp-ink-3)" }}>
+            No two-step method is set up yet.
+          </li>
         ) : (
           verified.map((m) => (
             <li
               key={m.id}
-              className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--tp-hairline-2)] px-3 py-2"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--tp-space-3)",
+                padding: "var(--tp-space-2) var(--tp-space-3)",
+                border: "1px solid var(--tp-hairline-2)",
+                borderRadius: "var(--radius)",
+              }}
             >
-              <span className="flex flex-col">
-                <span className="text-sm font-medium">{TYPE_LABELS[m.type] ?? m.type}</span>
-                <span className="text-[12px] text-[var(--tp-ink-3)]">
+              <span style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                  {TYPE_LABELS[m.type] ?? m.type}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
                   Added {m.createdAt.toLocaleDateString()}
                   {m.lastUsedAt ? ` · last used ${m.lastUsedAt.toLocaleDateString()}` : ""}
                 </span>
               </span>
-              <span className="flex items-center gap-2">
+              <span style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
                 <StatusBadge tone="success">On</StatusBadge>
                 {/* Disable requires step-up — the current password is collected inline. */}
-                <form action={disableMfaMethod} className="flex items-center gap-2">
+                <form
+                  action={disableMfaMethod}
+                  style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-2)" }}
+                >
                   <input type="hidden" name="method_id" value={m.id} />
-                  <Label htmlFor={`disable_pw_${m.id}`} className="sr-only">
+                  <Label htmlFor={`disable_pw_${m.id}`} className={styles.srOnly}>
                     {stepUpLabel} to remove this method
                   </Label>
                   <Input
@@ -112,7 +136,7 @@ export function MfaSection({
                     autoComplete={stepUpAutoComplete}
                     placeholder={stepUpLabel}
                     required
-                    className="h-9 w-[160px]"
+                    style={{ height: 36, width: 160 }}
                   />
                   <SubmitButton>Remove</SubmitButton>
                 </form>
@@ -126,15 +150,24 @@ export function MfaSection({
           (AUTH-069) — so instead of an unusable form we point them at the one path that works: set a password. */}
       {!hasTotp ? (
         canEnroll ? (
-          <form action={startTotpEnroll} noValidate className="mb-6 flex flex-col gap-3">
+          <form
+            action={startTotpEnroll}
+            noValidate
+            style={{
+              marginBottom: "var(--tp-space-6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--tp-space-3)",
+            }}
+          >
             <div>
-              <span className="text-sm font-medium">Set up an authenticator app</span>
-              <p className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
+              <span style={{ fontSize: 14, fontWeight: 500 }}>Set up an authenticator app</span>
+              <p style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}>
                 You'll scan a QR code, confirm a code, and save one-time recovery codes.
               </p>
             </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 max-w-[220px]">
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--tp-space-2)" }}>
+              <div style={{ flex: 1, minWidth: 0, maxWidth: 220 }}>
                 <Label htmlFor="enroll_current_password">{stepUpLabel}</Label>
                 <Input
                   id="enroll_current_password"
@@ -149,19 +182,23 @@ export function MfaSection({
             </div>
           </form>
         ) : (
-          <div className="mb-6 flex flex-col gap-3">
+          <div
+            style={{
+              marginBottom: "var(--tp-space-6)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--tp-space-3)",
+            }}
+          >
             <div>
-              <span className="text-sm font-medium">Set up an authenticator app</span>
-              <p className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
+              <span style={{ fontSize: 14, fontWeight: 500 }}>Set up an authenticator app</span>
+              <p style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}>
                 Your account signs in without a password, so there's no credential to confirm setup
                 with yet. Set a password first — you can still sign in with a link too — then add an
                 authenticator here.
               </p>
             </div>
-            <a
-              href={setPasswordHref}
-              className="inline-flex h-9 w-fit items-center rounded-[var(--radius)] border border-[var(--tp-hairline-2)] px-3 text-sm font-medium text-[var(--tp-ink)] no-underline hover:bg-[var(--tp-surface-2)]"
-            >
+            <a href={setPasswordHref} className={styles.buttonLink}>
               Set a password
             </a>
           </div>
@@ -170,17 +207,30 @@ export function MfaSection({
 
       {/* Recovery codes — only relevant once a real factor is enrolled (they are a fallback FOR a factor). */}
       {verified.length > 0 ? (
-        <div className="border-t border-[var(--tp-hairline-2)] pt-4">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm font-medium">Recovery codes</span>
+        <div
+          style={{ borderTop: "1px solid var(--tp-hairline-2)", paddingTop: "var(--tp-space-4)" }}
+        >
+          <div
+            style={{
+              marginBottom: "var(--tp-space-2)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--tp-space-2)",
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 500 }}>Recovery codes</span>
             <Badge>{recoveryCodesRemaining} remaining</Badge>
           </div>
-          <p className="mb-3 text-[12px] text-[var(--tp-ink-3)]">
+          <p style={{ marginBottom: "var(--tp-space-3)", fontSize: 12, color: "var(--tp-ink-3)" }}>
             One-time codes to sign in if you lose your authenticator. Regenerating replaces any
             existing codes.
           </p>
-          <form action={regenerateRecoveryCodes} noValidate className="flex items-end gap-2">
-            <div className="flex-1 max-w-[220px]">
+          <form
+            action={regenerateRecoveryCodes}
+            noValidate
+            style={{ display: "flex", alignItems: "flex-end", gap: "var(--tp-space-2)" }}
+          >
+            <div style={{ flex: 1, minWidth: 0, maxWidth: 220 }}>
               <Label htmlFor="regen_current_password">{stepUpLabel}</Label>
               <Input
                 id="regen_current_password"

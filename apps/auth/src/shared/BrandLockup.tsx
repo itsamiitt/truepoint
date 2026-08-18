@@ -3,10 +3,18 @@
 // crisp at any size; the mark carries the brand's only color (cobalt), the wordmark is Ink.
 export function BrandLockup() {
   return (
-    <div className="mb-5 inline-flex items-center gap-2" aria-label="TruePoint">
+    <div
+      style={{
+        marginBottom: "var(--tp-space-5)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--tp-space-2)",
+      }}
+      aria-label="TruePoint"
+    >
       <svg
         viewBox="0 0 100 100"
-        className="h-6 w-6"
+        style={{ height: 24, width: 24 }}
         fill="none"
         strokeWidth={8.5}
         strokeLinecap="round"
@@ -17,9 +25,9 @@ export function BrandLockup() {
         <path d="M22 60 L50 45 L78 60" stroke="var(--tp-ink)" />
         <path d="M22 77 L50 62 L78 77" stroke="var(--tp-ink)" />
       </svg>
-      <span className="text-xl tracking-[-0.02em]">
-        <span className="font-normal">True</span>
-        <span className="font-extrabold">Point</span>
+      <span style={{ fontSize: 20, letterSpacing: "-0.02em" }}>
+        <span style={{ fontWeight: 400 }}>True</span>
+        <span style={{ fontWeight: 800 }}>Point</span>
       </span>
     </div>
   );

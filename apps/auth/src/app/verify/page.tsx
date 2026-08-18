@@ -4,6 +4,7 @@
 import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
+import styles from "@/shared/auth.module.css";
 import { getSignupTransaction } from "@leadwolf/auth";
 import { Alert, Button, Label } from "@leadwolf/ui";
 import { cookies } from "next/headers";
@@ -31,17 +32,17 @@ export default async function VerifyPage({ searchParams }: { searchParams: Searc
       }
     >
       {sp.sent ? (
-        <Alert aria-live="polite" className="mb-4">
+        <Alert aria-live="polite" className={styles.spaced}>
           A new code is on its way.
         </Alert>
       ) : null}
       <form action={submitVerification} noValidate>
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="code">Verification code</Label>
           <OtpInput />
         </div>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             That code is incorrect or expired. Try again.
           </Alert>
         ) : null}

@@ -9,6 +9,7 @@ import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import { TurnstileWidget } from "@/shared/TurnstileWidget";
+import styles from "@/shared/auth.module.css";
 import { Alert, Input, Label } from "@leadwolf/ui";
 import { submitIdentifier } from "./actions";
 
@@ -46,7 +47,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
       subtitle="Enter your email or username to continue."
     >
       {notice ? (
-        <Alert aria-live="polite" className="mb-4">
+        <Alert aria-live="polite" className={styles.spaced}>
           {notice}
         </Alert>
       ) : null}
@@ -54,7 +55,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         <input type="hidden" name="app_origin" value={appOrigin} />
         <input type="hidden" name="code_challenge" value={codeChallenge} />
         <input type="hidden" name="state" value={state} />
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="identifier">Email or username</Label>
           <Input
             id="identifier"
@@ -73,7 +74,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </div>
         <TurnstileWidget />
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
+          <Alert variant="destructive" role="alert" className={`${styles.spaced} tp-shake`}>
             {errorMessage}
           </Alert>
         ) : null}

@@ -3,6 +3,7 @@
 // Enumeration-safe by design — after sending it renders one neutral confirmation regardless of existence.
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { requestReset } from "./actions";
 
@@ -35,10 +36,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
         title="Check your email"
         subtitle="If an account exists for that address, we've emailed a reset link."
         footer={
-          <a
-            className="underline underline-offset-2 hover:text-muted-foreground"
-            href={`/login?${carry}`}
-          >
+          <a className={styles.link} href={`/login?${carry}`}>
             Back to sign in
           </a>
         }
@@ -55,10 +53,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
       title="Reset your password"
       subtitle="Enter your email and we'll send you a link to reset your password."
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/login?${carry}`}
-        >
+        <a className={styles.link} href={`/login?${carry}`}>
           Back to sign in
         </a>
       }
@@ -67,7 +62,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
         <input type="hidden" name="app_origin" value={sp.app_origin ?? ""} />
         <input type="hidden" name="code_challenge" value={sp.code_challenge ?? ""} />
         <input type="hidden" name="state" value={sp.state ?? ""} />
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -85,7 +80,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
           />
         </div>
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             {errorMessage}
           </Alert>
         ) : null}
