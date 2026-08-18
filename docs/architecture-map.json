@@ -104,7 +104,7 @@
     "workspaces"
   ],
   "fileCount": 2093,
-  "fileSetHash": "sha256:b2a3fe1ed7047fd9483b65b01a3e959a15ebdf490ee92f552ad96e009e31adf4",
+  "fileSetHash": "sha256:e783f4d63acdca4cb62de79562d3dcf95b539114de6249b07395c8ae876cc9aa",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2611,7 +2611,6 @@
       "apps/web/src/app/providers.tsx"
     ],
     "apps/web/components": [
-      "apps/web/src/components/PageHeader.tsx",
       "apps/web/src/components/shell/AppShell.tsx",
       "apps/web/src/components/shell/CreditPill.tsx",
       "apps/web/src/components/shell/GlobalSearch.tsx",
@@ -3191,6 +3190,7 @@
       "packages/ui/src/components/Combobox.tsx",
       "packages/ui/src/components/DataTable.tsx",
       "packages/ui/src/components/Icon.tsx",
+      "packages/ui/src/components/PageContainer.tsx",
       "packages/ui/src/components/PageHeader.tsx",
       "packages/ui/src/components/Pagination.tsx",
       "packages/ui/src/components/Progress.tsx",

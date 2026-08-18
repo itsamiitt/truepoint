@@ -134,7 +134,7 @@ apps/                           # deployable processes (thin transport adapters)
     app/{login,password,magic,mfa(+enroll),signup,verify,sso,org,workspace,forgot,reset,account/security,token,logout}  shared/*  lib/*
   web/   src/                   # app.truepoint.in (Next 15) — AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,lists,enrichment/jobs,sales-navigator,settings/*}  app/{import,auth/callback}
-    components/{shell/*,PageHeader}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
+    components/{shell/*}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
                                               enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig,
                                               problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
@@ -727,16 +727,21 @@ flowchart TD
 - **`packages/ui`** — the TruePoint **design system**: `tokens/primitives/theme.css` + `cn`; dashboard primitives (StatusBadge,
   Card, StatTile, Spinner, Avatar, Progress, Pagination, Icon), **State Kit** (`state.tsx`: Skeleton/Loading/Empty/Error/StateSwitch),
   Tp-prefixed form `controls.tsx` + `form.tsx`, `Tabs`, overlays (`overlay.tsx` Dialog/Drawer; `floating.tsx` Popover/DropdownMenu/Tooltip),
-  `Toast`, `DataTable`, `Combobox`, `PageHeader` (the one destination header all three frontends render), and
-  shadcn-pattern `components/ui/*` (used by the auth screens).
+  `Toast`, `DataTable`, `Combobox`, the page-scaffolding pair `PageHeader` (the one destination header) +
+  `PageContainer` (the one page container — `width="fluid"|"default"|"narrow"`, always centred, so no surface can
+  re-invent its own max-width), and shadcn-pattern `components/ui/*` (now used by ALL four frontends: the auth
+  screens moved onto the shared tokens + primitives and no longer carry Tailwind utilities in app JSX).
 - **`packages/app-shell`** — the **shared Next.js app chrome** consumed by `apps/web`, `apps/admin` and
   `apps/forge`: `AppShellFrame` (rail column + sticky top bar + internally-scrolling content, owning mobile
   sidebar state, the desktop rail pin and the density context), `Sidebar`/`NavItem`/`UserRow`, `TopBar` (+
   `DensityToggle`, `ShortcutsButton`), `CommandPalette` (⌘K), `ShortcutsDialog`, `Brandmark`/`Wordmark`/`Logo`,
-  and one `shell.css` carrying the `.tp-shell`/`.tp-sidebar`/`.tp-topbar`/`.tp-nav-*` chrome plus the console
-  page scaffold. Each app keeps only its own auth/staff gate, destination list, and app-specific widgets — this
-  package exists because those three shells had drifted into three near-identical copies. `next` and `react`
-  are peer deps so nothing Next-coupled leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
+  and one `shell.css` carrying the `.tp-shell`/`.tp-sidebar`/`.tp-topbar`/`.tp-nav-*` chrome, the console
+  page scaffold (`.tp-page`, now a centred alias of the `PageContainer` contract), the `.tp-palette-*` command
+  palette, and the base layer — `box-sizing`, `body`, the thin token-coloured scrollbars and `.app-button` —
+  which the three apps had each been carrying byte-identically in their own `globals.css`. Each app keeps only
+  its own auth/staff gate, destination list, and app-specific widgets — this package exists because those three
+  shells had drifted into three near-identical copies. `next` and `react` are peer deps so nothing Next-coupled
+  leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
 - **`packages/db`** — `drizzle.config.ts` + `drizzle.worktree.config.ts` (the worktree-scoped variant, for
   running migrations against a per-worktree database); `client.ts` (`withTenantTx`/`withPrivilegedTx`/`withPlatformTx`/`closeDb`), `applyMigrations.ts`
   (bootstrap → drizzle → RLS sorted → grants → **partition-ACL mirror, which must run last**), `bootstrapAdmin.ts`,
