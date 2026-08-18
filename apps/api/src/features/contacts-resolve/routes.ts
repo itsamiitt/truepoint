@@ -7,7 +7,13 @@
 import { checkCaptureRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import { blindIndex, fetchAndLandUrl, linkedinUrlKey } from "@leadwolf/core";
-import { contactRepository, usageEventRepository, withTenantTx } from "@leadwolf/db";
+import {
+  contactRepository,
+  masterPersonReadRepository,
+  usageEventRepository,
+  withErTx,
+  withTenantTx,
+} from "@leadwolf/db";
 import { ForbiddenError, ValidationError } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
@@ -128,9 +134,44 @@ contactsResolveRoutes.post("/lookup", async (c) => {
     });
   }
 
-  // Not in the workspace — pull the licensed document into the master graph (bounded; 30-day freshness
-  // clock inside fetchAndLandUrl means a repeat view costs no vendor call). Flag-off degrades to a plain
-  // not_found so the card still renders truthfully.
+  // Not in the workspace — is the person already in the platform DATABASE? (Layer-0-as-database slice 4:
+  // the database is the product; an instant hit needs no vendor call at all.)
+  const readDatabasePerson = () =>
+    withErTx(async (tx) => {
+      if (slug) return masterPersonReadRepository.readVisiblePerson(tx, { slug });
+      const personId = await masterPersonReadRepository.resolveRegistryPerson(
+        tx,
+        key.normalizedUrl,
+      );
+      return personId ? masterPersonReadRepository.readVisiblePerson(tx, { id: personId }) : null;
+    });
+  const toPerson = (row: NonNullable<Awaited<ReturnType<typeof readDatabasePerson>>>) => ({
+    linkedinPublicId: row.linkedinPublicId,
+    linkedinUrl: `https://www.linkedin.com/in/${row.linkedinPublicId}`,
+    fullName: row.fullName,
+    jobTitle: row.jobTitle ?? row.headline,
+    headline: row.headline,
+    seniorityLevel: row.seniorityLevel,
+    companyName: row.company?.name ?? null,
+    locationRaw: row.locationRaw,
+    locationCity: row.locationCity,
+    locationCountry: row.locationCountry,
+    hasEmail: row.hasEmail,
+    hasPhone: row.hasPhone,
+  });
+  const inDb = await readDatabasePerson();
+  if (inDb) {
+    return c.json({
+      status: "in_database",
+      contactId: null,
+      contact: null,
+      person: toPerson(inDb),
+    });
+  }
+
+  // Not in the database either — pull the licensed document into the master graph (bounded; the 30-day
+  // freshness clock inside fetchAndLandUrl means a repeat view costs no vendor call), then RE-READ so the
+  // caller gets the identity, not a boolean. Flag-off degrades to an honest not_found.
   if (!env.LINKEDIN_LINK_FETCH_ENABLED) {
     return c.json({ status: "not_found", contactId: null, contact: null });
   }
@@ -139,11 +180,18 @@ contactsResolveRoutes.post("/lookup", async (c) => {
     entityKind: "person",
     normalizedUrl: key.normalizedUrl,
   });
-  const status =
-    result.outcome === "landed" || result.outcome === "fresh" || result.outcome === "duplicate"
-      ? "fetched"
-      : result.outcome === "unavailable"
-        ? "unavailable"
-        : "not_found";
+  if (result.outcome === "landed" || result.outcome === "fresh" || result.outcome === "duplicate") {
+    const landed = await readDatabasePerson();
+    if (landed) {
+      return c.json({
+        status: "in_database",
+        contactId: null,
+        contact: null,
+        person: toPerson(landed),
+      });
+    }
+    return c.json({ status: "not_found", contactId: null, contact: null });
+  }
+  const status = result.outcome === "unavailable" ? "unavailable" : "not_found";
   return c.json({ status, contactId: null, contact: null });
 });

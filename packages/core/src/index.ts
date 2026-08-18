@@ -139,6 +139,17 @@ export {
   type CaptureLandingResult,
   type CaptureScope,
 } from "./ingestion/landCapture.ts";
+// The shared overlay person-landing body + the database materializer ("Add to workspace").
+export {
+  landOverlayPerson,
+  type OverlayPersonLanding,
+  type OverlayScalars,
+} from "./ingestion/landOverlayPerson.ts";
+export {
+  materializeContactFromMaster,
+  type MaterializeBy,
+} from "./ingestion/materializeFromMaster.ts";
+export { names, splitLocation, str } from "./ingestion/personFields.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,
@@ -1463,3 +1474,18 @@ export {
   type CrmAlertThresholds,
   type CrmConnectionSnapshot,
 } from "./crm-sync/evaluateCrmAlerts.ts";
+// Junk-capture cleanup (Layer-0-as-database plan slice 8) — audited, reversible, per-workspace.
+export {
+  archiveJunkCaptures,
+  type ArchiveJunkCapturesInput,
+  type ArchiveJunkCapturesResult,
+} from "./prospect/archiveJunkCaptures.ts";
+// Title → seniority rung inference (the landing's seniority facet for the database search).
+export { inferSeniorityFromTitle } from "./search/inferSeniority.ts";
+// The GLOBAL database search (Layer-0-as-database slice 2) — visibility-filtered, workspace-flagged.
+export {
+  searchDatabase,
+  countDatabase,
+  toMaskedDatabasePerson,
+  type DatabaseSearchScope,
+} from "./prospect/searchDatabase.ts";

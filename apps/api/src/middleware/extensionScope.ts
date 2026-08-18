@@ -67,6 +67,9 @@ const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   // The one-round-trip DB-first / vendor-fallback lookup behind the card (extension-intelligence-loop
   // slice B) — body is a LinkedIn URL, response is masked-or-status, no PII either direction.
   rule("POST", "/api/v1/contacts/lookup"),
+  // "Add to workspace" from the platform database (Layer-0-as-database slice 3/4): one contact per user
+  // gesture, addressed by URL. The card's in-database CTA calls exactly this.
+  rule("POST", "/api/v1/contacts/from-database"),
   rule("GET", "/api/v1/credits/balance"),
   rule("GET", "/api/v1/credits/reveal-costs"),
   rule("GET", "/api/v1/me"),

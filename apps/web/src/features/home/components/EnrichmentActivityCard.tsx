@@ -3,6 +3,7 @@
 // async states render through the shared WidgetCard → StateSwitch. Public slice component.
 "use client";
 
+import { sourceLabel } from "@leadwolf/types";
 import { StatusBadge, type StatusTone } from "@leadwolf/ui";
 import { Database } from "lucide-react";
 import type { EnrichmentActivity } from "../types";
@@ -44,9 +45,9 @@ export function EnrichmentActivityCard({
     >
       <div className={styles.list}>
         {activity.map((a, i) => (
-          <div key={`${a.providerName}-${a.calledAt}-${i}`} className={styles.row}>
+          <div key={`${sourceLabel(a.providerName)}-${a.calledAt}-${i}`} className={styles.row}>
             <span className={styles.rowStack}>
-              <span className={styles.rowLabel}>{a.providerName}</span>
+              <span className={styles.rowLabel}>{sourceLabel(a.providerName)}</span>
               <span className={styles.rowMeta}>
                 {a.cacheHit ? "Cache hit" : "Live"} · {formatRelative(a.calledAt)}
               </span>

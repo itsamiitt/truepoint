@@ -32,6 +32,9 @@ export const requestMessage = z.discriminatedUnion("type", [
     entityKind: z.enum(["person", "company"]),
     url: z.string().url(),
   }),
+  // The database-hit save (Layer-0-as-database): materialize the person the platform already holds —
+  // never a DOM capture. The URL is the addressing key; the server canonicalizes.
+  z.object({ type: z.literal("ADD_FROM_DATABASE"), url: z.string().url() }),
   z.object({ type: z.literal("REVEAL"), contactId: z.string().min(1), revealType }),
   z.object({ type: z.literal("AUTH_LOGIN") }),
   z.object({ type: z.literal("AUTH_LOGOUT") }),
@@ -111,7 +114,7 @@ export type ResponseFor<T extends RequestType> = T extends "PING"
     ? AppState
     : T extends "LOOKUP"
       ? LookupResponse
-      : T extends "CAPTURE"
+      : T extends "CAPTURE" | "ADD_FROM_DATABASE"
         ? CaptureResponse
         : T extends "REVEAL"
           ? RevealResponse

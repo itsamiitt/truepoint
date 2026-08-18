@@ -12,6 +12,7 @@ import type {
   OutreachStatus,
   RevealType,
 } from "@leadwolf/types";
+import { sourceLabel } from "@leadwolf/types";
 import {
   Avatar,
   Drawer,
@@ -690,7 +691,7 @@ export function RecordDetail({
                     key={`${h.revealType}-${h.revealedAt}-${i}`}
                   >
                     <span>
-                      {REVEAL_TYPE_LABELS[h.revealType]} · {h.dataSource}
+                      {REVEAL_TYPE_LABELS[h.revealType]} · {sourceLabel(h.dataSource)}
                     </span>
                     <span className={styles.revealHistoryMeta}>
                       {h.creditsConsumed} cr · {new Date(h.revealedAt).toLocaleDateString()}

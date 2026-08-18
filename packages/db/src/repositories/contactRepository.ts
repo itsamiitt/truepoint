@@ -280,6 +280,9 @@ function toMaskedContact(r: MaskedContactRow, channels?: ContactChannelSummaries
     createdAt: r.createdAt.toISOString(),
     lastVerifiedAt,
     dataHealth,
+    // URL-shaped identity (D4) — the projection already selected these for dataHealth's hasLinkedin.
+    linkedinPublicId: r.linkedinPublicId,
+    linkedinUrl: r.linkedinUrl,
     // Additive, gate-on only (05 §5): masked per-value channel summaries. ABSENT gate-off ⇒ byte-identical.
     ...(channels ? { channels } : {}),
   };
@@ -1025,6 +1028,55 @@ export const contactRepository = {
    * PII and fans out the erasure. Only already-live rows are affected (the `deleted_at IS NULL` guard makes a
    * re-archive a no-op). Callers MUST pass only workspace-visible ids. Returns the affected count.
    */
+  /** Which of these LinkedIn slugs the workspace ALREADY holds (the database search's "In workspace" pill).
+   *  RLS-scoped through the caller's tx; the partial ws-unique on linkedin_public_id guarantees ≤1 live row
+   *  per slug. Soft-deleted rows never count — an archived contact should read as addable again. */
+  async findRevealStateBySlugs(
+    tx: Tx,
+    workspaceId: string,
+    slugs: readonly string[],
+  ): Promise<Map<string, { contactId: string; isRevealed: boolean }>> {
+    const out = new Map<string, { contactId: string; isRevealed: boolean }>();
+    if (slugs.length === 0) return out;
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        slug: contacts.linkedinPublicId,
+        isRevealed: contacts.isRevealed,
+      })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.workspaceId, workspaceId),
+          inArray(contacts.linkedinPublicId, [...slugs]),
+          isNull(contacts.deletedAt),
+        ),
+      );
+    for (const r of rows) {
+      if (r.slug) out.set(r.slug, { contactId: r.id, isRevealed: r.isRevealed });
+    }
+    return out;
+  },
+
+  /** Junk-capture cleanup (Layer-0-as-database plan, slice 8): live contacts that carry NOTHING a human
+   *  could act on (no name, no title, no channel, never revealed) and whose ONLY provenance is the
+   *  chrome_extension capture path — the residue of the pre-guard Sales-Nav extractor. Ids only; the
+   *  caller archives via the audited path. */
+  async listJunkCaptureIds(tx: Tx, workspaceId: string, limit = 500): Promise<string[]> {
+    const rows = (await tx.execute(sql`
+      SELECT c.id FROM contacts c
+       WHERE c.workspace_id = ${workspaceId}::uuid AND c.deleted_at IS NULL
+         AND c.first_name IS NULL AND c.last_name IS NULL AND c.job_title IS NULL
+         AND c.email_enc IS NULL AND c.phone_enc IS NULL AND c.is_revealed = false
+         AND EXISTS (SELECT 1 FROM source_imports si
+                      WHERE si.contact_id = c.id AND si.source_name = 'chrome_extension')
+         AND NOT EXISTS (SELECT 1 FROM source_imports si2
+                          WHERE si2.contact_id = c.id AND si2.source_name <> 'chrome_extension')
+       LIMIT ${limit}
+    `)) as unknown as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  },
+
   async archive(tx: Tx, ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
     const rows = await tx

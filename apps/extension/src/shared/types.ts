@@ -55,10 +55,11 @@ export const subjectStatus = z.object({
   // "queued" is a LOCAL, client-only outcome: the capture is durably in the IndexedDB queue but has not been
   // acknowledged by the server yet. It exists so the capture path can stop reporting "saved" the instant it
   // enqueues — the drain happens later, off the alarm, and can still fail. The server never sends it.
-  // The lookup ladder (extension-intelligence-loop slice C): "found" = this workspace holds the contact;
-  // "fetched" = not in the workspace, but the licensed source just landed intel (Save adds it);
-  // "not_found" = neither the workspace nor the source knows it; "unavailable" = the source fleet is
-  // dark/down — Save still captures the visible page.
+  // The lookup ladder (extension-intelligence-loop → Layer-0-as-database): "found" = this workspace holds
+  // the contact; "in_database" = the TruePoint database holds the person (Add to workspace materializes
+  // it — never a DOM capture); "not_found" = neither knows it; "unavailable" = the source fleet is
+  // dark/down — Save still captures the visible page. ("fetched" was the pre-database transitional state;
+  // the server now answers in_database after a landing.)
   outcome: z.enum([
     "saved",
     "queued",
@@ -67,7 +68,7 @@ export const subjectStatus = z.object({
     "rejected",
     "unknown",
     "found",
-    "fetched",
+    "in_database",
     "not_found",
     "unavailable",
   ]),
@@ -81,6 +82,9 @@ export const subjectStatus = z.object({
   // and, keyed on contactId, can fetch the deep intel (employment/skills/headcount) via the allow-listed reads.
   identity: z
     .object({
+      fullName: z.string().nullable().optional(),
+      company: z.string().nullable().optional(),
+      linkedinPublicId: z.string().nullable().optional(),
       jobTitle: z.string().nullable(),
       seniority: z.string().nullable(),
       department: z.string().nullable(),

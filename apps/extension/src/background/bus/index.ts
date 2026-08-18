@@ -77,6 +77,19 @@ async function handle(
       return { status: { contactId: null, known: false, owned: false, outcome: "queued" } };
     }
 
+    case "ADD_FROM_DATABASE": {
+      // Materialize a database person into the workspace (Layer-0-as-database slice 4). Server-side verb;
+      // degrade to "rejected" on any failure so the card shows the truth.
+      try {
+        const status = await ctx.api.addFromDatabase(msg.url, crypto.randomUUID());
+        await ctx.telemetry.event("database_add", {});
+        ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
+        return { status };
+      } catch {
+        return { status: { contactId: null, known: false, owned: false, outcome: "rejected" } };
+      }
+    }
+
     case "REVEAL": {
       await ctx.telemetry.event("reveal_click", { revealType: msg.revealType });
       try {

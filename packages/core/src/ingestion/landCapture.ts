@@ -1,40 +1,27 @@
 // landCapture.ts — land a chrome_extension capture into the workspace overlay (the missing half of
 // POST /api/v1/ingest, docs/planning/extension-intelligence-loop.md slice A). One captured LinkedIn
-// profile becomes (or refreshes) ONE overlay contact, with:
-//   • the same dedup ladder every landing path uses (findByDedupKeys — the partial ws-unique indexes),
-//   • the same field-provenance pin discipline as import/enrichment (planFieldWrite; a user-pinned
-//     scalar is never clobbered by a capture),
-//   • the same co-op-safe master LINK-or-MINT bridge (resolveForImport under withErTx; non-fatal),
-//   • a source_imports provenance row per landing (rule 5: no ingestion path writes without provenance),
-//   • content-hash idempotency: an identical re-observation is a no-op that reports the existing contact.
-// Deliberately synchronous: a capture is one small row, not a bulk job — the import pipeline stays the
-// home of anything batched. The capture's consent context was already validated by the connector.
+// profile becomes (or refreshes) ONE overlay contact. The landing BODY is landOverlayPerson (shared with
+// the database materializer); this module only parses the observation, resolves the Layer-0 bridge, and
+// applies the capture-specific posture:
+//   • requireCreateData — a capture that read no name AND no title creates nothing (the junk-row guard);
+//   • the co-op-safe master LINK-or-MINT bridge (resolveForImport under withErTx; non-fatal).
+// Deliberately synchronous: a capture is one small row, not a bulk job. The capture's consent context was
+// already validated by the connector.
 import { createHash } from "node:crypto";
-import {
-  contactRepository,
-  masterGraphRepository,
-  sourceImportRepository,
-  withErTx,
-  withTenantTx,
-} from "@leadwolf/db";
+import { masterGraphRepository, withErTx, withTenantTx } from "@leadwolf/db";
 import type { RawObservation } from "@leadwolf/types";
-import { CONTACT_PROVENANCE_FIELDS } from "@leadwolf/types";
-import { planFieldWrite } from "../prospect/fieldProvenance.ts";
+import {
+  type CaptureLandingResult,
+  type CaptureScope,
+  landOverlayPerson,
+} from "./landOverlayPerson.ts";
+import { names, splitLocation, str } from "./personFields.ts";
 
-export type CaptureLandingOutcome = "created" | "updated" | "known" | "skipped";
-
-export interface CaptureLandingResult {
-  outcome: CaptureLandingOutcome;
-  contactId: string | null;
-  /** Why a record was skipped (no dedupable identity key). */
-  reason?: string;
-}
-
-export interface CaptureScope {
-  tenantId: string;
-  workspaceId: string;
-  capturedByUserId: string | null;
-}
+export type {
+  CaptureLandingOutcome,
+  CaptureLandingResult,
+  CaptureScope,
+} from "./landOverlayPerson.ts";
 
 /** The subset of a capture observation this landing reads. Everything else rides along in raw_data. */
 interface CaptureFields {
@@ -48,29 +35,6 @@ interface CaptureFields {
   location?: string;
   profileUrl?: string;
   sourceUrl?: string;
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
-}
-
-/** Split "City, Country" best-effort; a single token stays city-only (never guess a country). */
-function splitLocation(location: string | undefined): { city?: string; country?: string } {
-  if (!location) return {};
-  const parts = location
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length >= 2) return { city: parts.slice(0, -1).join(", "), country: parts.at(-1) };
-  return { city: parts[0] };
-}
-
-function names(f: CaptureFields): { firstName?: string; lastName?: string } {
-  if (f.firstName || f.lastName) return { firstName: f.firstName, lastName: f.lastName };
-  if (!f.fullName) return {};
-  const parts = f.fullName.split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0] };
-  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) };
 }
 
 /**
@@ -131,89 +95,31 @@ export async function landCapturedObservation(
 
   const loc = splitLocation(f.location);
   const nm = names(f);
-  const scalarValues: Record<string, string | undefined> = {
-    firstName: nm.firstName,
-    lastName: nm.lastName,
-    jobTitle: f.jobTitle,
-    locationCity: loc.city,
-    locationCountry: loc.country,
-  };
-  const scalarFields = Object.keys(scalarValues).filter(
-    (k) =>
-      scalarValues[k] !== undefined && (CONTACT_PROVENANCE_FIELDS as readonly string[]).includes(k),
-  );
 
-  return withTenantTx(scope, async (tx) => {
-    const prior = await sourceImportRepository.findByContentHash(
-      tx,
-      scope.workspaceId,
-      contentHash,
-    );
-    if (prior?.contactId) return { outcome: "known", contactId: prior.contactId };
-
-    const match = await contactRepository.findByDedupKeys(tx, scope.workspaceId, {
-      linkedinPublicId: publicId,
-      salesNavLeadId,
-    });
-
-    let contactId: string;
-    let outcome: CaptureLandingOutcome;
-    if (match) {
-      // Refresh scalars with the pin discipline: a user-corrected field survives every capture.
-      const existingProv = await contactRepository.getFieldProvenance(tx, match.id);
-      const planned = planFieldWrite(existingProv, scalarFields, {
-        src: "capture:chrome_extension",
-      });
-      const values: Record<string, unknown> = {
-        fieldProvenance: planned.provenance,
-        // The identity/linking fields are not pin-gated (same posture as import).
-        linkedinPublicId: publicId ?? undefined,
-        linkedinUrl: publicId ? (f.profileUrl ?? undefined) : undefined,
-        salesNavLeadId: salesNavLeadId ?? undefined,
-        salesNavProfileUrl: salesNavLeadId ? (f.profileUrl ?? undefined) : undefined,
-        masterPersonId: masterPersonId ?? undefined,
-      };
-      for (const field of planned.writableFields) values[field] = scalarValues[field];
-      await contactRepository.update(
-        tx,
-        match.id,
-        values as Parameters<typeof contactRepository.update>[2],
-      );
-      contactId = match.id;
-      outcome = "updated";
-    } else {
-      const { provenance } = planFieldWrite({}, scalarFields, {
-        src: "capture:chrome_extension",
-      });
-      contactId = await contactRepository.insert(tx, {
-        tenantId: scope.tenantId,
-        workspaceId: scope.workspaceId,
-        firstName: nm.firstName ?? null,
-        lastName: nm.lastName ?? null,
-        jobTitle: f.jobTitle ?? null,
-        locationCity: loc.city ?? null,
-        locationCountry: loc.country ?? null,
-        linkedinPublicId: publicId ?? null,
+  return withTenantTx(scope, (tx) =>
+    landOverlayPerson(tx, scope, {
+      identity: {
+        linkedinPublicId: publicId,
+        salesNavLeadId,
         linkedinUrl: publicId ? (f.profileUrl ?? null) : null,
-        salesNavLeadId: salesNavLeadId ?? null,
         salesNavProfileUrl: salesNavLeadId ? (f.profileUrl ?? null) : null,
-        masterPersonId: masterPersonId ?? undefined,
-        fieldProvenance: provenance,
-      });
-      outcome = "created";
-    }
-
-    await sourceImportRepository.append(tx, {
-      tenantId: scope.tenantId,
-      workspaceId: scope.workspaceId,
-      contactId,
-      importedByUserId: scope.capturedByUserId,
+      },
+      scalars: {
+        firstName: nm.firstName,
+        lastName: nm.lastName,
+        jobTitle: f.jobTitle,
+        locationCity: loc.city,
+        locationCountry: loc.country,
+      },
+      masterPersonId,
+      source: { src: "capture:chrome_extension" },
       sourceName: "chrome_extension",
       sourceFile: f.sourceUrl ?? null,
       rawData: observation,
       contentHash,
-    });
-
-    return { outcome, contactId };
-  });
+      // A capture that read nothing usable (the pre-guard Sales-Nav failure mode) must not mint a blank
+      // contact; refreshing an EXISTING one from a thin observation is still fine.
+      requireCreateData: true,
+    }),
+  );
 }

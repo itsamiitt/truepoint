@@ -5,7 +5,7 @@ import { validatePolicyWrite } from "@leadwolf/auth";
 // scans. Transport only: the bounded read shapes live in @leadwolf/db (platformAdminRepository). This is the
 // highest-privilege surface in the api; nothing reaches it without pa===true.
 import { env } from "@leadwolf/config";
-import { evaluateFlagsForTenant } from "@leadwolf/core";
+import { archiveJunkCaptures, evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   accountHoldRepository,
@@ -1552,3 +1552,40 @@ adminRoutes.route("/announcements", announcementRoutes);
 // Data-management control panel — cross-tenant data-ops overview, read-only (data:read).
 // database-management-research Phase 1 / MVP. Own module; parent authn + platformAdmin already apply.
 adminRoutes.route("/data", dataRoutes);
+
+/** Junk-capture cleanup (Layer-0-as-database plan slice 8 [A-03]): per-workspace, reversible soft-archive of
+ *  no-data capture residue (pre-guard Sales-Nav extractor junk). data:manage; platform-audited; the tenant
+ *  audit row (contact.delete, reason junk_capture) rides the same tenant tx. dryRun reports, writes nothing. */
+adminRoutes.post(
+  "/maintenance/archive-junk-captures",
+  requireCapability("data:manage"),
+  async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      tenantId?: unknown;
+      workspaceId?: unknown;
+      dryRun?: unknown;
+    } | null;
+    const tenantId = typeof body?.tenantId === "string" ? body.tenantId : "";
+    const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
+    const dryRun = body?.dryRun !== false; // default TRUE — writing requires an explicit dryRun:false
+    if (!UUID_RE.test(tenantId) || !UUID_RE.test(workspaceId)) {
+      throw new ValidationError("tenantId and workspaceId must be UUIDs");
+    }
+    const actor = actorOf(c);
+    let result: Awaited<ReturnType<typeof archiveJunkCaptures>> | undefined;
+    await withPlatformTx(
+      actor,
+      "maintenance.archive_junk_captures",
+      async () => {
+        result = await archiveJunkCaptures({
+          tenantId,
+          workspaceId,
+          actorUserId: actor.userId,
+          dryRun,
+        });
+      },
+      { targetType: "workspace", targetId: workspaceId, tenantId, metadata: { dryRun } },
+    );
+    return c.json(result);
+  },
+);

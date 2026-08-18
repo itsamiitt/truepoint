@@ -19,6 +19,7 @@ import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
+import { contactsFromDatabaseRoutes } from "./features/contacts-from-database/index.ts";
 import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
 import { contactsResolveRoutes } from "./features/contacts-resolve/index.ts";
 import { crmRoutes, crmWebhookRoutes } from "./features/crm-sync/index.ts";
@@ -197,6 +198,8 @@ app.route("/api/v1/contacts", contactsMergeRoutes);
 // contact for the slug in the active workspace. Registered BEFORE the reveal router so the literal
 // `by-linkedin` segment is never captured as a contact `:id` (same first-match discipline as /contacts/bulk).
 app.route("/api/v1/contacts", contactsResolveRoutes);
+// "Add to workspace" (Layer-0-as-database): a LITERAL segment, so it must precede revealRoutes' `/:id`.
+app.route("/api/v1/contacts", contactsFromDatabaseRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either

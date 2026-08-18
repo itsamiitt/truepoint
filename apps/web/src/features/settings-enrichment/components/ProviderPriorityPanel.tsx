@@ -20,7 +20,6 @@ import {
   FormSection,
   StateSwitch,
   TpButton,
-  TpCheckbox,
   TpSelect,
   TpSwitch,
   useToast,
@@ -29,7 +28,6 @@ import { useEffect, useState } from "react";
 import { useAutoEnrichPolicy } from "../hooks/useAutoEnrichPolicy";
 import styles from "../settings-enrichment.module.css";
 
-const LABEL = new Map<string, string>(KNOWN_ENRICH_PROVIDERS.map((p) => [p.provider, p.label]));
 const ALL_IDS = KNOWN_ENRICH_PROVIDERS.map((p) => p.provider);
 
 const CATCH_ALL_OPTIONS: { value: AcceptCatchAll; label: string }[] = [
@@ -52,15 +50,6 @@ function displayOrder(saved: EnrichProviderId[], disabled: EnrichProviderId[]): 
   return [...saved, ...(rest as EnrichProviderId[])].filter(
     (id) => !disabled.includes(id) || saved.includes(id),
   );
-}
-
-function move<T>(list: T[], index: number, delta: -1 | 1): T[] {
-  const target = index + delta;
-  if (target < 0 || target >= list.length) return list;
-  const next = [...list];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item as T);
-  return next;
 }
 
 export function ProviderPriorityPanel() {
@@ -104,46 +93,6 @@ export function ProviderPriorityPanel() {
     }
   };
 
-  const orderList = (field: "email" | "phone") => {
-    if (!form) return null;
-    const list = form[field];
-    return (
-      <ol className={styles.providerList}>
-        {list.map((id, index) => {
-          const isDisabled = form.disabled.includes(id);
-          return (
-            <li key={id} className={styles.providerRow}>
-              <span className={styles.providerPosition}>{index + 1}</span>
-              <span className={isDisabled ? styles.providerNameDisabled : styles.providerName}>
-                {LABEL.get(id) ?? id}
-              </span>
-              <span className={styles.providerRowActions}>
-                <TpButton
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Move ${LABEL.get(id) ?? id} up in the ${field} order`}
-                  disabled={index === 0}
-                  onClick={() => setForm((f) => f && { ...f, [field]: move(f[field], index, -1) })}
-                >
-                  ↑
-                </TpButton>
-                <TpButton
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Move ${LABEL.get(id) ?? id} down in the ${field} order`}
-                  disabled={index === list.length - 1}
-                  onClick={() => setForm((f) => f && { ...f, [field]: move(f[field], index, 1) })}
-                >
-                  ↓
-                </TpButton>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    );
-  };
-
   return (
     <section>
       <h1 className="tp-settings-title">Enrichment providers</h1>
@@ -151,46 +100,10 @@ export function ProviderPriorityPanel() {
         {form ? (
           <>
             <FormSection
-              title="Provider priority"
-              description="The waterfall tries providers top-to-bottom, per field, and stops at the first verified answer. Email and phone keep independent orders."
+              title="Data sources"
+              description="TruePoint sources contact data for you and verifies it before accepting it. Which upstream sources are used, and in what order, is managed by TruePoint — you control verification below."
             >
-              <FieldGroup
-                label="Email order"
-                hint="Who gets asked for an email address, first to last."
-              >
-                {orderList("email")}
-              </FieldGroup>
-              <FieldGroup
-                label="Phone order"
-                hint="Who gets asked for a phone number, first to last."
-              >
-                {orderList("phone")}
-              </FieldGroup>
-              <FieldGroup
-                label="Enabled providers"
-                hint="A disabled provider is skipped in every cascade for this workspace."
-              >
-                <div className={styles.optionList}>
-                  {KNOWN_ENRICH_PROVIDERS.map((p) => (
-                    <TpCheckbox
-                      key={p.provider}
-                      label={p.label}
-                      checked={!form.disabled.includes(p.provider)}
-                      onChange={() =>
-                        setForm(
-                          (f) =>
-                            f && {
-                              ...f,
-                              disabled: f.disabled.includes(p.provider)
-                                ? f.disabled.filter((d) => d !== p.provider)
-                                : [...f.disabled, p.provider],
-                            },
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              </FieldGroup>
+              {null}
             </FormSection>
 
             <FormSection

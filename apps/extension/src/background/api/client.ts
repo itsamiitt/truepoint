@@ -113,6 +113,7 @@ export class ApiClient {
       subjectKey: record.subjectKey,
       adapter: record.adapter,
       pageType: record.pageType,
+      sourceUrl: record.sourceUrl, // provenance: the page the capture was taken from (source_imports.source_file)
     };
     const envelope: IngestionEnvelope = {
       source: "chrome_extension",
@@ -259,15 +260,53 @@ export class ApiClient {
           : undefined,
       };
     }
+    // In the DATABASE but not the workspace (Layer-0-as-database slice 4): carry the masked identity so
+    // the card can show the real name/title/company and offer "Add to workspace".
+    if (resp.status === "in_database") {
+      const p = resp.person;
+      return {
+        contactId: null,
+        known: false,
+        owned: false,
+        outcome: "in_database",
+        score: null,
+        identity: p
+          ? {
+              fullName: p.fullName ?? null,
+              company: p.companyName ?? null,
+              linkedinPublicId: p.linkedinPublicId ?? null,
+              jobTitle: p.jobTitle ?? null,
+              seniority: p.seniorityLevel ?? null,
+              department: null,
+              location:
+                [p.locationCity, p.locationCountry].filter(Boolean).join(", ") ||
+                (p.locationRaw ?? null),
+              emailStatus: null,
+            }
+          : undefined,
+      };
+    }
     const outcome =
-      resp.status === "fetched"
-        ? "fetched"
-        : resp.status === "unavailable"
-          ? "unavailable"
-          : resp.status === "not_found"
-            ? "not_found"
-            : "unknown";
+      resp.status === "unavailable"
+        ? "unavailable"
+        : resp.status === "not_found"
+          ? "not_found"
+          : "unknown";
     return { contactId: null, known: false, owned: false, outcome, score: null };
+  }
+
+  /** Materialize a database person into the workspace (POST /contacts/from-database; Layer-0-as-database
+   *  slice 4). Addressed by the page URL — the server canonicalizes public and Sales-Nav forms. */
+  async addFromDatabase(url: string, idempotencyKey: string): Promise<SubjectStatus> {
+    const resp = await this.request<{ contactId: string | null; outcome: string }>(
+      "/contacts/from-database",
+      { method: "POST", body: JSON.stringify({ url }) },
+      { idempotencyKey },
+    );
+    if (resp.contactId && resp.outcome !== "skipped") {
+      return { contactId: resp.contactId, known: true, owned: false, outcome: "saved" };
+    }
+    return { contactId: null, known: false, owned: false, outcome: "rejected" };
   }
 
   /** Post harvested Sales-Nav URLs to the fetch registry (POST /ingest/linkedin-links; docs/planning

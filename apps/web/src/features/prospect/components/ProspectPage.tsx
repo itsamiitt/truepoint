@@ -42,12 +42,13 @@ import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { type ResultScope, displayName, emailGlyphFor } from "../types";
+import { type ResultScope, displayName, emailGlyphFor, profileHref } from "../types";
 import { AccountDetailDrawer } from "./AccountDetailDrawer";
 import { AccountFilterPanel } from "./AccountFilterPanel";
 import { AccountsTable } from "./AccountsTable";
 import { AiSearchBox } from "./AiSearchBox";
 import type { RowBulkAction } from "./BulkActionBar";
+import { DatabaseScope } from "./DatabaseScope";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
 // business in the initial chunk of the surface every prospect session lands on. `next/dynamic` defers it to
@@ -71,6 +72,8 @@ import { SaveSearchPanel } from "./SaveSearchPanel";
 const SCOPES = [
   { value: "contacts", label: "Contacts" },
   { value: "accounts", label: "Accounts" },
+  // The platform-wide database (Layer-0-as-database): people the workspace does not hold yet.
+  { value: "database", label: "Database" },
 ];
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
@@ -105,7 +108,9 @@ function ProspectPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
+  const scopeParam = searchParams?.get("scope");
+  const scope: ResultScope =
+    scopeParam === "accounts" ? "accounts" : scopeParam === "database" ? "database" : "contacts";
   const contactsActive = scope === "contacts";
   const accountsActive = scope === "accounts";
 
@@ -261,14 +266,33 @@ function ProspectPageInner() {
         key: "name",
         header: "Name",
         sortValue: (c) => displayName(c),
-        cell: (c) => (
-          <span className={styles.nameCell}>
-            <span className={styles.nameMeta}>
-              <span className={styles.name}>{displayName(c)}</span>
-              <span className={styles.title}>{c.jobTitle ?? "—"}</span>
+        cell: (c) => {
+          const href = profileHref(c);
+          return (
+            <span className={styles.nameCell}>
+              <span className={styles.nameMeta}>
+                <span className={styles.name}>{displayName(c)}</span>
+                <span className={styles.title}>
+                  {c.jobTitle ?? "—"}
+                  {href ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Open profile"
+                      >
+                        profile
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </span>
             </span>
-          </span>
-        ),
+          );
+        },
       },
       {
         key: "company",
@@ -360,6 +384,20 @@ function ProspectPageInner() {
       aria-label="Result type"
     />
   );
+
+  // The DATABASE scope is a self-contained surface (its own URL-derived query, filters, count and add
+  // action), so it renders as the whole results area rather than threading a third case through the
+  // contacts/accounts branches below. The scope switch is shared so navigation stays in one place.
+  if (scope === "database") {
+    return (
+      <div className={styles.page} data-density={density}>
+        <aside className={styles.databaseRail}>{scopeSwitch}</aside>
+        <section className={styles.results}>
+          <DatabaseScope />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page} data-density={density}>

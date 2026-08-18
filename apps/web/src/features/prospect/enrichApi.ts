@@ -24,10 +24,9 @@ export async function refreshContactFromSource(contactId: string): Promise<Refre
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       fields: ["email", "phone", "jobTitle", "seniorityLevel", "department"],
-      providerOrder: ["linkedin_api"],
     }),
   });
-  if (!res.ok) throw await toApiError(res, "Could not refresh from LinkedIn");
+  if (!res.ok) throw await toApiError(res, "Could not refresh this contact");
   if (res.status === 202) {
     const body = (await res.json()) as { queued: boolean; jobId: string };
     return { queued: true, jobId: body.jobId };

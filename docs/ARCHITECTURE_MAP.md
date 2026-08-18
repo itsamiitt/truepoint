@@ -222,6 +222,14 @@ apps/                           # deployable processes (thin transport adapters)
   hooked post-evidence in `enrichContactV2` and driven fleet-wide by `queues/linkedinCompanyRefresh.ts` (leader-locked,
   25/tick @ 6h). db writers: `masterProfileRepository` (master-sync). Design:
   [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)
+- **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
+  customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
+  unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
+  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database`;
+  `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
+  core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
+  `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
+  web: `features/prospect/` Database scope (`DatabaseScope`/`DatabaseTable`/`useDatabaseSearch`).
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·

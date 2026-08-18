@@ -2,8 +2,16 @@
 // the verified token (never the body), validation is Zod at the edge, and all search logic lives behind the
 // SearchPort (packages/search). POST is used for contacts/facets (structured query bodies); suggest is GET.
 
-import { searchCount } from "@leadwolf/core";
-import { ValidationError, contactQuery, facetCountsRequest, suggestQuery } from "@leadwolf/types";
+import { countDatabase, searchCount, searchDatabase } from "@leadwolf/core";
+import {
+  ValidationError,
+  contactQuery,
+  databaseCountResult,
+  databaseQuery,
+  databaseSearchPage,
+  facetCountsRequest,
+  suggestQuery,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
@@ -42,6 +50,29 @@ searchRoutes.post("/count", async (c) => {
 
   const result = await searchCount({ tenantId: c.get("tenantId"), workspaceId }, parsed.data);
   return c.json(result);
+});
+
+/**
+ * POST /search/database — the GLOBAL database search (Layer-0-as-database slice 2): every person the
+ * PLATFORM holds, not just the workspace's contacts. Workspace scope is still required, but only to flag
+ * which hits the caller already owns; the visibility policy (licensed/co-op, unsuppressed, unmerged) is
+ * applied inside the repository. The egress parse is load-bearing — it is what guarantees no Layer-0
+ * identifier can leak into a response.
+ */
+searchRoutes.post("/database", async (c) => {
+  const workspaceId = requireWorkspace(c, "Select a workspace to search the database.");
+  const parsed = databaseQuery.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Invalid database query.");
+  const page = await searchDatabase({ tenantId: c.get("tenantId"), workspaceId }, parsed.data);
+  return c.json(databaseSearchPage.parse(page));
+});
+
+/** POST /search/database/count — the exact total for the same query (the grid header). */
+searchRoutes.post("/database/count", async (c) => {
+  requireWorkspace(c, "Select a workspace to search the database.");
+  const parsed = databaseQuery.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Invalid database query.");
+  return c.json(databaseCountResult.parse(await countDatabase(parsed.data)));
 });
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */

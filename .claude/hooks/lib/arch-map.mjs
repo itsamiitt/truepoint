@@ -196,6 +196,12 @@ export const REPO_DOMAIN = {
   // graph; split from masterGraphRepository for the same reason masterEmploymentRead is: that module owns
   // the resolve chokepoint, this one owns the fold-applied fact writes.
   masterProfile: "master-sync",
+  // The CUSTOMER read seams over the same Layer-0 graph (Layer-0-as-database): the visibility-filtered
+  // person read, the global database search, and the reveal channel read. Same system-owned tables and the
+  // same withErTx access path as the writers above — they differ only in direction.
+  masterPersonRead: "master-sync",
+  masterPersonSearch: "master-sync",
+  masterChannelRead: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",

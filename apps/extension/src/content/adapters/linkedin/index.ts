@@ -4,8 +4,9 @@
 // and never patches the network (01 §3 documents Apollo's rejected technique; the URL-only harvest stays
 // under the ADR-0043 user-visible-DOM posture; the licensed source API supplies the actual data).
 import type { CapturedLink, CapturedRecord, PageType } from "../../../shared/types.ts";
-import { firstText } from "../../extract/dom.ts";
 import type { SiteAdapter } from "../types.ts";
+import { extractSalesNavLead } from "./extractLead.ts";
+import { extractPublicProfile } from "./extractProfile.ts";
 
 const PROFILE_RE = /^\/in\/([^/]+)/;
 const COMPANY_RE = /^\/company\/([^/]+)/;
@@ -54,56 +55,21 @@ export const linkedinAdapter: SiteAdapter = {
     return sales?.[2] ? `sales-lead:${decodeURIComponent(sales[2])}` : null;
   },
 
+  // Two page families, two extractors (extractProfile / extractLead): Sales Navigator's markup shares
+  // nothing with the public profile, and reusing one selector set produced page-chrome "names".
   extract(url: URL, doc: Document): CapturedRecord | null {
     if (this.pageType(url) !== "profile") {
       return null;
     }
-    const subjectKey = this.subjectKey(url);
-    if (!subjectKey) {
-      return null;
-    }
-    const fullName = firstText(doc, ["h1", "main h1", "section h1"]);
-    const jobTitle = firstText(doc, [".text-body-medium.break-words", ".text-body-medium"]);
-    const location = firstText(doc, [
-      ".text-body-small.inline.t-black--light",
-      "span.text-body-small",
-    ]);
-
     const salesMatch = url.pathname.match(SALES_PROFILE_RE);
     if (salesMatch?.[2]) {
-      const leadId = decodeURIComponent(salesMatch[2]);
-      return {
-        subjectKey,
-        adapter: "linkedin",
-        pageType: "profile",
-        fields: {
-          fullName,
-          jobTitle,
-          location,
-          profileUrl: `https://www.linkedin.com/sales/lead/${encodeURIComponent(leadId)}`,
-          salesNavLeadId: leadId,
-        },
-        sourceUrl: url.href,
-        capturedAt: new Date().toISOString(),
-      };
+      return extractSalesNavLead(url, doc, decodeURIComponent(salesMatch[2]));
     }
-
-    const publicId = subjectKey;
-    const profileUrl = `${url.origin}/in/${encodeURIComponent(publicId)}`;
-    return {
-      subjectKey: publicId,
-      adapter: "linkedin",
-      pageType: "profile",
-      fields: {
-        fullName,
-        jobTitle,
-        location,
-        profileUrl,
-        publicId,
-      },
-      sourceUrl: url.href,
-      capturedAt: new Date().toISOString(),
-    };
+    const publicMatch = url.pathname.match(PROFILE_RE);
+    if (publicMatch?.[1]) {
+      return extractPublicProfile(url, doc, decodeURIComponent(publicMatch[1]));
+    }
+    return null;
   },
 
   /** Harvest the result-row anchor hrefs on a Sales-Nav search/list page (visible-DOM only). Returns the

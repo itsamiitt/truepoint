@@ -35,7 +35,7 @@ export function AttributesSection({ contactId }: { contactId: string }) {
           title={resolved ? "No skills on record" : "Not matched to the graph yet"}
           description={
             resolved
-              ? "Skills and languages appear after a LinkedIn refresh."
+              ? "Skills and languages appear after the next refresh."
               : "Attributes appear once this contact is matched to the shared graph."
           }
         />

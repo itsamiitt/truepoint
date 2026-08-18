@@ -14,10 +14,10 @@ const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src",
 const DESCRIPTION_MAX = 500;
 
 /** Single-quoted SQL literals on a line, with '' unescaped to '. */
-function literalsOn(line: string): string[] {
+function literalsOn(text: string): string[] {
   // Group 1 always participates when the pattern matches, so `?? ""` is unreachable rather than a
   // behaviour change — it just tells TS what the regex guarantees.
-  return [...line.matchAll(/'((?:[^']|'')*)'/g)].map((m) => (m[1] ?? "").replaceAll("''", "'"));
+  return [...text.matchAll(/'((?:[^']|'')*)'/g)].map((m) => (m[1] ?? "").replaceAll("''", "'"));
 }
 
 describe("feature_flags seed migrations", () => {
@@ -29,11 +29,18 @@ describe("feature_flags seed migrations", () => {
     const violations: string[] = [];
     for (const file of sqlFiles) {
       const lines = readFileSync(join(migrationsDir, file), "utf8").split("\n");
-      for (const line of lines) {
-        if (!/INSERT INTO\s+"?feature_flags"?/i.test(line)) continue;
+      for (let i = 0; i < lines.length; i++) {
+        if (!/INSERT INTO\s+"?feature_flags"?/i.test(lines[i] as string)) continue;
+        // STATEMENT-scoped, not line-scoped: a seed may wrap its VALUES onto following lines (0119 does),
+        // and a line-only scan then sees an INSERT with no literals and reports a false parser failure.
+        // Accumulate from the INSERT until the statement terminator.
+        let statement = lines[i] as string;
+        for (let j = i + 1; j < lines.length && !/;\s*$/.test(statement.trim()); j++) {
+          statement += `\n${lines[j]}`;
+        }
         // Column order in every seed: (key, description, global_enabled, "default") — literal #1 is
         // the key, #2 the description. A future seed with a different shape trips the sanity check below.
-        const literals = literalsOn(line);
+        const literals = literalsOn(statement);
         if (literals.length < 2) {
           violations.push(
             `${file}: feature_flags INSERT with <2 string literals — update this test's parser`,

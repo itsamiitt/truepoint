@@ -39,6 +39,7 @@ export class HoverCard {
   private readonly button: HTMLButtonElement;
   private readonly revealEl: HTMLElement;
   private record: CapturedRecord | null = null;
+  private reExtract: (() => CapturedRecord | null) | null = null;
   private status: SubjectStatus | null = null;
 
   constructor() {
@@ -79,12 +80,13 @@ export class HoverCard {
     });
   }
 
-  showForRecord(record: CapturedRecord): void {
+  /** Show the card for a freshly detected profile. `reExtract` (optional) re-reads the DOM at Save time so
+   *  the capture carries the rendered header, not the nav-time snapshot (slice 5e). */
+  showForRecord(record: CapturedRecord, reExtract?: () => CapturedRecord | null): void {
     this.record = record;
+    this.reExtract = reExtract ?? null;
     this.status = null;
-    this.nameEl.textContent = record.fields.fullName ?? record.subjectKey;
-    const parts = [record.fields.jobTitle, record.fields.company].filter(Boolean);
-    this.subEl.textContent = parts.join(" · ");
+    this.renderIdentityFromRecord(record);
     this.revealEl.textContent = "";
     // Honest initial state: the LOOKUP is in flight — say so instead of pre-rendering "Not revealed"
     // and swapping (the reader can't tell a pending answer from a miss).
@@ -93,11 +95,35 @@ export class HoverCard {
     this.host.style.display = "block";
   }
 
+  /** A later DOM settle: refresh the DOM-derived identity if the header rendered after the first pass. Never
+   *  overrides a server-resolved identity (setStatus wins). */
+  refreshFromDom(reExtract: () => CapturedRecord | null): void {
+    if (!this.record || this.status?.identity) return;
+    const fresh = reExtract();
+    if (!fresh || fresh.subjectKey !== this.record.subjectKey) return;
+    if (fresh.fields.fullName && fresh.fields.fullName !== this.record.fields.fullName) {
+      this.record = fresh;
+      this.renderIdentityFromRecord(fresh);
+    }
+  }
+
+  private renderIdentityFromRecord(record: CapturedRecord): void {
+    this.nameEl.textContent = record.fields.fullName ?? record.subjectKey;
+    const parts = [record.fields.jobTitle, record.fields.company].filter(Boolean);
+    this.subEl.textContent = parts.join(" · ");
+  }
+
   setStatus(status: SubjectStatus): void {
     this.status = status;
     // Prefer the RESOLVED masked identity (richer + server-authoritative) over the DOM capture when present.
+    if (status.identity?.fullName) {
+      this.nameEl.textContent = status.identity.fullName;
+    }
     if (status.identity) {
-      const parts = [status.identity.jobTitle, status.identity.location].filter(Boolean);
+      const parts = [
+        status.identity.jobTitle,
+        status.identity.company ?? status.identity.location,
+      ].filter(Boolean);
       if (parts.length > 0) this.subEl.textContent = parts.join(" · ");
     }
     this.renderPrimary();
@@ -130,10 +156,10 @@ export class HoverCard {
       this.button.textContent = this.status.owned ? t("card.openInApp") : t("card.reveal");
       return;
     }
-    if (this.status?.outcome === "fetched") {
-      this.pillEl.textContent = t("card.fetchedPill");
-      this.revealEl.textContent = t("card.fetchedHint");
-      this.button.textContent = t("card.save");
+    if (this.status?.outcome === "in_database") {
+      this.pillEl.textContent = t("card.inDatabasePill");
+      this.revealEl.textContent = t("card.inDatabaseHint");
+      this.button.textContent = t("card.addToWorkspace");
       return;
     }
     if (this.status?.outcome === "not_found") {
@@ -188,9 +214,28 @@ export class HoverCard {
       return;
     }
 
-    // Capture path.
+    // Database hit: materialize the person the platform already holds — the workspace contact is built
+    // from the LICENSED document, not the DOM (Layer-0-as-database slice 4). A user gesture per row.
+    if (this.status?.outcome === "in_database") {
+      this.button.disabled = true;
+      this.button.textContent = t("card.adding");
+      const res = await send({ type: "ADD_FROM_DATABASE", url: this.record.sourceUrl });
+      this.setStatus(res.status);
+      this.button.disabled = false;
+      this.renderPrimary();
+      return;
+    }
+
+    // Capture path — re-extract NOW (the header has certainly rendered by the time a user clicks Save) so
+    // the landed contact carries the real name/title, not the nav-time snapshot (slice 5e).
     this.button.disabled = true;
-    const res = await send({ type: "CAPTURE", record: this.record });
+    const fresh = this.reExtract?.() ?? null;
+    const record =
+      fresh && fresh.subjectKey === this.record.subjectKey && fresh.fields.fullName
+        ? fresh
+        : this.record;
+    this.record = record;
+    const res = await send({ type: "CAPTURE", record });
     this.setStatus(res.status);
     this.button.disabled = false;
   }
