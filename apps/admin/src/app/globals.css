@@ -1,49 +1,11 @@
-/* globals.css — apps/admin's own styling, which is now almost nothing. The shell chrome (rail, top bar,
- * nav, user row, mobile overlay, command palette) and the console page scaffold (.tp-page, .tp-stat-grid,
- * .tp-section-title, .tp-meta-*, the staff tag and the cross-tenant note) all come from
- * @leadwolf/app-shell — the same stylesheet apps/web and apps/forge consume, so the three surfaces cannot
- * drift apart again. Tokens and component styling come from @leadwolf/ui. Light-theme only. */
+/* globals.css — apps/admin's own styling, which is now nothing at all. The shell chrome (rail, top bar,
+ * nav, user row, mobile overlay, command palette), the base layer (box-sizing, body, scrollbars,
+ * .app-button) and the console page scaffold (.tp-page, .tp-stat-grid, .tp-section-title, .tp-meta-*, the
+ * staff tag and the cross-tenant note) all come from @leadwolf/app-shell — the same stylesheet apps/web and
+ * apps/forge consume, so the three surfaces cannot drift apart again. Tokens and component styling come
+ * from @leadwolf/ui. Light-theme only.
+ *
+ * Nothing app-specific belongs here yet. If something does later, it goes BELOW the imports. */
 @import "@leadwolf/ui/tokens.css";
 @import "@leadwolf/ui/primitives.css";
 @import "@leadwolf/app-shell/shell.css";
-
-* {
-  box-sizing: border-box;
-}
-
-/* Scrollbars — hidden app-wide; content remains fully scrollable (clean modern look). */
-* {
-  scrollbar-width: none;
-}
-*::-webkit-scrollbar {
-  display: none;
-}
-
-body {
-  margin: 0;
-  background: var(--tp-surface);
-  color: var(--tp-ink);
-  font-family: var(--font-sans);
-}
-
-/* Legacy plain button used by a few console panels that predate the DS controls. New work uses TpButton. */
-.app-button {
-  height: 40px;
-  padding: 0 16px;
-  font: inherit;
-  font-weight: 500;
-  color: var(--tp-on-fill);
-  background: var(--tp-btn);
-  border: 0;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition-property: background-color, transform;
-  transition-duration: var(--tp-duration-fast);
-  transition-timing-function: var(--tp-ease);
-}
-.app-button:hover {
-  background: var(--tp-btn-700);
-}
-.app-button:active {
-  transform: translateY(0.5px);
-}

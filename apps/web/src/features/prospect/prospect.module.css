@@ -879,6 +879,6 @@
   flex: 1;
   min-width: 4px;
   border-radius: 2px 2px 0 0;
-  background: var(--tp-accent, #4f6ef7);
+  background: var(--tp-cobalt);
   opacity: 0.85;
 }

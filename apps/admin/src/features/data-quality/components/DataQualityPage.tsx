@@ -36,7 +36,7 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
   return (
     <div
       style={{
-        border: "1px solid var(--tp-line)",
+        border: "1px solid var(--tp-hairline-2)",
         borderRadius: 10,
         padding: "12px 14px",
         minWidth: 130,

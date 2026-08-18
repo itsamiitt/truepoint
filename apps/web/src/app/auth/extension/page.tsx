@@ -48,7 +48,7 @@ export default function ExtensionAuthPage(): React.ReactElement {
   }, []);
 
   return (
-    <main className="app-main">
+    <main className="tp-center-screen">
       <p className="app-muted">{message}</p>
     </main>
   );

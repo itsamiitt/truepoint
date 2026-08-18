@@ -29,10 +29,10 @@ function saveDismissed(s: Set<string>): void {
 function toneStyle(level: string): CSSProperties {
   const accent =
     level === "critical"
-      ? "var(--tp-danger, #dc2626)"
+      ? "var(--danger)"
       : level === "warning"
-        ? "var(--tp-warning, #d97706)"
-        : "var(--tp-accent, #2563eb)";
+        ? "var(--warning)"
+        : "var(--tp-cobalt)";
   return {
     borderLeft: `3px solid ${accent}`,
     background: "var(--tp-surface-2)",

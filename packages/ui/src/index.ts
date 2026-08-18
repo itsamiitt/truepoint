@@ -5,6 +5,7 @@ export { cn } from "./cn.ts";
 
 // ── Page scaffolding — the one destination header shared by apps/web, apps/admin and apps/forge. ───────
 export { PageHeader } from "./components/PageHeader.tsx";
+export { PageContainer, type PageWidth } from "./components/PageContainer.tsx";
 
 // ── Dashboard surface primitives (token-driven, inline-styled) — used by apps/web. ─────────────────────
 export { Card } from "./components/Card.tsx";

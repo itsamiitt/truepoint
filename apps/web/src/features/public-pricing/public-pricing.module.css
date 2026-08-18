@@ -171,7 +171,7 @@
   justify-content: center;
   min-height: 38px;
   padding: 0 16px;
-  border-radius: var(--tp-radius, 8px);
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
@@ -180,13 +180,13 @@
 }
 
 .cta {
-  background: var(--tp-accent, #2563c9);
+  background: var(--tp-cobalt);
   color: #fff;
-  border: 1px solid var(--tp-accent, #2563c9);
+  border: 1px solid var(--tp-cobalt);
 }
 
 .cta:hover {
-  background: var(--tp-accent-strong, #1d4ed8);
+  background: var(--tp-cobalt-700);
 }
 
 .ctaGhost {
@@ -201,7 +201,7 @@
 
 .cta:focus-visible,
 .ctaGhost:focus-visible {
-  outline: 2px solid var(--tp-accent, #2563c9);
+  outline: 2px solid var(--tp-cobalt);
   outline-offset: 2px;
 }
 
@@ -219,7 +219,7 @@
 }
 
 .footer a {
-  color: var(--tp-accent, #2563c9);
+  color: var(--tp-cobalt);
   text-decoration: none;
 }
 

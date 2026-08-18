@@ -14,7 +14,7 @@
 .window select {
   padding: 6px 10px;
   border: 1px solid var(--tp-hairline);
-  border-radius: var(--tp-radius, 6px);
+  border-radius: var(--tp-radius-sm);
   background: var(--tp-surface);
   color: var(--tp-ink);
   font-size: 13px;
@@ -23,7 +23,7 @@
 .tableWrap {
   overflow-x: auto;
   border: 1px solid var(--tp-hairline);
-  border-radius: var(--tp-radius, 8px);
+  border-radius: var(--radius);
 }
 
 .table {
@@ -59,6 +59,6 @@
 }
 
 .warn {
-  color: var(--tp-warning, #b45309);
+  color: var(--warning);
   font-weight: 600;
 }

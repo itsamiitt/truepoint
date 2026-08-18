@@ -73,7 +73,7 @@ function TeamRoster({ team, canManage }: { team: TeamView; canManage: boolean })
   }
 
   return (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--tp-border)" }}>
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--tp-hairline-2)" }}>
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {members.length === 0 ? (
           <p className="app-muted" style={{ fontSize: 13, margin: "0 0 12px" }}>

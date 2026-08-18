@@ -96,7 +96,7 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
       align: "right",
       sortValue: (e) => e.delta,
       cell: (e) => (
-        <span style={e.delta > 0 ? { color: "var(--tp-success, #15803d)" } : undefined}>
+        <span style={e.delta > 0 ? { color: "var(--success)" } : undefined}>
           {e.delta > 0 ? `+${e.delta.toLocaleString()}` : e.delta.toLocaleString()}
         </span>
       ),
