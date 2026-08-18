@@ -231,6 +231,26 @@ export function zoominfoMatchBody(req: EnrichRequest): {
 }
 
 /**
+ * Whether a fieldless ZoomInfo answer cost anything. ZoomInfo bills per MATCHED record: a response whose
+ * every entry is a declared non-match is free, and booking it as spend would throttle the daily budget
+ * gate against money we never spent. A response we cannot read is assumed billable — the safe direction
+ * for a spend counter is to over-report, never to under-report.
+ */
+export function zoominfoIsBillable(json: unknown): boolean {
+  if (typeof json !== "object" || json === null) return true;
+  const data = (json as Record<string, unknown>).data;
+  if (!Array.isArray(data) || data.length === 0) return true;
+  return !data.every((entry) => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const e = entry as Record<string, unknown>;
+    if (e.type === "NoMatch") return true;
+    const meta = e.meta as Record<string, unknown> | undefined;
+    const status = typeof meta?.matchStatus === "string" ? meta.matchStatus.toUpperCase() : "";
+    return status.includes("NO_MATCH") || status.includes("NON_MATCH");
+  });
+}
+
+/**
  * Request headers for GTM enrich. The gateway REFUSES `accept: application/json` with a 406 — verified
  * live against the endpoint — because it is a JSON:API surface and wants the JSON:API media type. Exported
  * so that stays under test: the 406 is invisible in CI, where the provider never authenticates.
@@ -258,6 +278,7 @@ export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
       headers: zoominfoHeaders,
       body: zoominfoMatchBody,
       extract: extractZoominfo,
+      isBillable: zoominfoIsBillable,
     },
     fetchJson,
   );

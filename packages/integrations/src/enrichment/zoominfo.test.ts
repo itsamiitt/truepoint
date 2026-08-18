@@ -13,6 +13,7 @@ import { type FetchJson, vendorProvider } from "./httpProvider.ts";
 import {
   extractZoominfo,
   zoominfoHeaders,
+  zoominfoIsBillable,
   zoominfoMatchBody,
   zoominfoProvider,
 } from "./providers.ts";
@@ -259,6 +260,54 @@ describe("zoominfoProvider", () => {
         extract: extractZoominfo,
       },
       fixtureFetch(200, ENTERPRISE_HIT),
+    );
+    const result = await provider.enrich(REQUEST);
+    expect(result.status).toBe("miss");
+    expect(result.costMicros).toBe(0);
+  });
+});
+
+describe("zoominfoIsBillable", () => {
+  const noMatch = {
+    data: [{ id: "0", type: "NoMatch", meta: { matchStatus: "NO_MATCH", input: {} } }],
+  };
+
+  test("an all-non-match response is free — ZoomInfo bills per matched record", () => {
+    expect(zoominfoIsBillable(noMatch)).toBe(false);
+    expect(
+      zoominfoIsBillable({
+        data: [{ type: "Contact", meta: { matchStatus: "NON_MATCH_BY_REQUIRED_FIELDS" } }],
+      }),
+    ).toBe(false);
+  });
+
+  test("a matched record is billable even when we extract nothing from it", () => {
+    expect(
+      zoominfoIsBillable({ data: [{ type: "Contact", meta: { matchStatus: "FULL_MATCH" } }] }),
+    ).toBe(true);
+  });
+
+  test("an unreadable response is assumed billable — over-report, never under-report", () => {
+    for (const payload of [null, 42, {}, { data: [] }, { data: { result: [] } }]) {
+      expect(zoominfoIsBillable(payload)).toBe(true);
+    }
+  });
+
+  test("the provider books ZERO cost for a no-match answer", async () => {
+    const provider = vendorProvider(
+      {
+        name: "zoominfo",
+        trust: 0.85,
+        costMicrosPerCall: 60_000,
+        url: "https://api.zoominfo.com/gtm/data/v1/contacts/enrich",
+        apiKey: undefined,
+        resolveApiKey: () => Promise.resolve("stub"),
+        headers: zoominfoHeaders,
+        body: () => ({}),
+        extract: extractZoominfo,
+        isBillable: zoominfoIsBillable,
+      },
+      fixtureFetch(200, noMatch),
     );
     const result = await provider.enrich(REQUEST);
     expect(result.status).toBe("miss");

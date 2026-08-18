@@ -111,6 +111,11 @@ export interface VendorSpec {
   capabilities?: EnrichCapability[];
   /** Map the vendor payload to (field → value); return {} for a no-match payload. */
   extract(json: unknown, fields: EnrichField[]): Partial<Record<EnrichField, string>>;
+  /** Whether a 2xx payload with no usable fields still COSTS. Default true — most vendors bill per
+   *  lookup, so an empty answer is a paid miss. A vendor that declares a non-match explicitly (ZoomInfo
+   *  answers matchStatus NO_MATCH and bills nothing) overrides this, or our own spend counters — which
+   *  feed the daily budget gate — throttle enrichment against money never spent. */
+  isBillable?(json: unknown): boolean;
 }
 
 /** Parse a Retry-After header (seconds form; the delta every enrichment vendor uses) to ms. */
@@ -181,9 +186,16 @@ export function vendorProvider(
       const fields = Object.entries(extracted)
         .filter(([, v]) => typeof v === "string" && v.length > 0)
         .map(([field, value]) => ({ field: field as EnrichField, value: value as string }));
-      return fields.length > 0
-        ? { fields, rawPayload: json, costMicros: spec.costMicrosPerCall, status: "hit" }
-        : { fields: [], rawPayload: json, costMicros: spec.costMicrosPerCall, status: "miss" };
+      if (fields.length > 0) {
+        return { fields, rawPayload: json, costMicros: spec.costMicrosPerCall, status: "hit" };
+      }
+      const billable = spec.isBillable ? spec.isBillable(json) : true;
+      return {
+        fields: [],
+        rawPayload: json,
+        costMicros: billable ? spec.costMicrosPerCall : 0,
+        status: "miss",
+      };
     },
   };
 }
