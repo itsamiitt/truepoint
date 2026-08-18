@@ -77,8 +77,9 @@ const ZOOMINFO_FIELD_MAP: Record<EnrichField, string> = {
   department: "jobFunction",
 };
 
-/** The `outputFields` ZoomInfo will return. Requested explicitly — ZoomInfo returns only what is asked
- *  for, and every returned record is billable, so we ask for exactly what the waterfall can store. */
+/** The `outputFields` ZoomInfo will return. Required by the API and requested explicitly — ZoomInfo
+ *  returns only what is asked for, and every returned record is billable, so we ask for exactly what the
+ *  waterfall can store. */
 const ZOOMINFO_OUTPUT_FIELDS = [
   "id",
   "firstName",
@@ -92,6 +93,10 @@ const ZOOMINFO_OUTPUT_FIELDS = [
   "companyName",
   "companyId",
 ] as const;
+
+/** GTM contact enrich (docs.zoominfo.com/reference/enrichinterface_enrichcontact). Max 25 inputs/request;
+ *  we send one, because the waterfall enriches one subject at a time. */
+const ZOOMINFO_ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/contacts/enrich";
 
 /** EnrichSubject carries only `fullName`; ZoomInfo matches better on the split pair, so derive it —
  *  first token / remainder, which is all a single display string can honestly support. */
@@ -151,8 +156,11 @@ export function extractZoominfo(
       if (typeof one === "object" && one !== null) record = one as Record<string, unknown>;
     }
   } else if (Array.isArray(data)) {
-    // Documented v1: { data: [ { attributes: {...}, meta: { matchStatus } } ] }
-    const first = data[0];
+    // GTM: { data: [ { type: "Contact" | "NoMatch", attributes: {...}, meta: { matchStatus } } ] }
+    const first = data.find((entry) => {
+      if (typeof entry !== "object" || entry === null) return false;
+      return (entry as Record<string, unknown>).type !== "NoMatch";
+    });
     if (typeof first === "object" && first !== null) {
       const entry = first as Record<string, unknown>;
       const attrs = entry.attributes;
@@ -163,7 +171,13 @@ export function extractZoominfo(
   }
 
   if (!record) return {};
-  if (matchStatus?.toUpperCase().includes("NO_MATCH")) return {};
+  // ALLOWLIST the statuses that mean "this is the person you asked for". ZoomInfo also answers NO_MATCH,
+  // NON_MATCH_BY_REQUIRED_FIELDS, OPT_OUT and LIMIT_EXCEEDED — a denylist would have to stay in sync with
+  // that vocabulary forever, and the failure mode of guessing wrong is another person's contact details
+  // landing on this record.
+  if (matchStatus !== undefined && !/(^|_)(FULL|PARTIAL)_MATCH$/.test(matchStatus.toUpperCase())) {
+    return {};
+  }
 
   const out: Partial<Record<EnrichField, string>> = {};
   for (const field of fields) {
@@ -177,35 +191,50 @@ export function extractZoominfo(
   return out;
 }
 
-/** The `/enrich/contact` request body: a one-element match batch plus the fields we want back. Exported
- *  so the shape is testable without credentials — the provider itself short-circuits to a miss when
- *  ZoomInfo is unconfigured, which is the normal state in CI. */
+/**
+ * The GTM enrich request body — a JSON:API envelope: `data.type = "ContactEnrich"` wrapping the match
+ * batch and the requested output fields. Exported so the shape is testable without credentials, which is
+ * the normal state in CI (the provider short-circuits to a miss when ZoomInfo is unconfigured).
+ *
+ * `requiredFields` is deliberately NOT sent: it makes ZoomInfo withhold a record that lacks the named
+ * field, and the waterfall would rather see a partial record — one verified mobile is worth more than a
+ * suppressed row (S-04).
+ */
 export function zoominfoMatchBody(req: EnrichRequest): {
-  matchPersonInput: Array<Record<string, string | undefined>>;
-  outputFields: string[];
+  data: {
+    type: "ContactEnrich";
+    attributes: {
+      matchPersonInput: Array<Record<string, string | undefined>>;
+      outputFields: string[];
+    };
+  };
 } {
   const [firstName, lastName] = splitFullName(req.subject.fullName);
   return {
-    matchPersonInput: [
-      {
-        emailAddress: req.subject.email,
-        firstName,
-        lastName,
-        fullName: req.subject.fullName,
-        companyName: req.subject.companyName,
-        companyDomain: req.subject.companyDomain,
-        externalURL: req.subject.linkedinUrl,
+    data: {
+      type: "ContactEnrich",
+      attributes: {
+        matchPersonInput: [
+          {
+            emailAddress: req.subject.email,
+            firstName,
+            lastName,
+            fullName: req.subject.fullName,
+            companyName: req.subject.companyName ?? req.subject.companyDomain,
+            externalURL: req.subject.linkedinUrl,
+          },
+        ],
+        outputFields: [...ZOOMINFO_OUTPUT_FIELDS],
       },
-    ],
-    outputFields: [...ZOOMINFO_OUTPUT_FIELDS],
+    },
   };
 }
 
 /**
- * ZoomInfo contact enrich. Unlike every other adapter here, the credential is a MINTED JWT
- * (zoominfoAuth) rather than a static key — see that module for why. The match input is sent
- * best-first: ZoomInfo's own guidance is that a verified email or a LinkedIn URL lifts match rates from
- * roughly two-thirds to over 90%, and `externalURL` is where a LinkedIn profile belongs.
+ * ZoomInfo contact enrich, on the GTM API. Unlike every other adapter here the credential is a MINTED
+ * token (zoominfoAuth: client-credentials → Bearer access_token), not a static key. The match input is
+ * sent best-first: a verified email or a LinkedIn URL is what lifts ZoomInfo's match rate, and
+ * `externalURL` is where a LinkedIn profile belongs.
  */
 export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
   return vendorProvider(
@@ -213,11 +242,11 @@ export function zoominfoProvider(fetchJson?: FetchJson): EnrichmentProvider {
       name: "zoominfo",
       trust: 0.85,
       costMicrosPerCall: 60_000,
-      url: "https://api.zoominfo.com/enrich/contact",
+      url: ZOOMINFO_ENRICH_URL,
       // Static key is only the pre-minted escape hatch; the resolver owns the real flow.
       apiKey: env.ZOOMINFO_API_KEY,
       resolveApiKey: () => zoominfoToken(),
-      headers: (jwt) => ({ authorization: `Bearer ${jwt}` }),
+      headers: (token) => ({ authorization: `Bearer ${token}`, accept: "application/json" }),
       body: zoominfoMatchBody,
       extract: extractZoominfo,
     },

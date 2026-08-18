@@ -275,20 +275,22 @@ export const appEnvSchema = z
     // DPA is executed, it is on the sub-processor list, and its ToS review is recorded — the absent-key→miss
     // behavior IS the enforcement mechanism for PDL/Coresignal landing dark.
     APOLLO_API_KEY: z.string().optional(),
-    // ZoomInfo does NOT take a static API key. Every call carries a short-lived JWT minted at
-    // https://api.zoominfo.com/authenticate (~60 min, no refresh token), by one of two flows:
-    //   • username + password — the documented basic flow;
-    //   • PKI — username + client id + an RS256 PRIVATE KEY, which signs the assertion posted to the same
-    //     endpoint. ZoomInfo's own guidance prefers this for production automation, because no user
-    //     password is then stored in our infrastructure.
-    // A client id ALONE ("0oa…", the Okta app identifier) cannot authenticate: it names the application,
-    // it does not prove anything. Absent/incomplete credentials ⇒ the adapter reports a permanent `miss`
-    // and the waterfall moves on — the same fail-quiet posture as every other unconfigured provider.
-    // ZOOMINFO_API_KEY stays as an escape hatch for a PRE-MINTED jwt (useful in a fixture/staging probe).
+    // ZoomInfo does NOT take a static API key. Every call carries a short-lived token the adapter mints,
+    // by one of three flows (zoominfoAuth.ts ranks them):
+    //   • CLIENT CREDENTIALS (the GTM API, what we run) — CLIENT_ID + CLIENT_SECRET, exchanged for a
+    //     Bearer access_token at /gtm/oauth/v1/token;
+    //   • PKI (legacy Enterprise) — username + client id + an RS256 PRIVATE KEY;
+    //   • basic (legacy Enterprise) — username + password.
+    // A client id ALONE cannot authenticate: it names the application, it proves nothing. Absent or
+    // incomplete credentials ⇒ the adapter reports a permanent `miss` and the waterfall moves on — the
+    // same fail-quiet posture as every other unconfigured provider.
+    // ZOOMINFO_API_KEY is an escape hatch for a PRE-MINTED token (a fixture/staging probe); it expires
+    // within the hour and cannot renew itself, so it ranks below the real flows.
     ZOOMINFO_API_KEY: z.string().optional(),
     ZOOMINFO_USERNAME: z.string().optional(),
     ZOOMINFO_PASSWORD: z.string().optional(),
     ZOOMINFO_CLIENT_ID: z.string().optional(),
+    ZOOMINFO_CLIENT_SECRET: z.string().optional(),
     /** RS256 private key (PEM). Base64 variant for container transport — a multi-line PEM cannot survive
      *  docker compose ${VAR} interpolation (the JWT_PRIVATE_KEY_PEM_B64 precedent). */
     ZOOMINFO_PRIVATE_KEY: z.string().optional(),

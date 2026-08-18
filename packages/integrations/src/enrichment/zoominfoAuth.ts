@@ -1,32 +1,36 @@
-// zoominfoAuth.ts — ZoomInfo's authentication is a token MINT, not a static key: every enrich call carries
-// a JWT obtained from https://api.zoominfo.com/authenticate, valid ~60 minutes with NO refresh token. So the
-// adapter has to hold a token cache and re-mint before expiry, or a long-running worker starts 401-ing an
-// hour after boot.
+// zoominfoAuth.ts — ZoomInfo's credential is a MINTED, short-lived token, never a static key. The adapter
+// therefore holds a token cache and re-mints before expiry, or a long-running worker starts 401-ing.
 //
-// Two flows, both supported:
-//   • BASIC   — POST { username, password }.
-//   • PKI     — sign an RS256 assertion with the account's private key (client id = the application, the
-//               key = the proof) and POST { username, clientId, jwt }. ZoomInfo recommends this for
-//               production automation precisely because no user password sits in our infrastructure.
+// THREE flows, in preference order:
+//   • CLIENT CREDENTIALS (GTM API — what we run) — POST https://api.zoominfo.com/gtm/oauth/v1/token,
+//     `grant_type=client_credentials` form-encoded, credentials in an HTTP Basic header (ZoomInfo's
+//     recommended placement — a body-borne secret gets logged by more middleware than a header does).
+//     Response: { access_token, expires_in, scope, token_type: "Bearer" }.
+//   • PKI (legacy Enterprise API) — RS256 assertion signed with the account's private key, POSTed to
+//     /authenticate with the username and client id.
+//   • BASIC (legacy Enterprise API) — POST { username, password } to /authenticate. Response: { jwt }.
 //
 // Everything fails QUIET: unconfigured, or a mint that errors, yields null, which the provider turns into a
 // permanent `miss`. An enrichment vendor is never allowed to throw into the waterfall.
 import { createSign } from "node:crypto";
 import { env } from "@leadwolf/config";
 
-const AUTH_URL = "https://api.zoominfo.com/authenticate";
+/** GTM client-credentials token endpoint (docs.zoominfo.com/docs/client-credentials-flow). */
+const OAUTH_TOKEN_URL = "https://api.zoominfo.com/gtm/oauth/v1/token";
+/** Legacy Enterprise mint — username/password or a PKI assertion. */
+const LEGACY_AUTH_URL = "https://api.zoominfo.com/authenticate";
 /** Re-mint this long before the stated expiry, so an in-flight call never races the boundary. */
 const RENEW_SKEW_MS = 5 * 60_000;
-/** ZoomInfo states ~60 minutes; used only when the token carries no readable `exp`. */
+/** ZoomInfo's tokens run ~60 minutes; used only when the response states no lifetime. */
 const ASSUMED_TTL_MS = 55 * 60_000;
 
 export type AuthFetch = (
   url: string,
-  init: { method: "POST"; headers: Record<string, string>; body: unknown },
+  init: { method: "POST"; headers: Record<string, string>; body: string },
 ) => Promise<{ status: number; json: unknown }>;
 
-interface CachedToken {
-  jwt: string;
+export interface CachedToken {
+  token: string;
   expiresAtMs: number;
 }
 let cached: CachedToken | null = null;
@@ -55,10 +59,10 @@ function base64url(input: Buffer | string): string {
 }
 
 /**
- * The RS256 client assertion for the PKI flow. Claims follow ZoomInfo's published client libraries:
+ * The RS256 client assertion for the legacy PKI flow. Claims follow ZoomInfo's published client libraries:
  * the client id identifies the application (`iss`), the username the acting principal (`sub`), and the
- * assertion is short-lived. Unverifiable from here without a real key — the first live mint is the test,
- * and a wrong claim set surfaces as a 401 from /authenticate (a zero-cost `miss`), never as bad data.
+ * assertion is short-lived. A wrong claim set surfaces as a 401 from /authenticate (a zero-cost `miss`),
+ * never as bad data.
  */
 export function buildClientAssertion(
   username: string,
@@ -68,13 +72,7 @@ export function buildClientAssertion(
 ): string {
   const header = { alg: "RS256", typ: "JWT" };
   const iat = Math.floor(nowMs / 1000);
-  const payload = {
-    iss: clientId,
-    sub: username,
-    aud: AUTH_URL,
-    iat,
-    exp: iat + 300,
-  };
+  const payload = { iss: clientId, sub: username, aud: LEGACY_AUTH_URL, iat, exp: iat + 300 };
   const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
   const signer = createSign("RSA-SHA256");
   signer.update(signingInput);
@@ -83,8 +81,8 @@ export function buildClientAssertion(
 }
 
 /** `exp` out of a JWT body, in ms — best effort; an unreadable token falls back to the assumed TTL. */
-function expiryOf(jwt: string, nowMs: number): number {
-  const body = jwt.split(".")[1];
+function jwtExpiry(token: string, nowMs: number): number {
+  const body = token.split(".")[1];
   if (!body) return nowMs + ASSUMED_TTL_MS;
   try {
     const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as { exp?: number };
@@ -97,8 +95,8 @@ function expiryOf(jwt: string, nowMs: number): number {
 const defaultAuthFetch: AuthFetch = async (url, init) => {
   const res = await fetch(url, {
     method: init.method,
-    headers: { "content-type": "application/json", ...init.headers },
-    body: JSON.stringify(init.body),
+    headers: init.headers,
+    body: init.body,
     redirect: "error",
     signal: AbortSignal.timeout(env.ENRICH_PROVIDER_TIMEOUT_MS),
   });
@@ -114,11 +112,18 @@ const defaultAuthFetch: AuthFetch = async (url, init) => {
 
 /** The credential set actually configured — null when ZoomInfo cannot authenticate at all. */
 function credentials():
-  | { kind: "preminted"; jwt: string }
-  | { kind: "basic"; username: string; password: string }
+  | { kind: "preminted"; token: string }
+  | { kind: "client_credentials"; clientId: string; clientSecret: string }
   | { kind: "pki"; username: string; clientId: string; privateKey: string }
+  | { kind: "basic"; username: string; password: string }
   | null {
-  if (env.ZOOMINFO_API_KEY) return { kind: "preminted", jwt: env.ZOOMINFO_API_KEY };
+  if (env.ZOOMINFO_CLIENT_ID && env.ZOOMINFO_CLIENT_SECRET) {
+    return {
+      kind: "client_credentials",
+      clientId: env.ZOOMINFO_CLIENT_ID,
+      clientSecret: env.ZOOMINFO_CLIENT_SECRET,
+    };
+  }
   const username = env.ZOOMINFO_USERNAME;
   const key = privateKeyPem();
   if (username && env.ZOOMINFO_CLIENT_ID && key) {
@@ -127,58 +132,107 @@ function credentials():
   if (username && env.ZOOMINFO_PASSWORD) {
     return { kind: "basic", username, password: env.ZOOMINFO_PASSWORD };
   }
+  // Last: a pre-minted token pasted by an operator. Ranked BELOW the real flows because it expires within
+  // the hour and cannot renew itself.
+  if (env.ZOOMINFO_API_KEY) return { kind: "preminted", token: env.ZOOMINFO_API_KEY };
   return null;
 }
 
-/** Which credential half is missing — surfaced by the admin/ops probe so a half-configured vendor is
- *  diagnosable without reading logs. */
-export function zoominfoCredentialState(): "preminted" | "pki" | "basic" | "unconfigured" {
+/** Which flow is configured — surfaced by the ops probe so a half-configured vendor is diagnosable. */
+export function zoominfoCredentialState():
+  | "client_credentials"
+  | "pki"
+  | "basic"
+  | "preminted"
+  | "unconfigured" {
   return credentials()?.kind ?? "unconfigured";
 }
 
-async function mint(authFetch: AuthFetch): Promise<string | null> {
+/** Pull the token + its lifetime out of either mint's response shape. Exported for its own test: the
+ *  credential state is unconfigured in CI, so this is the only way to prove the parse without mocking. */
+export function parseTokenResponse(json: unknown, nowMs: number): CachedToken | null {
+  if (typeof json !== "object" || json === null) return null;
+  const body = json as Record<string, unknown>;
+  const oauth = body.access_token;
+  if (typeof oauth === "string" && oauth.length > 0) {
+    const ttl = typeof body.expires_in === "number" ? body.expires_in * 1000 : ASSUMED_TTL_MS;
+    return { token: oauth, expiresAtMs: nowMs + ttl };
+  }
+  const legacy = body.jwt;
+  if (typeof legacy === "string" && legacy.length > 0) {
+    return { token: legacy, expiresAtMs: jwtExpiry(legacy, nowMs) };
+  }
+  return null;
+}
+
+async function mint(authFetch: AuthFetch): Promise<CachedToken | null> {
   const creds = credentials();
   if (!creds) return null;
-  if (creds.kind === "preminted") return creds.jwt;
+  if (creds.kind === "preminted") {
+    return { token: creds.token, expiresAtMs: jwtExpiry(creds.token, Date.now()) };
+  }
 
-  const body =
-    creds.kind === "pki"
+  const request: { url: string; headers: Record<string, string>; body: string } =
+    creds.kind === "client_credentials"
       ? {
-          username: creds.username,
-          clientId: creds.clientId,
-          jwt: buildClientAssertion(creds.username, creds.clientId, creds.privateKey),
+          url: OAUTH_TOKEN_URL,
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "application/json",
+            authorization: `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`,
+          },
+          body: new URLSearchParams({ grant_type: "client_credentials" }).toString(),
         }
-      : { username: creds.username, password: creds.password };
+      : {
+          url: LEGACY_AUTH_URL,
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify(
+            creds.kind === "pki"
+              ? {
+                  username: creds.username,
+                  clientId: creds.clientId,
+                  jwt: buildClientAssertion(creds.username, creds.clientId, creds.privateKey),
+                }
+              : { username: creds.username, password: creds.password },
+          ),
+        };
 
   try {
-    const res = await authFetch(AUTH_URL, { method: "POST", headers: {}, body });
-    if (res.status >= 400 || typeof res.json !== "object" || res.json === null) {
-      console.error("[zoominfo] authenticate failed", { status: res.status, flow: creds.kind });
+    const res = await authFetch(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: request.body,
+    });
+    if (res.status >= 400) {
+      // Status + flow only. The response body of a failed auth can echo the credential.
+      console.error("[zoominfo] token mint failed", { status: res.status, flow: creds.kind });
       return null;
     }
-    const jwt = (res.json as Record<string, unknown>).jwt;
-    return typeof jwt === "string" && jwt.length > 0 ? jwt : null;
+    const token = parseTokenResponse(res.json, Date.now());
+    if (!token) console.error("[zoominfo] token mint returned no token", { flow: creds.kind });
+    return token;
   } catch (e) {
-    console.error("[zoominfo] authenticate threw", e instanceof Error ? e.message : String(e));
+    console.error("[zoominfo] token mint threw", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
 
 /**
- * A live ZoomInfo JWT, minted on demand and cached until shortly before it expires. Concurrent callers
- * share ONE mint (the in-flight promise): a burst of enrichment jobs must not each spend an auth call.
+ * A live ZoomInfo access token, minted on demand and cached until shortly before it expires. Concurrent
+ * callers share ONE mint (the in-flight promise): a burst of enrichment jobs must not each spend an auth
+ * call, and ZoomInfo rate-limits the token endpoint separately from the data endpoints.
  */
 export async function zoominfoToken(
   authFetch: AuthFetch = defaultAuthFetch,
 ): Promise<string | null> {
   const now = Date.now();
-  if (cached && cached.expiresAtMs - RENEW_SKEW_MS > now) return cached.jwt;
+  if (cached && cached.expiresAtMs - RENEW_SKEW_MS > now) return cached.token;
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    const jwt = await mint(authFetch);
-    cached = jwt ? { jwt, expiresAtMs: expiryOf(jwt, Date.now()) } : null;
-    return jwt;
+    const minted = await mint(authFetch);
+    cached = minted;
+    return minted?.token ?? null;
   })().finally(() => {
     inFlight = null;
   });

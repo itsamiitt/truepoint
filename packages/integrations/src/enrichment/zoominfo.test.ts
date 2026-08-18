@@ -11,7 +11,12 @@ import type { EnrichRequest } from "@leadwolf/core";
 import type { EnrichField } from "@leadwolf/types";
 import { type FetchJson, vendorProvider } from "./httpProvider.ts";
 import { extractZoominfo, zoominfoMatchBody, zoominfoProvider } from "./providers.ts";
-import { buildClientAssertion, zoominfoCredentialState, zoominfoToken } from "./zoominfoAuth.ts";
+import {
+  buildClientAssertion,
+  parseTokenResponse,
+  zoominfoCredentialState,
+  zoominfoToken,
+} from "./zoominfoAuth.ts";
 
 const FIELDS: EnrichField[] = ["email", "phone", "jobTitle", "seniorityLevel", "department"];
 
@@ -48,18 +53,21 @@ const ENTERPRISE_HIT = {
   },
 };
 
-// Documented v1 shape: data[].attributes with meta.matchStatus.
+// GTM shape (what we call): data[].attributes with meta.matchStatus.
 const V1_HIT = {
   data: [
     {
+      id: "9876",
+      type: "Contact",
       attributes: {
         email: "jane@acme.com",
         mobilePhone: "+1 617 555 0199",
         jobTitle: "VP Engineering",
         managementLevel: "VP Level Executives",
         jobFunction: "Engineering & Technical",
+        company: { id: 12, name: "Acme" },
       },
-      meta: { matchStatus: "FULL_MATCH" },
+      meta: { matchStatus: "FULL_MATCH", input: {} },
     },
   ],
 };
@@ -80,7 +88,7 @@ describe("extractZoominfo", () => {
     });
   });
 
-  test("reads the documented data[].attributes envelope, falling back to mobilePhone", () => {
+  test("reads the GTM data[].attributes envelope, falling back to mobilePhone", () => {
     expect(extractZoominfo(V1_HIT, FIELDS)).toEqual({
       email: "jane@acme.com",
       phone: "+1 617 555 0199",
@@ -97,6 +105,52 @@ describe("extractZoominfo", () => {
       },
     };
     expect(extractZoominfo(noMatch, FIELDS)).toEqual({});
+  });
+
+  test("every non-match GTM status is refused — only FULL/PARTIAL_MATCH lets values through", () => {
+    for (const status of [
+      "NO_MATCH",
+      "NON_MATCH_BY_REQUIRED_FIELDS",
+      "OPT_OUT",
+      "LIMIT_EXCEEDED",
+      "SOMETHING_NEW",
+    ]) {
+      const payload = {
+        data: [
+          {
+            type: "Contact",
+            attributes: { email: "someone.else@acme.com" },
+            meta: { matchStatus: status },
+          },
+        ],
+      };
+      expect(extractZoominfo(payload, FIELDS)).toEqual({});
+    }
+    const partial = {
+      data: [
+        {
+          type: "Contact",
+          attributes: { email: "jane@acme.com" },
+          meta: { matchStatus: "PARTIAL_MATCH" },
+        },
+      ],
+    };
+    expect(extractZoominfo(partial, ["email"])).toEqual({ email: "jane@acme.com" });
+  });
+
+  test("a NoMatch entry never supplies the record", () => {
+    const mixed = {
+      data: [
+        { id: "0", type: "NoMatch", meta: { matchStatus: "NO_MATCH", input: {} } },
+        {
+          id: "1",
+          type: "Contact",
+          attributes: { email: "jane@acme.com" },
+          meta: { matchStatus: "FULL_MATCH" },
+        },
+      ],
+    };
+    expect(extractZoominfo(mixed, ["email"])).toEqual({ email: "jane@acme.com" });
   });
 
   test("junk, empty and unknown shapes are a miss, never a throw", () => {
@@ -136,23 +190,33 @@ describe("zoominfoProvider", () => {
     expect(provider.name).toBe("zoominfo");
   });
 
-  test("sends matchPersonInput with a split name, the LinkedIn URL and explicit outputFields", () => {
+  test("wraps the match batch in the GTM ContactEnrich envelope", () => {
     const body = zoominfoMatchBody(REQUEST);
-    const input = body.matchPersonInput[0];
+    expect(body.data.type).toBe("ContactEnrich");
+    const input = body.data.attributes.matchPersonInput[0];
     expect(input?.firstName).toBe("Jane");
     expect(input?.lastName).toBe("Q Doe");
     expect(input?.fullName).toBe("Jane Q Doe");
     expect(input?.externalURL).toBe("https://www.linkedin.com/in/janedoe");
-    expect(input?.companyDomain).toBe("acme.com");
-    expect(body.outputFields).toContain("mobilePhone");
-    expect(body.outputFields).toContain("managementLevel");
+    expect(input?.companyName).toBe("Acme");
+    expect(body.data.attributes.outputFields).toContain("mobilePhone");
+    expect(body.data.attributes.outputFields).toContain("managementLevel");
+    // requiredFields must stay absent: it makes ZoomInfo WITHHOLD partially-populated records.
+    expect("requiredFields" in body.data.attributes).toBe(false);
+  });
+
+  test("falls back to the company domain when no company name is known", () => {
+    const body = zoominfoMatchBody({ ...REQUEST, subject: { companyDomain: "acme.com" } });
+    expect(body.data.attributes.matchPersonInput[0]?.companyName).toBe("acme.com");
   });
 
   test("a one-token or absent name never invents a surname", () => {
     expect(
-      zoominfoMatchBody({ ...REQUEST, subject: { fullName: "Prince" } }).matchPersonInput[0],
+      zoominfoMatchBody({ ...REQUEST, subject: { fullName: "Prince" } }).data.attributes
+        .matchPersonInput[0],
     ).toMatchObject({ firstName: "Prince", lastName: undefined });
-    const empty = zoominfoMatchBody({ ...REQUEST, subject: {} }).matchPersonInput[0];
+    const empty = zoominfoMatchBody({ ...REQUEST, subject: {} }).data.attributes
+      .matchPersonInput[0];
     expect(empty?.firstName).toBeUndefined();
     expect(empty?.lastName).toBeUndefined();
   });
@@ -192,6 +256,28 @@ describe("zoominfoProvider", () => {
 });
 
 describe("zoominfoAuth", () => {
+  test("parses the OAuth client-credentials response and honours expires_in", () => {
+    const now = 1_700_000_000_000;
+    const parsed = parseTokenResponse(
+      { access_token: "abc.def.ghi", expires_in: 3600, token_type: "Bearer", scope: "api:data" },
+      now,
+    );
+    expect(parsed).toEqual({ token: "abc.def.ghi", expiresAtMs: now + 3_600_000 });
+  });
+
+  test("parses the legacy { jwt } response, reading its own exp", () => {
+    const exp = Math.floor(1_700_000_000_000 / 1000) + 1800;
+    const body = Buffer.from(JSON.stringify({ exp })).toString("base64url");
+    const parsed = parseTokenResponse({ jwt: `h.${body}.sig` }, 1_700_000_000_000);
+    expect(parsed?.expiresAtMs).toBe(exp * 1000);
+  });
+
+  test("a response with no token at all is null, not a bogus token", () => {
+    for (const body of [null, {}, { access_token: "" }, { jwt: 42 }, { error: "invalid_client" }]) {
+      expect(parseTokenResponse(body, 1)).toBeNull();
+    }
+  });
+
   test("unconfigured mints nothing", async () => {
     expect(
       await zoominfoToken(() => Promise.resolve({ status: 200, json: { jwt: "x" } })),
