@@ -13,7 +13,12 @@
 "use client";
 
 import type { ContactHit, ContactQuery, SearchPage } from "@leadwolf/types";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { type ProspectRow, mergeRows, toDatabaseQuery } from "../databaseRows";
@@ -80,6 +85,10 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     queryKey,
     enabled,
     initialPageParam: null,
+    // A filter edit is a NEW cache key; without this the grid unmounted to a skeleton on every edit and
+    // repopulated ("strobing"). Holding the previous key's rows while the fresh search lands is the same
+    // treatment the facet sidebar already had — the grid, the thing the user is looking at, deserves it most.
+    placeholderData: keepPreviousData,
     // RQ owns the AbortSignal: it aborts on unmount and on cancellation, so an abandoned keystroke stops
     // costing the backend a full search without this hook tracking a controller itself.
     queryFn: ({ pageParam, signal }) =>
@@ -101,6 +110,9 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
     // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…).
     enabled: enabled && databaseQuery !== null,
+    // Same no-blank treatment as the owned half above: a filter edit keeps the previous database rows on
+    // screen while the fresh search lands, instead of the merged grid losing its bottom half per edit.
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       searchDatabase(databaseQuery as NonNullable<typeof databaseQuery>, signal),
     staleTime: 30_000,
@@ -136,8 +148,9 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     setQuery,
     hits,
     databaseCount,
-    // A filter edit is a NEW cache entry, so isPending covers exactly what the old cold-load flag did; a
-    // "load more" is deliberately not a full-grid loading state.
+    // With keepPreviousData above, isPending is true only on the genuine cold load (no previous rows to
+    // show) — a filter edit keeps the old rows on screen while fetching, and a "load more" is deliberately
+    // not a full-grid loading state either.
     loading: search.isPending && enabled,
     error: search.error
       ? search.error instanceof Error

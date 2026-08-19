@@ -1,7 +1,11 @@
 // eventStream.ts — a fetch-based SSE reader (reveal-experience Phase 4). The api authenticates only the
 // in-memory `Authorization: Bearer` access token, and native EventSource cannot set headers, so we stream over
-// `fetch` + a body reader and parse text/event-stream frames by hand. Reconnects with a short backoff and a
-// Last-Event-ID so a dropped connection resumes gap-free; a 404 (REALTIME_SSE_ENABLED off) stops permanently so
+// `fetch` + a body reader and parse text/event-stream frames by hand. Reconnects with EXPONENTIAL backoff +
+// jitter (perf-audit P0.10): the old fixed 3 s timer meant any drop that wasn't a 404 — a proxy idle timeout,
+// a 502 mid-deploy — had every connected tab retrying in lockstep every 3 s against a service that was already
+// unhealthy (a synchronized thundering herd, each attempt possibly triggering a silentRefresh too). Backoff
+// resets once a connection actually streams, a hidden tab holds off reconnecting until it is visible again,
+// and a Last-Event-ID keeps the resume gap-free. A 404 (REALTIME_SSE_ENABLED off) still stops permanently so
 // a dark deployment never spam-reconnects. `stop()` cancels the loop.
 
 import { getAccessToken, silentRefresh } from "@/lib/authClient";
@@ -14,10 +18,17 @@ export interface StreamedEvent {
   data: string;
 }
 
-const RECONNECT_MS = 3000;
+const RECONNECT_MIN_MS = 3_000;
+const RECONNECT_MAX_MS = 60_000;
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Half-jittered backoff: 50-100% of the current step, so a fleet of tabs dropped by the same proxy blip
+ *  spreads its retries instead of arriving in lockstep. */
+function jittered(ms: number): number {
+  return Math.round(ms / 2 + Math.random() * (ms / 2));
 }
 
 /** Parse one SSE frame (fields separated by \n, frames by \n\n). Returns null for a comment/heartbeat frame. */
@@ -42,16 +53,29 @@ function parseFrame(frame: string): StreamedEvent | null {
 export function connectEventStream(onEvent: (ev: StreamedEvent) => void): () => void {
   let stopped = false;
   let lastEventId: string | null = null;
+  let reconnectMs = RECONNECT_MIN_MS;
+
+  // A hidden tab must not burn reconnect attempts (or silentRefresh calls) against a struggling service —
+  // hold here until it is visible again. Bounded 5 s wake-checks instead of a visibilitychange listener so
+  // stop() always wins within one tick and nothing leaks.
+  const waitUntilVisible = async (): Promise<void> => {
+    while (!stopped && typeof document !== "undefined" && document.visibilityState === "hidden") {
+      await delay(5_000);
+    }
+  };
 
   const run = async (): Promise<void> => {
     while (!stopped) {
+      await waitUntilVisible();
+      if (stopped) return;
       let token = getAccessToken();
       if (!token) {
         await silentRefresh();
         token = getAccessToken();
       }
       if (!token) {
-        await delay(RECONNECT_MS);
+        await delay(jittered(reconnectMs));
+        reconnectMs = Math.min(reconnectMs * 2, RECONNECT_MAX_MS);
         continue;
       }
       try {
@@ -64,9 +88,12 @@ export function connectEventStream(onEvent: (ev: StreamedEvent) => void): () => 
         });
         if (res.status === 404) return; // realtime disabled — don't reconnect
         if (!res.ok || !res.body) {
-          await delay(RECONNECT_MS);
+          await delay(jittered(reconnectMs));
+          reconnectMs = Math.min(reconnectMs * 2, RECONNECT_MAX_MS);
           continue;
         }
+        // Streaming for real — the service is healthy, so the next drop starts from the short step again.
+        reconnectMs = RECONNECT_MIN_MS;
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -92,9 +119,12 @@ export function connectEventStream(onEvent: (ev: StreamedEvent) => void): () => 
           /* already closed */
         }
       } catch {
-        // network drop / token expiry — reconnect after a short backoff.
+        // network drop / token expiry — fall through to the backoff below and reconnect.
       }
-      if (!stopped) await delay(RECONNECT_MS);
+      if (!stopped) {
+        await delay(jittered(reconnectMs));
+        reconnectMs = Math.min(reconnectMs * 2, RECONNECT_MAX_MS);
+      }
     }
   };
 

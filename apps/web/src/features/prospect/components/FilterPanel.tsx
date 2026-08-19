@@ -26,6 +26,7 @@ import {
   setRange,
   termConditions,
 } from "../filterGroups";
+import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
@@ -292,6 +293,11 @@ function RangeControl({
   onChange: (q: ContactQuery) => void;
 }) {
   const { gte, lte } = getRange(query, field);
+  // Keystrokes land in a draft and commit after a quiet 400ms (or on blur) — the query is the cache key for
+  // search + facets + count + database, so committing per keystroke fired 4-5 requests per character typed.
+  const { draft, schedule, flush } = useDraftRange(gte, lte, (next) =>
+    onChange(setRange(query, field, next.gte, next.lte)),
+  );
   const toInput = (n: number | undefined) =>
     n === undefined ? "" : valueKind === "date" ? msToDateInput(n) : String(n);
   const fromInput = (s: string): number | undefined => {
@@ -308,14 +314,16 @@ function RangeControl({
         <TpInput
           type={valueKind === "date" ? "date" : "number"}
           placeholder="Min"
-          value={toInput(gte)}
-          onChange={(e) => onChange(setRange(query, field, fromInput(e.target.value), lte))}
+          value={toInput(draft.gte)}
+          onChange={(e) => schedule({ gte: fromInput(e.target.value), lte: draft.lte })}
+          onBlur={flush}
         />
         <TpInput
           type={valueKind === "date" ? "date" : "number"}
           placeholder="Max"
-          value={toInput(lte)}
-          onChange={(e) => onChange(setRange(query, field, gte, fromInput(e.target.value)))}
+          value={toInput(draft.lte)}
+          onChange={(e) => schedule({ gte: draft.gte, lte: fromInput(e.target.value) })}
+          onBlur={flush}
         />
       </div>
     </div>

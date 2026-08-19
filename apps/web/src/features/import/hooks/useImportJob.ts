@@ -1,7 +1,10 @@
-// useImportJob.ts — one durable import job's detail, polled indefinitely per the 09 §4.3 cadence (2.5 s while
-// active, 10 s while queued/deferred, STOP on terminal) — there is no give-up (11 §4.1; the ~2-min poller is
-// deleted with useImport). The handle is the URL, so refresh/return resumes cleanly. Reads the v2 `statusV2`
-// when the dual gate is on, falling back to the legacy poll `status` for gate-off / legacy numeric ids.
+// useImportJob.ts — one durable import job's detail, polled on the 09 §4.3 cadence (2.5 s while active, 10 s
+// while queued/deferred, STOP on terminal), with a BOUNDED horizon (perf-audit P0.10, amending 11 §4.1's
+// "no give-up"): a job that never reaches a terminal status — a stuck worker, a failed deploy, a detail
+// endpoint that errors — used to poll a left-open tab at 2.5 s FOREVER (~1,440 req/h). Now the cadence eases
+// to 30 s after 5 minutes and stops after 15; the handle is the URL, so refresh/return restarts the poll
+// cleanly, which preserves 11 §4.1's actual intent (resume on return) without the unbounded tail. Reads the
+// v2 `statusV2` when the dual gate is on, falling back to the legacy poll `status` for legacy numeric ids.
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,9 +13,19 @@ import { fetchImportJobDetail } from "../apiV2";
 import { isTerminalV2, legacyStatusToV2 } from "../components/shared/stateCopy";
 import { importKeys } from "../keys";
 
+/** After this long without a terminal status, ease the cadence to the slow interval. */
+const POLL_SLOW_AFTER_MS = 5 * 60_000;
+/** After this long, stop polling entirely — a manual refresh / reopen restarts the clock. */
+const POLL_GIVE_UP_MS = 15 * 60_000;
+const POLL_SLOW_MS = 30_000;
+
 export function useImportJob(jobId: string | null) {
   const queryClient = useQueryClient();
   const invalidatedFor = useRef<string | null>(null);
+
+  // Poll horizon per job id: reset when the watched job changes, so switching jobs restarts the clock.
+  const startedAt = useRef<{ jobId: string | null; at: number }>({ jobId, at: Date.now() });
+  if (startedAt.current.jobId !== jobId) startedAt.current = { jobId, at: Date.now() };
 
   const query = useQuery({
     queryKey: importKeys.detail(jobId ?? "none"),
@@ -20,9 +33,14 @@ export function useImportJob(jobId: string | null) {
     enabled: jobId != null,
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (!data) return 2_500;
-      const status = data.statusV2 ?? legacyStatusToV2(data.status);
-      if (isTerminalV2(status)) return false;
+      const status = data ? (data.statusV2 ?? legacyStatusToV2(data.status)) : null;
+      if (status && isTerminalV2(status)) return false;
+      const elapsed = Date.now() - startedAt.current.at;
+      if (elapsed >= POLL_GIVE_UP_MS) return false;
+      if (elapsed >= POLL_SLOW_AFTER_MS) return POLL_SLOW_MS;
+      // A detail read that errors (no data) gets the queued cadence, not the hot one — a 404/500 at 2.5 s
+      // forever was the pathological case this horizon exists for.
+      if (!data) return 10_000;
       return status === "queued" || status === "deferred" ? 10_000 : 2_500;
     },
   });

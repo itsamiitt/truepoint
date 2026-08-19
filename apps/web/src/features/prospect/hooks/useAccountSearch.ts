@@ -15,7 +15,7 @@
 "use client";
 
 import type { AccountQuery, AccountSearchPage, MaskedAccount } from "@leadwolf/types";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { searchAccounts } from "../accountSearchApi";
@@ -101,6 +101,9 @@ export function useAccountSearch(options?: { enabled?: boolean }): AccountSearch
     queryKey: prospectKeys.accountSearch(query),
     enabled,
     initialPageParam: null,
+    // A filter edit is a NEW cache key; hold the previous rows while the fresh search lands instead of
+    // unmounting the grid to a skeleton per edit (same treatment as the contacts grid + facet counts).
+    placeholderData: keepPreviousData,
     // RQ owns the AbortSignal and keys results by the search, so a superseded request can neither cost the
     // backend a full search nor land its rows on the newer query's entry.
     queryFn: ({ pageParam, signal }) =>
