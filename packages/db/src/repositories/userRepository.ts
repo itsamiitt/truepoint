@@ -343,6 +343,21 @@ export const sessionRepository = {
   },
 
   async findByRefreshTokenHash(hash: string): Promise<SessionRecord | null> {
+    // Two-step ON PURPOSE (perf-audit P0.8). The only index on this hash is the PARTIAL unique over live rows
+    // (uniq_user_sessions_refresh_token_hash WHERE revoked_at IS NULL, schema/auth.ts), and a bare equality
+    // carries no revoked_at predicate, so the planner could never use it — every silent refresh (the hot path
+    // on every cold app load) was a seq scan of a never-pruned, append-per-login table. But this method MUST
+    // still surface revoked rows: findActiveSessionOrDetectReuse (packages/auth/src/session.ts) treats a
+    // revoked hit as refresh-token REPLAY and revokes the whole session family, so filtering to live-only here
+    // would silently disable reuse detection. Hence: index-served live lookup first (the overwhelmingly common
+    // case — a valid current token), full lookup only on a miss (expired or replayed tokens: rare, and exactly
+    // the rows reuse detection exists to see).
+    const live = await db
+      .select()
+      .from(userSessions)
+      .where(and(eq(userSessions.refreshTokenHash, hash), isNull(userSessions.revokedAt)))
+      .limit(1);
+    if (live[0]) return toSession(live[0]);
     const rows = await db
       .select()
       .from(userSessions)
