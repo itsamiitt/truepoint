@@ -31,6 +31,22 @@ export const CRM_SYNC_PUSH_QUEUE = "crm_sync_push";
 /** PII-free dead-letter for all CRM queues (the `queue` discriminator names the origin). */
 export const CRM_SYNC_DLQ = "crm_sync_dlq";
 
+/**
+ * Shared CRM-sync retry policy — BOTH producers spread this into their `.add()` options (perf-audit P4.3c).
+ * It lives in the leaf types package for the same reason the queue names do: apps/api's webhook/inbound
+ * producer and apps/workers' sweep producer enqueue onto the SAME queues, and when only the api side carried
+ * a policy, a sweep-enqueued pull ran with BullMQ's attempts:1 — one transient blip permanently lost that
+ * connection's delta until the next tick, while an api-enqueued twin of the same job got 5 attempts.
+ * Exponential with a modest floor: CRM APIs rate-limit aggressively and a tight retry loop turns a throttle
+ * into a ban. RETENTION is deliberately not here — each root's queue-level defaults own it (the worker root
+ * via tracedQueue's bounded defaults; apps/api via its own DEFAULT_JOB_OPTIONS). The erase lane keeps its
+ * own stronger budget (attempts 10) — a DSAR blocked by a shared ceiling would be the worse failure.
+ */
+export const CRM_SYNC_JOB_OPTIONS = {
+  attempts: 5,
+  backoff: { type: "exponential", delay: 5_000 },
+} as const;
+
 // ── Closed enums (mirror the §4.11 CHECK enums; the DB rejects unknown values) ───────────────────────────────
 /** The CRM vendors phase-1 ships adapters for. Salesforce is the deferred fast-follow; HubSpot is first. */
 export const crmProvider = z.enum(["salesforce", "hubspot"]);

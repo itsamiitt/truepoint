@@ -10,6 +10,7 @@ import { env } from "@leadwolf/config";
 import {
   CRM_SYNC_BACKFILL_QUEUE,
   CRM_SYNC_INBOUND_QUEUE,
+  CRM_SYNC_JOB_OPTIONS,
   CRM_SYNC_PUSH_QUEUE,
   type CrmBackfillJob,
   type CrmInboundJob,
@@ -27,13 +28,13 @@ function redis(): IORedis {
 }
 
 /**
- * Shared retry policy. Exponential backoff with a modest ceiling: CRM APIs rate-limit aggressively and a
- * tight retry loop turns a throttle into a ban. `removeOnComplete` keeps Redis bounded — the durable record
- * of what happened is crm_sync_runs, not the job history.
+ * Retry policy comes from the SHARED constant (@leadwolf/types CRM_SYNC_JOB_OPTIONS — perf-audit P4.3c), so
+ * an api-enqueued job and a sweep-enqueued job on the same queue can never carry different attempt budgets
+ * again. `removeOnComplete/Fail` stays THIS root's concern: it keeps Redis bounded — the durable record of
+ * what happened is crm_sync_runs, not the job history.
  */
 const DEFAULT_JOB_OPTIONS = {
-  attempts: 5,
-  backoff: { type: "exponential" as const, delay: 5_000 },
+  ...CRM_SYNC_JOB_OPTIONS,
   removeOnComplete: 1_000,
   removeOnFail: 5_000,
 };

@@ -44,6 +44,7 @@ import {
   type BulkImportScope,
   type BulkRevealDeadLetter,
   CRM_PUSH_TOPIC,
+  CRM_SYNC_JOB_OPTIONS,
   CRM_SYNC_OBJECTS,
   type CrmBackfillJob,
   type CrmInboundJob,
@@ -892,8 +893,13 @@ export function startWorkers(): Worker[] {
             idempotencyKey: `${intent.tpEntityId}:${intent.changeSeq}`,
           },
           // The idempotency key is IN the jobId, so an at-least-once relay re-publish collapses onto the
-          // same job rather than pushing the same change into a customer's CRM twice.
-          { jobId: `crm-push:${conn.id}:${intent.tpEntityId}:${intent.changeSeq}` },
+          // same job rather than pushing the same change into a customer's CRM twice. The shared retry
+          // policy rides along (P4.3c) — without it these sweep-enqueued pushes ran at attempts:1 while the
+          // api's identical jobs got 5.
+          {
+            ...CRM_SYNC_JOB_OPTIONS,
+            jobId: `crm-push:${conn.id}:${intent.tpEntityId}:${intent.changeSeq}`,
+          },
         );
       }
     };
@@ -1182,6 +1188,7 @@ export function startWorkers(): Worker[] {
                   ...(reconcile ? { reconcile: true } : {}),
                 },
                 {
+                  ...CRM_SYNC_JOB_OPTIONS,
                   jobId: `crm-${reconcile ? "reconcile" : "pull"}:${conn.id}:${objectType}`,
                 },
               );
@@ -1198,7 +1205,7 @@ export function startWorkers(): Worker[] {
                 provider: conn.provider as "salesforce" | "hubspot",
                 objectType: "contact",
               },
-              { jobId: `crm-refresh:${conn.id}` },
+              { ...CRM_SYNC_JOB_OPTIONS, jobId: `crm-refresh:${conn.id}` },
             ),
         }),
         { connection, ...SWEEP_WORKER_TUNING },
