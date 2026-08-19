@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2199,
-  "fileSetHash": "sha256:0717361866af1775423f02d355e0fcb9ee8708ee9a6778963e8940c33a6470ab",
+  "fileCount": 2201,
+  "fileSetHash": "sha256:61cf0a095cc59ea23385a4250476bc199a3e41cb033ab2a0e64b6fa2b17693ee",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2586,6 +2586,8 @@
       "apps/extension/src/background/eventStream.ts",
       "apps/extension/src/background/events/manager.ts",
       "apps/extension/src/background/index.ts",
+      "apps/extension/src/background/lookup/cache.test.ts",
+      "apps/extension/src/background/lookup/cache.ts",
       "apps/extension/src/background/queue/captureQueue.test.ts",
       "apps/extension/src/background/queue/captureQueue.ts",
       "apps/extension/src/background/queue/scheduler.ts",

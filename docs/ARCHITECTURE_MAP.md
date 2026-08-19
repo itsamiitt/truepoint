@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2199 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2201 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -911,7 +911,8 @@ flowchart TD
 - **`apps/extension`** (MV3 browser extension, Vite + CRXJS; areas `apps/extension` · `…/background` · `…/content` ·
   `…/ui` · `…/shared` · `…/i18n`) — **`background/`** the service-worker hub (Zod message bus, `ApiClient` over `/api/v1`
   with RFC-9457 + Idempotency-Key, PKCE `AuthModule` with in-memory token, IndexedDB capture queue + alarm-driven
-  scheduler with backoff, `RemoteConfig` + kill switch, telemetry, fetch-stream SSE consumer); **`content/`**
+  scheduler with backoff + a `recent`-store TTL reaper, `lookup/` single-flight LOOKUP warm cache (coalesces the
+  observer's nav+settle re-fires), `RemoteConfig` + kill switch, telemetry, fetch-stream SSE consumer); **`content/`**
   isolated-world adapter registry + LinkedIn adapter (**visible-DOM only, no network patching**), debounced navigation
   observer, shadow-DOM hover-card; **`ui/`** React popup + four-state side panel; **`shared/`** Zod message contracts +
   typed `chrome.storage`/IndexedDB + env; **`i18n/`** message catalog; root `manifest.config.ts`/`vite.config.ts` +
@@ -1033,4 +1034,9 @@ flowchart TD
   and after this change — the 51 recorded in the entry above is stale, not a regression here). Unassigned
   holds at **2** (`usageEventRepository`, `outcomeMetricsRepository` — the two honest gaps described
   above, unchanged by this work).
+
+  2026-08-19 refresh (extension LOOKUP coalescing, dbb2f07b): 2199 → 2201 files, both in
+  `shared["apps/extension/background"]` — `lookup/cache.ts` (the single-flight warm cache for LOOKUP) and
+  its test. A new `background/lookup/` submodule under the existing extension background area, so no new
+  domain and no new warning; unassigned holds at **2** (the same two repositories). Doc-15 P1 SW-half.
 ```
