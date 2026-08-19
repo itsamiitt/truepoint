@@ -860,6 +860,13 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // MARKET_ROLLUPS_ENABLED — market-intelligence MI-S7: the daily leader-locked rebuild of the
+    // master_market_rollups segment cache + the /api/v1/market read surface. Off ⇒ sweep not built and
+    // the API answers an honest empty board.
+    MARKET_ROLLUPS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // LINKEDIN_CHANNELS_ENABLED — the landing's master_emails/master_phones contribution (multi-value,
     // typed, encrypted). Separate from the main landing gate because channel PII is the co-op boundary's
     // sensitive half: a paid provider MAY contribute email_enc/phone_enc (masterGraph.ts channel notes),

@@ -396,6 +396,10 @@ const GRANTS = `
   -- Writes stay revoked everywhere (curation is staff/migration work).
   GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_er;
   GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_app;
+  -- Market rollups (0130, MI-S7): a derived, non-PII aggregate cache. er gets SELECT only (the API read
+  -- seam); the rebuild runs on the OWNER connection inside the system sweep — the deliberate exception
+  -- that keeps er's never-DELETE posture intact (reasoned in the migration header).
+  GRANT SELECT ON master_market_rollups TO leadwolf_er;
   -- source_fetch_registry (0118) — URLs + ids only, no PII. READ by the ER role so the database lookup and
   -- the add-to-workspace materializer can hop a Sales-Nav lead URL → resolved_person_id in the same withErTx
   -- as the person read (D8). Writes stay on the owner/withPrivilegedTx path (registerUrl/recordFetch).

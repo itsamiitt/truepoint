@@ -904,6 +904,13 @@
       "when": 1787179817000,
       "tag": "0129_account_scores",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1787179818000,
+      "tag": "0130_market_rollups",
+      "breakpoints": true
     }
   ]
 }

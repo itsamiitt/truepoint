@@ -204,6 +204,11 @@ import {
   makeProcessAccountScoringSweep,
 } from "./queues/accountScoringSweep.ts";
 import {
+  MARKET_ROLLUP_SWEEP_QUEUE,
+  type MarketRollupSweepJobData,
+  makeProcessMarketRollupSweep,
+} from "./queues/marketRollupSweep.ts";
+import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
   makeProcessLedgerBackfillSweep,
@@ -2102,6 +2107,30 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 30 * 60_000 }, jobId: "account-scoring-sweep" })
       .catch((e) =>
         log.error("failed to schedule the account-scoring sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Market rollup sweep (market-intelligence MI-S7) — DARK behind MARKET_ROLLUPS_ENABLED. Daily
+  // full-window rebuild of the non-PII segment cache; failure mode = stale board, never a wrong number.
+  if (env.MARKET_ROLLUPS_ENABLED) {
+    const marketRollupQueue = tracedQueue<MarketRollupSweepJobData>(MARKET_ROLLUP_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<MarketRollupSweepJobData>(
+          MARKET_ROLLUP_SWEEP_QUEUE,
+          makeProcessMarketRollupSweep(connection),
+          { connection },
+        ),
+        MARKET_ROLLUP_SWEEP_QUEUE,
+      ),
+    );
+    void marketRollupQueue
+      .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "market-rollup-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the market rollup sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

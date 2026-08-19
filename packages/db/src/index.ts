@@ -183,6 +183,12 @@ export {
 // Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
 // tenant_signals — the feed is browse, a notification requires a subscription naming the family.
 export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
+// Market-segment rollup cache (MI-S7, 0130): SYSTEM rebuild + the er-read board seam. Non-PII by
+// construction; dimensions = the account-search facets so every board number reconciles with drill-down.
+export {
+  marketRollupRepository,
+  type MarketSegmentRow,
+} from "./repositories/marketRollupRepository.ts";
 // Account-grain scoring (MI-S4, 0129): append-per-rescore history + the sweep's census/worklist reads.
 export {
   accountScoreRepository,

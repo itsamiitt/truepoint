@@ -60,6 +60,7 @@
     "inbox",
     "ingest",
     "lists",
+    "market",
     "master-sync",
     "notifications",
     "outreach",
@@ -107,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2171,
-  "fileSetHash": "sha256:b99c742a27b97adbf02e8d0b3d6aee30622b8896a6e9abe82c88f278d33b1b0e",
+  "fileCount": 2176,
+  "fileSetHash": "sha256:9bb0f88819d240e225d3e601d1c8bea224c3be5a6d1e18709e3eec69627a3e21",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1314,6 +1315,18 @@
       "workers": [],
       "integrations": []
     },
+    "market": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/market/index.ts",
+        "apps/api/src/features/market/routes.ts"
+      ],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "master-sync": {
       "web": [],
       "admin": [],
@@ -1672,9 +1685,12 @@
       ],
       "core": [],
       "db": [
+        "packages/db/src/repositories/marketRollupRepository.ts",
         "packages/db/src/repositories/reportsRepository.ts"
       ],
-      "workers": [],
+      "workers": [
+        "apps/workers/src/queues/marketRollupSweep.ts"
+      ],
       "integrations": []
     },
     "retention": {
@@ -3090,6 +3106,7 @@
       "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
       "packages/db/test/listsStaffNoAccess.itest.ts",
+      "packages/db/test/marketRollups.itest.ts",
       "packages/db/test/masterBackfill.itest.ts",
       "packages/db/test/masterBackfillSweep.itest.ts",
       "packages/db/test/masterEducationAndProducts.itest.ts",

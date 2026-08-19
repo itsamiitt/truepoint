@@ -59,3 +59,23 @@ export const tenantSignalSchema = z.object({
 export type TenantSignal = z.infer<typeof tenantSignalSchema>;
 
 export const signalFeedResponse = z.object({ signals: z.array(tenantSignalSchema) });
+
+// ── Market segment board (MI-S7; /api/v1/market/segments) ────────────────────────────────────────────────
+export const marketSegmentSchema = z.object({
+  industryCode: z.string(),
+  industryLabel: z.string(),
+  hqCountry: z.string(),
+  employeeBand: z.string(),
+  month: z.string(),
+  companyCount: z.number().int(),
+  headcountDelta: z.number(),
+  fundingRounds: z.number().int(),
+  fundingAmountMinor: z.number(),
+  signalCount: z.number().int(),
+});
+export type MarketSegment = z.infer<typeof marketSegmentSchema>;
+
+export const marketSegmentsResponse = z.object({
+  enabled: z.boolean(),
+  segments: z.array(marketSegmentSchema),
+});

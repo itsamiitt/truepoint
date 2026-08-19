@@ -48,6 +48,8 @@ export const CANONICAL_DOMAINS = [
   // The /companies/:id web DESTINATION (market-intelligence MI-1) — the account drawer promoted to a
   // canonical URL; its api/core/db stay resource-keyed under account-intelligence/reveal.
   "companies",
+  // The market-segment board resource (MI-S7): /api/v1/market over the non-PII rollup cache.
+  "market",
   "compliance",
   "admin-settings",
   "home",
@@ -135,6 +137,8 @@ export const QUEUE_DOMAIN = {
   signalFanout: "alerts",
   // The account-rescore sweep (MI-S4) — scoring, beside its contact-grain sibling.
   accountScoringSweep: "scoring",
+  // The market-segment rollup rebuild (MI-S7) — the reports-facing aggregate cache.
+  marketRollupSweep: "reports",
 };
 export const REPO_DOMAIN = {
   // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
@@ -208,6 +212,8 @@ export const REPO_DOMAIN = {
   watchlist: "alerts",
   // Account-grain score history (MI-S4) — scoring, beside `score` (the contact grain).
   accountScore: "scoring",
+  // Market-segment rollup cache (MI-S7) — the reports-facing aggregate seam.
+  marketRollup: "reports",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
   // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of
