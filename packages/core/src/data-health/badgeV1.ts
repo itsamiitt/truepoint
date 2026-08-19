@@ -11,6 +11,7 @@
 
 import {
   type ConfidenceBand,
+  type ConfidenceHalfLifePolicy,
   METHOD_PRIOR,
   computeFieldConfidence,
   confidenceBand,
@@ -82,17 +83,21 @@ export function buildConfidenceBadgeV1(
   field: string,
   agg: BadgeAggregate | null,
   now: Date = new Date(),
+  policy?: ConfidenceHalfLifePolicy,
 ): ConfidenceBadgeV1 | null {
   if (!agg || agg.sourceDiversity <= 0) return null;
 
   const ageDays = agg.lastObservedAt ? daysSince(agg.lastObservedAt, now) : null;
   const method = strongestMethod(agg.methods);
-  const confidence = computeFieldConfidence({
-    field,
-    method,
-    ageDays,
-    distinctSources: agg.sourceDiversity,
-  });
+  const confidence = computeFieldConfidence(
+    {
+      field,
+      method,
+      ageDays,
+      distinctSources: agg.sourceDiversity,
+    },
+    policy,
+  );
 
   return {
     lastVerifiedAt: agg.lastObservedAt ? agg.lastObservedAt.toISOString() : null,

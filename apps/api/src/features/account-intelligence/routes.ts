@@ -21,7 +21,7 @@
 // ORGANIZATIONS, not people; the response carries no contact values, no person ids, and no contributor
 // reference. The education route below is the one that touches personal data — see its own note.
 
-import { buildConfidenceBadgeV1 } from "@leadwolf/core";
+import { badgeHalfLifePolicy, buildConfidenceBadgeV1 } from "@leadwolf/core";
 import {
   type Tx,
   accountRepository,
@@ -444,8 +444,9 @@ contactIntelligenceRoutes.get("/:contactId/provenance", async (c) => {
     source_count: number;
     strongest_method: string | null;
   }> = [];
+  const halfLifePolicy = await badgeHalfLifePolicy();
   for (const field of ["email", "phone"] as const) {
-    const badge = buildConfidenceBadgeV1(field, aggregate);
+    const badge = buildConfidenceBadgeV1(field, aggregate, new Date(), halfLifePolicy);
     if (!badge) continue; // no evidence for this field — omit it, never render a zero
     fields.push({
       field,

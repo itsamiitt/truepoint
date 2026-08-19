@@ -172,3 +172,37 @@ describe("confidenceBand", () => {
     expect(confidenceBand(0)).toBe("unverified");
   });
 });
+
+describe("computeFieldConfidence with a half-life policy (C9, display-only)", () => {
+  const base = { field: "email", method: "provider", ageDays: 300, distinctSources: 1 };
+
+  test("no policy is byte-identical to the hardcoded constants", () => {
+    expect(computeFieldConfidence(base, undefined)).toBe(computeFieldConfidence(base));
+  });
+
+  test("a named field prices decay off the policy half-life, not the hardcoded one", () => {
+    // Policy says email halves at 300d; at age 300 that is exactly one half-life.
+    const policy = { fieldHalfLifeDays: { email: 300 }, defaultHalfLifeDays: 730 };
+    expect(computeFieldConfidence(base, policy)).toBeCloseTo(0.75 * 0.5, 6);
+    // Hardcoded email half-life is 270 — the two must genuinely differ at this age.
+    expect(computeFieldConfidence(base)).not.toBeCloseTo(0.75 * 0.5, 6);
+  });
+
+  test("null half-life means the field does not decay", () => {
+    const policy = { fieldHalfLifeDays: { email: null }, defaultHalfLifeDays: 730 };
+    expect(computeFieldConfidence(base, policy)).toBeCloseTo(0.75, 6);
+  });
+
+  test("an unnamed field takes the policy's own default, not the hardcoded default", () => {
+    const policy = { fieldHalfLifeDays: {}, defaultHalfLifeDays: 300 };
+    const input = { ...base, field: "somethingUnlisted" };
+    expect(computeFieldConfidence(input, policy)).toBeCloseTo(0.75 * 0.5, 6);
+  });
+
+  test("the pinned floor decays on the policy curve too", () => {
+    const policy = { fieldHalfLifeDays: { email: 300 }, defaultHalfLifeDays: 730 };
+    const pinned = computeFieldConfidence({ ...base, pinned: true }, policy);
+    // Floor = user_confirm prior (0.9) × the SAME policy decay (0.5).
+    expect(pinned).toBeCloseTo(0.9 * 0.5, 6);
+  });
+});

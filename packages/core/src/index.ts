@@ -587,6 +587,12 @@ export {
   type BadgeAggregate,
   type ConfidenceBadgeV1,
 } from "./data-health/badgeV1.ts";
+// C9 (decisions.md 2026-08-19): the badge's table-sourced half-life constants — gated, cached, and
+// undefined-on-any-failure so the hardcoded constants always remain the fallback.
+export {
+  badgeHalfLifePolicy,
+  resetConfidencePolicyCache,
+} from "./data-health/confidencePolicy.ts";
 // Job-change detection (Phase 4 decay engine; S-09/S-13/S-14). PURE, and it compares CONFIDENCES rather than
 // timestamps — 07's rule that three corroborated confirmations beat a year-old crawl is a confidence
 // comparison, so this composes the same model the badge uses instead of inventing a second one.

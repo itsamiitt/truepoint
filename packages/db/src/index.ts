@@ -165,6 +165,9 @@ export {
   type EmploymentStintInput,
   type HeadcountPointInput,
 } from "./repositories/masterProfileRepository.ts";
+// Confidence policy constants for the badge (C9 resolution, decisions.md 2026-08-19): field half-lives
+// only — the per-source-type dimension parameterizes the (unwired) fold, not the badge.
+export { masterConfidencePolicyRepository } from "./repositories/masterConfidencePolicyRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

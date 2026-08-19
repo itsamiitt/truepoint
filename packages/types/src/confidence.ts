@@ -9,6 +9,9 @@
 // production consumers. This file's half-lives are hardcoded (FIELD_HALF_LIFE_DAYS) and its corroboration is
 // capped at 1.25×, so the two disagree by 0.09–0.17 on the same fact. Do not "unify" them casually — the
 // swap re-scores every displayed record. Audit 32 §9D states the decision.
+// C9 RESOLUTION (decisions.md 2026-08-19, D-2): this leaf function REMAINS the only scoring path; the
+// policy table may supply its half-life constants via the optional ConfidenceHalfLifePolicy parameter,
+// display-only, dark behind CONFIDENCE_POLICY_BADGE_ENABLED. The noisy-OR engine stays unwired.
 //
 // NOT THE SAME THING AS dataHealth.ts, and conflating them is the easy mistake:
 //   dataHealth   = RECORD-level data_quality_score — completeness + verification + freshness, 0-100, answers
@@ -48,6 +51,19 @@ export type ConfidenceField = keyof typeof FIELD_HALF_LIFE_DAYS;
 
 /** Fields with no explicit half-life fall back to this — the email half-life, the dominant decaying field. */
 export const DEFAULT_HALF_LIFE_DAYS = FIELD_HALF_LIFE_DAYS.email;
+
+/**
+ * Optional table-sourced half-life overrides (C9 resolution, decisions.md 2026-08-19: the shipped leaf
+ * function stays the ONLY scoring path; `master_confidence_policy` may supply its CONSTANTS). Display-only
+ * rollout: callers pass this into the badge; ranking and gating never read it until their own decisions.
+ * Omitted (the default everywhere the gate is off) ⇒ the hardcoded constants above — byte-identical output.
+ */
+export interface ConfidenceHalfLifePolicy {
+  /** field → half-life days; null = the field DOES NOT DECAY (policy rows may say so). */
+  fieldHalfLifeDays: Record<string, number | null>;
+  /** Fallback for fields the table does not name (the ('*','*') policy row). */
+  defaultHalfLifeDays: number;
+}
 
 /**
  * Prior confidence by how the value was obtained, before any decay (07: "SMTP-verified beats
@@ -117,10 +133,25 @@ export function corroborationBoost(distinctSources: number): number {
  * outcome. It floors the result rather than replacing it, so a pinned value that is now three years old still
  * decays — because the human was right in 2023, not necessarily today.
  */
-export function computeFieldConfidence(input: FieldConfidenceInput): number {
-  const halfLife = FIELD_HALF_LIFE_DAYS[input.field as ConfidenceField] ?? DEFAULT_HALF_LIFE_DAYS;
+export function computeFieldConfidence(
+  input: FieldConfidenceInput,
+  policy?: ConfidenceHalfLifePolicy,
+): number {
+  // Policy resolution mirrors the table's contract: a named field wins, null means "does not decay",
+  // an unnamed field takes the table's own fallback. No policy ⇒ the hardcoded constants, unchanged.
+  const policyHalfLife =
+    policy === undefined
+      ? undefined
+      : input.field in policy.fieldHalfLifeDays
+        ? policy.fieldHalfLifeDays[input.field]
+        : policy.defaultHalfLifeDays;
+  const halfLife =
+    policyHalfLife !== undefined
+      ? policyHalfLife
+      : (FIELD_HALF_LIFE_DAYS[input.field as ConfidenceField] ?? DEFAULT_HALF_LIFE_DAYS);
   const prior = METHOD_PRIOR[input.method as ConfidenceMethod] ?? DEFAULT_METHOD_PRIOR;
-  const decay = input.ageDays == null ? 1 : decayFactor(input.ageDays, halfLife);
+  const decay =
+    input.ageDays == null || halfLife === null ? 1 : decayFactor(input.ageDays, halfLife);
   const boost = corroborationBoost(input.distinctSources ?? 1);
 
   const raw = prior * decay * boost;

@@ -833,8 +833,16 @@ export const appEnvSchema = z
       .optional()
       .transform((v) => v === "true"),
     // LINKEDIN_SIGNALS_ENABLED — master_signals emission from that landing (job_change on a primary-employer
-    // transition; headcount_surge/decline past the threshold).
+    // transition; exec_hired/exec_departed on the same transition; headcount_surge/decline past the
+    // threshold).
     LINKEDIN_SIGNALS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // CONFIDENCE_POLICY_BADGE_ENABLED — C9 resolution (decisions.md 2026-08-19, D-2): the S-10 badge prices
+    // decay off master_confidence_policy half-lives instead of the hardcoded FIELD_HALF_LIFE_DAYS.
+    // Display-only rollout, per-row is_enabled underneath; off ⇒ byte-identical badges.
+    CONFIDENCE_POLICY_BADGE_ENABLED: z
       .string()
       .optional()
       .transform((v) => v === "true"),
