@@ -9,7 +9,13 @@
 import type { MaskedContact, RevealType } from "@leadwolf/types";
 import { StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import { Sparkles } from "lucide-react";
-import { ownedRevealTypes, useRevealStore } from "../hooks/useRevealStore";
+import {
+  ownedRevealTypes,
+  useIsRevealing,
+  useRevealCosts,
+  useRevealStore,
+  useRevealedContact,
+} from "../hooks/useRevealStore";
 import styles from "../prospect.module.css";
 import { emailStatusLabel, emailStatusTone, phoneLineTypeLabel, phoneStatusTone } from "../types";
 import { CopyButton } from "./CopyButton";
@@ -26,11 +32,16 @@ export function RevealCell({
 }) {
   const store = useRevealStore();
   const toast = useToast();
+  // Per-slice subscriptions (perf-audit P3.1b): this cell re-renders when ITS row's data, ITS in-flight flag,
+  // or the costs change — a reveal/hydrate elsewhere in the grid no longer touches it. Hooks run before the
+  // no-field early return below (React's rules; the subscriptions are cheap either way).
+  const revealed = useRevealedContact(contact.id);
+  const busy = useIsRevealing(contact.id, field as RevealType);
+  const costs = useRevealCosts();
 
   const has = field === "email" ? contact.hasEmail : contact.hasPhone;
   if (!has) return <span className={styles.glyphNone}>—</span>;
 
-  const revealed = store.getRevealed(contact.id);
   const owned = ownedRevealTypes(contact.revealedTypes, revealed);
   const isOwned = field === "email" ? owned.email : owned.phone;
   const value = field === "email" ? revealed?.email : revealed?.phone;
@@ -61,8 +72,7 @@ export function RevealCell({
   if (isOwned) return <StatusBadge tone="success">Revealed</StatusBadge>;
 
   // Not owned → the one-click reveal affordance with the credit cost up front.
-  const cost = store.costs ? (field === "email" ? store.costs.email : store.costs.phone) : null;
-  const busy = store.isRevealing(contact.id, field as RevealType);
+  const cost = costs ? (field === "email" ? costs.email : costs.phone) : null;
 
   const onReveal = async () => {
     const res = await store.reveal(contact.id, field as RevealType);

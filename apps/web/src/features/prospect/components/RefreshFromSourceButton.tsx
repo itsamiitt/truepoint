@@ -16,7 +16,7 @@
 import { TpButton, useToast } from "@leadwolf/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { refreshAccountFromSource, refreshContactFromSource } from "../enrichApi";
 import { prospectKeys } from "../keys";
 
@@ -33,6 +33,16 @@ export function RefreshFromSourceButton({
   const queryClient = useQueryClient();
   const toast = useToast();
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Clear the delay ladder on unmount (perf-audit P3.8): the timers were never cleaned, so closing the
+  // drawer kept firing up to 15 invalidations (5 keys × 3 ticks) for sections no longer on screen.
+  useEffect(
+    () => () => {
+      for (const t of timers.current) clearTimeout(t);
+      timers.current = [];
+    },
+    [],
+  );
 
   const invalidate = () => {
     if (entity === "contact") {

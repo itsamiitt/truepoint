@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useCreditBalance } from "../hooks/useCreditBalance";
 import { useReveal } from "../hooks/useReveal";
-import { useRevealStore } from "../hooks/useRevealStore";
+import { useRevealCosts } from "../hooks/useRevealStore";
 import styles from "../prospect.module.css";
 import { displayName, emailStatusTone } from "../types";
 
@@ -38,7 +38,7 @@ export function RevealDialog({
   const toast = useToast();
   const { result, failure, busy, run, reset } = useReveal();
   // Show the credit cost + current balance BEFORE the user confirms (single-reveal parity with the bulk estimate).
-  const { costs } = useRevealStore();
+  const costs = useRevealCosts();
   const { balance } = useCreditBalance();
   const cost = costs ? costs[revealType] : null;
 
