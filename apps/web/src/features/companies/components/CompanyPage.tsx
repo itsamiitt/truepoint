@@ -1,5 +1,5 @@
 // CompanyPage.tsx — the routed /companies/:id destination (market-intelligence MI-1,
-// 07-product-surfaces §2): the AccountDetailDrawer's content promoted to a canonical URL. Composes the
+// 07-product-surfaces §2): the account drawer's content (now retired) promoted to a canonical URL. Composes the
 // SAME prospect-slice sections the drawer renders (one implementation, no drift) + the account's
 // delivered signal timeline + a Watch toggle. Sections self-hide or show honest empties while the data
 // pipeline is dark. Every field is an organization fact — no personal data on this page beyond the
@@ -12,6 +12,8 @@ import {
   AccountTechnologySection,
   HeadcountSection,
   contactsHrefForCompany,
+  orgKindCopy,
+  useAccountTechnologies,
 } from "@/features/prospect";
 import type { MaskedAccount, TenantSignal } from "@leadwolf/types";
 import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
@@ -75,6 +77,11 @@ function SignalsTimeline({ signals }: { signals: TenantSignal[] }) {
 
 function Header({ account }: { account: MaskedAccount }) {
   const { watched, loading, toggling, toggle } = useWatchAccount(account.id);
+  // The develops section below already fetches this account's Layer-0 answer; reading org_kind off that
+  // shared cache entry costs nothing extra — the retired drawer's trick, kept so a school is an
+  // "Institution", not a mislabeled company.
+  const { orgKind } = useAccountTechnologies(account.id, "develops");
+  const copy = orgKindCopy(orgKind as never);
   const hq = [account.hqCity, account.hqCountry].filter(Boolean).join(", ");
   return (
     <header className={styles.header}>
@@ -97,6 +104,7 @@ function Header({ account }: { account: MaskedAccount }) {
           </TpButton>
         </Link>
       </div>
+      <h2 className={styles.sectionTitle}>{copy.attributesTitle}</h2>
       <div className={styles.fieldGrid}>
         <Field label="Industry" value={show(account.industry)} />
         <Field label="Headcount" value={show(account.employeeCount)} />

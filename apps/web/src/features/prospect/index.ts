@@ -52,7 +52,6 @@ export { searchContacts, suggestField, fetchFacetCounts, aiSearch } from "./sear
 // useAccountSearch + useAccountFacetCounts against the real /account-search API. Exported for reuse/testing.
 export { AccountFilterPanel } from "./components/AccountFilterPanel";
 export { AccountsTable } from "./components/AccountsTable";
-export { AccountDetailDrawer } from "./components/AccountDetailDrawer";
 export { useAccountSearch } from "./hooks/useAccountSearch";
 export { useAccountFacetCounts } from "./hooks/useAccountFacetCounts";
 export {
@@ -75,6 +74,13 @@ export { useTags, useTaggedIds } from "./hooks/useTags";
 // the SAME sections the drawer shows — one implementation, two surfaces, no drift.
 export { HeadcountSection } from "./components/HeadcountSection";
 export { AccountTechnologySection } from "./components/AccountTechnologySections";
-export { AccountAlumniSection, AccountDisplacementSection } from "./components/AccountGraphSections";
+export {
+  AccountAlumniSection,
+  AccountDisplacementSection,
+} from "./components/AccountGraphSections";
 // Deep-link builder for "view this company's contacts" from non-prospect surfaces (companies page).
 export { contactsHrefForCompany } from "./searchUrlState";
+// org-kind-aware copy + the shared-cache orgKind read: the /companies/:id header renders "Institution"
+// for a school instead of calling everything a company (the retired drawer's nicety, kept alive).
+export { orgKindCopy, isNotableOrgKind } from "./orgKindCopy";
+export { useAccountTechnologies } from "./hooks/useAccountTechnologies";

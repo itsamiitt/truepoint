@@ -1,7 +1,7 @@
 // AccountsTable.tsx — the company-level results grid (the Accounts sibling of the Contacts DataTable in
 // ProspectPage): Name + domain, Industry, Headcount, Revenue, Funding/Stage, and the #Contacts rollup (the
 // workspace-scoped contactCount with its revealed sub-count). A row click hands off to onOpen (the page opens
-// the AccountDetailDrawer). Token-styled via @leadwolf/ui; presentation only — the page owns data + selection.
+// the routed /companies/:id page). Token-styled via @leadwolf/ui; presentation only — the page owns data + selection.
 "use client";
 
 import type { MaskedAccount } from "@leadwolf/types";

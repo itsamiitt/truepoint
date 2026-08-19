@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2178,
-  "fileSetHash": "sha256:e1dba6e51f7d1bba54c6de981215a97e0127d1e8706aaffa8f029e9c812d7812",
+  "fileCount": 2177,
+  "fileSetHash": "sha256:53c2690dc8dc7beef5ad8fc9b0398c63ec7de0bbc0b100fab42e4f1fb4c85581",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1485,7 +1485,6 @@
         "apps/web/src/features/prospect/bulkResourcesApi.ts",
         "apps/web/src/features/prospect/bulkReveal.test.ts",
         "apps/web/src/features/prospect/bulkReveal.ts",
-        "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
         "apps/web/src/features/prospect/components/AccountGraphSections.tsx",
         "apps/web/src/features/prospect/components/AccountTechnologySections.tsx",
