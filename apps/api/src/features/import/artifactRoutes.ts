@@ -24,7 +24,6 @@ import { ForbiddenError, NotFoundError } from "@leadwolf/types";
 import { Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "./bulkStore.ts";
@@ -35,7 +34,6 @@ export const importArtifactRoutes = new Hono<{ Variables: RoleVariables }>();
 
 importArtifactRoutes.use("*", authn);
 importArtifactRoutes.use("*", tenancy);
-importArtifactRoutes.use("*", rateLimit);
 
 /** The closed artifact-kind vocabulary → the object-key column it resolves to on the durable job row. `errors`
  *  rides `options.errorReportKey` (the pair's second key — only one key column shipped in S-I1, 08). */

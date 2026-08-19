@@ -27,14 +27,12 @@ import {
 import { type Context, Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const importMappingTemplatesRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 importMappingTemplatesRoutes.use("*", authn);
 importMappingTemplatesRoutes.use("*", tenancy);
-importMappingTemplatesRoutes.use("*", rateLimit);
 
 /** Resolve the verified workspace scope or fail closed — no body-supplied scope is ever trusted (16 §7). */
 function requireScope(c: Context<{ Variables: TenancyVariables }>): {

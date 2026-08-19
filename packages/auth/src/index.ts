@@ -86,6 +86,7 @@ export { verifyTurnstile } from "./botCheck.ts";
 export {
   checkIdentifierRate,
   checkRequestRate,
+  checkAuthedRequestRate,
   checkCaptureRate,
   checkRevealRate,
   checkEmailOtpSendRate,

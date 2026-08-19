@@ -55,7 +55,6 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "./bulkStore.ts";
@@ -67,7 +66,6 @@ export const importScheduleRoutes = new Hono<{ Variables: RoleVariables }>();
 
 importScheduleRoutes.use("*", authn);
 importScheduleRoutes.use("*", tenancy);
-importScheduleRoutes.use("*", rateLimit);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -40,13 +40,31 @@ const idLimiter = (): RateLimiterRedis =>
     points: 10,
     duration: 60,
   }));
-// Coarse per-caller cap for the resource API (keyed by subject when authenticated, else IP). 120/min.
+// Coarse per-IP backstop for the resource API's UNAUTHENTICATED surface (tokenless requests, plus requests
+// whose token fails verification — authn bills those back here). Authenticated traffic is charged per-subject
+// via checkAuthedRequestRate below, never this bucket: keying verified users by IP put a whole office/VPN
+// egress in ONE 120/min bucket and normal team browsing produced fleet-wide 429s (perf-audit RC2). 120/min.
 const apiLimiter = (): RateLimiterRedis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_apiLimiter ??= new RateLimiterRedis({
     storeClient: redis(),
     keyPrefix: "rl:api",
     points: 120,
+    duration: 60,
+  }));
+// Per-SUBJECT cap for authenticated resource-API traffic, consumed by authn AFTER the token verifies — only a
+// proven subject can spend its own budget, so a forged token can neither dodge the throttle (it's billed to
+// the IP backstop above) nor drain another user's bucket. Higher than the backstop on purpose: one legitimate
+// user's burst peaks well above it (a filter edit fans out to search + facets + count, job pollers tick
+// underneath), and the expensive paths keep their own tighter guards on top (rl:reveal, rl:capture,
+// entitlements, credit balance). Separate keyspace so neither limit weakens the other. 300/min.
+let _authedApiLimiter: RateLimiterRedis | undefined;
+const authedApiLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_authedApiLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:api:sub",
+    points: 300,
     duration: 60,
   }));
 // Per-caller cap for the SCRAPING capture path (chrome_extension ingestion, prospect-database-platform I6). Metered
@@ -100,9 +118,15 @@ export async function checkIdentifierRate(args: { ip: string; identifier: string
   await consume(idLimiter(), args.identifier.toLowerCase());
 }
 
-/** Coarse per-request throttle for the resource API. `key` is the subject (authenticated) or client IP. */
+/** Coarse per-request backstop for the resource API's unauthenticated surface. `key` is the client IP. */
 export async function checkRequestRate(key: string): Promise<void> {
   await consume(apiLimiter(), key);
+}
+
+/** Per-request throttle for AUTHENTICATED resource-API traffic. `key` is the VERIFIED token subject — call
+ *  only after the JWT has passed verification (apps/api authn), so the spender provably owns the bucket. */
+export async function checkAuthedRequestRate(key: string): Promise<void> {
+  await consume(authedApiLimiter(), key);
 }
 
 /**

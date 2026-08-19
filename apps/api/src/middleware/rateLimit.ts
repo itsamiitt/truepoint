@@ -1,30 +1,39 @@
-// rateLimit.ts — a coarse per-caller throttle for the resource API (mission §rate-limiting). Keyed by the
-// verified subject when authn has already populated claims, else the client IP from the proxy headers. Backed
-// by the shared Redis limiter in packages/auth (fails open on a Redis outage). Exhaustion → RateLimitedError
-// → 429 Problem Details.
+// rateLimit.ts — the UNAUTHENTICATED per-IP backstop for the resource API (mission §rate-limiting). Registered
+// at the app root, which runs BEFORE every router's authn — so claims can never be present here. The old
+// implementation read `c.get("claims")` anyway; that branch was dead code, and every authenticated caller fell
+// through to the IP key, putting an entire office/VPN/NAT egress into ONE shared 120/min bucket. One team's
+// normal browsing (a filter edit fans out to several search calls, job pollers tick underneath) exhausted it
+// and produced intermittent fleet-wide 429s (perf-audit RC2).
 //
-// Deliberately does NOT verify the JWT itself (perf RC#11a): the rate-limit bucket is not a security boundary,
-// and authn — the real boundary — already verifies the token per-router. Verifying here too would run the JWT
-// crypto (and a possible JWKS fetch) twice on every authenticated request, in front of the throttle, which is
-// the opposite of the perf goal. So we key by `sub` whenever claims are present (set by an authn that has
-// already run for this request) and fall back to a coarse IP key otherwise. Read-only — no limit is weakened.
+// The split now matches where the information actually lives on the request path:
+//   - HERE (pre-authn): requests WITHOUT a bearer token consume the per-IP backstop — the only surface an
+//     unauthenticated flood can reach (401 probes, the public reads).
+//   - authn (post-verify): every VERIFIED request consumes the per-subject budget (checkAuthedRequestRate),
+//     and a request whose token FAILS verification is billed back to this per-IP bucket there — so carrying a
+//     garbage bearer token buys a flood nothing over sending none.
+// Deliberately still does NOT verify the JWT itself (perf RC#11a): authn is the security boundary and runs
+// once per request; the header-presence check below only routes WHICH bucket pays, and cannot weaken either
+// limit — a forged header defers the request to authn, where it is verified or billed to the IP.
+//
+// IP resolution stays delegated to the shared trusted-hop resolver: each trusted proxy APPENDS to
+// X-Forwarded-For rather than replacing it, so the leftmost value is whatever the client sent. A local parse
+// that took the first entry made the throttle trivially evadable (a fresh bucket per rotated header) — the
+// exact bypass already fixed on the auth origin (W10/#14).
 
 import { checkRequestRate, clientIpFromHeaders } from "@leadwolf/auth";
 import type { Context, Next } from "hono";
 
-function clientKey(c: Context): string {
-  // claims are set by authn when this runs inside (or after) an authenticated router; absent at the app root.
-  const sub = (c.get("claims") as { sub?: string } | undefined)?.sub;
-  if (sub) return `sub:${sub}`;
-  // IP fallback. This MUST use the trusted-hop rule, not the first X-Forwarded-For entry: each trusted proxy
-  // APPENDS to that header rather than replacing it, so the leftmost value is whatever the client sent. Reading
-  // it made the throttle trivially evadable — send a different X-Forwarded-For per request and every request
-  // gets a fresh bucket. This is the exact bypass already fixed on the auth origin (W10/#14); it now shares that
-  // implementation from @leadwolf/auth instead of keeping a second, weaker copy here.
+/** The per-IP bucket key for this request, via the shared trusted-hop rule. Exported for authn, which bills
+ *  failed-verification requests to the same bucket this middleware charges — one rule, one keyspace. */
+export function ipKey(c: Context): string {
   return `ip:${clientIpFromHeaders({ get: (name) => c.req.header(name) ?? null })}`;
 }
 
 export async function rateLimit(c: Context, next: Next): Promise<void> {
-  await checkRequestRate(clientKey(c));
+  // A bearer-carrying request is charged per-subject (or billed to the IP on a failed verify) inside authn —
+  // charging it here too would double-bill every authenticated request against the small unauth backstop.
+  if (!c.req.header("authorization")) {
+    await checkRequestRate(ipKey(c));
+  }
   await next();
 }

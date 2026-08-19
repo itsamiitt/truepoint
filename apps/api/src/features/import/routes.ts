@@ -78,7 +78,6 @@ import {
 import { type Context, Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive, enqueueFastImport } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
@@ -94,7 +93,6 @@ export const importRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 importRoutes.use("*", authn);
 importRoutes.use("*", tenancy);
-importRoutes.use("*", rateLimit);
 
 /** Map a BullMQ job state to the public import status enum. */
 function toImportJobStatus(state: string): ImportJobStatus {

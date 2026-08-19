@@ -150,7 +150,9 @@ app.get("/metrics", (c) => {
   if (!token || c.req.header("authorization") !== `Bearer ${token}`) return c.notFound();
   return c.text(renderAuthMetrics(), 200, { "content-type": "text/plain; version=0.0.4" });
 });
-// Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
+// Unauthenticated per-IP backstop. Runs pre-authn, so it charges only tokenless requests; authenticated
+// traffic is charged per-subject inside authn AFTER the token verifies (and a failed verify is billed back to
+// the IP bucket there). See middleware/rateLimit.ts for why the old claims-aware branch here was dead code.
 app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
 // Extension identity reads (chrome-extension/14 X03/X04): GET /me (display identity for the popup/panel) +

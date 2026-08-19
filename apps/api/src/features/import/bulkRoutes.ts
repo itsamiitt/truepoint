@@ -30,7 +30,6 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
@@ -42,7 +41,6 @@ export const bulkImportRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 bulkImportRoutes.use("*", authn);
 bulkImportRoutes.use("*", tenancy);
-bulkImportRoutes.use("*", rateLimit);
 
 // LAYER 1 — the GLOBAL kill-switch (env.BULK_IMPORT_ENABLED): while it is false the feature is DARK for EVERYONE —
 // every bulk route fails with a clear RFC-9457 problem and NOTHING is read, created, or enqueued. A `use` so it

@@ -35,7 +35,6 @@ import { Hono } from "hono";
 import { cache } from "../../cache.ts";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
-import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueReverification } from "./reverificationQueue.ts";
@@ -173,12 +172,13 @@ homeRoutes.get(
 /**
  * POST /data-quality/reverify — ON-DEMAND freshness re-verification (data-management #3 follow-up). Runs the SAME
  * bounded, idempotent per-workspace re-verification the daily sweep runs, on demand. GUARDED: requireRole("owner",
- * "admin") (it can spend metered verifier budget — NEVER member/viewer) + a per-caller rateLimit. INHERENTLY SAFE:
+ * "admin") (it can spend metered verifier budget — NEVER member/viewer); the per-subject request throttle is
+ * charged by authn like every authed route (the extra router-level rateLimit double-billed it). INHERENTLY SAFE:
  * the worker's runReverification re-checks the per-tenant `data_health.reverification` flag and NO-OPS if off, and
  * the work is bounded to already-revealed, past-SLA contacts + idempotent — the manual form of an existing bounded
  * operation, not a new cost surface. Enqueue-only: no flag bypass; returns 202 + a job ref.
  */
-homeRoutes.post("/data-quality/reverify", rateLimit, requireRole("owner", "admin"), async (c) => {
+homeRoutes.post("/data-quality/reverify", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   const jobId = await enqueueReverification({ tenantId: c.get("tenantId"), workspaceId });
