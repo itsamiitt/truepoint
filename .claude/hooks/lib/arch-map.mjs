@@ -45,6 +45,9 @@ export const CANONICAL_DOMAINS = [
   // The Signals web DESTINATION (market-intelligence MI-P2, D-9 IA regroup). Web slices are
   // destination-keyed while api/core/db stay resource-keyed under `alerts` — the reveal/prospect split.
   "signals",
+  // The /companies/:id web DESTINATION (market-intelligence MI-1) — the account drawer promoted to a
+  // canonical URL; its api/core/db stay resource-keyed under account-intelligence/reveal.
+  "companies",
   "compliance",
   "admin-settings",
   "home",

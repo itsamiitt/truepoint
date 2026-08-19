@@ -8,6 +8,7 @@
 import type { MaskedAccount } from "@leadwolf/types";
 import { Avatar, Drawer, StatusBadge, TpButton, TpChip } from "@leadwolf/ui";
 import { Users } from "lucide-react";
+import Link from "next/link";
 import { useAccountTechnologies } from "../hooks/useAccountTechnologies";
 import { isNotableOrgKind, orgKindCopy } from "../orgKindCopy";
 import styles from "../prospect.module.css";
@@ -86,6 +87,12 @@ export function AccountDetailDrawer({
             {/* linkedin-source-ingestion §account lane: 202-queued company refresh; the server 422s
                 honestly when the account has no LinkedIn identity, and 400s while the lane is dark. */}
             <RefreshFromSourceButton entity="account" id={account.id} />
+            {/* MI-1: the drawer is the in-search preview; the canonical, shareable surface is the page. */}
+            <Link href={`/companies/${account.id}`}>
+              <TpButton variant="ghost" size="sm">
+                Open company page
+              </TpButton>
+            </Link>
           </div>
         ) : undefined
       }

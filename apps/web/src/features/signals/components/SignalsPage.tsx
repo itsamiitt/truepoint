@@ -61,7 +61,7 @@ function SignalRow({ signal }: { signal: TenantSignal }) {
       <StatusBadge tone={FAMILY_TONE[signal.family]}>{FAMILY_LABEL[signal.family]}</StatusBadge>
       <span className={styles.headline}>
         {signal.accountId ? (
-          <Link href={`/prospect?account=${signal.accountId}`}>{title}</Link>
+          <Link href={`/companies/${signal.accountId}`}>{title}</Link>
         ) : (
           title
         )}
@@ -76,9 +76,11 @@ function WatchlistsPanel() {
   const [name, setName] = useState("");
   const [subs, setSubs] = useState<Record<string, Set<SignalFamily>>>({});
 
+  // Server truth (w.myFamilies) hydrates the toggles; local state only overrides after a toggle in this
+  // session, so a reload always shows what is actually persisted.
   const toggleFamily = (w: Watchlist, family: SignalFamily) => {
     setSubs((prev) => {
-      const current = new Set(prev[w.id] ?? []);
+      const current = new Set(prev[w.id] ?? w.myFamilies);
       if (current.has(family)) current.delete(family);
       else current.add(family);
       subscribe.mutate({ watchlistId: w.id, families: [...current] });
@@ -115,7 +117,8 @@ function WatchlistsPanel() {
               </div>
               <div className={styles.familyToggles}>
                 {FAMILIES.filter((f) => f.key !== "all").map((f) => {
-                  const active = subs[w.id]?.has(f.key as SignalFamily) ?? false;
+                  const effective = subs[w.id] ?? new Set<SignalFamily>(w.myFamilies);
+                  const active = effective.has(f.key as SignalFamily);
                   return (
                     <button
                       key={f.key}

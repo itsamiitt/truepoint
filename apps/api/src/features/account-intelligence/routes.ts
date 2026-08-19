@@ -25,6 +25,7 @@ import { badgeHalfLifePolicy, buildConfidenceBadgeV1 } from "@leadwolf/core";
 import {
   type Tx,
   accountRepository,
+  accountSearchRepository,
   contactRepository,
   intentSignalRepository,
   masterEducationRepository,
@@ -48,6 +49,7 @@ import {
   contactEmploymentResponse,
   contactProvenanceResponse,
   contactSignalsResponse,
+  maskedAccountSchema,
   technologyPeersResponse,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -79,6 +81,22 @@ async function resolveBridge(
   if (!account) throw new NotFoundError("Account not found.");
   return { masterCompanyId: account.masterCompanyId };
 }
+
+/**
+ * GET /accounts/:accountId — the base masked-account DTO for the /companies/:id page (MI-1).
+ * Overlay-only read under RLS: same SELECTION as account search, so the page and the grid never disagree.
+ * No Layer-0 hop here — the momentum/technology/signals sections each have their own seams.
+ */
+accountIntelligenceRoutes.get("/:accountId", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("workspace_required");
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const account = await withTenantTx(scope, (tx: Tx) =>
+    accountSearchRepository.getMaskedById(tx, c.req.param("accountId")),
+  );
+  if (!account) throw new NotFoundError("Account not found.");
+  return c.json({ account: maskedAccountSchema.parse(account) });
+});
 
 accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
   const workspaceId = c.get("workspaceId");

@@ -36,6 +36,8 @@ export const watchlistSchema = z.object({
   name: z.string(),
   memberCount: z.number().int().min(0),
   createdAt: z.string(),
+  /** The caller's subscribed families on this list (empty = not subscribed or paused). */
+  myFamilies: z.array(signalFamily),
 });
 export type Watchlist = z.infer<typeof watchlistSchema>;
 

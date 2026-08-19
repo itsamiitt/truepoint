@@ -10,6 +10,8 @@ export interface WatchlistRow {
   name: string;
   memberCount: number;
   createdAt: Date;
+  /** The CALLER's subscribed families on this list (empty = not subscribed or paused). */
+  myFamilies: string[];
 }
 
 export const watchlistRepository = {
@@ -25,18 +27,30 @@ export const watchlistRepository = {
     return rows[0]!.id;
   },
 
-  async list(tx: Tx): Promise<WatchlistRow[]> {
+  /** All watchlists in the workspace, each carrying THE CALLER's subscription families (hydration for the
+   *  UI's toggles — one fetch, no per-list subscription read). userId is an explicit predicate, never RLS. */
+  async list(tx: Tx, userId: string): Promise<WatchlistRow[]> {
     const rows = (await tx.execute(
       sql`SELECT w.id, w.name, w.created_at,
-                 (SELECT count(*)::int FROM watchlist_members m WHERE m.watchlist_id = w.id) AS member_count
+                 (SELECT count(*)::int FROM watchlist_members m WHERE m.watchlist_id = w.id) AS member_count,
+                 coalesce(s.families, '{}'::text[]) AS my_families
             FROM watchlists w
+            LEFT JOIN signal_subscriptions s
+              ON s.watchlist_id = w.id AND s.user_id = ${userId}::uuid
            ORDER BY w.name`,
-    )) as unknown as Array<{ id: string; name: string; created_at: Date; member_count: number }>;
+    )) as unknown as Array<{
+      id: string;
+      name: string;
+      created_at: Date;
+      member_count: number;
+      my_families: string[];
+    }>;
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       memberCount: r.member_count,
       createdAt: new Date(r.created_at),
+      myFamilies: r.my_families ?? [],
     }));
   },
 

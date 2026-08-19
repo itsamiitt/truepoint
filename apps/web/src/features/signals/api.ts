@@ -41,6 +41,14 @@ export async function deleteWatchlist(id: string): Promise<void> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not delete the watchlist"));
 }
 
+export async function fetchWatchlistMembers(watchlistId: string): Promise<string[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/watchlists/${encodeURIComponent(watchlistId)}/members`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the watchlist"));
+  return ((await res.json()) as { accountIds: string[] }).accountIds;
+}
+
 export async function addWatchlistMember(watchlistId: string, accountId: string): Promise<void> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/watchlists/${encodeURIComponent(watchlistId)}/members`,

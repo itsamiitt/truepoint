@@ -26,7 +26,9 @@ watchlistRoutes.use("*", tenancy);
 watchlistRoutes.get("/", async (c) => {
   const workspaceId = requireWorkspace(c);
   const scope = { tenantId: c.get("tenantId"), workspaceId };
-  const watchlists = await withTenantTx(scope, (tx: Tx) => watchlistRepository.list(tx));
+  const watchlists = await withTenantTx(scope, (tx: Tx) =>
+    watchlistRepository.list(tx, c.get("claims").sub),
+  );
   return c.json(
     watchlistsResponse.parse({
       watchlists: watchlists.map((w) => ({
@@ -34,6 +36,7 @@ watchlistRoutes.get("/", async (c) => {
         name: w.name,
         memberCount: w.memberCount,
         createdAt: w.createdAt.toISOString(),
+        myFamilies: w.myFamilies,
       })),
     }),
   );

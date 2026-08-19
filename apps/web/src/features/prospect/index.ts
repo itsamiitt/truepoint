@@ -71,3 +71,8 @@ export { ParsedFilterPreview } from "./components/ParsedFilterPreview";
 export { TagChip } from "./components/TagChip";
 export { TagPicker } from "./components/TagPicker";
 export { useTags, useTaggedIds } from "./hooks/useTags";
+// Account-intelligence sections (market-intelligence MI-1): exported so the /companies/:id page composes
+// the SAME sections the drawer shows — one implementation, two surfaces, no drift.
+export { HeadcountSection } from "./components/HeadcountSection";
+export { AccountTechnologySection } from "./components/AccountTechnologySections";
+export { AccountAlumniSection, AccountDisplacementSection } from "./components/AccountGraphSections";

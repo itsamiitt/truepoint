@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2153 source files · 88 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2158 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -559,10 +559,15 @@ apps/                           # deployable processes (thin transport adapters)
   /:id/subscription — the CALLER's subscription only, claims.sub, never a body-supplied user) ·
   `signalRoutes.ts` (GET /api/v1/signals — the tenant_signals feed read, optional accountId filter;
   never Layer 0)
-- **web (destination-keyed sibling — `features.signals`):** `apps/web/src/features/signals/` — the
-  `/signals` rail destination: family-filtered feed + watchlists panel (create/delete, per-user family
-  subscription chips); honest empty states while the pipeline is dark; `account_signal` notifications
-  deep-link here
+- **web (destination-keyed siblings):** `features/signals/` — the `/signals` rail destination:
+  family-filtered feed + watchlists panel (create/delete, per-user family subscription chips hydrated
+  from `myFamilies`); honest empty states while the pipeline is dark; `account_signal` notifications
+  deep-link here · `features/companies/` — the routed `/companies/:accountId` page (MI-1): the account
+  drawer's content on a canonical URL — firmographic header + Watch toggle (auto-created "Watched
+  accounts" list) + the SAME prospect-slice sections (headcount, technologies, displacement, alumni,
+  re-exported via the prospect barrel) + the account signal timeline. `GET /api/v1/accounts/:accountId`
+  (account-intelligence routes, `accountSearchRepository.getMaskedById` — search's own SELECTION, so
+  page and grid never disagree) is its base read
 - **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
   `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
 - **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a

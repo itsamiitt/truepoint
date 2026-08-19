@@ -28,6 +28,7 @@
     "auth-policy",
     "billing",
     "channels",
+    "companies",
     "compliance",
     "contacts-bulk",
     "contacts-dedup",
@@ -106,8 +107,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2153,
-  "fileSetHash": "sha256:b154bfc362073e3b6d29a42112109a83553618b0b4933be38f8fd8599f1ef924",
+  "fileCount": 2158,
+  "fileSetHash": "sha256:23f898cbf4a96debc1835a325292c88a3c5f8c8ef276bd7c0c88b32f17e91236",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -375,6 +376,20 @@
         "packages/core/src/channels/channelReconcile.test.ts",
         "packages/core/src/channels/channelReconcile.ts"
       ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "companies": {
+      "web": [
+        "apps/web/src/features/companies/api.ts",
+        "apps/web/src/features/companies/components/CompanyPage.tsx",
+        "apps/web/src/features/companies/hooks/useCompany.ts",
+        "apps/web/src/features/companies/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
       "db": [],
       "workers": [],
       "integrations": []
@@ -2665,6 +2680,7 @@
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
+      "apps/web/src/app/(shell)/companies/[accountId]/page.tsx",
       "apps/web/src/app/(shell)/crm-sync/page.tsx",
       "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
