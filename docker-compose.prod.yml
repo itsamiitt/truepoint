@@ -80,6 +80,9 @@ services:
     # protective, not risky).
     environment:
       DB_STATEMENT_TIMEOUT_MS: "15000"
+      # S6: the role memo the perf audit wired (invalidation already event-driven) — ON in the api service.
+      # Bounded-stale ≤30s per the confirmed §4 consistency table; was the operator's owed manual env copy.
+      ROLE_CACHE_TTL_MS: "30000"
     # Reserve a modest CPU/memory floor for this latency-sensitive service so a noisy neighbour on the
     # same host can't starve it during a sign-in/redirect (RC#12). Reservations are a soft floor (not a
     # hard cap), so this never throttles the service — it only guarantees the scheduler keeps room for it.
