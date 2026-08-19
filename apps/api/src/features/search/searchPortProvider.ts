@@ -17,6 +17,7 @@ import type {
   SuggestQuery,
   Suggestion,
 } from "@leadwolf/types";
+import { flagGateCached } from "../../lib/gateMemo.ts";
 
 /** Expand title term-filter values through the canonical taxonomy → surface forms the repo ILIKEs, so an
  *  abbreviation ("CEO") matches the spelled-out title. Non-title clauses pass through untouched. */
@@ -39,8 +40,13 @@ export async function buildWorkspaceSearchPort(scope: {
 }): Promise<SearchPort> {
   // S-CH4 composed read gate, evaluated ONCE per port build (env-off ⇒ zero queries; fail-closed on error).
   // Gate-on the masked hits gain `channels` summaries + has_email/has_phone/company resolve from live child
-  // rows; gate-off every read is byte-identical to the pre-S-CH4 flat-column path.
-  const channelsFromChild = await channelReadFromChildEnabledForScope(scope);
+  // rows; gate-off every read is byte-identical to the pre-S-CH4 flat-column path. Memoized 30s (perf-audit
+  // P2.4): a port is built per search/suggest/facet REQUEST — the busiest surface in the product — and each
+  // build paid the gate's transaction to re-read a rollout boolean. Key is a synthetic label because the
+  // composed core evaluator owns the real flag key + env layering; the admin flag write clears all gates.
+  const channelsFromChild = await flagGateCached(scope.tenantId, "channel_read_from_child", () =>
+    channelReadFromChildEnabledForScope(scope),
+  );
   return {
     async searchContacts(query: ContactQuery): Promise<SearchPage<ContactHit>> {
       const page = await searchRepository.searchContacts(scope, expandTitleFilters(query), {

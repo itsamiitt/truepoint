@@ -16,6 +16,7 @@ import { env } from "@leadwolf/config";
 import { isFlagEnabledForTenant } from "@leadwolf/core";
 import { withTenantTx, workspaceRepository } from "@leadwolf/db";
 import { JOB_VISIBILITY_FLAG_KEY, type JobViewer, type WorkspaceRole } from "@leadwolf/types";
+import { flagGateCached } from "../lib/gateMemo.ts";
 
 export interface BuildJobViewerInput {
   tenantId: string;
@@ -33,9 +34,13 @@ export async function buildJobViewer(input: BuildJobViewerInput): Promise<JobVie
   if (!env.JOB_VISIBILITY_SCOPED) {
     return { userId: input.userId, role: input.role ?? "viewer", scoped: false };
   }
-  // LAYER 2 — per-tenant rollout flag (fail-closed: unknown flag evaluates off).
-  const tenantEnabled = await withTenantTx({ tenantId: input.tenantId }, (tx) =>
-    isFlagEnabledForTenant(tx, input.tenantId, JOB_VISIBILITY_FLAG_KEY),
+  // LAYER 2 — per-tenant rollout flag (fail-closed: unknown flag evaluates off). Memoized 30s: job-surface
+  // reads are POLLED (every open import page, every 10s), and each poll paid a full transaction to re-read
+  // a rollout boolean (perf-audit P2.4). The admin flag write invalidates the memo synchronously.
+  const tenantEnabled = await flagGateCached(input.tenantId, JOB_VISIBILITY_FLAG_KEY, () =>
+    withTenantTx({ tenantId: input.tenantId }, (tx) =>
+      isFlagEnabledForTenant(tx, input.tenantId, JOB_VISIBILITY_FLAG_KEY),
+    ),
   );
   if (!tenantEnabled) {
     return { userId: input.userId, role: input.role ?? "viewer", scoped: false };

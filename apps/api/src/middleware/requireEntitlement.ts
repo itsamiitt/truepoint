@@ -26,6 +26,7 @@ import {
 import { entitlementRepository, withTenantTx } from "@leadwolf/db";
 import { AppError } from "@leadwolf/types";
 import type { Context, Next } from "hono";
+import { entitlementBasisCached } from "../lib/gateMemo.ts";
 
 // Module-scoped throttle for the fail-open marker (audit 32 · C11) — see guardDegradedLog.ts.
 const allowDegradedLog = makeDegradedThrottle();
@@ -98,29 +99,28 @@ export function requireEntitlement(key: string) {
 }
 
 /**
- * ONE scoped transaction for everything this middleware needs: the live grants, the usage counted against the
- * winning grant's period, and the enforce flag.
+ * The BASIS (live grants + the enforce flag) is memoized 30s per tenant; USAGE is read live every request.
  *
- * Deliberately one and not two. The first version evaluated the decision and read the enforce flag through
- * separate helpers, each opening its own withTenantTx — two transactions per request on the reveal money
- * endpoint, largely to decide whether to print a log line. isEntitlementEnforced is the in-transaction variant
- * that exists precisely for this; the out-of-tx sibling was deleted rather than left exported with no caller.
+ * The split follows what actually changes when (perf-audit P2.4): grants move on a plan override and the
+ * enforce switch on an admin flag write — both of which invalidate the memo synchronously — while usage
+ * moves on every metered action and is the one number this gate must never serve stale. The previous shape
+ * ran grants + usage + enforce-flag in one transaction per request, re-reading monthly-stable rows on the
+ * reveal money endpoint every single time. On a memo hit this is ONE transaction with ONE query (the usage
+ * aggregate); the miss path (once per tenant per 30s, and after every invalidation) pays two transactions,
+ * which is why the basis read is not folded into the usage transaction.
  */
 async function evaluate(
   scope: { tenantId: string; workspaceId: string },
   key: string,
 ): Promise<{ decision: EntitlementDecision; enforcing: boolean }> {
-  return withTenantTx(scope, async (tx) => {
-    const grants = await entitlementRepository.liveForTenant(tx, scope.tenantId);
-    const used = await entitlementRepository.usedInPeriod(
-      tx,
-      scope.tenantId,
-      key,
-      periodFor(key, grants),
-    );
-    return {
-      decision: resolveEntitlement(key, grants, used),
+  const basis = await entitlementBasisCached(scope.tenantId, () =>
+    withTenantTx(scope, async (tx) => ({
+      grants: await entitlementRepository.liveForTenant(tx, scope.tenantId),
       enforcing: await isEntitlementEnforced(tx, scope.tenantId),
-    };
-  });
+    })),
+  );
+  const used = await withTenantTx(scope, (tx) =>
+    entitlementRepository.usedInPeriod(tx, scope.tenantId, key, periodFor(key, basis.grants)),
+  );
+  return { decision: resolveEntitlement(key, basis.grants, used), enforcing: basis.enforcing };
 }

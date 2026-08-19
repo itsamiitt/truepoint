@@ -11,14 +11,17 @@ import { env } from "@leadwolf/config";
 import { isFlagEnabledForTenant } from "@leadwolf/core";
 import { withTenantTx } from "@leadwolf/db";
 import { BULK_IMPORT_FLAG_KEY, IMPORT_V2_FLAG_KEY } from "@leadwolf/types";
+import { flagGateCached } from "../../lib/gateMemo.ts";
 
 /** Evaluate the dual gate for a tenant. Either layer off ⇒ false (legacy path, byte-identical). */
 export async function isImportV2Enabled(tenantId: string): Promise<boolean> {
   // LAYER 1 — global env kill-switch: off ⇒ no flag read, no behavior change at all.
   if (!env.IMPORT_V2_ENABLED) return false;
-  // LAYER 2 — per-tenant rollout flag (fail-closed: unknown flag evaluates off).
-  return withTenantTx({ tenantId }, (tx) =>
-    isFlagEnabledForTenant(tx, tenantId, IMPORT_V2_FLAG_KEY),
+  // LAYER 2 — per-tenant rollout flag (fail-closed: unknown flag evaluates off). Memoized 30s (perf-audit
+  // P2.4): every import request — including the 10s status polls of every open import page — paid a full
+  // transaction to re-read a rollout boolean. The admin flag write invalidates the memo synchronously.
+  return flagGateCached(tenantId, IMPORT_V2_FLAG_KEY, () =>
+    withTenantTx({ tenantId }, (tx) => isFlagEnabledForTenant(tx, tenantId, IMPORT_V2_FLAG_KEY)),
   );
 }
 

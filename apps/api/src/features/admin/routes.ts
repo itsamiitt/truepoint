@@ -69,6 +69,12 @@ import {
   userStatusChangeSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import {
+  invalidateAllEntitlementBasis,
+  invalidateAllFlagGates,
+  invalidateEntitlementBasis,
+  invalidateFlagGate,
+} from "../../lib/gateMemo.ts";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
@@ -479,6 +485,8 @@ adminRoutes.post("/tenants/:id/plan", requireCapability("tenants:plan"), async (
       metadata: { templateKey: parsed.data.templateKey },
     },
   );
+  // A plan override moves the tenant's entitlement grants — drop their memoized basis (perf-audit P2.4).
+  invalidateEntitlementBasis(tenantId);
   return c.json({ ok: true, tenantId, plan: parsed.data.templateKey });
 });
 
@@ -1303,6 +1311,10 @@ adminRoutes.put("/feature-flags", requireCapability("flags:manage"), async (c) =
       defaultEnabled: input.default,
     }),
   );
+  // The definition write may move any tenant's evaluated gate (default/global changed) — drop every memo so
+  // the change lands on the next request (perf-audit P2.4; gateMemo.ts owns the reasoning).
+  invalidateAllFlagGates();
+  invalidateAllEntitlementBasis();
   return c.json({ ok: true, key: input.key });
 });
 
@@ -1316,6 +1328,9 @@ adminRoutes.post("/feature-flags/:key/global", requireCapability("flags:manage")
     const found = await featureFlagRepository.setGlobal(tx, key, parsed.data.enabled);
     if (!found) throw new NotFoundError(`Unknown feature flag '${key}'.`);
   });
+  // A global toggle moves every tenant without a per-tenant override — clear all gate memos (see gateMemo.ts).
+  invalidateAllFlagGates();
+  invalidateAllEntitlementBasis();
   return c.json({ ok: true, key, globalEnabled: parsed.data.enabled });
 });
 
@@ -1340,6 +1355,12 @@ adminRoutes.post("/feature-flags/:key/tenant", requireCapability("flags:manage")
     },
     { targetType: "feature_flag", targetId: key, tenantId: tenant_id, metadata: { enabled } },
   );
+  // Land the override on the tenant's next request: their gate memo for this key, the composed channel-read
+  // gate (memoized under its synthetic key — see searchPortProvider), and their entitlement basis (the
+  // enforce switch rides the flag system).
+  invalidateFlagGate(tenant_id, key);
+  invalidateFlagGate(tenant_id, "channel_read_from_child");
+  invalidateEntitlementBasis(tenant_id);
   return c.json({ ok: true, key, tenantId: tenant_id, enabled });
 });
 
