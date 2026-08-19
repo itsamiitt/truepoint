@@ -16,10 +16,15 @@ import { startTelemetry, stopTelemetry } from "./telemetry.ts";
 // fully non-fatal internally, with a defensive .catch as a last resort so an unexpected throw can't crash boot.
 runBootWarmup().catch(() => {});
 
-/** Request-body ceiling. Bun's default is 128 MB, so without this ANY route buffers an arbitrarily large body
- *  into memory before Zod ever rejects it. 2 MB comfortably exceeds every JSON write this API accepts; the
- *  bulk/import upload surfaces enforce their own (larger) admission caps on their own routes. */
-const MAX_REQUEST_BODY_BYTES = 2_000_000;
+/** TRANSPORT backstop only (launch-scale fix): sized to the import admission envelope so the import-upload
+ *  verbs can actually receive their documented 250 MiB CSVs — the old 2 MB value here was server-GLOBAL and
+ *  killed every upload between 2 MB and the envelope before any route logic ran, while this file claimed
+ *  per-route caps that a transport-global ceiling makes impossible. The REAL per-route policy now lives in
+ *  middleware/bodyLimits.ts (2 MB default across /api, the three import verbs at the envelope, each rejected
+ *  via Content-Length/stream metering without buffering). */
+import { IMPORT_UPLOAD_REQUEST_MAX_BYTES } from "@leadwolf/core";
+
+const MAX_REQUEST_BODY_BYTES = IMPORT_UPLOAD_REQUEST_MAX_BYTES;
 
 /** Connection idle timeout (seconds). MUST exceed the SSE heartbeat interval — Bun's default is 10s, which is
  *  SHORTER than the 15s heartbeat in features/events, so the default would silently kill every event stream

@@ -11,9 +11,9 @@ import {
 } from "./features/account-intelligence/index.ts";
 import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
-import { signalRoutes, watchlistRoutes } from "./features/alerts/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
 import { aiSearchRoutes } from "./features/ai/index.ts";
+import { signalRoutes, watchlistRoutes } from "./features/alerts/index.ts";
 import { announcementsRoutes } from "./features/announcements/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
@@ -67,6 +67,7 @@ import {
   workspacesRoutes,
 } from "./features/workspaces/index.ts";
 import { isDraining } from "./lifecycle.ts";
+import { apiBodyLimit } from "./middleware/bodyLimits.ts";
 import { notFound, onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 import { requestId } from "./middleware/requestId.ts";
@@ -154,6 +155,11 @@ app.get("/metrics", (c) => {
 // traffic is charged per-subject inside authn AFTER the token verifies (and a failed verify is billed back to
 // the IP bucket there). See middleware/rateLimit.ts for why the old claims-aware branch here was dead code.
 app.use("/api/*", rateLimit);
+// Request-body policy (middleware/bodyLimits.ts): 2 MB default for every /api route, the import-upload
+// verbs excepted (they enforce the 250 MiB admission envelope at their own routes). Pre-authn on purpose —
+// an oversized body is refused before any verification work, and the old transport-global 2 MB Bun cap
+// this replaces used to kill legitimate import uploads before their admission logic ever ran.
+app.use("/api/*", apiBodyLimit);
 app.route("/api/v1/auth", authRoutes);
 // Extension identity reads (chrome-extension/14 X03/X04): GET /me (display identity for the popup/panel) +
 // GET /orgs (the caller's orgs for the switcher). Each keyed by the token's sub → a user only ever sees their

@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2197,
-  "fileSetHash": "sha256:f6bb023802d0a0772a59d8530ae7af57ba4b6181e14930b3c4c0d1bfc3074da9",
+  "fileCount": 2199,
+  "fileSetHash": "sha256:0717361866af1775423f02d355e0fcb9ee8708ee9a6778963e8940c33a6470ab",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2422,6 +2422,8 @@
     ],
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
+      "apps/api/src/middleware/bodyLimits.test.ts",
+      "apps/api/src/middleware/bodyLimits.ts",
       "apps/api/src/middleware/error.ts",
       "apps/api/src/middleware/extensionScope.test.ts",
       "apps/api/src/middleware/extensionScope.ts",
