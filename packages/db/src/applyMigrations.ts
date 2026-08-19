@@ -390,12 +390,12 @@ const GRANTS = `
   -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
   -- policy are authored by staff, not by an ingest path.
   GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
-  -- Industry taxonomy (0128, MI-S3): shared REFERENCE data. The er role resolves aliases at landing;
-  -- the APP role gets SELECT deliberately (unlike master_signal_types) — the facet/label join runs inside
-  -- tenant transactions, and denormalizing labels onto every account row would be the real inconsistency.
-  -- Writes stay revoked everywhere (curation is staff/migration work).
+  -- Industry taxonomy (0128, MI-S3): shared REFERENCE data, er-read only. The app role deliberately gets
+  -- NOTHING — the ^master_ wall (layerZeroWall.test.ts) admits no exceptions, and it is executable. Any
+  -- customer-facing label/facet read goes through an API seam under withErTx (the market routes' pattern)
+  -- or a denormalized label column, never an app-role join. Writes revoked everywhere (curation is
+  -- staff/migration work).
   GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_er;
-  GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_app;
   -- Market rollups (0130, MI-S7): a derived, non-PII aggregate cache. er gets SELECT only (the API read
   -- seam); the rebuild runs on the OWNER connection inside the system sweep — the deliberate exception
   -- that keeps er's never-DELETE posture intact (reasoned in the migration header).

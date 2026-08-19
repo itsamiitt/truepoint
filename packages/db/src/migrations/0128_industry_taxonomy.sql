@@ -12,10 +12,10 @@
 -- hand-authored by the fold. The seeded vocabulary is a STARTING POINT for curation (the 0107
 -- philosophy): tuning is an INSERT/UPDATE on these rows, not a deploy.
 --
--- ACL: master_-prefixed, so the ^master_ convention REVOKE covers writes. Unlike master_signal_types
--- (revoked from the app "for consistency"), the app DOES get SELECT here — the facet/label join runs
--- inside tenant transactions and denormalizing labels onto every account row would be the real
--- inconsistency. Explicit grants in applyMigrations.ts.
+-- ACL: master_-prefixed, so the ^master_ wall covers the app role entirely (layerZeroWall.test.ts —
+-- no exceptions, executable). er gets SELECT (alias resolution at landing); customer-facing labels go
+-- through an API seam under withErTx or a denormalized column, never an app-role join. Explicit
+-- grants in applyMigrations.ts.
 
 CREATE TABLE IF NOT EXISTS "master_industries" (
   "id" uuid PRIMARY KEY DEFAULT uuid_generate_v7(),

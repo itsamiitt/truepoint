@@ -3,10 +3,10 @@
 // the raw vendor truth; `industry_id` on master_companies/accounts is the CANONICAL node — a derived
 // column resolved at landing / backfill (the current_company_id posture), never written by the fold.
 //
-// ACCESS: shared REFERENCE data. Writes revoked everywhere (curation = staff/migration work); SELECT
-// granted to BOTH leadwolf_er (alias resolution at landing) and leadwolf_app (the facet/label join runs
-// inside tenant transactions) — see applyMigrations.ts for why this deliberately differs from
-// master_signal_types.
+// ACCESS: shared REFERENCE data, er-read ONLY — the ^master_ wall (layerZeroWall.test.ts) admits no
+// app-role exception, and it is executable. Customer-facing label/facet reads go through an API seam
+// under withErTx (the market routes' pattern) or a denormalized label column. Writes revoked
+// everywhere (curation is staff/migration work).
 
 import { sql } from "drizzle-orm";
 import { customType, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
