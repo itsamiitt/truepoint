@@ -11,6 +11,9 @@ const BREAKER_COOLDOWN_MS = 60_000; // half-open probe after cooldown
 interface BreakerState {
   consecutiveErrors: number;
   openedAt: number | null;
+  /** Vendor-declared throttle horizon (perf-audit P1.9): a 429's Retry-After blocks the provider until it
+   *  elapses, instead of paying it another full-timeout call on the very next job in the waterfall. */
+  blockedUntil: number | null;
 }
 
 const breakers = new Map<string, BreakerState>();
@@ -18,7 +21,7 @@ const breakers = new Map<string, BreakerState>();
 function breakerFor(name: string): BreakerState {
   let s = breakers.get(name);
   if (!s) {
-    s = { consecutiveErrors: 0, openedAt: null };
+    s = { consecutiveErrors: 0, openedAt: null, blockedUntil: null };
     breakers.set(name, s);
   }
   return s;
@@ -26,6 +29,7 @@ function breakerFor(name: string): BreakerState {
 
 export function breakerOpen(name: string, now = Date.now()): boolean {
   const s = breakerFor(name);
+  if (s.blockedUntil !== null && now < s.blockedUntil) return true; // vendor said when — believe it
   if (s.openedAt === null) return false;
   if (now - s.openedAt >= BREAKER_COOLDOWN_MS) return false; // half-open: allow a probe
   return true;
@@ -36,15 +40,32 @@ export function recordOutcome(name: string, ok: boolean, now = Date.now()): void
   if (ok) {
     s.consecutiveErrors = 0;
     s.openedAt = null;
+    s.blockedUntil = null;
     return;
   }
   s.consecutiveErrors += 1;
   if (s.consecutiveErrors >= BREAKER_THRESHOLD) s.openedAt = now;
 }
 
+/** A provider answered 429 (perf-audit P1.9). The old accounting treated it as one strike of three, so a
+ *  throttled vendor was still paid two more full-timeout calls before its breaker opened — and the vendor's
+ *  own Retry-After was discarded. One 429 now blocks the provider for exactly the declared window (or the
+ *  standard cooldown when it sent none); the next hit/miss clears it via recordOutcome. */
+export function recordRateLimited(name: string, retryAfterMs?: number, now = Date.now()): void {
+  const s = breakerFor(name);
+  s.blockedUntil = now + Math.max(1, retryAfterMs ?? BREAKER_COOLDOWN_MS);
+}
+
 /** Test seam: reset all breaker state. */
 export function resetBreakers(): void {
   breakers.clear();
+}
+
+/** Route one call's outcome into the breaker: a 429 carries its own horizon (recordRateLimited); hit/miss
+ *  clear the state; a thrown/errored call strikes toward the 3-consecutive threshold. */
+function recordResult(name: string, result: ProviderResult): void {
+  if (result.status === "rate_limited") recordRateLimited(name, result.retryAfterMs);
+  else recordOutcome(name, result.status === "hit" || result.status === "miss");
 }
 
 /** The waterfall ordering score: trust ÷ estimated cost (06 §4), clamped so a sub-1µ cost can't blow up. */
@@ -79,7 +100,7 @@ export async function runWaterfall(
       status: result.status,
       costMicros: result.costMicros,
     });
-    recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
+    recordResult(provider.name, result);
     if (result.status === "hit") return { provider: provider.name, result, attempts };
   }
   return { provider: null, result: null, attempts };
@@ -143,7 +164,7 @@ export async function runWaterfallBulk(
         status: result.status,
         costMicros: result.costMicros,
       });
-      recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
+      recordResult(provider.name, result);
     }
     let best: { provider: EnrichmentProvider; result: ProviderResult } | null = null;
     for (const candidate of results) {
@@ -166,7 +187,7 @@ export async function runWaterfallBulk(
       status: result.status,
       costMicros: result.costMicros,
     });
-    recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
+    recordResult(provider.name, result);
     if (result.status === "hit") return { provider: provider.name, result, attempts };
   }
 

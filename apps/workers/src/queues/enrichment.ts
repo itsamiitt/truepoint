@@ -9,8 +9,15 @@
 
 import { type EnrichContactResult, type EnrichDeps, enrichContact } from "@leadwolf/core";
 import { defaultProviders } from "@leadwolf/integrations";
-import { ENRICHMENT_DLQ, ENRICHMENT_QUEUE, type EnrichmentJobData } from "@leadwolf/types";
-import type { Job } from "bullmq";
+import {
+  ENRICHMENT_DLQ,
+  ENRICHMENT_QUEUE,
+  type EnrichmentJobData,
+  NotFoundError,
+  ProviderBudgetExceededError,
+  ValidationError,
+} from "@leadwolf/types";
+import { type Job, UnrecoverableError } from "bullmq";
 
 // Queue + DLQ names AND the job-data contract live in @leadwolf/types (the api's 202 producer shares
 // them; reverification precedent) and are RE-EXPORTED here so register.ts keeps importing them from this
@@ -34,17 +41,35 @@ export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
     job: Job<EnrichmentJobData>,
   ): Promise<EnrichContactResult> {
     const { tenantId, workspaceId, contactId, fields, requestedByUserId, providerOrder } = job.data;
-    const result = await enrichContact(
-      {
-        scope: { tenantId, workspaceId },
-        contactId,
-        fields,
-        providers: defaultProviders(),
-        requestedByUserId,
-        providerOrder,
-      },
-      deps.enrich,
-    );
+    let result: EnrichContactResult;
+    try {
+      result = await enrichContact(
+        {
+          scope: { tenantId, workspaceId },
+          contactId,
+          fields,
+          providers: defaultProviders(),
+          requestedByUserId,
+          providerOrder,
+        },
+        deps.enrich,
+      );
+    } catch (err) {
+      // Permanent-failure classification (perf-audit P1.7). These cannot succeed on a 30s/60s backoff
+      // retry — the daily budget resets at UTC midnight, a deleted contact stays deleted, a malformed
+      // payload stays malformed — so retrying burned the full attempts budget per job for nothing (a
+      // budget-exhausted workspace produced 3 doomed vendor-adjacent attempts on EVERY subsequent job
+      // until midnight). UnrecoverableError fails the job immediately; the failed-listener still records
+      // it to the DLQ, where it is inspectable and replayable once the cause has actually changed.
+      if (
+        err instanceof ProviderBudgetExceededError ||
+        err instanceof NotFoundError ||
+        err instanceof ValidationError
+      ) {
+        throw new UnrecoverableError(`${err.name}: ${err.message}`);
+      }
+      throw err;
+    }
     // v2 deferral: every capable provider was throttle-denied and nothing was filled — try again after
     // the smallest vendor-suggested delay. Deferred, never dropped; the re-enqueued job re-reads the
     // cache first, so a concurrent fill costs nothing. CAPPED at MAX_DEFERRALS so a permanently

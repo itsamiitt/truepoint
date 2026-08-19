@@ -34,6 +34,7 @@ import {
   type BulkEstimateAction,
   type BulkSpendEstimate,
   type ContactQuery,
+  FeatureDisabledError,
   ForbiddenError,
   NotFoundError,
   type OutreachStatus,
@@ -340,17 +341,25 @@ export interface BulkEnrichInput extends BulkActor, BulkSelectionInput {}
  * enqueue time. NOT audited: the closed 08 §5 enum has no enrichment-job action; the job row is the durable record.
  * Returns { affected, jobId }.
  *
- * SPEND ROUTING (prospect-database-platform I3 / audit A3/P08):
- *  - BULK_ENRICHMENT_ENABLED OFF (default): BYTE-IDENTICAL to the shipped behaviour — the row is created `queued`.
- *    Nothing consumes `queued` bulk-enrich jobs, so it stays an inert orphan exactly as today (no worker, no spend).
+ * SPEND ROUTING (prospect-database-platform I3 / audit A3/P08; gate-off posture amended by perf-audit P1.8):
+ *  - BULK_ENRICHMENT_ENABLED OFF (default): 409 `feature_disabled` — no row is created. The I3 posture
+ *    minted an inert `queued` row here ("byte-identical, no worker, no spend"), which was rollout-safe but
+ *    lied to the user: nothing would EVER consume it, `queued` is not a terminal status, so the enrichment
+ *    jobs page polled the orphan every 5s forever — the literal "the action doesn't respond" complaint.
+ *    A typed 409 shows an honest "not available" toast instead of a permanently-stuck job.
  *  - BULK_ENRICHMENT_ENABLED ON: the row is created `estimating`, then the WORST-CASE ceiling
  *    (contactIds.length × the placeholder per-match cost) is persisted and the confirm gate is ARMED
  *    (→ awaiting_confirmation). The run spends NOTHING until a human confirms the shown ceiling
- *    (POST /enrichment/jobs/:jobId/confirm), which enqueues the drive. The response shape is unchanged in both cases.
+ *    (POST /enrichment/jobs/:jobId/confirm), which enqueues the drive.
  */
 export async function bulkEnrich(
   input: BulkEnrichInput,
 ): Promise<{ affected: number; jobId: string }> {
+  if (!env.BULK_ENRICHMENT_ENABLED) {
+    throw new FeatureDisabledError(
+      "Bulk enrichment is not enabled on this deployment. Ask an administrator to enable it.",
+    );
+  }
   // Resolve the visible ids in their own short tx (createJob opens its own withTenantTx).
   const ids = await withBulkTx(input.scope, (tx) =>
     resolveVisibleSelection(tx, input.scope.tenantId, input),
@@ -359,27 +368,19 @@ export async function bulkEnrich(
     // Nothing visible to enrich — surface 404 rather than create an empty job.
     throw new NotFoundError("No matching contacts to enrich in this workspace.");
   }
-  const enabled = env.BULK_ENRICHMENT_ENABLED;
   const job = await enrichmentJobRepository.createJob(input.scope, {
     tenantId: input.scope.tenantId,
     workspaceId: input.scope.workspaceId,
     createdByUserId: input.callerUserId,
     sourceFile: "bulk-reenrich",
     sourceName: "manual",
-    // OFF → `queued` (byte-identical orphan). ON → `estimating` (armed for the confirm gate below).
-    status: enabled ? "estimating" : "queued",
+    status: "estimating",
     totalRows: ids.length,
     options: { mode: "bulk_reverify", contactIds: ids },
   });
-  if (enabled) {
-    // Persist the worst-case ceiling + arm the confirm gate (estimating → awaiting_confirmation). No spend yet.
-    const ceilingMicros = ids.length * env.ENRICH_COST_MICROS_PER_MATCH;
-    await enrichmentJobRepository.setEstimateAwaitingConfirmation(
-      input.scope,
-      job.id,
-      ceilingMicros,
-    );
-  }
+  // Persist the worst-case ceiling + arm the confirm gate (estimating → awaiting_confirmation). No spend yet.
+  const ceilingMicros = ids.length * env.ENRICH_COST_MICROS_PER_MATCH;
+  await enrichmentJobRepository.setEstimateAwaitingConfirmation(input.scope, job.id, ceilingMicros);
   return { affected: ids.length, jobId: job.id };
 }
 

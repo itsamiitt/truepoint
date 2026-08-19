@@ -156,6 +156,18 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * A capability the deployment has switched off (an env/rollout gate, not a permission): the request was
+ * well-formed and authorized, but the feature it targets is not enabled here. 409 `feature_disabled` so the
+ * client shows an honest "not available" instead of a fabricated success — the alternative this replaced
+ * was minting an inert job row the UI then polled forever (perf-audit P1.8).
+ */
+export class FeatureDisabledError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 409, code: "feature_disabled", title: "Feature not enabled", detail });
+  }
+}
+
+/**
  * Contact TRUE-MERGE legality — a merge input is already merged/tombstoned (import-and-data-model-redesign
  * 04 §API/§pre-build edge): loser already merged, or survivor tombstoned. 409 `contact_merged` carrying a
  * `mergedInto` extension member so a stale reference resolves to the survivor (the same code a 410-style
