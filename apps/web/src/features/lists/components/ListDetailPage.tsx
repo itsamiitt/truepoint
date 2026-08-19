@@ -39,6 +39,7 @@ import {
   StateSwitch,
   StatusBadge,
   type StatusTone,
+  TableSkeleton,
   Tooltip,
   TpButton,
   useToast,
@@ -391,6 +392,7 @@ export function ListDetailPage({ listId }: { listId: string }) {
         error={error}
         empty={!loading && members.length === 0}
         onRetry={reload}
+        skeleton={<TableSkeleton rows={10} />}
         emptyState={
           <EmptyState
             icon={<Users size={28} />}

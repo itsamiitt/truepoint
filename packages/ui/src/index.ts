@@ -21,6 +21,7 @@ export { Icon, type IconComponent } from "./components/Icon.tsx";
 export {
   Skeleton,
   LoadingState,
+  TableSkeleton,
   EmptyState,
   ErrorState,
   StateSwitch,

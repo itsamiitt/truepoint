@@ -18,6 +18,7 @@ import {
   Progress,
   StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
 } from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
@@ -179,6 +180,7 @@ export function ImportJobsHistoryPage() {
           error={errMsg}
           empty={!isLoading && visible.length === 0}
           onRetry={() => void refetch()}
+          skeleton={<TableSkeleton rows={8} columns={[10, 5, 6, 5, 4]} />}
           emptyState={
             notEnabled ? (
               <EmptyState

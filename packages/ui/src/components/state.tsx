@@ -63,6 +63,69 @@ export function LoadingState({
   );
 }
 
+/** A TABLE-shaped loading body (perf-audit P3.6b; design-skill Loading: "skeletons match the shape of the
+ *  content they replace — a skeleton that looks nothing like the result causes a jarring layout shift").
+ *  LoadingState above is the avatar-and-two-lines CARD shape; putting it in front of a DataTable made every
+ *  grid's first paint lie about what was coming. This renders a muted header band + `rows` rows of
+ *  per-column shimmer blocks; `columns` is the relative flex weight per column, so a call site that knows
+ *  its real column layout can match it (the default approximates the app's list surfaces: select, name,
+ *  company, two data columns, actions). Same tp-skeleton shimmer — opacity-only, reduced-motion-safe. */
+export function TableSkeleton({
+  rows = 8,
+  columns = [2, 12, 10, 8, 8, 2],
+  label = "Loading table",
+  style,
+}: {
+  rows?: number;
+  /** Relative flex weight per column (length = column count). */
+  columns?: number[];
+  label?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      // biome-ignore lint/a11y/useSemanticElements: skeleton container holds block children; <output> takes phrasing only
+      role="status"
+      aria-label={label}
+      aria-busy="true"
+      style={{ display: "flex", flexDirection: "column", gap: 0, padding: "4px 0", ...style }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          padding: "8px 12px",
+          borderBottom: "1px solid var(--tp-hairline-2)",
+        }}
+      >
+        {columns.map((weight, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder cells have no stable id
+          <Skeleton key={i} width="auto" height={9} style={{ flex: weight, opacity: 0.7 }} />
+        ))}
+      </div>
+      {Array.from({ length: rows }, (_, r) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder rows have no stable id
+          key={r}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            padding: "0 12px",
+            minHeight: "var(--tp-row-h, 44px)",
+            borderBottom: "1px solid var(--tp-hairline-2)",
+          }}
+        >
+          {columns.map((weight, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder cells have no stable id
+            <Skeleton key={i} width="auto" height={12} style={{ flex: weight }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The quiet empty state (04 §5): one muted glyph max, a title, an optional description + single action. */
 export function EmptyState({
   icon,

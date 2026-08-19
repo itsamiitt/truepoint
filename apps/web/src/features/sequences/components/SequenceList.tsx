@@ -12,6 +12,7 @@ import {
   Progress,
   StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
 } from "@leadwolf/ui";
 import { ListPlus, Pause, Play } from "lucide-react";
@@ -159,6 +160,7 @@ export function SequenceList({
         error={error}
         onRetry={onRetry}
         empty={sequences.length === 0}
+        skeleton={<TableSkeleton rows={8} columns={[12, 5, 4, 4, 3]} />}
         emptyState={
           <EmptyState
             icon={<Icon icon={ListPlus} size={28} />}

@@ -13,6 +13,7 @@ import {
   type MenuItem,
   StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
   TpIconButton,
   TpInput,
@@ -207,6 +208,7 @@ export function ListsPage() {
         error={error}
         empty={!loading && shown.length === 0}
         onRetry={reload}
+        skeleton={<TableSkeleton rows={8} columns={[12, 4, 6, 2]} />}
         emptyState={
           <EmptyState
             icon={<ListChecks size={28} />}

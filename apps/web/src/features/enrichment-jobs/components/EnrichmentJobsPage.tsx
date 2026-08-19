@@ -14,6 +14,7 @@ import {
   Progress,
   StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
 } from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
@@ -122,6 +123,7 @@ export function EnrichmentJobsPage() {
           error={error && jobs.length === 0 ? error : undefined}
           empty={!loading && jobs.length === 0}
           onRetry={reload}
+          skeleton={<TableSkeleton rows={8} columns={[10, 5, 6, 5, 4]} />}
           emptyState={
             <EmptyState
               icon={<Database size={20} />}

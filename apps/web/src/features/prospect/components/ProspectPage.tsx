@@ -16,6 +16,7 @@ import {
   EmptyState,
   SegmentedControl,
   StateSwitch,
+  TableSkeleton,
   Tooltip,
   TpButton,
   TpInput,
@@ -386,6 +387,7 @@ function ProspectPageInner() {
             error={error}
             empty={!loading && hits.length === 0}
             onRetry={reload}
+            skeleton={<TableSkeleton rows={10} />}
             emptyState={
               <EmptyState
                 icon={<Users size={28} />}
