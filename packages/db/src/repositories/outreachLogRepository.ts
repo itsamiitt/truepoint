@@ -123,14 +123,27 @@ export const outreachLogRepository = {
       .where(and(eq(outreachLog.id, logId), inArray(outreachLog.status, ["enrolled", "active"])));
   },
 
-  /** Newest-first enrollment log for a sequence (GET /outreach/sequences/:id/log). RLS-scoped. */
+  /** Newest-first enrollment log for a sequence (GET /outreach/sequences/:id/log). RLS-scoped.
+   *
+   *  KEYSET-paginated (perf-audit P2.6 tail — the last real-growth list): this was a hard 200 with no
+   *  cursor, so a big sequence's older enrollments were unreachable, and same-timestamp bulk enrollments
+   *  had non-deterministic edges without the id tiebreaker. Keyset over (last_event_at DESC, id DESC);
+   *  a row whose last_event_at moves mid-pagination can shift pages — the normal tradeoff of paging an
+   *  activity-ordered log, and what the UI's ordering asks for. */
   async listBySequence(
     scope: TenantScope,
     sequenceId: string,
     limit = 200,
-  ): Promise<OutreachLogRow[]> {
-    return withTenantTx(scope, (tx) =>
-      tx
+    cursor: { lastEventAt: Date; id: string } | null = null,
+  ): Promise<{ entries: OutreachLogRow[]; nextCursor: { lastEventAt: Date; id: string } | null }> {
+    return withTenantTx(scope, async (tx) => {
+      const conds = [eq(outreachLog.sequenceId, sequenceId)];
+      if (cursor) {
+        conds.push(
+          sql`(${outreachLog.lastEventAt}, ${outreachLog.id}) < (${cursor.lastEventAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`,
+        );
+      }
+      const rows = await tx
         .select({
           id: outreachLog.id,
           contactId: outreachLog.contactId,
@@ -139,10 +152,17 @@ export const outreachLogRepository = {
           lastEventAt: outreachLog.lastEventAt,
         })
         .from(outreachLog)
-        .where(eq(outreachLog.sequenceId, sequenceId))
-        .orderBy(desc(outreachLog.lastEventAt))
-        .limit(limit),
-    );
+        .where(and(...conds))
+        .orderBy(desc(outreachLog.lastEventAt), desc(outreachLog.id))
+        .limit(limit + 1);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      return {
+        entries: page,
+        nextCursor: hasMore && last ? { lastEventAt: last.lastEventAt, id: last.id } : null,
+      };
+    });
   },
 
   /** Roll the contact-level outreach_status up to in_sequence (05 §13). RLS scopes the row; raw SQL so the

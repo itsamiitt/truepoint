@@ -129,11 +129,35 @@ outreachRoutes.get("/sequences/:id/log", async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to view the enrollment log.");
-  const entries = await outreachLogRepository.listBySequence(
+  // Keyset cursor (perf-audit P2.6 tail): the log was a hard 200 with no next page. ADDITIVE — the
+  // existing panel keeps ignoring `nextCursor`; a malformed cursor degrades to the first page.
+  const limit = Math.min(Number(c.req.query("limit") ?? 200) || 200, 200);
+  const rawCursor = c.req.query("cursor");
+  let cursor: { lastEventAt: Date; id: string } | null = null;
+  if (rawCursor) {
+    try {
+      const [iso, id] = Buffer.from(rawCursor, "base64url").toString("utf8").split("|");
+      const lastEventAt = iso ? new Date(iso) : null;
+      if (lastEventAt && !Number.isNaN(lastEventAt.getTime()) && id) cursor = { lastEventAt, id };
+    } catch {
+      /* malformed cursor → first page */
+    }
+  }
+  const page = await outreachLogRepository.listBySequence(
     { tenantId: c.get("tenantId"), workspaceId },
     c.req.param("id"),
+    limit,
+    cursor,
   );
-  return c.json({ entries });
+  return c.json({
+    entries: page.entries,
+    nextCursor: page.nextCursor
+      ? Buffer.from(
+          `${page.nextCursor.lastEventAt.toISOString()}|${page.nextCursor.id}`,
+          "utf8",
+        ).toString("base64url")
+      : null,
+  });
 });
 
 // Inline dev send (M9: consoleSender, no real network); scheduled delivery runs on the outreach queue.
