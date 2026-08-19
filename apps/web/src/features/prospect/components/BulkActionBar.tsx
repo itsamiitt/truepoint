@@ -142,6 +142,12 @@ export function BulkActionBar({
   const { count, allMatching, toBulkSelection, clear, selectAllMatching } = selection;
   const revealable = revealableIds.length;
   const me = currentUserId();
+  // Past this, explicit-id reveals reroute to the ASYNC job dialog (perf-audit P3.4): the serial client loop
+  // is one money round trip per contact — 50 selected was 50 sequential requests behind a modal — and the
+  // rl:reveal per-minute throttle turns big serial runs into silent per-row failures. Small selections keep
+  // the inline loop: instant in-grid values beat a background job for a handful of rows.
+  const JOB_REVEAL_THRESHOLD = 25;
+  const revealViaJob = allMatching || revealable > JOB_REVEAL_THRESHOLD;
 
   /** The server selection for the current mode, or null when nothing is selected. */
   const sel = useCallback(() => toBulkSelection(query), [toBulkSelection, query]);
@@ -316,11 +322,13 @@ export function BulkActionBar({
           <TpButton
             variant="primary"
             size="sm"
-            onClick={() => (allMatching ? setRevealingAll(true) : setRevealing(true))}
+            onClick={() => (revealViaJob ? setRevealingAll(true) : setRevealing(true))}
             disabled={!allMatching && revealable === 0}
             title={
-              allMatching
-                ? "Reveal every matching contact (runs in the background)"
+              revealViaJob
+                ? allMatching
+                  ? "Reveal every matching contact (runs in the background)"
+                  : "Reveal the selected contacts (runs in the background)"
                 : revealable === 0
                   ? "No selected contacts need a reveal"
                   : undefined
@@ -371,12 +379,15 @@ export function BulkActionBar({
         }}
       />
 
-      {/* Async job path — reveal EVERY matching contact (select-all). Degrades gracefully while the feature
-          is dark (confirm 403 → "rolling out"). */}
+      {/* Async job path — select-all-matching AND explicit selections past the reroute threshold (P3.4).
+          Explicit mode keeps the serial loop's "email" reveal type, so rerouting never changes what a click
+          spends. Degrades gracefully while the feature is dark (confirm 403 → "rolling out"). */}
       <BulkRevealJobDialog
         open={revealingAll}
         onClose={() => setRevealingAll(false)}
-        criteria={query}
+        criteria={allMatching ? query : undefined}
+        contactIds={allMatching ? undefined : revealableIds}
+        revealType={allMatching ? undefined : "email"}
         onDone={() => {
           onMutated?.();
           clear();

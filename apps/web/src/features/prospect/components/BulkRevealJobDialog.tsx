@@ -1,8 +1,11 @@
-// BulkRevealJobDialog.tsx — the ASYNC bulk-reveal flow (Phase 3), used when the user selects ALL matching
-// results (the synchronous client loop can't do that). On open it creates a job (server-resolves the criteria
-// to visible ids + sizes the worst-case estimate — spends nothing); the user confirms (leases the ceiling +
-// starts a worker run); a live progress bar polls the job; on completion a revealed CSV is downloadable. While
-// the feature is dark (BULK_REVEAL_ENABLED off) confirm returns 403 and we degrade gracefully.
+// BulkRevealJobDialog.tsx — the ASYNC bulk-reveal flow (Phase 3): select-all-matching (criteria mode — the
+// synchronous client loop can't do that) AND, since perf-audit P3.4, LARGE explicit selections (contactIds
+// mode) — the serial one-request-per-contact loop put 50+ sequential money round trips behind a modal and
+// raced the rl:reveal per-minute throttle, whose 429s the loop counted as silent per-row failures. On open it
+// creates a job (server-resolves/validates the targets + sizes the worst-case estimate — spends nothing); the
+// user confirms (leases the ceiling + starts a worker run); a live progress bar polls the job; on completion
+// a revealed CSV is downloadable. While the feature is dark (BULK_REVEAL_ENABLED off) confirm returns 403 and
+// we degrade gracefully.
 "use client";
 
 import type { ContactQuery, RevealJobEstimate, RevealType } from "@leadwolf/types";
@@ -25,13 +28,17 @@ export function BulkRevealJobDialog({
   open,
   onClose,
   criteria,
+  contactIds,
   revealType = "full_profile",
   onDone,
 }: {
   open: boolean;
   onClose: () => void;
-  /** The active search query — the job reveals every VISIBLE contact matching it (resolved server-side). */
-  criteria: ContactQuery;
+  /** Select-all mode: the active search query — the job reveals every VISIBLE match (resolved server-side).
+   *  Exactly one of criteria/contactIds is provided by the caller. */
+  criteria?: ContactQuery;
+  /** Explicit-id mode (P3.4): the selected revealable ids, rerouted here past the reroute threshold. */
+  contactIds?: string[];
   revealType?: RevealType;
   /** Called after a run finishes so the parent can refresh the grid + clear the selection. */
   onDone?: () => void;
@@ -54,7 +61,7 @@ export function BulkRevealJobDialog({
     setMessage(null);
     setJobId(null);
     setActiveJobId(null);
-    createBulkRevealJob({ revealType, criteria })
+    createBulkRevealJob(contactIds ? { revealType, contactIds } : { revealType, criteria })
       .then((est) => {
         if (!live) return;
         setEstimate(est);
@@ -69,7 +76,7 @@ export function BulkRevealJobDialog({
     return () => {
       live = false;
     };
-  }, [open, criteria, revealType]);
+  }, [open, criteria, contactIds, revealType]);
 
   const onConfirm = useCallback(async () => {
     if (!jobId) return;
@@ -81,7 +88,9 @@ export function BulkRevealJobDialog({
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) {
         setMessage(
-          "Bulk reveal across all matching results is rolling out. For now, select specific rows.",
+          contactIds
+            ? "Background bulk reveal is rolling out. For now, reveal in smaller selections."
+            : "Bulk reveal across all matching results is rolling out. For now, select specific rows.",
         );
         setPhase("disabled");
       } else if (e instanceof ApiError && e.code === "insufficient_credits") {
@@ -94,7 +103,7 @@ export function BulkRevealJobDialog({
     } finally {
       setConfirming(false);
     }
-  }, [jobId]);
+  }, [jobId, contactIds]);
 
   const onDownload = useCallback(async () => {
     if (!jobId) return;
@@ -160,16 +169,24 @@ export function BulkRevealJobDialog({
       </TpButton>
     );
 
+  const targetWord = contactIds ? "selected" : "matching";
+  const whatLabel = revealType === "full_profile" ? "the full profile" : `the ${revealType}`;
   return (
-    <Dialog open={open} onClose={close} title="Reveal all matching" footer={footer} maxWidth={460}>
+    <Dialog
+      open={open}
+      onClose={close}
+      title={contactIds ? "Reveal selected" : "Reveal all matching"}
+      footer={footer}
+      maxWidth={460}
+    >
       {phase === "loading" && <p className={styles.revealMeta}>Preparing the reveal…</p>}
 
       {phase === "estimate" && estimate && (
         <>
           <p className={styles.dialogNote}>
-            Reveals the full profile for <strong>{estimate.totalContacts.toLocaleString()}</strong>{" "}
-            matching contact{estimate.totalContacts === 1 ? "" : "s"}. Runs in the background; you
-            only pay for valid data. Already-owned contacts are free.
+            Reveals {whatLabel} for <strong>{estimate.totalContacts.toLocaleString()}</strong>{" "}
+            {targetWord} contact{estimate.totalContacts === 1 ? "" : "s"}. Runs in the background;
+            you only pay for valid data. Already-owned contacts are free.
           </p>
           <p className={styles.revealMeta}>
             Costs up to{" "}
