@@ -69,6 +69,22 @@ import { BulkRevealJobDialog } from "./BulkRevealJobDialog";
 /** The resolved server selection (never null inside `run`, which guards it). */
 type BulkSelectionResolved = BulkSelection;
 
+/**
+ * What a completed bulk mutation changed, so the host can patch its cached rows / invalidate the narrow
+ * keys instead of refetching every loaded page (perf-audit P3.3b). Emitted only for explicit-id selections —
+ * "all N matching" resolves server-side, so those mutations complete with `undefined` and the host reloads.
+ */
+export type BulkMutationEffect =
+  | { kind: "status"; ids: string[]; outreachStatus: OutreachStatus }
+  | { kind: "owner"; ids: string[]; ownerUserId: string | null }
+  | { kind: "archived"; ids: string[] }
+  /** Tag membership changed — grid rows don't render tags; only the per-tag id lists + usage counts are stale. */
+  | { kind: "tags"; tagIds: string[] }
+  /** List membership changed — nothing on this grid is affected; the lists feature's caches are stale. */
+  | { kind: "list"; listId: string }
+  /** Work was queued server-side (enrich/re-verify) — row values land when the job completes, not now. */
+  | { kind: "queued" };
+
 /** Which secondary dialog (picker) is open, if any. */
 type ActiveDialog =
   | null
@@ -114,8 +130,9 @@ export function BulkActionBar({
   onRequestHandled?: () => void;
   /** Fired with the ids that were revealed so the parent can flip rows + clear the selection. */
   onRevealed: (revealedIds: string[]) => void;
-  /** Fired after any non-reveal mutation so the parent can reload the grid + clear the selection. */
-  onMutated?: () => void;
+  /** Fired after any non-reveal mutation so the parent can sync the grid + clear the selection. The effect
+   *  says exactly what changed when that's known client-side (explicit ids); `undefined` = reload. */
+  onMutated?: (effect?: BulkMutationEffect) => void;
   /**
    * Hide the "Select all N matching" escalation. Surfaces that aren't backed by the workspace search query
    * (e.g. a list's members — where `query` is not the membership criteria) pass this so the bar never offers
@@ -176,11 +193,14 @@ export function BulkActionBar({
     };
   }, [dialog, sel]);
 
-  /** Run a bulk mutation: resolve the selection, await it, toast the affected count, then reload + clear. */
+  /** Run a bulk mutation: resolve the selection, await it, toast the affected count, then sync + clear.
+   *  `effect` (optional) describes the change for explicit-id selections so the host can patch instead of
+   *  reload; select-all-matching always completes with `undefined` (ids unknown client-side). */
   const run = useCallback(
     async (
       label: string,
       fn: (selection: NonNullable<BulkSelectionResolved>) => Promise<number>,
+      effect?: (explicitIds: string[]) => BulkMutationEffect,
     ) => {
       const selection = sel();
       if (!selection) return;
@@ -191,7 +211,7 @@ export function BulkActionBar({
           `${label} — ${affected.toLocaleString()} contact${affected === 1 ? "" : "s"}`,
         );
         setDialog(null);
-        onMutated?.();
+        onMutated?.(selection.contactIds && effect ? effect(selection.contactIds) : undefined);
         clear();
       } catch (e) {
         const msg =
@@ -413,7 +433,7 @@ export function BulkActionBar({
               `Added to list — ${affected.toLocaleString()} contact${affected === 1 ? "" : "s"}`,
             );
             setDialog(null);
-            onMutated?.();
+            onMutated?.({ kind: "list", listId });
             clear();
           } catch (e) {
             toast.error("Could not add to list", e instanceof Error ? e.message : undefined);
@@ -456,7 +476,11 @@ export function BulkActionBar({
               variant="secondary"
               disabled={busy}
               onClick={() =>
-                void run("Cleared owner", async (s) => (await bulkAssignOwner(s, null)).affected)
+                void run(
+                  "Cleared owner",
+                  async (s) => (await bulkAssignOwner(s, null)).affected,
+                  (ids) => ({ kind: "owner", ids, ownerUserId: null }),
+                )
               }
             >
               Clear owner
@@ -465,7 +489,11 @@ export function BulkActionBar({
               <TpButton
                 disabled={busy}
                 onClick={() =>
-                  void run("Assigned to me", async (s) => (await bulkAssignOwner(s, me)).affected)
+                  void run(
+                    "Assigned to me",
+                    async (s) => (await bulkAssignOwner(s, me)).affected,
+                    (ids) => ({ kind: "owner", ids, ownerUserId: me }),
+                  )
                 }
               >
                 Assign to me
@@ -485,7 +513,11 @@ export function BulkActionBar({
         count={count}
         onClose={() => setDialog(null)}
         onConfirm={(tagIds) =>
-          run("Added tags", async (s) => (await bulkAddTags(s, tagIds)).affected)
+          run(
+            "Added tags",
+            async (s) => (await bulkAddTags(s, tagIds)).affected,
+            () => ({ kind: "tags", tagIds }),
+          )
         }
       />
 
@@ -498,7 +530,11 @@ export function BulkActionBar({
         count={count}
         onClose={() => setDialog(null)}
         onConfirm={(tagIds) =>
-          run("Removed tags", async (s) => (await bulkRemoveTags(s, tagIds)).affected)
+          run(
+            "Removed tags",
+            async (s) => (await bulkRemoveTags(s, tagIds)).affected,
+            () => ({ kind: "tags", tagIds }),
+          )
         }
       />
 
@@ -509,7 +545,11 @@ export function BulkActionBar({
         count={count}
         onClose={() => setDialog(null)}
         onConfirm={(status) =>
-          run("Changed status", async (s) => (await bulkChangeStatus(s, status)).affected)
+          run(
+            "Changed status",
+            async (s) => (await bulkChangeStatus(s, status)).affected,
+            (ids) => ({ kind: "status", ids, outreachStatus: status }),
+          )
         }
       />
 
@@ -554,7 +594,11 @@ export function BulkActionBar({
             <TpButton
               disabled={busy}
               onClick={() =>
-                void run("Queued enrichment", async (s) => (await bulkEnrich(s)).affected)
+                void run(
+                  "Queued enrichment",
+                  async (s) => (await bulkEnrich(s)).affected,
+                  () => ({ kind: "queued" }),
+                )
               }
             >
               Queue job
@@ -626,7 +670,13 @@ export function BulkActionBar({
             <TpButton
               variant="danger"
               disabled={busy}
-              onClick={() => void run("Archived", async (s) => (await bulkArchive(s)).affected)}
+              onClick={() =>
+                void run(
+                  "Archived",
+                  async (s) => (await bulkArchive(s)).affected,
+                  (ids) => ({ kind: "archived", ids }),
+                )
+              }
             >
               Archive
             </TpButton>

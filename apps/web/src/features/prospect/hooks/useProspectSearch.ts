@@ -43,6 +43,10 @@ export interface ProspectSearch {
   reload: () => void;
   /** Optimistically flip a row to revealed after a successful reveal (no refetch). */
   markRevealed: (id: string) => void;
+  /** Patch the cached owned rows in place after a bulk mutation whose outcome is known (P3.3b — no refetch). */
+  patchRows: (ids: string[], patch: (row: ContactHit) => ContactHit) => void;
+  /** Drop rows from the cached owned pages (e.g. archived out of the workspace) without a refetch. */
+  removeRows: (ids: string[]) => void;
 }
 
 export interface UseProspectSearchOptions {
@@ -124,10 +128,13 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   );
   const databaseCount = hits.length - owned.length;
 
-  const markRevealed = useCallback(
-    (id: string) => {
-      // Written straight into the cache rather than into a parallel useState, so the optimistic flip survives
-      // a remount and stays consistent with what a later refetch replaces it with.
+  // Written straight into the cache rather than into a parallel useState, so a patched row survives a
+  // remount and stays consistent with what a later refetch replaces it with. patchRows/removeRows are the
+  // bulk-mutation counterparts (perf-audit P3.3b): a bulk action whose outcome is known client-side edits
+  // the cached pages in place instead of refetching every loaded page.
+  const patchRows = useCallback(
+    (ids: string[], patch: (row: ContactHit) => ContactHit) => {
+      const idSet = new Set(ids);
       qc.setQueryData<{ pages: SearchPage<ContactHit>[]; pageParams: unknown[] }>(
         queryKey,
         (old) =>
@@ -135,12 +142,37 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
             ...old,
             pages: old.pages.map((page) => ({
               ...page,
-              hits: page.hits.map((h) => (h.id === id ? { ...h, isRevealed: true } : h)),
+              hits: page.hits.map((h) => (idSet.has(h.id) ? patch(h) : h)),
             })),
           },
       );
     },
     [qc, queryKey],
+  );
+
+  const removeRows = useCallback(
+    (ids: string[]) => {
+      const idSet = new Set(ids);
+      qc.setQueryData<{ pages: SearchPage<ContactHit>[]; pageParams: unknown[] }>(
+        queryKey,
+        (old) =>
+          old && {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              hits: page.hits.filter((h) => !idSet.has(h.id)),
+            })),
+          },
+      );
+    },
+    [qc, queryKey],
+  );
+
+  const markRevealed = useCallback(
+    (id: string) => {
+      patchRows([id], (h) => ({ ...h, isRevealed: true }));
+    },
+    [patchRows],
   );
 
   return {
@@ -165,5 +197,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
       void search.refetch();
     },
     markRevealed,
+    patchRows,
+    removeRows,
   };
 }

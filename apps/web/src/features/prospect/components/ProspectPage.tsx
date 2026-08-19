@@ -21,7 +21,7 @@ import {
   TpButton,
   TpInput,
 } from "@leadwolf/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -41,7 +41,7 @@ import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
 import { displayName, emailGlyphFor, profileHref } from "../types";
 import { AiSearchBox } from "./AiSearchBox";
-import type { RowBulkAction } from "./BulkActionBar";
+import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
 // business in the initial chunk of the surface every prospect session lands on. `next/dynamic` defers it to
@@ -114,7 +114,10 @@ function ProspectPageInner() {
     loadMore,
     reload,
     markRevealed,
+    patchRows,
+    removeRows,
   } = search;
+  const queryClient = useQueryClient();
   const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
@@ -454,8 +457,53 @@ function ProspectPageInner() {
           }
           selectionStore.clear();
         }}
-        onMutated={() => {
-          reload();
+        onMutated={(effect) => {
+          // P3.3b: a bulk mutation used to refetch EVERY loaded page. When the bar says exactly what
+          // changed (explicit-id selections), patch the cached rows / invalidate the narrow keys instead.
+          // Reload stays the fallback for select-all-matching and for anything that changes which rows
+          // match the ACTIVE query (a term filter on the mutated field).
+          if (!effect) {
+            reload();
+            return;
+          }
+          const filtersOn = (field: string) =>
+            query.filters.some((f) => f.kind === "term" && f.field === field);
+          switch (effect.kind) {
+            case "status":
+              if (filtersOn("outreach_status")) reload();
+              else patchRows(effect.ids, (r) => ({ ...r, outreachStatus: effect.outreachStatus }));
+              break;
+            case "owner":
+              if (filtersOn("owner")) reload();
+              else patchRows(effect.ids, (r) => ({ ...r, ownerUserId: effect.ownerUserId }));
+              break;
+            case "archived":
+              // Rows leave the result set; the header total + facet rail shift with them — two cheap
+              // requests instead of refetching every page of rows.
+              removeRows(effect.ids);
+              void queryClient.invalidateQueries({
+                queryKey: prospectKeys.contactCount(query),
+              });
+              void queryClient.invalidateQueries({
+                queryKey: prospectKeys.contactFacets(query, COUNT_FIELDS),
+              });
+              break;
+            case "tags":
+              // Grid rows don't render tags — only the per-tag id lists behind filter-by-tag and the
+              // rail's usage counts are stale.
+              for (const tagId of effect.tagIds)
+                void queryClient.invalidateQueries({
+                  queryKey: prospectKeys.taggedRecords(tagId),
+                });
+              void queryClient.invalidateQueries({ queryKey: prospectKeys.tags() });
+              break;
+            case "list":
+              // Nothing on this grid changed; the lists feature's caches are what went stale.
+              void queryClient.invalidateQueries({ queryKey: ["lists"] });
+              break;
+            case "queued":
+              break; // values land when the job completes — nothing to refetch yet
+          }
         }}
       />
     </div>
@@ -484,7 +532,7 @@ function ProspectBulkBar({
   requestedAction: RowBulkAction | null;
   onRequestHandled: () => void;
   onRevealed: (ids: string[]) => void;
-  onMutated: () => void;
+  onMutated: (effect?: BulkMutationEffect) => void;
 }) {
   const sel = useBulkSelection(store);
   const selectedContacts = useMemo(
