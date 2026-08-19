@@ -159,6 +159,11 @@ export const appEnvSchema = z
     SEARCH_FACETS_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(60),
     SEARCH_COUNT_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(30),
     SEARCH_SUGGEST_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(120),
+    // S7 (arch doc §2 memory-budget rule): the CACHE Redis may be a SEPARATE instance from the durable one
+    // (BullMQ/rate-limits/revocation must be noeviction+AOF; a cache wants allkeys-lru and no persistence —
+    // one instance cannot be both once memory pressure is real). Unset ⇒ the cache shares REDIS_URL,
+    // exactly today's behaviour; set it when the split instance exists.
+    CACHE_REDIS_URL: z.string().url().optional(),
     // L-1.5: TTL (ms) for the per-request workspace-role memo. 0 = OFF, which is the shipped default and
     // today's exact behaviour — every `requireRole` request reads the role from the database, so a revocation
     // takes effect on the very next request.

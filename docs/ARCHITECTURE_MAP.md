@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2194 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2197 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -514,7 +514,8 @@ apps/                           # deployable processes (thin transport adapters)
   contract: term filters, free-text, suggest, facet counts, keyset paging) · **types:** `search.ts` (the `SearchPort` contract)
 - **api:** `features/search/` — `routes.ts` (`/search/{contacts,suggest,facets}`), `searchPortProvider.ts` (wires the active port),
   `searchReadCache.ts` (+test — the S5 generation-keyed read-through for facets/count/suggest; TTLs in env, keys fold
-  `v{N}` from `lib/searchVersion.ts`, whose `bumpSearchVersion` is INCR'd by bulk mutations + reveals)
+  `v{N}` from `lib/searchVersion.ts`, whose `bumpSearchVersion` binds @leadwolf/integrations `searchCacheBump.ts`
+  (+test) — the shared fail-open INCR the workers also emit from register.ts on completed search-mutating jobs)
 
 #### ai — *NL→ContactQuery compile with guards* (M14, ADR-0023)
 - **core:** `ai/` — `aiPort.ts` (the `parseSearchQuery` contract; core owns the port), `compileSearchQuery.ts`

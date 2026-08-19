@@ -48,8 +48,26 @@ auth.truepoint.in {
 	import site_proxy auth:3000
 }
 
+# The customer app: /api/* goes STRAIGHT to the API tier (launch-scale S7 — the web app calls same-origin
+# /api/v1/* by default, and routing it here removes the Next-rewrite proxy hop from every API request while
+# keeping single-origin semantics: no CORS surface changes). Everything else — HTML, /_next assets, /auth/*
+# (which web's rewrites forward to the auth origin) — keeps flowing through the web container. Mirrors the
+# forge.truepoint.in split below.
 app.truepoint.in {
-	import site_proxy web:3002
+	encode zstd gzip
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:3001 {
+			lb_try_duration 5s
+			lb_try_interval 250ms
+		}
+	}
+	handle {
+		reverse_proxy web:3002 {
+			lb_try_duration 5s
+			lb_try_interval 250ms
+		}
+	}
 }
 
 api.truepoint.in {

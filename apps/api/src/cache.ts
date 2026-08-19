@@ -36,7 +36,9 @@ let redisInstance: IORedis | undefined;
  *  treat every failure as a miss/no-op. */
 export function cacheRedis(): IORedis {
   if (!redisInstance) {
-    redisInstance = new IORedis(env.REDIS_URL, {
+    // CACHE_REDIS_URL splits the cache onto its own instance (allkeys-lru, no persistence) once one exists;
+    // unset ⇒ share the durable Redis, exactly the pre-S7 behaviour (see env.ts).
+    redisInstance = new IORedis(env.CACHE_REDIS_URL ?? env.REDIS_URL, {
       maxRetriesPerRequest: 1,
       commandTimeout: CACHE_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,

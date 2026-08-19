@@ -35,7 +35,7 @@ import type {
   Suggestion,
 } from "@leadwolf/types";
 import { type SQL, and, desc, eq, inArray, or, sql } from "drizzle-orm";
-import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { type TenantScope, type Tx, withReplicaTx, withTenantTx } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 import { contactChannelRepository } from "./contactChannelRepository.ts";
@@ -528,7 +528,11 @@ export const searchRepository = {
     query: ContactQuery,
     opts: SearchReadOpts = {},
   ): Promise<number> {
-    return withTenantTx(scope, (tx) => searchRepository.countContactsTx(tx, query, opts));
+    // S7: scan-class aggregate → the REPLICA seam (§4-classified eventual; RLS GUCs identical). With
+    // REPLICA_DATABASE_URL unset this still pays off: the replica pool is a SEPARATE connection budget, so
+    // a burst of expensive counts can no longer occupy the interactive tenant pool (the Phase 2 poison
+    // mechanism). The tx-composed variant below stays tenant — same-tx reads keep their consistency.
+    return withReplicaTx(scope, (tx) => searchRepository.countContactsTx(tx, query, opts));
   },
 
   /** The tx-aware core of countContacts — the match total computed inside an already-open withTenantTx
@@ -614,7 +618,8 @@ export const searchRepository = {
     query: ContactQuery,
     fields: FacetKey[],
   ): Promise<{ field: FacetKey; value: string; displayLabel: string; count: number }[]> {
-    return withTenantTx(scope, async (tx) => {
+    // S7: replica-routed like countContacts above (eventual per §4; the S5 cache sits in front anyway).
+    return withReplicaTx(scope, async (tx) => {
       const out: { field: FacetKey; value: string; displayLabel: string; count: number }[] = [];
       const groupable = fields.filter((f) => FACET_EXPR[f]); // join-only facets aren't grouped here (documented)
 
@@ -710,7 +715,8 @@ export const searchRepository = {
     // already debounces and sends ≥3 chars; this makes the floor a SERVER property. 2, not 3, so short
     // legitimate values (initials, "VP") stay reachable from clients with a lower floor.
     if (req.prefix.trim().length < 2) return [];
-    return withTenantTx(scope, async (tx) => {
+    // S7: replica-routed like countContacts above (eventual per §4; the S5 cache sits in front anyway).
+    return withReplicaTx(scope, async (tx) => {
       const expr = FACET_EXPR[req.field];
       if (!expr) return [];
       const rows = await tx

@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2194,
-  "fileSetHash": "sha256:7c8e2f041eecfc838b1f094e3a40dfc18e30c7d35576a9a2e549067393215c5b",
+  "fileCount": 2197,
+  "fileSetHash": "sha256:f6bb023802d0a0772a59d8530ae7af57ba4b6181e14930b3c4c0d1bfc3074da9",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2413,6 +2413,7 @@
     ],
     "apps/api/lib": [
       "apps/api/src/lib/csvDownload.ts",
+      "apps/api/src/lib/gateMemo.test.ts",
       "apps/api/src/lib/gateMemo.ts",
       "apps/api/src/lib/roleCache.test.ts",
       "apps/api/src/lib/roleCache.ts",
@@ -3237,6 +3238,8 @@
       "packages/integrations/src/forgeRateLimiter.ts",
       "packages/integrations/src/index.ts",
       "packages/integrations/src/redisCacheStore.ts",
+      "packages/integrations/src/searchCacheBump.test.ts",
+      "packages/integrations/src/searchCacheBump.ts",
       "packages/integrations/src/security/clamdScanner.test.ts",
       "packages/integrations/src/security/clamdScanner.ts",
       "packages/integrations/src/storage/s3FileStore.itest.ts",
