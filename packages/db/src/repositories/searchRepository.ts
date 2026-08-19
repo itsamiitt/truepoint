@@ -86,7 +86,11 @@ const FACET_EXPR: Partial<Record<FacetKey, SQL>> = {
   title: sql`${contacts.jobTitle}`,
   seniority: sql`${contacts.seniorityLevel}`,
   department: sql`${contacts.department}`,
-  company: sql`${contacts.emailDomain}`,
+  // Cast ON PURPOSE (perf-audit P2.2): email_domain is citext, and 0081's trgm GIN is on the
+  // (email_domain::text) EXPRESSION (gin_trgm_ops is defined over text — see 0081's header). suggest's
+  // prefix ILIKE on the BARE citext column matched nothing indexable, so every company keystroke was a
+  // full-workspace GROUP BY. The cast makes the query match the index; grouped VALUES are byte-identical.
+  company: sql`(${contacts.emailDomain}::text)`,
   industry: sql`${accounts.industry}`,
   owner: sql`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId})`,
   outreach_status: sql`${contacts.outreachStatus}`,
@@ -211,28 +215,44 @@ function clauseCondition(
     }
   }
   // range (epoch-ms for date fields)
-  const col = rangeColumn(clause.field);
-  if (!col) return undefined;
+  const range = rangeSpec(clause.field);
+  if (!range) return undefined;
   const bounds: SQL[] = [];
-  if (clause.gte !== undefined) bounds.push(sql`${col} >= ${clause.gte}`);
-  if (clause.lte !== undefined) bounds.push(sql`${col} <= ${clause.lte}`);
+  if (range.kind === "timestamp") {
+    // Compare the BARE column against a timestamptz bound (perf-audit P2.2). The old shape wrapped the
+    // column — extract(epoch from created_at) * 1000 — which no btree can serve, so a default "created in
+    // the last 30 days" filter forced a workspace heap scan even though idx_contacts_ws_created_at exists
+    // for exactly this column. The epoch-ms CONTRACT is unchanged: bounds still arrive as milliseconds and
+    // are converted on the PARAMETER side, where they cost nothing.
+    if (clause.gte !== undefined)
+      bounds.push(sql`${range.col} >= to_timestamp(${clause.gte} / 1000.0)`);
+    if (clause.lte !== undefined)
+      bounds.push(sql`${range.col} <= to_timestamp(${clause.lte} / 1000.0)`);
+  } else {
+    if (clause.gte !== undefined) bounds.push(sql`${range.col} >= ${clause.gte}`);
+    if (clause.lte !== undefined) bounds.push(sql`${range.col} <= ${clause.lte}`);
+  }
   return bounds.length ? and(...bounds) : undefined;
 }
 
-/** Map a range field name to its numeric SQL expression. Dates compare as epoch milliseconds. */
-function rangeColumn(field: string): SQL | undefined {
+/** Map a range field to its SQL + comparison kind. `timestamp` fields compare the bare column (index-served);
+ *  their wire bounds are epoch MILLISECONDS, converted parameter-side in the range builder above. */
+function rangeSpec(field: string): { col: SQL; kind: "number" | "timestamp" } | undefined {
   switch (field) {
     case "headcount":
     case "employee_count":
-      return sql`${accounts.employeeCount}`;
+      return { col: sql`${accounts.employeeCount}`, kind: "number" };
     case "company_age":
-      return sql`(extract(year from now())::int - ${accounts.foundedYear})`;
+      return {
+        col: sql`(extract(year from now())::int - ${accounts.foundedYear})`,
+        kind: "number",
+      };
     case "score":
-      return sql`${contacts.priorityScore}`;
+      return { col: sql`${contacts.priorityScore}`, kind: "number" };
     case "created_at":
-      return sql`(extract(epoch from ${contacts.createdAt}) * 1000)`;
+      return { col: sql`${contacts.createdAt}`, kind: "timestamp" };
     case "last_activity_at":
-      return sql`(extract(epoch from ${contacts.lastActivityAt}) * 1000)`;
+      return { col: sql`${contacts.lastActivityAt}`, kind: "timestamp" };
     default:
       return undefined;
   }
@@ -619,6 +639,11 @@ export const searchRepository = {
 
   /** Typeahead: distinct facet values matching the prefix, with their counts, most-frequent first. */
   async suggest(scope: TenantScope, req: SuggestQuery): Promise<Suggestion[]> {
+    // A 0/1-character prefix aggregates the ENTIRE workspace per keystroke for a list the user hasn't
+    // meaningfully narrowed — LIMIT bounds the output, never the scan (perf-audit P2.2). The web typeahead
+    // already debounces and sends ≥3 chars; this makes the floor a SERVER property. 2, not 3, so short
+    // legitimate values (initials, "VP") stay reachable from clients with a lower floor.
+    if (req.prefix.trim().length < 2) return [];
     return withTenantTx(scope, async (tx) => {
       const expr = FACET_EXPR[req.field];
       if (!expr) return [];
