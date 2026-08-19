@@ -18,6 +18,7 @@ import type {
   Suggestion,
 } from "@leadwolf/types";
 import { flagGateCached } from "../../lib/gateMemo.ts";
+import { searchReadCache } from "./searchReadCache.ts";
 
 /** Expand title term-filter values through the canonical taxonomy → surface forms the repo ILIKEs, so an
  *  abbreviation ("CEO") matches the spelled-out title. Non-title clauses pass through untouched. */
@@ -55,10 +56,18 @@ export async function buildWorkspaceSearchPort(scope: {
       return { hits: page.hits, nextCursor: page.nextCursor };
     },
     async suggest(req: SuggestQuery): Promise<Suggestion[]> {
-      return searchRepository.suggest(scope, req);
+      // S5: TTL-only cache (§4 consistency table) — Phase 2 measured 27s/keystroke-class scans on a 500k
+      // workspace; post-S1 ~1.2s, still worth one shared entry per (field, prefix) for its 120s.
+      return searchReadCache().suggest(scope, req, () => searchRepository.suggest(scope, req));
     },
     async facetCounts(query: ContactQuery, fields: FacetKey[]): Promise<FacetCount[]> {
-      return searchRepository.facetCounts(scope, expandTitleFilters(query), fields);
+      // S5: generation-keyed cache (§2/§3) — the most expensive read in the product (Phase 2: 139.6s
+      // baseline, 8.6s post-S1 on the whale). Key includes the EXPANDED query + the S-CH4 gate, so
+      // gate-on/off and differently-expanded titles never share an entry.
+      const expanded = expandTitleFilters(query);
+      return searchReadCache().facetCounts(scope, expanded, fields, channelsFromChild, () =>
+        searchRepository.facetCounts(scope, expanded, fields),
+      );
     },
     async index(): Promise<void> {
       // No-op: Postgres IS the store. (A dedicated search engine would apply CDC changes here — ADR-0035.)

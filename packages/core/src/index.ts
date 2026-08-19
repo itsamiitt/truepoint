@@ -1325,6 +1325,7 @@ export {
   type CacheStore,
   type ReadThroughCache,
   createReadThroughCache,
+  searchVersionKey,
   systemKey,
   tenantKey,
 } from "./cache/readThrough.ts";

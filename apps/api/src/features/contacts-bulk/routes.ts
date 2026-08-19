@@ -33,6 +33,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
+import { bumpSearchVersionAfter } from "../../lib/searchVersion.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
@@ -45,6 +46,13 @@ contactsBulkRoutes.use("*", tenancy);
 // All bulk actions require an active workspace membership; the role is stashed for the finer core policy gates
 // (owner-assign: members may only self-assign/clear; export: viewer denied).
 contactsBulkRoutes.use("*", requireRole("owner", "admin", "member", "viewer"));
+// S5 (arch doc §3): a successful bulk mutation retires the workspace's cached facet/count aggregates via
+// one generation INCR. Listed paths are the MUTATIONS only — estimate/export read, enrich only enqueues
+// (its worker bumps when rows actually change, the S5b emitter set).
+contactsBulkRoutes.use(
+  "*",
+  bumpSearchVersionAfter(new Set(["/assign-owner", "/tags", "/status", "/archive"])),
+);
 
 /** POST /contacts/bulk/assign-owner — set/clear the soft owner. Body adds { ownerUserId }. */
 contactsBulkRoutes.post("/assign-owner", async (c) => {

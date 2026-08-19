@@ -16,6 +16,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { buildWorkspaceSearchPort } from "./searchPortProvider.ts";
+import { searchReadCache } from "./searchReadCache.ts";
 
 export const searchRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -48,7 +49,12 @@ searchRoutes.post("/count", async (c) => {
   const parsed = contactQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid search query.");
 
-  const result = await searchCount({ tenantId: c.get("tenantId"), workspaceId }, parsed.data);
+  // S5: generation-keyed cache (≤30s eventual per the §4 consistency table) — the capped count scanned to
+  // the 10k cap on every "Select all N" render (Phase 2: 3.4s baseline / 0.48s post-S1 on the whale).
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const result = await searchReadCache().count(scope, parsed.data, () =>
+    searchCount(scope, parsed.data),
+  );
   return c.json(result);
 });
 

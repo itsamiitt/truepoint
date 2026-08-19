@@ -37,6 +37,7 @@ import {
   revealedBatchRequestSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+import { bumpSearchVersion } from "../../lib/searchVersion.ts";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
@@ -151,6 +152,9 @@ revealRoutes.post(
       ipAddress: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
       userAgent: c.req.header("user-agent") ?? null,
     });
+    // S5 (arch doc §3): a reveal flips is_revealed/revealedTypes — facet/count aggregates for this
+    // workspace are stale, retire their generation. Fail-open (TTL backstop) and never blocks the spend.
+    await bumpSearchVersion({ tenantId: c.get("tenantId"), workspaceId });
     return c.json(result, 200);
   },
 );

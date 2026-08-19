@@ -59,6 +59,19 @@ export function systemKey(...parts: string[]): string {
   return ["sys", ...parts.map(assertSafe)].join(":");
 }
 
+/**
+ * The per-workspace SEARCH-READ cache generation counter (launch-scale Phase 7 S5). A RAW redis key —
+ * writers INCR it directly and readers GET it outside the CacheStore wrapper, so it is spelled with the
+ * store's "cache:" prefix to live beside the value keys it governs. The current generation is folded into
+ * facet/count keys as a `v{N}` part, which makes one INCR an O(1) invalidation of every generation-N entry
+ * for that workspace (no SCAN, no wildcard deletes); orphaned generations age out on their ≤TTL. Emitters:
+ * bulk contact mutations, reveals, import promotion, re-verification, forge sync-out — anything that
+ * changes which rows a search sees or how facets count them.
+ */
+export function searchVersionKey(scope: CacheScope & { workspaceId: string }): string {
+  return `cache:ver:${tenantKey(scope, "search")}`;
+}
+
 export interface ReadThroughCache {
   /** Serve `key` from cache, else run `load`, store it, and return it. */
   getOrSet<T>(key: string, ttlSeconds: number, load: () => Promise<T>): Promise<T>;

@@ -149,6 +149,16 @@ export const appEnvSchema = z
     // 0 (default) = no timeout for the Forge pool, exactly today's behaviour. It does NOT inherit the app
     // value, deliberately: setting the request-path timeout must never silently start killing Forge jobs.
     FORGE_DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
+    // Launch-scale Phase 7 S5 (arch doc §2; consistency table §4 operator-confirmed 2026-08-19): TTLs for
+    // the three scan-class search reads — the only things the read-through tier newly caches. Facet counts
+    // and the capped count are advisory aggregates (eventual, ≤ these bounds, plus the per-workspace
+    // `ver:…:search` generation INCR emitted by contact mutations); suggest is TTL-only (its values drift
+    // slowly and must survive bulk edits without churn). 0 disables that class — the rollback lever,
+    // reusing ROLE_CACHE_TTL_MS's numeric-off convention rather than adding a boolean. Money and
+    // permission decisions stay uncached through this tier, per the readThrough contract.
+    SEARCH_FACETS_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(60),
+    SEARCH_COUNT_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(30),
+    SEARCH_SUGGEST_CACHE_TTL_S: z.coerce.number().int().nonnegative().default(120),
     // L-1.5: TTL (ms) for the per-request workspace-role memo. 0 = OFF, which is the shipped default and
     // today's exact behaviour — every `requireRole` request reads the role from the database, so a revocation
     // takes effect on the very next request.

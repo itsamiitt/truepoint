@@ -29,12 +29,14 @@ export const PRICING_PLANS_KEY = systemKey("pricing", "plans");
 const CACHE_COMMAND_TIMEOUT_MS = 150;
 
 let instance: ReadThroughCache | undefined;
+let redisInstance: IORedis | undefined;
 
-/** Lazily-constructed singleton — mirrors the per-feature lazy Redis connections already used here, so a
- *  process that never touches a cached route never opens the connection. */
-export function cache(): ReadThroughCache {
-  if (!instance) {
-    const redis = new IORedis(env.REDIS_URL, {
+/** The cache tier's raw connection — shared by the read-through store AND the search version counter
+ *  (GET/INCR of `cache:ver:…` keys sits outside the CacheStore wrapper). Same fail-fast posture; callers
+ *  treat every failure as a miss/no-op. */
+export function cacheRedis(): IORedis {
+  if (!redisInstance) {
+    redisInstance = new IORedis(env.REDIS_URL, {
       maxRetriesPerRequest: 1,
       commandTimeout: CACHE_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,
@@ -42,8 +44,16 @@ export function cache(): ReadThroughCache {
     });
     // An unreachable cache is expected to be survivable, so its connection errors must not become unhandled
     // 'error' events (which would take the process down). The tier already treats every failure as a miss.
-    redis.on("error", () => {});
-    instance = createReadThroughCache(redisCacheStore(redis));
+    redisInstance.on("error", () => {});
+  }
+  return redisInstance;
+}
+
+/** Lazily-constructed singleton — mirrors the per-feature lazy Redis connections already used here, so a
+ *  process that never touches a cached route never opens the connection. */
+export function cache(): ReadThroughCache {
+  if (!instance) {
+    instance = createReadThroughCache(redisCacheStore(cacheRedis()));
   }
   return instance;
 }
