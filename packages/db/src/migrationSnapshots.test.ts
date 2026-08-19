@@ -154,8 +154,12 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  89 → 90 for 0131_reverify_indexes — 0123's category verbatim: CREATE INDEX CONCURRENTLY with an
  *  expression key (coalesce(last_verified_at, created_at)) and partial predicates, which drizzle-kit does
  *  not emit (perf-audit P1.6). The schema DSL carries matching index defs for documentation/dev-parity;
- *  the migration is the authority. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 90;
+ *  the migration is the authority. Absorbed by the next rebaseline.
+ *
+ *  90 → 91 for 0132_search_filter_indexes — the 0109/0123 category again: CONCURRENTLY partial + trgm GIN
+ *  indexes for the search-filter and session access paths (perf-audit P2.1). Migration-only per the 0109
+ *  rationale (Drizzle would emit blocking CREATEs); absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 91;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
