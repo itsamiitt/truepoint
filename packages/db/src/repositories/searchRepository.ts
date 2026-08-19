@@ -296,26 +296,71 @@ function textCondition(text: string | undefined): SQL | undefined {
  * exposes global + this tenant + this workspace and nothing else — which is why every caller of buildWhere
  * runs inside withTenantTx.
  *
- * MEASURED BEFORE SHIPPING, because this lands on the busiest read in the product and the honest answer was
- * not obvious. Against 200k contacts in one workspace with the 0094 indexes: page-of-50 goes from ~0.1ms to
- * 0.3–1.7ms, and — the part that mattered — it does NOT degrade as the suppression list grows, because
- * Postgres hashes the small side once. The worst case was measured deliberately: suppressing the NEWEST 100k
- * contacts, so the ordered scan must walk past every one of them to fill a page, still lands at 1.4ms. The
- * naive fixture (suppress the OLDEST) never reaches them and would have greenlit this on a best case.
+ * TWO SHAPES, PICKED BY WALK LENGTH (launch-scale Phase 2, 2026-08-19). Against an 8.25M-contact seed
+ * every single-shape variant failed one caller class, always for the same reason: under RLS the workspace
+ * predicate reaches the planner as current_setting() (an opaque InitPlan param), so row estimates are
+ * structurally generic — the planner prices the fleet-average workspace (~1.4k rows) while a 500k-contact
+ * workspace is 367× that, and it flips join strategies on the wrong side of that error:
+ *   · The original OR'd single NOT EXISTS planned as a BitmapOr under a Nested Loop Anti Join whose
+ *     `domain IS NOT NULL` leg re-read EVERY tenant domain-suppression row per outer row — 135s of a
+ *     139.6s facetCounts, 15.5s of a 16.6s filtered search (whale).
+ *   · Plain ANDed NOT EXISTS (SET below) decorrelates into set-based anti-joins: right for scans
+ *     (facets 139.6s→9s, filtered 16.6s→0.9s), but the same bad estimate put a Merge Anti Join + 101MB
+ *     external sort in front of a LIMIT-51 unfiltered page — 29ms → 10s.
+ *   · OFFSET-0-fenced EXISTS (PROBE below) forces correlated per-row SubPlan probes: perfect for the
+ *     unfiltered keyset walk (~limit rows examined; p1 back to ~150ms cold), but ~0.1ms/row·rung (RLS
+ *     policy re-evaluates per probe) makes full scans regress to baseline (facets 147s).
+ * So the shape is chosen where the walk length is KNOWN, not left to estimates the planner cannot have:
+ *   PROBE — unfiltered, textless keyset page reads (examined rows ≈ limit): fenced rungs, one indexed
+ *           probe each per candidate row; cannot spill or flip.
+ *   SET   — everything that scans (filtered/text search, counts, facets, suggest, resolveVisibleIds):
+ *           decorrelatable rungs, each a hash/indexed anti-join built once per statement.
+ * Semantics of both are identical to the original (De Morgan; a NULL contact key makes its rung match
+ * nothing, exactly as the old IS NOT NULL guards did; equality proves each 0094 partial index's predicate
+ * regardless of runtime NULLs).
+ *
+ * The original pre-ship measurement fixture (worst-case newest-100k suppressed) stays valid in the itests —
+ * it pins the PROBE path's ordered walk.
  */
-const NOT_SUPPRESSED: SQL = sql`NOT EXISTS (
+const NOT_SUPPRESSED_PROBE: SQL = sql`(NOT EXISTS (
   SELECT 1 FROM suppression_list s
-   WHERE s.contact_id = ${contacts.id}
-      OR (s.email_blind_index IS NOT NULL AND s.email_blind_index = ${contacts.emailBlindIndex})
-      OR (s.domain IS NOT NULL AND s.domain = ${contacts.emailDomain}))`;
+   WHERE s.contact_id = ${contacts.id} OFFSET 0)
+  AND NOT EXISTS (
+  SELECT 1 FROM suppression_list s
+   WHERE s.email_blind_index = ${contacts.emailBlindIndex} OFFSET 0)
+  AND NOT EXISTS (
+  SELECT 1 FROM suppression_list s
+   WHERE s.domain = ${contacts.emailDomain} OFFSET 0))`;
+
+const NOT_SUPPRESSED_SET: SQL = sql`(NOT EXISTS (
+  SELECT 1 FROM suppression_list s
+   WHERE s.contact_id = ${contacts.id})
+  AND NOT EXISTS (
+  SELECT 1 FROM suppression_list s
+   WHERE s.email_blind_index = ${contacts.emailBlindIndex})
+  AND NOT EXISTS (
+  SELECT 1 FROM suppression_list s
+   WHERE s.domain = ${contacts.emailDomain}))`;
+
+/** Which suppression shape a caller gets — see the regime analysis above. Default SET: only the unfiltered
+ *  keyset page read (walk ≈ limit) opts into PROBE. */
+type SuppressionShape = "probe" | "set";
 
 /** Combine all clauses + text + the not-deleted guard into one WHERE. `exceptFacet` drops a facet's own term
  *  filter (for live facet counts). Always includes deleted_at IS NULL (DSAR tombstones never surface) and the
  *  suppression anti-join — applied HERE, the single chokepoint, so results and facet COUNTS can never diverge.
  *  A count that included suppressed rows while the list excluded them would be its own bug, and a confusing
  *  one: the UI would promise records that are unreachable by design. */
-function buildWhere(query: ContactQuery, opts: SearchReadOpts, exceptFacet?: FacetKey): SQL {
-  const conds: (SQL | undefined)[] = [sql`${contacts.deletedAt} IS NULL`, NOT_SUPPRESSED];
+function buildWhere(
+  query: ContactQuery,
+  opts: SearchReadOpts,
+  exceptFacet?: FacetKey,
+  shape: SuppressionShape = "set",
+): SQL {
+  const conds: (SQL | undefined)[] = [
+    sql`${contacts.deletedAt} IS NULL`,
+    shape === "probe" ? NOT_SUPPRESSED_PROBE : NOT_SUPPRESSED_SET,
+  ];
   for (const clause of query.filters) {
     if (exceptFacet && clause.kind === "term" && clause.field === exceptFacet) continue;
     conds.push(clauseCondition(clause, opts));
@@ -441,7 +486,11 @@ export const searchRepository = {
     query: ContactQuery,
     opts: SearchReadOpts = {},
   ): Promise<SearchResultPage> {
-    const where = buildWhere(query, opts);
+    // Unfiltered, textless page reads examine ~limit rows — the PROBE shape's home turf; anything that
+    // filters or text-matches scans, and gets SET (see the NOT_SUPPRESSED regime analysis above).
+    const shape: SuppressionShape =
+      query.filters.length === 0 && !query.text?.trim() ? "probe" : "set";
+    const where = buildWhere(query, opts, undefined, shape);
     // Sort + keyset: score_desc seeks on (priority_score, id); everything else on (created_at, id).
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     const rows = await runSearch(tx, where, query.sort, query.limit + 1, cursor, opts);
@@ -674,7 +723,7 @@ export const searchRepository = {
         .where(
           and(
             sql`${contacts.deletedAt} IS NULL`,
-            NOT_SUPPRESSED,
+            NOT_SUPPRESSED_SET,
             sql`${expr} ILIKE ${`${req.prefix}%`}`,
           ) as SQL,
         )

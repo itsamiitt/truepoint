@@ -158,8 +158,12 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  90 → 91 for 0132_search_filter_indexes — the 0109/0123 category again: CONCURRENTLY partial + trgm GIN
  *  indexes for the search-filter and session access paths (perf-audit P2.1). Migration-only per the 0109
- *  rationale (Drizzle would emit blocking CREATEs); absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 91;
+ *  rationale (Drizzle would emit blocking CREATEs); absorbed by the next rebaseline.
+ *
+ *  91 → 92 for 0133_title_trgm_index — the 0132 category once more: the job_title trgm GIN that batch
+ *  missed (launch-scale Phase 2 finding F3; CONCURRENTLY, migration-only per the 0109 rationale).
+ *  Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 92;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
