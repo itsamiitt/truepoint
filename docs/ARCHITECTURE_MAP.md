@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2190 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2191 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -168,7 +168,9 @@ apps/                           # deployable processes (thin transport adapters)
   `parseFile.ts` (RFC-4180 CSV) + `parseXlsx.ts` (XLSX with ZIP-magic + formula-injection guard + 100K-row/25 MiB caps),
   `columnMap.ts`, `validateRow.ts` (pure per-row verdict, reused by preview + run), `preview.ts` (valid/rejected/duplicate
   counts + bounded sample), `rejectedRowsCsv.ts`, `templates.ts` (save/load reusable column mappings),
-  `encryptPii.ts` (AES-GCM, KMS-swappable). Normalization, the HMAC blind index and the stable content hash
+  `encryptPii.ts` (AES-GCM, KMS-swappable; `encryptPii.test.ts` pins the roundtrip + the corruption-tolerance
+  contract `decryptPiiOrNull` carries for the reveal reads — a poisoned blob masks a field, never throws).
+  Normalization, the HMAC blind index and the stable content hash
   come from `@leadwolf/identity` directly — the old `core/import` re-export shims are deleted;
   `piiLogTripwire.test.ts` — guards **`scripts/lint-import-pii-logs.mjs`** (the S-S6 gate, `bun run
   lint:import-pii`), which enforces 13 §3.5: an import- or ingest-path log call carries codes/ids/counts,

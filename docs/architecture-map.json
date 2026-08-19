@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2190,
-  "fileSetHash": "sha256:e1e892a66319c6a037fffd3513893168de1dfbd04a4e61d910e1e5cdc019868f",
+  "fileCount": 2191,
+  "fileSetHash": "sha256:f72fe99769c28a31fed330e0f187accd278c18338c772c520d3a1973ec38fbd9",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1158,6 +1158,7 @@
         "packages/core/src/import/delta.test.ts",
         "packages/core/src/import/deltaImportsGate.ts",
         "packages/core/src/import/draftPreview.ts",
+        "packages/core/src/import/encryptPii.test.ts",
         "packages/core/src/import/encryptPii.ts",
         "packages/core/src/import/headerAliases.test.ts",
         "packages/core/src/import/headerAliases.ts",
