@@ -9,6 +9,7 @@
 import {
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   Progress,
   StateSwitch,
@@ -95,7 +96,7 @@ export function EnrichmentJobsPage() {
   ];
 
   return (
-    <main className={styles.page}>
+    <PageContainer width="fluid">
       <PageHeader
         title="Enrichment jobs"
         subtitle="Track your bulk enrichment runs — status, progress, and results update live."
@@ -144,6 +145,6 @@ export function EnrichmentJobsPage() {
         open={selectedId != null}
         onClose={() => setSelectedId(null)}
       />
-    </main>
+    </PageContainer>
   );
 }

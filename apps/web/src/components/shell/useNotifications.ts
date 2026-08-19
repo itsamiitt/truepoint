@@ -34,6 +34,8 @@ const TONE: Record<NotificationType, NotificationTone> = {
   // A saved contact changing jobs is a warning, not information: the next email to them bounces and the next
   // call reaches someone who left. Muting it beside "your import finished" is how it goes unread.
   job_change: "warning",
+  // Opt-in market signal on a watched account — news, not danger. The subscriber asked for it.
+  account_signal: "muted",
   system: "muted",
 };
 
@@ -45,6 +47,7 @@ const TYPE_HREF: Record<NotificationType, string> = {
   // Falls back only when the row carries no entity; job_change always does, so hrefFor deep-links to the
   // contact and this is the safety net.
   job_change: "/prospect",
+  account_signal: "/signals",
   system: "/home",
 };
 

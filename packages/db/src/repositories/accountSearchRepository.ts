@@ -244,6 +244,18 @@ function decodeCursor(cursor: string): { k: string | number | null; id: string }
 }
 
 export const accountSearchRepository = {
+  /** One masked account by id — the /companies/:id page read (market-intelligence MI-1). Same SELECTION
+   *  and mapper as search, so the page and the grid can never disagree about the same account. Runs
+   *  inside the caller's withTenantTx (RLS decides visibility; a foreign id is simply null). */
+  async getMaskedById(tx: Tx, accountId: string): Promise<MaskedAccount | null> {
+    const rows = (await tx
+      .select(SELECTION)
+      .from(accounts)
+      .where(sql`${accounts.id} = ${accountId} AND ${accounts.deletedAt} IS NULL`)
+      .limit(1)) as AccountRow[];
+    return rows[0] ? toMasked(rows[0]) : null;
+  },
+
   /** Faceted, keyset-paged company search. Workspace-isolated via RLS (withTenantTx). */
   async searchAccounts(scope: TenantScope, query: AccountQuery): Promise<AccountSearchPage> {
     return withTenantTx(scope, async (tx) => {

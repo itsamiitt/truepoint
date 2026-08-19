@@ -3,7 +3,7 @@
 // This is the feature's public component (rendered by the thin (shell)/sales-navigator route). HITL only.
 "use client";
 
-import { PageHeader } from "@leadwolf/ui";
+import { PageContainer, PageHeader } from "@leadwolf/ui";
 import { useSalesNavLinks } from "../hooks/useSalesNavLinks";
 import { CaptureForm } from "./CaptureForm";
 import { LinksTable } from "./LinksTable";
@@ -12,7 +12,7 @@ export function SalesNavPage() {
   const { links, error, loading, reload, capture, remove } = useSalesNavLinks();
 
   return (
-    <main className="app-main" style={{ display: "grid", gap: "var(--tp-space-4)" }}>
+    <PageContainer>
       <PageHeader
         title="Sales Navigator"
         subtitle={
@@ -29,6 +29,6 @@ export function SalesNavPage() {
         onReload={() => void reload()}
         onDelete={remove}
       />
-    </main>
+    </PageContainer>
   );
 }

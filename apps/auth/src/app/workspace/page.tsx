@@ -3,6 +3,7 @@
 // pending login transaction (else back to /login). SSR + WCAG AA.
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { getLoginTransaction } from "@leadwolf/auth";
 import { workspaceRepository } from "@leadwolf/db";
 import { Alert, Button, RadioGroup, RadioOption } from "@leadwolf/ui";
@@ -24,7 +25,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Se
   return (
     <AuthShell title="Choose a workspace" subtitle="Select where you want to work.">
       <form action={selectWorkspace}>
-        <RadioGroup aria-label="Workspaces" className="mb-4">
+        <RadioGroup aria-label="Workspaces" className={styles.spaced}>
           {workspaces.map((w, i) => (
             <RadioOption
               key={w.id}
@@ -34,12 +35,14 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Se
               required
             >
               <span>{w.name}</span>
-              <span className="ml-auto text-xs text-[var(--tp-ink-4)]">{w.role}</span>
+              <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--tp-ink-4)" }}>
+                {w.role}
+              </span>
             </RadioOption>
           ))}
         </RadioGroup>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             Please choose a workspace.
           </Alert>
         ) : null}

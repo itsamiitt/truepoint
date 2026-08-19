@@ -6,7 +6,7 @@
 // pattern — replace semantics so back/refresh land correctly, and no useSearchParams Suspense constraint).
 "use client";
 
-import { EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
+import { EmptyState, PageContainer, PageHeader, StateSwitch } from "@leadwolf/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { type DraftStep, parseStepParam } from "../draftFlow";
@@ -44,7 +44,7 @@ export function ImportPage() {
   useEffect(() => setDeepLink(readDraftParamsFromUrl()), []);
 
   return (
-    <main className="app-main">
+    <PageContainer>
       <PageHeader title="Contacts" />
       {/* Hand off to the durable job page on submit (11 §4, S-U3): the import runs there, navigable away, no
           dead 2-min poll. The contacts list below refreshes on return. */}
@@ -72,6 +72,6 @@ export function ImportPage() {
           <ContactsTable contacts={contacts} />
         </StateSwitch>
       </section>
-    </main>
+    </PageContainer>
   );
 }

@@ -309,3 +309,20 @@ New READ-side policy layer (0121): master_persons.visibility ('private'|'license
 persons stay 'private' (the co-op boundary holds); only provider-landed rows are 'licensed'. Channel rows
 carry source_name; only licensed channels are revealable across workspaces (pay-once copy on reveal,
 gated MASTER_CHANNEL_REVEAL_ENABLED). Suppression is now enforced at READ as well as landing.
+
+## 2026-08-19 — Market-intelligence surface ratified (user directive; series: docs/planning/market-intelligence/)
+
+The user directed implementation of the market-intelligence roadmap ("follow the road map and plan and
+implement filling all the gaps and issues"), which this entry records as the D-1 ratification the series
+required (09-roadmap-and-decisions.md): TruePoint builds the combined sales + market intelligence surface
+NOW, ahead of the post-Phase-6 rescore the strategy roadmap had sequenced. Scope boundary unchanged:
+company facts in (hiring, funding/M&A, tech change, leadership, filings — the RD-4 line); X-04 person-level
+intent stays OUT, the missing 'intent' signal family stays missing, and hard constraints 1-4 bind every
+acquisition path. Non-goals X-01/X-02 untouched.
+
+In-repo defaults from the series' register adopted with this entry: D-2 (confidence unification = shipped
+badge leaf fn sourcing constants from master_confidence_policy, display-only first), D-8 (erasure of
+person-referencing signals = anonymize to company event), D-9 (IA regroup per 07-product-surfaces.md).
+Still open — commercial/procurement, no code may assume them: D-4 funding/registry feed, D-5 technographics
+feed + C4 GPL clearance, D-6 postings feed, D-3 final tier packaging (build flag-gated behind
+plan_templates.features keys pending pricing sign-off). Everything ships dark behind default-off gates.

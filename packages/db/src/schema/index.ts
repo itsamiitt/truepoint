@@ -16,6 +16,7 @@ export * from "./providerOrigins.ts";
 // the 30-day freshness clock. Platform-global, app-REVOKEd (see applyMigrations).
 export * from "./sourceFetchRegistry.ts";
 export * from "./masterConfidencePolicy.ts";
+export * from "./masterIndustries.ts";
 export * from "./processedSyncEvents.ts";
 // NOTE: ./forge.ts is intentionally NOT re-exported here — its tables live in the `forge` Postgres schema and
 // several Drizzle identifiers (matchLinks, approvalRequests, reviewTasks, parsers…) collide with the public
@@ -25,6 +26,9 @@ export * from "./customFields.ts";
 export * from "./tags.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";
+export * from "./tenantSignals.ts";
+export * from "./watchlists.ts";
+export * from "./accountScores.ts";
 export * from "./compliance.ts";
 export * from "./activity.ts";
 export * from "./salesnav.ts";

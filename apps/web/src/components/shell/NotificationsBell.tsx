@@ -70,7 +70,7 @@ export function NotificationsBell() {
                   background: "none",
                   border: "none",
                   padding: 0,
-                  color: "var(--tp-accent, #2563c9)",
+                  color: "var(--tp-cobalt)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -110,7 +110,7 @@ export function NotificationsBell() {
               display: "block",
               padding: "10px 14px",
               fontSize: 12,
-              color: "var(--tp-accent, #2563c9)",
+              color: "var(--tp-cobalt)",
               textDecoration: "none",
               borderTop: "1px solid var(--tp-hairline)",
             }}

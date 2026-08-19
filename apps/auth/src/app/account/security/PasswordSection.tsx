@@ -3,6 +3,7 @@
 // to the form, and the new-password rules are stated up-front (not only on error). Copy is plain + localizable.
 import { AccountSectionCard } from "@/shared/AccountShell";
 import { SubmitButton } from "@/shared/SubmitButton";
+import styles from "@/shared/auth.module.css";
 import { PASSWORD_MIN_LENGTH } from "@leadwolf/auth";
 import { Alert, Input, Label } from "@leadwolf/ui";
 import { changePassword } from "./actions";
@@ -56,14 +57,18 @@ export function PasswordSection({
         <Alert
           variant={msg.tone === "ok" ? "default" : "destructive"}
           role={msg.tone === "ok" ? "status" : "alert"}
-          className="mb-4"
+          className={styles.spaced}
         >
           {msg.text}
         </Alert>
       ) : null}
 
       {hasPassword ? (
-        <form action={changePassword} noValidate className="flex flex-col gap-4">
+        <form
+          action={changePassword}
+          noValidate
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}
+        >
           <div>
             <Label htmlFor="current_password">Current password</Label>
             <Input
@@ -85,7 +90,10 @@ export function PasswordSection({
               required
               aria-describedby="new_password_hint"
             />
-            <p id="new_password_hint" className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
+            <p
+              id="new_password_hint"
+              style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}
+            >
               At least {PASSWORD_MIN_LENGTH} characters. Avoid passwords used elsewhere.
             </p>
           </div>
@@ -99,12 +107,12 @@ export function PasswordSection({
               required
             />
           </div>
-          <div className="max-w-[220px]">
+          <div style={{ maxWidth: 220 }}>
             <SubmitButton>Change password</SubmitButton>
           </div>
         </form>
       ) : (
-        <p className="text-sm text-[var(--tp-ink-3)]">
+        <p style={{ fontSize: 14, color: "var(--tp-ink-3)" }}>
           Your account signs in without a password (single sign-on or a passkey). There is no
           password to change here.
         </p>

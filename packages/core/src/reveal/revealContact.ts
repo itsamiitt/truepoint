@@ -35,6 +35,7 @@ import { isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
 import { assertNotSuppressed } from "../compliance/assertNotSuppressed.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { buildConfidenceBadgeV1 } from "../data-health/badgeV1.ts";
+import { badgeHalfLifePolicy } from "../data-health/confidencePolicy.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emailVerifier.ts";
 import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
 import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
@@ -499,8 +500,9 @@ async function buildVerificationBadge(contact: ContactForReveal): Promise<{
       provenanceBadgeRepository.badgeFor(tx, "person", contact.masterPersonId as string),
     );
     // v1 (Phase 2): the SCORE, assembled by the pure builder so the API, the extension and the exporter
-    // cannot compute different numbers from the same evidence.
-    const v1 = buildConfidenceBadgeV1("email", agg);
+    // cannot compute different numbers from the same evidence. The policy is undefined unless
+    // CONFIDENCE_POLICY_BADGE_ENABLED (C9) — hardcoded constants otherwise.
+    const v1 = buildConfidenceBadgeV1("email", agg, new Date(), await badgeHalfLifePolicy());
     if (!v1) return none;
 
     return {

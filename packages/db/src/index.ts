@@ -165,6 +165,47 @@ export {
   type EmploymentStintInput,
   type HeadcountPointInput,
 } from "./repositories/masterProfileRepository.ts";
+// Confidence policy constants for the badge (C9 resolution, decisions.md 2026-08-19): field half-lives
+// only — the per-source-type dimension parameterizes the (unwired) fold, not the badge.
+export { masterConfidencePolicyRepository } from "./repositories/masterConfidencePolicyRepository.ts";
+// Signal fan-out (market-intelligence MI-S6): the owner-conn census (jobChangeSweepRepository twin) and
+// the tenant-side projection writer/reader over tenant_signals. Layer 0 = the fact; tenant_signals = the
+// delivered copy scoring and alerts read under RLS.
+export {
+  signalFanoutRepository,
+  type FanoutSignal,
+  type FanoutWorkspace,
+} from "./repositories/signalFanoutRepository.ts";
+export {
+  tenantSignalsRepository,
+  type TenantSignalRow,
+} from "./repositories/tenantSignalsRepository.ts";
+// Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
+// tenant_signals — the feed is browse, a notification requires a subscription naming the family.
+export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
+// Market-segment rollup cache (MI-S7, 0130): SYSTEM rebuild + the er-read board seam. Non-PII by
+// construction; dimensions = the account-search facets so every board number reconciles with drill-down.
+export {
+  marketRollupRepository,
+  type MarketSegmentRow,
+} from "./repositories/marketRollupRepository.ts";
+// Account-grain scoring (MI-S4, 0129): append-per-rescore history + the sweep's census/worklist reads.
+export {
+  accountScoreRepository,
+  type AppendAccountScoreInput,
+} from "./repositories/accountScoreRepository.ts";
+// Industry taxonomy (MI-S3, 0128): alias resolution at landing + the tree read for facets/curation.
+export {
+  masterIndustryRepository,
+  type IndustryNode,
+} from "./repositories/masterIndustryRepository.ts";
+// Hiring-intelligence evidence table (MI-S1, 0127). Writer ships ahead of its producer (D-6 feed) —
+// the master_company_funding posture; reads feed the /accounts/:id/postings seam.
+export {
+  masterJobPostingsRepository,
+  type JobPostingInput,
+  type JobPostingRow,
+} from "./repositories/masterJobPostingsRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

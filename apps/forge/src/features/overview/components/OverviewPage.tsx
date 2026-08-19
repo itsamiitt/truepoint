@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StatTile,
   StateSwitch,
@@ -54,7 +55,7 @@ export function OverviewPage() {
   const { data, loading, error, reload } = useOverview();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Overview"
         subtitle="Live health of the capture → parse → review → sync pipeline across every source."
@@ -86,6 +87,6 @@ export function OverviewPage() {
           </>
         ) : null}
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

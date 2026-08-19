@@ -91,7 +91,7 @@ export default function CallbackPage() {
   }, []);
 
   return (
-    <main className="app-main">
+    <main className="tp-center-screen">
       {error ? (
         <p className="app-muted">
           {error} <a href="/">Back to sign in</a>

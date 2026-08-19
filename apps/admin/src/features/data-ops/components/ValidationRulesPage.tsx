@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   TpButton,
@@ -128,7 +129,7 @@ export function ValidationRulesPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Validation rules"
         subtitle="The global data-quality checks every import must pass — built-in checks plus your custom rules. A row that fails any enabled rule is rejected (reject-on-fail). Changes are audited."
@@ -184,6 +185,6 @@ export function ValidationRulesPage() {
           </div>
         }
       />
-    </div>
+    </PageContainer>
   );
 }

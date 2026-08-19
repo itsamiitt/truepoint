@@ -11,6 +11,7 @@ import {
 } from "./features/account-intelligence/index.ts";
 import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
+import { signalRoutes, watchlistRoutes } from "./features/alerts/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
 import { aiSearchRoutes } from "./features/ai/index.ts";
 import { announcementsRoutes } from "./features/announcements/index.ts";
@@ -43,6 +44,7 @@ import {
 } from "./features/import/index.ts";
 import { ingestRoutes } from "./features/ingest/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
+import { marketRoutes } from "./features/market/index.ts";
 import { masterSyncRoutes } from "./features/master-sync/index.ts";
 import { notificationsRoutes } from "./features/notifications/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
@@ -212,6 +214,11 @@ app.route("/api/v1/account-search", accountSearchRoutes); // search/facets/count
 // is never addressable directly. `relationship` is required — develops and uses are disjoint answers.
 app.route("/api/v1/accounts", accountIntelligenceRoutes);
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
+// Market-intelligence MI-S5/MI-S6 (docs/planning/market-intelligence/): account watchlists + per-user
+// signal subscriptions, and the tenant_signals feed (the workspace's DELIVERED copy — never Layer 0).
+app.route("/api/v1/watchlists", watchlistRoutes);
+app.route("/api/v1/signals", signalRoutes);
+app.route("/api/v1/market", marketRoutes); // MI-S7: the non-PII segment board (honest-empty while dark)
 app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 // Unified ingestion entry (prospect-database-platform Phase 03 / I2) — one idempotent envelope for every source.
 app.route("/api/v1/ingest", ingestRoutes);

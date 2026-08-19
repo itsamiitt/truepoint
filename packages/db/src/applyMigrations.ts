@@ -373,6 +373,11 @@ const GRANTS = `
   -- checks the parent's privileges); its partitions pick the ACL up via mirror_partition_acl at the very
   -- end of this block, same order-sensitivity note as the 0100-0107 grants above.
   GRANT SELECT, INSERT, UPDATE ON master_company_identifiers, master_company_headcount TO leadwolf_er;
+  -- master_job_postings (MI-S1, market-intelligence): the hiring-intelligence evidence table, written by a
+  -- future licensed-feed ingest under withErTx (producer gated on the D-6 procurement decision). Same
+  -- PARTITIONED posture as master_company_headcount directly above: parent grant here, partitions via
+  -- mirror_partition_acl at the end of this block. SELECT/INSERT/UPDATE, never DELETE.
+  GRANT SELECT, INSERT, UPDATE ON master_job_postings TO leadwolf_er;
   -- Multi-value person attributes (0116), written by the same landing path. Same posture: never DELETE.
   GRANT SELECT, INSERT, UPDATE ON master_person_skills, master_person_languages TO leadwolf_er;
   -- master_education (0108) — the education stint edge, the sibling of master_employment above and written by
@@ -385,6 +390,16 @@ const GRANTS = `
   -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
   -- policy are authored by staff, not by an ingest path.
   GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
+  -- Industry taxonomy (0128, MI-S3): shared REFERENCE data, er-read only. The app role deliberately gets
+  -- NOTHING — the ^master_ wall (layerZeroWall.test.ts) admits no exceptions, and it is executable. Any
+  -- customer-facing label/facet read goes through an API seam under withErTx (the market routes' pattern)
+  -- or a denormalized label column, never an app-role join. Writes revoked everywhere (curation is
+  -- staff/migration work).
+  GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_er;
+  -- Market rollups (0130, MI-S7): a derived, non-PII aggregate cache. er gets SELECT only (the API read
+  -- seam); the rebuild runs on the OWNER connection inside the system sweep — the deliberate exception
+  -- that keeps er's never-DELETE posture intact (reasoned in the migration header).
+  GRANT SELECT ON master_market_rollups TO leadwolf_er;
   -- source_fetch_registry (0118) — URLs + ids only, no PII. READ by the ER role so the database lookup and
   -- the add-to-workspace materializer can hop a Sales-Nav lead URL → resolved_person_id in the same withErTx
   -- as the person read (D8). Writes stay on the owner/withPrivilegedTx path (registerUrl/recordFetch).

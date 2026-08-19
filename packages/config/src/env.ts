@@ -852,8 +852,37 @@ export const appEnvSchema = z
       .optional()
       .transform((v) => v === "true"),
     // LINKEDIN_SIGNALS_ENABLED — master_signals emission from that landing (job_change on a primary-employer
-    // transition; headcount_surge/decline past the threshold).
+    // transition; exec_hired/exec_departed on the same transition; headcount_surge/decline past the
+    // threshold).
     LINKEDIN_SIGNALS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // CONFIDENCE_POLICY_BADGE_ENABLED — C9 resolution (decisions.md 2026-08-19, D-2): the S-10 badge prices
+    // decay off master_confidence_policy half-lives instead of the hardcoded FIELD_HALF_LIFE_DAYS.
+    // Display-only rollout, per-row is_enabled underneath; off ⇒ byte-identical badges.
+    CONFIDENCE_POLICY_BADGE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // SIGNAL_FANOUT_ENABLED — market-intelligence MI-S6: the leader-locked sweep projecting Layer-0
+    // company signals (master_signals) onto tenant_signals for every workspace holding a bridged account.
+    // Off ⇒ the queue is not built and tenant_signals stays empty.
+    SIGNAL_FANOUT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // ACCOUNT_SCORING_ENABLED — market-intelligence MI-S4: the leader-locked sweep rescoring accounts
+    // whose tenant_signals moved since the watermark (computeAccountScore appends versioned rows; the DB
+    // trigger caches fit onto accounts.icp_fit_score). Off ⇒ not built.
+    ACCOUNT_SCORING_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // MARKET_ROLLUPS_ENABLED — market-intelligence MI-S7: the daily leader-locked rebuild of the
+    // master_market_rollups segment cache + the /api/v1/market read surface. Off ⇒ sweep not built and
+    // the API answers an honest empty board.
+    MARKET_ROLLUPS_ENABLED: z
       .string()
       .optional()
       .transform((v) => v === "true"),

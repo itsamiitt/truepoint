@@ -1,11 +1,21 @@
 /*
- * globals.css — auth-origin global styles. Pulls in Tailwind v4 + the shared TruePoint theme, then sets
- * the page background (the muted auth surface). All screen + component styling now lives in the
- * @leadwolf/ui primitives and Tailwind utilities; the old hand-rolled .auth-* classes were removed once
- * every screen migrated. Light, near-monochrome; Geist via tokens.css. (04 §7, brand-identity.md.)
+ * globals.css — auth-origin global styles.
+ *
+ * The auth origin now consumes the SAME foundation as apps/web, apps/admin and apps/forge: the --tp-* tokens
+ * and the @leadwolf/ui primitives stylesheet. It previously imported only Tailwind + the theme bridge, which
+ * left it a fourth styling system — no primitives, so no Tp* control could render here, and every screen was
+ * built from Tailwind utility classes in app JSX (which truepoint-design forbids in apps/*).
+ *
+ * Import order is load-bearing: tailwindcss first (theme.css maps Tailwind's tokens and needs the engine
+ * present), then the theme bridge, then the tokens it maps onto, then the primitives that consume them.
+ * primitives.css is last so its .tp-ui-* rules win over Tailwind's preflight.
+ *
+ * Light, near-monochrome; Geist via tokens.css. (04 §7, brand-identity.md.)
  */
 @import "tailwindcss";
 @import "@leadwolf/ui/theme.css";
+@import "@leadwolf/ui/tokens.css";
+@import "@leadwolf/ui/primitives.css";
 
 body {
   background: var(--tp-surface-2);

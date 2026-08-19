@@ -3,6 +3,7 @@
 // and advances to /verify. SSR, no-JS friendly, carries the app's PKCE/return context as hidden fields.
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { startSignup } from "./actions";
 
@@ -32,10 +33,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
       title="Create your account"
       subtitle="We'll email you a code to confirm it's you."
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/login?${carry}`}
-        >
+        <a className={styles.link} href={`/login?${carry}`}>
           Already have an account? Sign in
         </a>
       }
@@ -44,7 +42,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
         <input type="hidden" name="app_origin" value={appOrigin} />
         <input type="hidden" name="code_challenge" value={codeChallenge} />
         <input type="hidden" name="state" value={state} />
-        <div className="mb-4">
+        <div className={styles.spaced}>
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -60,7 +58,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
           />
         </div>
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             {errorMessage}
           </Alert>
         ) : null}

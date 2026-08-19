@@ -18,9 +18,11 @@
 //   7. appendProvenanceEvents      — from the ACTUAL writableFields (never the incoming set — a pinned
 //                                    field was not asserted by this write). D7: an append failure fails
 //                                    the WHOLE landing; a fact without its assertion must not survive.
-//   8. signals (flag-gated)        — job_change on a primary-employer transition (S-13/S-09);
-//                                    headcount_surge/decline past the threshold. Fact + event, the
-//                                    master_company_funding precedent.
+//   8. signals (flag-gated)        — job_change on a primary-employer transition (S-13/S-09), plus
+//                                    exec_hired/exec_departed on the same transition when the title infers
+//                                    c_suite/vp (leadership family, company-subject); headcount_surge/
+//                                    decline past the threshold. Fact + event, the master_company_funding
+//                                    precedent.
 //
 // GATES: LINKEDIN_SOURCE_LANDING_ENABLED gates the whole function (env-only — Layer 0 has no tenant to key
 // a flag on); PROVENANCE_EVENTS_ENABLED gates step 7 (the shipped asymmetric posture);
@@ -32,6 +34,7 @@ import {
   evidenceRepository,
   masterEducationRepository,
   masterGraphRepository,
+  masterIndustryRepository,
   masterProfileRepository,
   masterSignalsRepository,
   withErTx,
@@ -48,6 +51,7 @@ import { encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { acceptanceFor, resolveLawfulBasis } from "../provenance/lawfulBasis.ts";
 import { planProvenanceEvents } from "../provenance/planEvents.ts";
+import { inferSeniorityFromTitle } from "../search/inferSeniority.ts";
 import {
   HEADCOUNT_SIGNAL_MIN_PCT,
   LINKEDIN_API_CONFIDENCE,
@@ -395,6 +399,40 @@ async function landPerson(
         sourceName: LINKEDIN_API_SOURCE,
         evidenceRef: ev.id,
       });
+
+      // Leadership signals (exec_hired / exec_departed) ride the SAME transition guard: a first-observed
+      // person never fires them (no old primary ⇒ no change happened in the world, only in our coverage).
+      // Subject is the COMPANY — that is the row a watchlist watches. The payload references the person by
+      // id only (assertNoContactValues is the contract; the channel tables stay the sole PII path).
+      const newTitle = primaryIdx != null ? (mapped.positions[primaryIdx]?.title ?? null) : null;
+      const newSeniority = inferSeniorityFromTitle(newTitle);
+      if (newPrimaryCompanyId && (newSeniority === "c_suite" || newSeniority === "vp")) {
+        await masterSignalsRepository.recordSignal(tx, {
+          subjectType: "company",
+          subjectId: newPrimaryCompanyId,
+          typeCode: "exec_hired",
+          observedAt: input.fetchedAt,
+          payload: { masterPersonId, seniority: newSeniority, title: newTitle },
+          relatedCompanyId: oldPrimary?.masterCompanyId ?? null,
+          confidence: LINKEDIN_API_CONFIDENCE,
+          sourceName: LINKEDIN_API_SOURCE,
+          evidenceRef: ev.id,
+        });
+      }
+      const oldSeniority = inferSeniorityFromTitle(oldPrimary?.title);
+      if (oldPrimary?.masterCompanyId && (oldSeniority === "c_suite" || oldSeniority === "vp")) {
+        await masterSignalsRepository.recordSignal(tx, {
+          subjectType: "company",
+          subjectId: oldPrimary.masterCompanyId,
+          typeCode: "exec_departed",
+          observedAt: input.fetchedAt,
+          payload: { masterPersonId, seniority: oldSeniority, title: oldPrimary.title },
+          relatedCompanyId: newPrimaryCompanyId,
+          confidence: LINKEDIN_API_CONFIDENCE,
+          sourceName: LINKEDIN_API_SOURCE,
+          evidenceRef: ev.id,
+        });
+      }
     }
 
     await evidenceRepository.enqueueProjection(tx, {
@@ -480,6 +518,16 @@ async function landCompany(
       writableValues,
       fold.provenance,
     );
+    // 4a′. Canonical industry node (0128, MI-S3) — a DERIVED column, resolved from the vendor spelling via
+    // the alias table, deliberately outside the fold (the current_company_id posture: the fold governs the
+    // raw `industry` string; the node is a normalization of whatever won). Unresolved spellings stay NULL —
+    // an honest gap curation closes by adding an alias, not a code change.
+    const rawIndustry = mapped.fields.industry;
+    if (typeof rawIndustry === "string" && rawIndustry) {
+      const industryId = await masterIndustryRepository.resolveIdForLabel(tx, rawIndustry);
+      if (industryId) await masterIndustryRepository.setCompanyIndustry(tx, masterCompanyId, industryId);
+    }
+
     // 4b. Domain fill for a company minted domainless (from a position's numeric id): the company document
     // carries the website, and accounts are keyed by registrable domain — without this the add-to-workspace
     // materializer could never upsert the employer account. FILL only; a domain another company holds is an

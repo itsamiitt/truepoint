@@ -42,6 +42,14 @@ export const CANONICAL_DOMAINS = [
   "ai",
   "ai-usage",
   "alerts",
+  // The Signals web DESTINATION (market-intelligence MI-P2, D-9 IA regroup). Web slices are
+  // destination-keyed while api/core/db stay resource-keyed under `alerts` — the reveal/prospect split.
+  "signals",
+  // The /companies/:id web DESTINATION (market-intelligence MI-1) — the account drawer promoted to a
+  // canonical URL; its api/core/db stay resource-keyed under account-intelligence/reveal.
+  "companies",
+  // The market-segment board resource (MI-S7): /api/v1/market over the non-PII rollup cache.
+  "market",
   "compliance",
   "admin-settings",
   "home",
@@ -125,6 +133,12 @@ export const QUEUE_DOMAIN = {
   // The S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1) — the trigger the shipped
   // detectJobChange/recordJobChange stack never had. Freshness/decay, so data-health rather than scoring.
   jobChangeSweep: "data-health",
+  // The company-signal fan-out sweep (market-intelligence MI-S6) — the alerts substrate's delivery step.
+  signalFanout: "alerts",
+  // The account-rescore sweep (MI-S4) — scoring, beside its contact-grain sibling.
+  accountScoringSweep: "scoring",
+  // The market-segment rollup rebuild (MI-S7) — the reports-facing aggregate cache.
+  marketRollupSweep: "reports",
 };
 export const REPO_DOMAIN = {
   // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
@@ -183,6 +197,23 @@ export const REPO_DOMAIN = {
   masterTechnology: "master-sync",
   // Layer-0 canonical signal store (migration 0103) — same system-owned graph.
   masterSignals: "master-sync",
+  // Layer-0 confidence-policy constants (migration 0107; C9 resolution 2026-08-19) — same system-owned
+  // graph, read under the same withErTx access path as its siblings.
+  masterConfidencePolicy: "master-sync",
+  // Layer-0 hiring-intelligence evidence table (0127, MI-S1) — same system-owned graph.
+  masterJobPostings: "master-sync",
+  // Industry taxonomy reference tables (0128, MI-S3) — curated beside the same graph.
+  masterIndustry: "master-sync",
+  // The signal fan-out pair (market-intelligence MI-S6): the owner-conn census and the tenant_signals
+  // projection. Registered under the canonical `alerts` domain — tenant_signals IS the alerts substrate.
+  signalFanout: "alerts",
+  tenantSignals: "alerts",
+  // Watchlists + signal subscriptions (MI-S5) — the opt-in layer of the same alerts substrate.
+  watchlist: "alerts",
+  // Account-grain score history (MI-S4) — scoring, beside `score` (the contact grain).
+  accountScore: "scoring",
+  // Market-segment rollup cache (MI-S7) — the reports-facing aggregate seam.
+  marketRollup: "reports",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
   // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of

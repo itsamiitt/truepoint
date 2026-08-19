@@ -587,6 +587,12 @@ export {
   type BadgeAggregate,
   type ConfidenceBadgeV1,
 } from "./data-health/badgeV1.ts";
+// C9 (decisions.md 2026-08-19): the badge's table-sourced half-life constants — gated, cached, and
+// undefined-on-any-failure so the hardcoded constants always remain the fallback.
+export {
+  badgeHalfLifePolicy,
+  resetConfidencePolicyCache,
+} from "./data-health/confidencePolicy.ts";
 // Job-change detection (Phase 4 decay engine; S-09/S-13/S-14). PURE, and it compares CONFIDENCES rather than
 // timestamps — 07's rule that three corroborated confirmations beat a year-old crawl is a confidence
 // comparison, so this composes the same model the badge uses instead of inventing a second one.
@@ -616,6 +622,13 @@ export {
   type JobChangeSweepResult,
   type JobChangeSweepScope,
 } from "./data-health/runJobChangeSweep.ts";
+// Signal fan-out delivery (market-intelligence MI-S6): the per-workspace tenant half of the
+// signal_fanout sweep — projects Layer-0 company signals onto bridged accounts under RLS.
+export {
+  fanoutSignalsToWorkspace,
+  type FanoutResult,
+  type FanoutScope,
+} from "./alerts/fanoutSignals.ts";
 // The other half of a departure (S-14): once someone leaves, the seller's problem is who to talk to instead.
 // Pure ranking over a supplied candidate set — finding people at a company is already a query
 // (erRepository.findBlockingCandidates); which of them succeeded the role is the judgement.
@@ -634,6 +647,15 @@ export {
   type ComputeScoreInput,
   type ComputeScoreResult,
 } from "./scoring/computeScore.ts";
+// Account-grain scorer (MI-S4/MI-7): company facts + delivered-signal momentum, breakdown-explained.
+export {
+  ACCOUNT_SCORE_MODEL_VERSION,
+  accountIcpFit,
+  accountMomentum,
+  computeAccountScore,
+  type AccountFitInputs,
+  type ComputeAccountScoreResult,
+} from "./scoring/computeAccountScore.ts";
 export { logActivity, type LogActivityInput } from "./activity/logActivity.ts";
 
 // Sales Navigator assisted (HITL) capture (05 §5, M7, ADR-0009): a human pastes a link; we parse a dedup id

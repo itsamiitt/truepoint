@@ -7,7 +7,9 @@ import {
   FastImportFailedError,
   defaultEmailVerifier,
   defaultPhoneVerifier,
+  computeAccountScore,
   diskFileStore,
+  fanoutSignalsToWorkspace,
   markFastImportFailed,
   registerEmailProviders,
   runAccountBackfillForWorkspace,
@@ -17,6 +19,7 @@ import {
   stubMalwareScanner,
 } from "@leadwolf/core";
 import {
+  accountScoreRepository,
   crmConnectionRepository,
   db,
   notificationRepository,
@@ -190,6 +193,21 @@ import {
   type JobChangeSweepJobData,
   makeProcessJobChangeSweep,
 } from "./queues/jobChangeSweep.ts";
+import {
+  SIGNAL_FANOUT_QUEUE,
+  type SignalFanoutJobData,
+  makeProcessSignalFanout,
+} from "./queues/signalFanout.ts";
+import {
+  ACCOUNT_SCORING_SWEEP_QUEUE,
+  type AccountScoringSweepJobData,
+  makeProcessAccountScoringSweep,
+} from "./queues/accountScoringSweep.ts";
+import {
+  MARKET_ROLLUP_SWEEP_QUEUE,
+  type MarketRollupSweepJobData,
+  makeProcessMarketRollupSweep,
+} from "./queues/marketRollupSweep.ts";
 import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
@@ -2027,6 +2045,92 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "job-change-sweep" })
       .catch((e) =>
         log.error("failed to schedule the job-change sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Signal fan-out sweep (market-intelligence MI-S6) — DARK behind SIGNAL_FANOUT_ENABLED. The
+  // jobChangeSweep sibling for COMPANY-subject signals: Layer-0 master_signals reaching every workspace
+  // holding a bridged account, as tenant_signals rows the feed/scoring/alerts read under RLS. Owner-conn
+  // census returns ids only (the C-02 boundary); delivery runs one withTenantTx per workspace and
+  // collapses redeliveries on the (workspace, master_signal_id) unique wall. The sweep re-checks the env
+  // gate before its leader lock, so an unset env leaves it inert.
+  if (env.SIGNAL_FANOUT_ENABLED) {
+    const signalFanoutQueue = tracedQueue<SignalFanoutJobData>(SIGNAL_FANOUT_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<SignalFanoutJobData>(
+          SIGNAL_FANOUT_QUEUE,
+          makeProcessSignalFanout(connection, fanoutSignalsToWorkspace),
+          { connection },
+        ),
+        SIGNAL_FANOUT_QUEUE,
+      ),
+    );
+    void signalFanoutQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "signal-fanout-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the signal fan-out sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Account-scoring sweep (market-intelligence MI-S4) — DARK behind ACCOUNT_SCORING_ENABLED. Event-driven
+  // rescore: accounts whose tenant_signals moved since the watermark get a fresh versioned account_scores
+  // row (fit + momentum, breakdown-explained); the DB trigger caches fit onto accounts.icp_fit_score.
+  // Same census/watermark discipline as signal_fanout directly above.
+  if (env.ACCOUNT_SCORING_ENABLED) {
+    const accountScoringQueue = tracedQueue<AccountScoringSweepJobData>(
+      ACCOUNT_SCORING_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        tracedWorker<AccountScoringSweepJobData>(
+          ACCOUNT_SCORING_SWEEP_QUEUE,
+          makeProcessAccountScoringSweep(
+            connection,
+            (input) => computeAccountScore(input),
+            (scope, since, limit) =>
+              withTenantTx(scope, (tx) =>
+                accountScoreRepository.listAccountsWithNewSignals(tx, since, limit),
+              ),
+          ),
+          { connection },
+        ),
+        ACCOUNT_SCORING_SWEEP_QUEUE,
+      ),
+    );
+    void accountScoringQueue
+      .add("sweep", {}, { repeat: { every: 30 * 60_000 }, jobId: "account-scoring-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the account-scoring sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Market rollup sweep (market-intelligence MI-S7) — DARK behind MARKET_ROLLUPS_ENABLED. Daily
+  // full-window rebuild of the non-PII segment cache; failure mode = stale board, never a wrong number.
+  if (env.MARKET_ROLLUPS_ENABLED) {
+    const marketRollupQueue = tracedQueue<MarketRollupSweepJobData>(MARKET_ROLLUP_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<MarketRollupSweepJobData>(
+          MARKET_ROLLUP_SWEEP_QUEUE,
+          makeProcessMarketRollupSweep(connection),
+          { connection },
+        ),
+        MARKET_ROLLUP_SWEEP_QUEUE,
+      ),
+    );
+    void marketRollupQueue
+      .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "market-rollup-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the market rollup sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

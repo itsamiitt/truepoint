@@ -13,15 +13,15 @@
 }
 
 .subheading {
-  font-size: var(--tp-text-sm);
+  font-size: 13px;
   font-weight: 600;
-  color: var(--tp-text);
+  color: var(--tp-ink);
   margin: 0;
 }
 
 .footnote {
-  font-size: var(--tp-text-xs);
-  color: var(--tp-text-muted);
+  font-size: 12px;
+  color: var(--tp-ink-3);
   margin: 0;
 }
 

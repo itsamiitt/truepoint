@@ -3,6 +3,7 @@
 // starts the IdP round-trip (17 §7). SSR, no-JS friendly; carries the tenant + the app's PKCE/return context.
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { Alert, Badge, Button } from "@leadwolf/ui";
 import { initiateSso } from "./actions";
 
@@ -28,16 +29,13 @@ export default async function SsoPage({ searchParams }: { searchParams: SearchPa
       title="Single sign-on"
       subtitle="Your organization uses SSO. Continue to your identity provider to sign in."
       footer={
-        <a
-          className="underline underline-offset-2 hover:text-muted-foreground"
-          href={`/login?${carry}`}
-        >
+        <a className={styles.link} href={`/login?${carry}`}>
           Use a different account
         </a>
       }
     >
       {email ? (
-        <Badge className="mb-4">
+        <Badge className={styles.spaced}>
           <span>{email}</span>
         </Badge>
       ) : null}
@@ -48,7 +46,7 @@ export default async function SsoPage({ searchParams }: { searchParams: SearchPa
         <input type="hidden" name="code_challenge" value={codeChallenge} />
         <input type="hidden" name="state" value={state} />
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             Single sign-on isn&apos;t available right now. Contact your administrator or try another
             account.
           </Alert>

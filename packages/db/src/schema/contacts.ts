@@ -56,6 +56,9 @@ export const accounts = pgTable(
     salesNavAccountUrl: varchar("sales_nav_account_url", { length: 500 }),
     industry: varchar("industry", { length: 100 }),
     subIndustry: varchar("sub_industry", { length: 100 }),
+    // Canonical taxonomy node (0128, MI-S3) — derived like the master twin; facets group by this, never
+    // by the free-text spelling.
+    industryId: uuid("industry_id"),
     employeeCount: integer("employee_count"),
     revenueRange: varchar("revenue_range", { length: 50 }),
     hqCountry: varchar("hq_country", { length: 100 }),

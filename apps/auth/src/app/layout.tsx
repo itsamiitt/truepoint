@@ -4,7 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import "@leadwolf/ui/tokens.css";
+// tokens.css is NOT imported here: globals.css `@import`s it, which also fixes the ORDER — tokens must be
+// defined before the theme bridge and primitives that consume them.
 import "./globals.css";
 
 export const metadata: Metadata = {

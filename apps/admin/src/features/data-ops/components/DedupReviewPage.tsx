@@ -5,7 +5,14 @@
 // the human-decision queue (populated once probabilistic matching ships); `auto` rows are deterministic, for oversight.
 "use client";
 
-import { type Column, DataTable, EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
+} from "@leadwolf/ui";
 import { GitMerge } from "lucide-react";
 import { shortDate } from "../format";
 import { useDedupReview } from "../hooks/useDedupReview";
@@ -61,7 +68,7 @@ export function DedupReviewPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Dedup review"
         subtitle={
@@ -89,6 +96,6 @@ export function DedupReviewPage() {
       >
         <DataTable columns={columns} rows={links ?? []} rowKey={(r) => r.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }

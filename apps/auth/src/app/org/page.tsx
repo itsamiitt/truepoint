@@ -3,6 +3,7 @@
 // workspace step or completes. Requires a pending login transaction (else back to /login). SSR + WCAG AA.
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import styles from "@/shared/auth.module.css";
 import { getLoginTransaction } from "@leadwolf/auth";
 import { tenantMemberRepository } from "@leadwolf/db";
 import { Alert, Button, RadioGroup, RadioOption } from "@leadwolf/ui";
@@ -23,7 +24,7 @@ export default async function OrgPage({ searchParams }: { searchParams: SearchPa
   return (
     <AuthShell title="Choose an organization" subtitle="You belong to more than one.">
       <form action={selectOrg}>
-        <RadioGroup aria-label="Organizations" className="mb-4">
+        <RadioGroup aria-label="Organizations" className={styles.spaced}>
           {orgs.map((o, i) => (
             <RadioOption
               key={o.tenantId}
@@ -34,13 +35,15 @@ export default async function OrgPage({ searchParams }: { searchParams: SearchPa
             >
               <span>{o.tenantName}</span>
               {o.isTenantOwner ? (
-                <span className="ml-auto text-xs text-[var(--tp-ink-4)]">owner</span>
+                <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--tp-ink-4)" }}>
+                  owner
+                </span>
               ) : null}
             </RadioOption>
           ))}
         </RadioGroup>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className={styles.spaced}>
             Please choose an organization.
           </Alert>
         ) : null}

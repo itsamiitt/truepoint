@@ -16,6 +16,7 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   import_complete: "Import",
   dsar_update: "Compliance",
   job_change: "Job change",
+  account_signal: "Account signal",
   system: "System",
 };
 
@@ -28,6 +29,8 @@ const TYPE_TONE: Record<NotificationType, Tone> = {
   // Warning, matching the bell. The next email to a departed contact bounces and the next call reaches
   // someone who left — that is not the same class of news as "your import finished".
   job_change: "warning",
+  // Opt-in market signal on a watched account — news the subscriber asked for, not danger.
+  account_signal: "muted",
   system: "muted",
 };
 
@@ -38,6 +41,7 @@ const TYPE_HREF: Record<NotificationType, string> = {
   dsar_update: "/settings",
   // Safety net only — job_change always carries a contact entity, so hrefFor deep-links to the record.
   job_change: "/prospect",
+  account_signal: "/signals",
   system: "/home",
 };
 

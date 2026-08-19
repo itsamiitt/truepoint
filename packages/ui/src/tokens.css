@@ -129,6 +129,26 @@
      RAIL_W 68 / DRAWER_W 244). Collapsed = an icon rail; hover/focus/pin expands to the drawer. */
   --tp-rail-w: 60px;
   --tp-rail-expanded: 232px;
+
+  /* Page layout — the ONE page-container contract, consumed by the PageContainer primitive (and by the
+     .tp-page alias in @leadwolf/app-shell). Before these existed every feature invented its own max-width:
+     ten different values across the four apps, fifteen of them with NO margin:auto, so every page pinned
+     flush-left with dead space on the right. A container ALWAYS centers; only the cap varies by page type.
+       fluid -> no cap (tables, lists, search) | default -> --tp-page-max | narrow -> --tp-page-max-narrow */
+  --tp-page-max: 1280px;
+  --tp-page-max-narrow: 880px;
+  --tp-page-pad-y: var(--tp-space-6);
+  --tp-page-pad-x: var(--tp-space-8);
+  --tp-page-pad-y-sm: var(--tp-space-5);
+  --tp-page-pad-x-sm: var(--tp-space-4);
+
+  /* Breakpoints — the three documented viewports (design skill patterns.md "Responsive Breakpoints").
+     Recorded here as the single source of truth. CSS cannot interpolate a var() into a media query, so
+     @media rules still spell the number out; these exist so a fourth value never gets invented (the code
+     had eight: 480/540/640/720/768/769/860/900).  desktop >= 769px | mobile <= 768px | small <= 480px */
+  --tp-bp-desktop: 769px;
+  --tp-bp-mobile: 768px;
+  --tp-bp-small: 480px;
 }
 
 html {

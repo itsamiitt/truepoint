@@ -21,14 +21,16 @@
 // ORGANIZATIONS, not people; the response carries no contact values, no person ids, and no contributor
 // reference. The education route below is the one that touches personal data — see its own note.
 
-import { buildConfidenceBadgeV1 } from "@leadwolf/core";
+import { badgeHalfLifePolicy, buildConfidenceBadgeV1 } from "@leadwolf/core";
 import {
   type Tx,
   accountRepository,
+  accountSearchRepository,
   contactRepository,
   intentSignalRepository,
   masterEducationRepository,
   masterEmploymentReadRepository,
+  masterJobPostingsRepository,
   masterProfileRepository,
   masterTechnologyRepository,
   provenanceBadgeRepository,
@@ -42,12 +44,14 @@ import {
   accountAlumniResponse,
   accountDisplacementResponse,
   accountHeadcountResponse,
+  accountPostingsResponse,
   accountTechnologiesResponse,
   contactAttributesResponse,
   contactEducationResponse,
   contactEmploymentResponse,
   contactProvenanceResponse,
   contactSignalsResponse,
+  maskedAccountSchema,
   technologyPeersResponse,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -79,6 +83,22 @@ async function resolveBridge(
   if (!account) throw new NotFoundError("Account not found.");
   return { masterCompanyId: account.masterCompanyId };
 }
+
+/**
+ * GET /accounts/:accountId — the base masked-account DTO for the /companies/:id page (MI-1).
+ * Overlay-only read under RLS: same SELECTION as account search, so the page and the grid never disagree.
+ * No Layer-0 hop here — the momentum/technology/signals sections each have their own seams.
+ */
+accountIntelligenceRoutes.get("/:accountId", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("workspace_required");
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const account = await withTenantTx(scope, (tx: Tx) =>
+    accountSearchRepository.getMaskedById(tx, c.req.param("accountId")),
+  );
+  if (!account) throw new NotFoundError("Account not found.");
+  return c.json({ account: maskedAccountSchema.parse(account) });
+});
 
 accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
   const workspaceId = c.get("workspaceId");
@@ -444,8 +464,9 @@ contactIntelligenceRoutes.get("/:contactId/provenance", async (c) => {
     source_count: number;
     strongest_method: string | null;
   }> = [];
+  const halfLifePolicy = await badgeHalfLifePolicy();
   for (const field of ["email", "phone"] as const) {
-    const badge = buildConfidenceBadgeV1(field, aggregate);
+    const badge = buildConfidenceBadgeV1(field, aggregate, new Date(), halfLifePolicy);
     if (!badge) continue; // no evidence for this field — omit it, never render a zero
     fields.push({
       field,
@@ -617,6 +638,47 @@ accountIntelligenceRoutes.get("/:accountId/headcount", async (c) => {
     accountHeadcountResponse.parse({
       resolved: true,
       series: series.map((p) => ({ month: p.month, employee_count: p.employeeCount })),
+    }),
+  );
+});
+
+/**
+ * GET /:accountId/postings — open job postings for this account's company (0127, MI-S1).
+ * Same two-transaction shape as headcount. Organization facts only — the table carries no person data by
+ * design. Empty until the D-6 licensed postings feed lands; the UI self-hides on an empty answer.
+ */
+accountIntelligenceRoutes.get("/:accountId/postings", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view postings.");
+  }
+
+  const { masterCompanyId } = await resolveBridge(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("accountId"),
+  );
+  if (!masterCompanyId) {
+    return c.json(accountPostingsResponse.parse({ resolved: false, postings: [], by_department: [] }));
+  }
+
+  const [postings, byDepartment] = await withErTx(async (tx: Tx) =>
+    Promise.all([
+      masterJobPostingsRepository.listOpenForCompany(tx, masterCompanyId, 50),
+      masterJobPostingsRepository.countOpenByDepartment(tx, masterCompanyId),
+    ]),
+  );
+
+  return c.json(
+    accountPostingsResponse.parse({
+      resolved: true,
+      postings: postings.map((p) => ({
+        title: p.title,
+        department: p.department,
+        seniority_level: p.seniorityLevel,
+        location: p.location,
+        posted_at: p.postedAt,
+      })),
+      by_department: byDepartment,
     }),
   );
 });

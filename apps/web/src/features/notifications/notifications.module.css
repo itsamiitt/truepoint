@@ -19,7 +19,7 @@
   padding: 0;
   max-width: 760px;
   border: 1px solid var(--tp-hairline);
-  border-radius: var(--tp-radius, 8px);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -37,7 +37,7 @@
 
 /* Unread: a subtle left accent rail + a faint tint. */
 .unread {
-  box-shadow: inset 3px 0 0 var(--tp-accent, #2563c9);
+  box-shadow: inset 3px 0 0 var(--tp-cobalt);
   background: var(--tp-surface-2, transparent);
 }
 
@@ -102,7 +102,7 @@
   font-size: 12px;
   color: var(--tp-ink-3);
   cursor: pointer;
-  border-radius: var(--tp-radius, 6px);
+  border-radius: var(--tp-radius-sm);
 }
 
 .markBtn:hover {

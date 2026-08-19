@@ -11,14 +11,88 @@
  * cross-tenant note) stay in their own app's globals.css — this file is only the frame.
  */
 
+/* ── Base layer ─────────────────────────────────────────────────────────────────────────────────────── */
+/* box-sizing, the body rule and .app-button were byte-identical in apps/web, apps/admin and apps/forge
+   globals.css. They live here now so the three cannot drift; each app's globals.css keeps only what is
+   genuinely its own. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font-family: var(--font-sans);
+}
+
+/* Scrollbars — thin and quiet, but VISIBLE. They used to be hidden app-wide
+   (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`), which read as "clean" but removed
+   the only signal that a region had more content. Combined with .tp-shell{overflow:hidden},
+   .tp-content{overflow-y:auto} and the table wrapper's overflow-x, that is what made content look cut off:
+   a clipped table gave no hint it could scroll, and on a non-touch desktop shift+wheel was the only way to
+   reach the hidden columns. A thin token-coloured bar keeps the look and restores the affordance
+   (also WCAG 2.2 — scroll regions need a visible cue). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tp-hairline-2) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--tp-hairline-2);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--tp-ink-4);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Legacy plain button used by the pre-shell entry/gate pages. New work uses TpButton from @leadwolf/ui. */
+.app-button {
+  height: 40px;
+  padding: 0 var(--tp-space-4);
+  font: inherit;
+  font-weight: 500;
+  color: var(--tp-on-fill);
+  background: var(--tp-btn);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition-property: background-color, transform;
+  transition-duration: var(--tp-duration-fast);
+  transition-timing-function: var(--tp-ease);
+}
+.app-button:hover {
+  background: var(--tp-btn-700);
+}
+.app-button:active {
+  transform: translateY(0.5px);
+}
+
 /* ── Centered states, boot splash, brand lockup ─────────────────────────────────────────────────────── */
 /* Centered states: loading + the signed-out "Sign in" card. */
 .tp-center-screen {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* dvh with a vh fallback — 100vh sits under mobile browser chrome, pushing the card off-centre. */
   min-height: 100vh;
-  padding: 24px;
+  min-height: 100dvh;
+  padding: var(--tp-space-6);
 }
 .tp-signin-card {
   display: flex;
@@ -31,7 +105,7 @@
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
-  box-shadow: 0 6px 24px rgb(17 24 39 / 6%);
+  box-shadow: var(--tp-shadow-card-hover);
 }
 .tp-signin-title {
   margin: 0;
@@ -95,6 +169,9 @@
   min-height: 0;
   min-width: 0;
   overflow-y: auto; /* content scrolls; outer shell does not */
+  /* The page canvas. patterns.md specifies surface-2 on <main>, but it lived nowhere: only the Home
+     feature painted its own, so Home read grey and all 37 other web pages read white. */
+  background: var(--tp-surface-2);
 }
 
 /* Sidebar — a collapsible icon rail in column 1 of the shell grid (in-flow, NOT fixed on desktop, so the main
@@ -453,44 +530,53 @@
 
 /* ── Command palette (cmdk) ─────────────────────────────────────────────────────────────────────────── */
 /* Ported from the apps/web CommandPalette.module.css; global classes so no consuming app needs CSS-module
-   transpile configuration for a package import. */
+   transpile configuration for a package import.
+
+   These are .tp-palette-* and must stay that way. They were previously the bare names .overlay, .content,
+   .dialog, .command, .input, .list, .empty, .group and .item, which did not match the .tp-palette-* class
+   names CommandPalette.tsx actually renders — so the palette shipped with NO styling at all in web, admin
+   and forge. Bare names were also a live collision risk: this is a GLOBAL sheet loaded into every console,
+   and `.content { position: fixed; top: 14vh }` or `.input { height: 52px; border: 0 }` would silently
+   capture any element that ever acquired one of those very ordinary class names. */
 
 /* Radix dialog overlay — a calm scrim, matching the reveal dialog's backdrop weight. */
-.overlay {
+.tp-palette-overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
-  background: rgb(17 24 39 / 32%);
+  z-index: var(--tp-z-popover);
+  background: var(--tp-scrim);
 }
 
 /* Radix dialog content — centered near the top so the palette feels like a launcher, not a modal block. */
-.content {
+.tp-palette-content {
   position: fixed;
   top: 14vh;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 71;
+  z-index: calc(var(--tp-z-popover) + 1);
   width: 100%;
   max-width: 560px;
-  padding: 0 16px;
+  padding: 0 var(--tp-space-4);
 }
 
-.dialog {
+.tp-palette-dialog {
   display: block;
 }
 
-.command {
+.tp-palette-command {
   display: flex;
   flex-direction: column;
+  /* dvh with a vh fallback — 100vh-based units sit under mobile browser chrome. */
   max-height: 60vh;
+  max-height: 60dvh;
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
-  box-shadow: 0 16px 48px rgb(17 24 39 / 18%);
+  box-shadow: var(--tp-shadow-dialog);
   overflow: hidden;
 }
 
-.input {
+.tp-palette-input {
   height: 52px;
   padding: 0 18px;
   font: inherit;
@@ -500,17 +586,23 @@
   border: 0;
   border-bottom: 1px solid var(--tp-hairline-2);
   outline: none;
+  flex: 0 0 auto;
 }
-.input::placeholder {
+.tp-palette-input::placeholder {
   color: var(--tp-ink-4);
 }
 
-.list {
+.tp-palette-list {
+  /* flex:1 + min-height:0 are load-bearing. A flex item's automatic minimum size is its CONTENT size, so
+     without them this never shrinks to the parent's max-height, never scrolls, and the parent's
+     overflow:hidden simply clips every result past the fold — with no way to reach them. */
+  flex: 1;
+  min-height: 0;
   padding: 6px;
   overflow-y: auto;
 }
 
-.empty {
+.tp-palette-empty {
   padding: 22px 14px;
   text-align: center;
   font-size: 13px;
@@ -518,14 +610,14 @@
 }
 
 /* Group heading — a small uppercase label, hairline-separated from the previous group. */
-.group {
+.tp-palette-group {
   padding: 4px 0;
 }
-.group + .group {
+.tp-palette-group + .tp-palette-group {
   margin-top: 4px;
   border-top: 1px solid var(--tp-hairline);
 }
-.group [cmdk-group-heading] {
+.tp-palette-group [cmdk-group-heading] {
   padding: 8px 10px 4px;
   font-size: 11px;
   font-weight: 600;
@@ -534,18 +626,18 @@
   color: var(--tp-ink-4);
 }
 
-.item {
+.tp-palette-item {
   display: flex;
   align-items: center;
   height: 38px;
   padding: 0 10px;
   font-size: 14px;
   color: var(--tp-ink-2);
-  border-radius: 7px;
+  border-radius: var(--tp-radius-sm);
   cursor: pointer;
 }
 /* cmdk marks the active (keyboard/pointer) item with data-selected — a subtle surface fill, no color. */
-.item[data-selected="true"] {
+.tp-palette-item[data-selected="true"] {
   background: var(--tp-surface-3);
   color: var(--tp-ink);
 }
@@ -582,8 +674,14 @@
   color: var(--tp-ink-3);
 }
 .tp-page {
-  padding: 28px 32px;
-  max-width: 1100px;
+  /* Kept as an alias so the 28 admin/forge call sites did not all have to change at once; new code uses
+     <PageContainer> from @leadwolf/ui. margin-inline:auto is the fix: this rule capped width at 1100px
+     with NO auto margin, so every staff-console page pinned flush-left and left a dead gutter on any
+     display wider than that. Values now come from the shared page tokens. */
+  width: 100%;
+  max-width: var(--tp-page-max);
+  margin-inline: auto;
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x);
 }
 .tp-stat-grid {
   display: grid;
@@ -636,6 +734,6 @@
 }
 @media (max-width: 768px) {
   .tp-page {
-    padding: 20px 16px;
+    padding: var(--tp-page-pad-y-sm) var(--tp-page-pad-x-sm);
   }
 }

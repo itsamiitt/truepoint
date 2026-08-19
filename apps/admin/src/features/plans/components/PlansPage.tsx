@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -249,7 +250,7 @@ export function PlansPage() {
   ];
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Plans"
         subtitle="Plan/entitlement templates — seat &amp; workspace caps, an optional monthly credit grant, and feature entitlements."
@@ -400,7 +401,7 @@ export function PlansPage() {
           </div>
         }
       />
-    </div>
+    </PageContainer>
   );
 }
 

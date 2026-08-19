@@ -39,6 +39,7 @@ const REPO_DIR = join(import.meta.dir, "repositories");
  */
 const RAW_CLIENT_REPOSITORIES: ReadonlySet<string> = new Set([
   "accountChildRepository.ts",
+  "accountScoreRepository.ts", // SYSTEM census (ids only) — the jobChangeSweepRepository twin, MI-S4
   "announcementRepository.ts",
   "contactChannelRepository.ts",
   "contactRepository.ts",
@@ -53,6 +54,8 @@ const RAW_CLIENT_REPOSITORIES: ReadonlySet<string> = new Set([
   "importJobRepository.ts",
   "jobChangeSweepRepository.ts",
   "mailboxRepository.ts",
+  "marketRollupRepository.ts", // owner-conn cache rebuild — keeps leadwolf_er never-DELETE (0130 header)
+  "signalFanoutRepository.ts", // SYSTEM census (ids only) — the C-02 boundary, MI-S6
   "oauthConnectStateRepository.ts",
   "outboxRepository.ts",
   "partitionRepository.ts", // DDL; partitions have no tenant

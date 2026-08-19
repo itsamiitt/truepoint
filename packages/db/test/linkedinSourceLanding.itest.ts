@@ -361,6 +361,21 @@ describe("linkedin_api Layer-0 landing (landLinkedinPayload)", () => {
       SELECT type_code, related_company_id FROM master_signals
        WHERE subject_type = 'person' AND subject_id = ${personId} AND type_code = 'job_change'`;
     expect(signals).toHaveLength(1);
+
+    // Leadership signals on the same transition: "Head of Finance" infers vp ⇒ exec_hired on the NEW
+    // company (company-subject — the row a watchlist watches), payload references the person by id only.
+    // The OLD title ("Senior Director of Accounting") infers director ⇒ NO exec_departed anywhere.
+    const [newCo] = await admin`
+      SELECT id FROM master_companies WHERE linkedin_company_id = '777001'`;
+    const hired = await admin`
+      SELECT payload FROM master_signals
+       WHERE subject_type = 'company' AND subject_id = ${newCo!.id} AND type_code = 'exec_hired'`;
+    expect(hired).toHaveLength(1);
+    expect(hired[0]!.payload.masterPersonId).toBe(personId);
+    expect(hired[0]!.payload.seniority).toBe("vp");
+    const [departed] = await admin`
+      SELECT count(*)::int AS n FROM master_signals WHERE type_code = 'exec_departed'`;
+    expect(departed!.n).toBe(0);
   });
 
   test("5. suppressed person: evidence row only — zero facts, edges, identifiers, signals", async () => {
@@ -395,8 +410,14 @@ describe("linkedin_api Layer-0 landing (landLinkedinPayload)", () => {
     const [company] = await admin`
       SELECT name, description, ownership_type, year_founded, website_url,
              revenue_min_minor, revenue_max_minor, revenue_currency, revenue_range,
-             primary_domain, linkedin_company_id, hq_country, hq_city
+             primary_domain, linkedin_company_id, hq_country, hq_city, industry, industry_id
         FROM master_companies WHERE id = ${companyId}`;
+    // MI-S3: the vendor spelling stays raw; the CANONICAL node is resolved via the alias table at landing
+    // ("Hospitals and Health Care" → providers-hospitals).
+    expect(company!.industry).toBe("Hospitals and Health Care");
+    const [node] = await admin`
+      SELECT code FROM master_industries WHERE id = ${company!.industry_id}`;
+    expect(node!.code).toBe("providers-hospitals");
     expect(company!.ownership_type).toBe("public");
     expect(company!.year_founded).toBe(1946);
     expect(Number(company!.revenue_min_minor)).toBe(500_000_000);

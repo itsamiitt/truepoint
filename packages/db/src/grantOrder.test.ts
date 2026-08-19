@@ -32,11 +32,15 @@ function grantsBlock(): string {
   return src.slice(start, end);
 }
 
-/** Strip `--` line comments so prose about GRANTs is never mistaken for a GRANT. */
+/** Strip `--` line comments so prose about GRANTs is never mistaken for a GRANT.
+ *  No `$` anchor: on a CRLF checkout each split line ends in `\r`, which `.` does not match, so an
+ *  anchored `--.*$` silently strips NOTHING and every comment mentioning a GRANT trips the assertions
+ *  below — the exact way this file sat red on Windows working copies. `--.*` alone stops at the `\r`
+ *  naturally and needs no anchor. */
 function withoutComments(sql: string): string {
   return sql
     .split("\n")
-    .map((l) => l.replace(/--.*$/, ""))
+    .map((l) => l.replace(/--.*/, ""))
     .join("\n");
 }
 

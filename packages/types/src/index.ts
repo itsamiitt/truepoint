@@ -86,6 +86,7 @@ export * from "./masterSync.ts";
 export * from "./forge.ts";
 export * from "./dedupReview.ts";
 export * from "./notifications.ts";
+export * from "./watchlists.ts";
 export * from "./aiUsage.ts";
 export * from "./crm.ts";
 export * from "./provenanceEvent.ts";

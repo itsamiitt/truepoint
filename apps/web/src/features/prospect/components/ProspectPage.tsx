@@ -1,5 +1,6 @@
-// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): the faceted sidebar (which also
-// hosts the Prospect/Account scope switch + Saved/Recent searches) driving a server ContactQuery, a top search
+// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): the faceted sidebar (hosting
+// Saved/Recent searches; the old Accounts scope moved to /companies — the MI-1 cutover, redirects below)
+// driving a server ContactQuery, a top search
 // box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (list only —
 // sortable, density-aware, masked glyphs, row-select, per-row overflow menu) with keyset "Load more", a
 // lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky bulk-action bar
@@ -8,7 +9,7 @@
 // the slice (api/bulkActionsApi).
 "use client";
 
-import type { AccountFacetKey, ContactQuery, FacetKey, MaskedAccount } from "@leadwolf/types";
+import type { ContactQuery, FacetKey } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
@@ -21,13 +22,11 @@ import {
   TpInput,
 } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
-import { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
-import { useAccountSearch } from "../hooks/useAccountSearch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
@@ -36,10 +35,7 @@ import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { type ResultScope, displayName, emailGlyphFor, profileHref } from "../types";
-import { AccountDetailDrawer } from "./AccountDetailDrawer";
-import { AccountFilterPanel } from "./AccountFilterPanel";
-import { AccountsTable } from "./AccountsTable";
+import { displayName, emailGlyphFor, profileHref } from "../types";
 import { AiSearchBox } from "./AiSearchBox";
 import type { RowBulkAction } from "./BulkActionBar";
 
@@ -64,24 +60,12 @@ import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
 import { SaveSearchPanel } from "./SaveSearchPanel";
 
-const SCOPES = [
-  { value: "contacts", label: "Contacts" },
-  { value: "accounts", label: "Accounts" },
-];
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
   { value: "compact", label: "Compact" },
 ];
 // The fixed-option facets that get live counts in the sidebar (POST /search/facets).
 const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
-// The fixed-option account facets that get live counts in the Accounts sidebar (POST /account-search/facets).
-const ACCOUNT_COUNT_FIELDS: AccountFacetKey[] = [
-  "industry",
-  "company_stage",
-  "funding_stage",
-  "revenue_range",
-  "employee_band",
-];
 
 // The toggleable result columns (the "select" checkbox + "actions" menu are always shown, not toggleable).
 const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
@@ -99,11 +83,19 @@ function ProspectPageInner() {
   // *after* all four hooks, so every visit to this page fired the inactive scope's search AND facet-count POSTs
   // for a grid that was never rendered: four wasted round-trips on the app's busiest surface.
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
-  const contactsActive = scope === "contacts";
-  const accountsActive = scope === "accounts";
+  // CUTOVER (market-intelligence MI-1, D-9 regroup): the Accounts scope moved to the /companies
+  // destination. Old ?scope=accounts deep-links redirect there WITH their query string — the aq/asort/af
+  // account codec is shared, so a shared account view keeps working at its new home.
+  const legacyAccountsScope = searchParams?.get("scope") === "accounts";
+  useEffect(() => {
+    if (!legacyAccountsScope) return;
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.delete("scope");
+    const qs = params.toString();
+    router.replace(qs ? `/companies?${qs}` : "/companies");
+  }, [legacyAccountsScope, router, searchParams]);
+  const contactsActive = !legacyAccountsScope;
 
   const search = useProspectSearch({ enabled: contactsActive });
   const {
@@ -139,48 +131,12 @@ function ProspectPageInner() {
     if (ownedIds.length > 0) hydrateRevealed(ownedIds);
   }, [hits, hydrateRevealed]);
 
-  // Company-level (accounts) scope engine — independent of the contacts query, its own URL params (aq/asort/af).
-  const accountSearch = useAccountSearch({ enabled: accountsActive });
-  const accountCounts = useAccountFacetCounts(accountSearch.query, ACCOUNT_COUNT_FIELDS, {
-    enabled: accountsActive,
-  });
-  const [accountDetail, setAccountDetail] = useState<MaskedAccount | null>(null);
-
-  // Scope lives in the URL (?scope=accounts) so the active surface is shareable + restored on refresh/back.
-  const setScope = useCallback(
-    (next: ResultScope) => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      if (next === "accounts") params.set("scope", "accounts");
-      else params.delete("scope");
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [router, pathname, searchParams],
-  );
-
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE);
   // A pending row-level bulk action: the single id to seed + which bulk dialog to open.
   const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
-
-  // "View N contacts" from the account drawer: switch to the Contacts scope and pin the contacts query to that
-  // account via the `company` term filter (the backend ilike-matches it against accounts.domain / accounts.name /
-  // contacts.emailDomain). Prefer the account domain (the most precise key); fall back to the company name.
-  const viewAccountContacts = useCallback(
-    (account: MaskedAccount) => {
-      const pin = account.domain ?? account.name;
-      const filters: ContactQuery["filters"] = [
-        ...query.filters.filter((c) => !(c.kind === "term" && c.field === "company")),
-        { kind: "term", field: "company", op: "include", values: [pin] },
-      ];
-      setQuery({ ...query, filters });
-      setAccountDetail(null);
-      setScope("contacts");
-    },
-    [query, setQuery, setScope],
-  );
 
   // Top free-text box: a local mirror committed to the query after a short debounce (typeahead feel), and
   // re-synced when the query changes externally (AI apply / URL restore).
@@ -199,20 +155,6 @@ function ProspectPageInner() {
   useEffect(() => {
     recent.add(query);
   }, [query]);
-
-  // Accounts free-text box: the same debounce-commit pattern, committed to the account query.
-  const [accountTextInput, setAccountTextInput] = useState(accountSearch.query.text ?? "");
-  useEffect(() => setAccountTextInput(accountSearch.query.text ?? ""), [accountSearch.query.text]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: debounce-commit keyed on the local input.
-  useEffect(() => {
-    const t = accountTextInput.trim();
-    if (t === (accountSearch.query.text ?? "")) return;
-    const id = setTimeout(
-      () => accountSearch.setQuery({ ...accountSearch.query, text: t || undefined }),
-      300,
-    );
-    return () => clearTimeout(id);
-  }, [accountTextInput]);
 
   const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
   const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
@@ -382,75 +324,43 @@ function ProspectPageInner() {
     [allColumns, visibleColumns],
   );
 
-  // The Prospect/Account scope switch now lives INSIDE the sidebar (top of the rail), passed to both panels.
-  const scopeSwitch = (
-    <SegmentedControl
-      items={SCOPES}
-      value={scope}
-      onChange={(v) => setScope(v as ResultScope)}
-      aria-label="Result type"
-    />
-  );
-
   return (
     <div className={styles.page} data-density={density}>
-      {scope === "accounts" ? (
-        <AccountFilterPanel
-          query={accountSearch.query}
-          onChange={accountSearch.setQuery}
-          counts={accountCounts}
-          scopeSwitch={scopeSwitch}
-        />
-      ) : (
-        <FilterPanel
-          query={query}
-          onChange={setQuery}
-          counts={counts}
-          scopeSwitch={scopeSwitch}
-          header={
-            <>
-              <SaveSearchPanel currentQuery={query} onApply={setQuery} />
-              <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
-            </>
-          }
-        />
-      )}
+      <FilterPanel
+        query={query}
+        onChange={setQuery}
+        counts={counts}
+        header={
+          <>
+            <SaveSearchPanel currentQuery={query} onApply={setQuery} />
+            <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
+          </>
+        }
+      />
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
           <div className={styles.headLeft}>
-            {scope === "contacts" ? (
-              <span className={styles.count}>
-                {loading
-                  ? "Loading…"
-                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                      totalCount === undefined && hasMore ? "+" : ""
-                    } in your workspace${
-                      databaseCount > 0
-                        ? ` · ${databaseCount.toLocaleString()} more in the database`
-                        : ""
-                    }`}
-              </span>
-            ) : (
-              <span className={styles.count}>
-                {accountSearch.loading
-                  ? "Loading…"
-                  : `${accountSearch.accounts.length.toLocaleString()}${
-                      accountSearch.hasMore ? "+" : ""
-                    } companies`}
-              </span>
-            )}
+            <span className={styles.count}>
+              {loading
+                ? "Loading…"
+                : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
+                    totalCount === undefined && hasMore ? "+" : ""
+                  } in your workspace${
+                    databaseCount > 0
+                      ? ` · ${databaseCount.toLocaleString()} more in the database`
+                      : ""
+                  }`}
+            </span>
           </div>
           <div className={styles.headRight}>
-            {scope === "contacts" && (
-              <ProspectToolbar
-                query={query}
-                onChange={setQuery}
-                columns={TOGGLEABLE_COLUMNS}
-                visibleColumns={visibleColumns}
-                onVisibleColumnsChange={setVisibleColumns}
-              />
-            )}
+            <ProspectToolbar
+              query={query}
+              onChange={setQuery}
+              columns={TOGGLEABLE_COLUMNS}
+              visibleColumns={visibleColumns}
+              onVisibleColumnsChange={setVisibleColumns}
+            />
             <SegmentedControl
               items={DENSITIES}
               value={density}
@@ -460,63 +370,18 @@ function ProspectPageInner() {
           </div>
         </div>
 
-        {scope === "contacts" ? (
-          <div className={styles.searchRow}>
-            <TpInput
-              type="search"
-              placeholder="Search name, title, company, email, LinkedIn…"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              aria-label="Search prospects"
-            />
-            <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
-          </div>
-        ) : (
-          <div className={styles.searchRow}>
-            <TpInput
-              type="search"
-              placeholder="Search company name or domain…"
-              value={accountTextInput}
-              onChange={(e) => setAccountTextInput(e.target.value)}
-              aria-label="Search companies"
-            />
-          </div>
-        )}
+        <div className={styles.searchRow}>
+          <TpInput
+            type="search"
+            placeholder="Search name, title, company, email, LinkedIn…"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            aria-label="Search prospects"
+          />
+          <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
+        </div>
 
-        {scope === "accounts" ? (
-          <StateSwitch
-            loading={accountSearch.loading}
-            error={accountSearch.error}
-            empty={!accountSearch.loading && accountSearch.accounts.length === 0}
-            onRetry={accountSearch.reload}
-            emptyState={
-              <EmptyState
-                icon={<Building2 size={28} />}
-                title="No companies"
-                description="No accounts match this search. Adjust your firmographic filters or import more from the Import surface."
-              />
-            }
-          >
-            <AccountsTable
-              accounts={accountSearch.accounts}
-              loading={accountSearch.loading}
-              onOpen={setAccountDetail}
-              density={density}
-            />
-            {accountSearch.hasMore && (
-              <div className={styles.loadMore}>
-                <TpButton
-                  variant="secondary"
-                  size="sm"
-                  loading={accountSearch.loading}
-                  onClick={accountSearch.loadMore}
-                >
-                  Load more
-                </TpButton>
-              </div>
-            )}
-          </StateSwitch>
-        ) : (
+        {
           <StateSwitch
             loading={loading}
             error={error}
@@ -546,7 +411,7 @@ function ProspectPageInner() {
               </div>
             )}
           </StateSwitch>
-        )}
+        }
       </section>
 
       {/* Lightweight preview → hands off to the heavy RecordDetail. */}
@@ -571,13 +436,6 @@ function ProspectPageInner() {
           // Keep the grid row in sync with a reveal done inside the drawer.
           revealStore.refresh(id);
         }}
-      />
-
-      {/* Read-only company preview; "View N contacts" pins the contacts query to this account + switches scope. */}
-      <AccountDetailDrawer
-        account={accountDetail}
-        onClose={() => setAccountDetail(null)}
-        onViewContacts={viewAccountContacts}
       />
 
       {bulk.count > 0 && (

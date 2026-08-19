@@ -331,11 +331,13 @@ select.tp-ui-field {
 }
 .tp-ui-form-row {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  /* minmax(0,1fr) not 1fr: a bare 1fr floors at the content's min-content width, so a long unbroken
+     value (an API key, a webhook URL) blows the grid past its container instead of ellipsing. */
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px 24px;
   align-items: start;
 }
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .tp-ui-form-row {
     grid-template-columns: 1fr;
     gap: 6px;
@@ -419,7 +421,10 @@ select.tp-ui-field {
 .tp-ui-dialog-card {
   width: 100%;
   max-width: 440px;
+  /* dvh with a vh fallback: 100vh sits UNDER mobile browser chrome, so a tall dialog's lower edge
+     — including its action buttons — ends up off-screen with no way to scroll to it. */
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow: auto;
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
@@ -502,6 +507,9 @@ select.tp-ui-field {
 }
 .tp-ui-drawer-body {
   flex: 1;
+  /* A flex item's automatic minimum size is its CONTENT size, so without min-height:0 this never shrinks,
+     never scrolls, and pushes .tp-ui-drawer-foot (the action buttons) off the bottom of the viewport. */
+  min-height: 0;
   overflow: auto;
   padding: 20px;
 }
@@ -645,7 +653,14 @@ select.tp-ui-field {
 /* ── DataTable ───────────────────────────────────────────────────────────────────────────────────────── */
 .tp-ui-table-wrap {
   width: 100%;
-  overflow: auto;
+  /* overflow-x scrolls wide tables; overflow-y is CLIP, not auto / visible, on purpose. `clip` does not
+     create a vertical scroll container, so the sticky `th` below resolves against .tp-content (the real
+     scroller) instead of against this wrapper. With `overflow: auto` the wrapper became the nearest
+     scrollport but had no bounded height, so it never scrolled vertically and `top: 0` never engaged —
+     every table silently lost its header on scroll. `visible` is not an option here: per CSS Overflow 3,
+     a `visible` axis computes to `auto` when the other axis is not visible/clip, which recreates the bug. */
+  overflow-x: auto;
+  overflow-y: clip;
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
   background: var(--tp-surface);
@@ -803,13 +818,53 @@ select.tp-ui-field {
   align-items: center;
   gap: var(--tp-space-2);
 }
-@media (max-width: 860px) {
+@media (max-width: 768px) {
   .tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-title {
     font-size: 23px;
   }
 }
-@media (max-width: 540px) {
+@media (max-width: 480px) {
   .tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-title {
     font-size: 20px;
+  }
+}
+
+/* ── PageContainer ───────────────────────────────────────────────────────────────────────────────────── */
+/* The ONE page container for every surface in every app. It exists because the page layer had no shared
+   contract: ten different max-widths across the four apps, and fifteen of eighteen containers set a
+   max-width with NO horizontal auto-margin, so content pinned flush-left and left a dead gutter on wide
+   displays. Centering is therefore NOT a variant here — every width centers; only the cap differs.
+     fluid   no cap, fills the content column     — tables, lists, search
+     default --tp-page-max (1280px)               — dashboards, reports
+     narrow  --tp-page-max-narrow (880px)         — forms, settings, detail
+   Lives in CSS rather than a style prop because the padding is responsive and a style prop cannot carry a
+   media query — the same reason .tp-ui-page-header gives. */
+.tp-ui-page-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-5);
+  /* Lets flex/grid children with wide content (tables) shrink instead of blowing the column out. */
+  min-width: 0;
+  width: 100%;
+  margin-inline: auto;
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x);
+}
+.tp-ui-page-container[data-width="default"] {
+  max-width: var(--tp-page-max);
+}
+.tp-ui-page-container[data-width="narrow"] {
+  max-width: var(--tp-page-max-narrow);
+}
+/* data-width="fluid" intentionally sets no max-width — margin-inline:auto is then a no-op. */
+
+@media (max-width: 768px) {
+  .tp-ui-page-container {
+    padding: var(--tp-page-pad-y-sm) var(--tp-page-pad-x-sm);
+  }
+}
+@media (max-width: 480px) {
+  .tp-ui-page-container {
+    gap: var(--tp-space-4);
+    padding: var(--tp-space-4) var(--tp-space-3);
   }
 }

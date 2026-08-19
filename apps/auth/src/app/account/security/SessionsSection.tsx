@@ -4,6 +4,7 @@
 // scoped to the authenticated user (data.ts); revokes are ownership-checked server-side (actions.ts).
 import { AccountSectionCard } from "@/shared/AccountShell";
 import { SubmitButton } from "@/shared/SubmitButton";
+import styles from "@/shared/auth.module.css";
 import { Alert, StatusBadge } from "@leadwolf/ui";
 import { revokeAllOtherSessions, revokeOwnSession } from "./actions";
 import type { SessionView } from "./data";
@@ -42,56 +43,51 @@ export function SessionsSection({
         <Alert
           variant={msg.tone === "ok" ? "default" : "destructive"}
           role={msg.tone === "ok" ? "status" : "alert"}
-          className="mb-4"
+          className={styles.spaced}
         >
           {msg.text}
         </Alert>
       ) : null}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">Your active sessions</caption>
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <caption className={styles.srOnly}>Your active sessions</caption>
           <thead>
-            <tr className="text-[12px] text-[var(--tp-ink-3)]">
-              <th scope="col" className="py-2 pr-3 font-medium">
-                Device
-              </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
-                IP address
-              </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
-                Last active
-              </th>
-              <th scope="col" className="py-2 pr-3 font-medium">
-                <span className="sr-only">Actions</span>
+            <tr>
+              <th scope="col">Device</th>
+              <th scope="col">IP address</th>
+              <th scope="col">Last active</th>
+              <th scope="col">
+                <span className={styles.srOnly}>Actions</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {sessions.map((s) => (
-              <tr key={s.id} className="border-t border-[var(--tp-hairline-2)]">
-                <td className="py-2 pr-3">
-                  <span className="flex items-center gap-2">
+              <tr key={s.id}>
+                <td>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "var(--tp-space-2)",
+                    }}
+                  >
                     {s.device}
                     {s.current ? <StatusBadge tone="success">This device</StatusBadge> : null}
                   </span>
                 </td>
-                <td className="py-2 pr-3 font-mono text-[12px] text-[var(--tp-ink-3)]">
-                  {s.ipAddress ?? "—"}
-                </td>
-                <td className="py-2 pr-3 text-[12px] text-[var(--tp-ink-3)]">
+                <td className={styles.cellMono}>{s.ipAddress ?? "—"}</td>
+                <td className={styles.cellMuted}>
                   {(s.lastSeenAt ?? s.createdAt).toLocaleString()}
                 </td>
-                <td className="py-2 pr-3 text-right">
+                <td className={styles.cellRight}>
                   {s.current ? (
-                    <span className="text-[12px] text-[var(--tp-ink-4)]">Current</span>
+                    <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>Current</span>
                   ) : (
                     <form action={revokeOwnSession}>
                       <input type="hidden" name="session_id" value={s.id} />
-                      <button
-                        type="submit"
-                        className="text-[13px] text-destructive underline underline-offset-2 hover:opacity-80"
-                      >
+                      <button type="submit" className={styles.linkDanger}>
                         Sign out
                       </button>
                     </form>
@@ -104,7 +100,10 @@ export function SessionsSection({
       </div>
 
       {others.length > 0 ? (
-        <form action={revokeAllOtherSessions} className="mt-4 max-w-[260px]">
+        <form
+          action={revokeAllOtherSessions}
+          style={{ marginTop: "var(--tp-space-4)", maxWidth: 260 }}
+        >
           <SubmitButton>Sign out all other sessions</SubmitButton>
         </form>
       ) : null}

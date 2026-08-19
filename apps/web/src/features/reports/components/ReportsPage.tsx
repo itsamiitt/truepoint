@@ -8,6 +8,7 @@
 import {
   Combobox,
   Icon,
+  PageContainer,
   PageHeader,
   SegmentedControl,
   Tabs,
@@ -109,7 +110,7 @@ export function ReportsPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <PageContainer>
       <PageHeader
         title="Reports"
         subtitle="Pipeline, spend, deliverability, team, and data health for this workspace."
@@ -206,6 +207,6 @@ export function ReportsPage() {
         most recent 200 reveals and contacts). Sending &amp; deliverability and lead score &amp;
         intent await the dedicated analytics pipeline (ClickHouse), which ships post-MVP.
       </p>
-    </main>
+    </PageContainer>
   );
 }

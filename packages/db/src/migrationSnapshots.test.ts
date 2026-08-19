@@ -143,8 +143,14 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  die on the interactive prompt, exactly as 0116–0118 record. All absorbed by the next rebaseline.
  *
  *  82 → 83 for 0124_reset_unresolved_fetch_clock — pure DATA repair (clearing a freshness clock the
- *  envelope bug burned); there is no schema change for drizzle to snapshot at all. */
-const EXPECTED_DEFICIT = 83;
+ *  envelope bug burned); there is no schema change for drizzle to snapshot at all.
+ *
+ *  83 → 89 for the market-intelligence series 0125–0130 (docs/planning/market-intelligence/): 0125
+ *  tenant_signals + 0126 watchlists + 0129 account_scores are plain tables drizzle could snapshot, but the
+ *  0107 chain HEAD still makes `generate` propose everything at once (the standing condition above); 0127
+ *  is PARTITION BY HASH (inexpressible), 0128 is seed-heavy taxonomy DDL, 0130 is a hand-shaped rollup
+ *  cache. All absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 89;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

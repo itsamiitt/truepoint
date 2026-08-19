@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2093 source files · 90 code-bearing domains · 39 shared areas · 53 domain-vocabulary warnings · 2
+> **2179 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -71,7 +71,8 @@
 > when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
 > when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
 > never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
-> that a Layer-0 module belongs to the one system-owned graph. The remaining two are not registered because
+> that a Layer-0 module belongs to the one system-owned graph; `masterConfidencePolicyRepository` was
+> registered under `master-sync` in the same commit that created it, C9. The remaining two are not registered because
 > no existing domain is clearly right for them, and the generator's own rule is that a confidently wrong
 > home is worse than an honest gap.)
 >
@@ -134,7 +135,7 @@ apps/                           # deployable processes (thin transport adapters)
     app/{login,password,magic,mfa(+enroll),signup,verify,sso,org,workspace,forgot,reset,account/security,token,logout}  shared/*  lib/*
   web/   src/                   # app.truepoint.in (Next 15) — AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,lists,enrichment/jobs,sales-navigator,settings/*}  app/{import,auth/callback}
-    components/{shell/*,PageHeader}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
+    components/{shell/*}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
                                               enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig,
                                               problemMessage,maybeList,queryKeys}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
@@ -220,10 +221,14 @@ apps/                           # deployable processes (thin transport adapters)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
   `mapLinkedinPayload.ts` (pure mapper; the raw-only compliance boundary: pronoun/photos/skills etc. never leave
   `source_records.raw_data`) + `landSourcePayload.ts` (one withErTx: evidence chokepoint → resolve → suppression guard →
-  provenance fold → stints/education/identifiers/headcount → same-tx events (D7) → `job_change`/`headcount_*` signals);
+  provenance fold → stints/education/identifiers/headcount → same-tx events (D7) → `job_change` +
+  `exec_hired`/`exec_departed` (company-subject leadership signals when the title infers c_suite/vp) +
+  `headcount_*` signals);
   hooked post-evidence in `enrichContactV2` and driven fleet-wide by `queues/linkedinCompanyRefresh.ts` (leader-locked,
-  25/tick @ 6h). db writers: `masterProfileRepository` (master-sync). Design:
-  [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)
+  25/tick @ 6h). db writers: `masterProfileRepository` (master-sync); `masterConfidencePolicyRepository` (master-sync)
+  reads the 0107 policy constants for the badge (C9). Design:
+  [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md) +
+  [`market-intelligence/`](./planning/market-intelligence/README.md)
 - **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
   customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
   unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
@@ -235,6 +240,9 @@ apps/                           # deployable processes (thin transport adapters)
   facets and adapts a database person into a grid row; `useProspectSearch` merges owned rows first, then
   people the workspace does not hold, each carrying an `Add` action (`AddToWorkspaceButton`). There is no
   separate Database tab: "already in my workspace" is a state of a row, not another surface.
+  api: `features/contacts-from-database/` — `POST /contacts/from-database`, the workspace-scoped write the `Add`
+  action posts to (transport only; the visibility policy and write discipline live in core's materializer, and one
+  row per explicit user gesture). Its own slice, so the read path `POST /search/database` and the write stay apart.
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
@@ -258,6 +266,9 @@ apps/                           # deployable processes (thin transport adapters)
   `dataQualitySummary.ts` (`buildDataQualitySummary` — the per-workspace fill/verification/freshness count rollup the Data Health dashboard reads),
   `dataQualitySnapshot.ts` (`captureDataQualitySnapshot` — persists a daily WorkspaceDataQuality trend point),
   `badgeV1.ts` (confidence badge v0 over provenance aggregates; `now` injected so it stays pure),
+  `confidencePolicy.ts` (C9, decisions.md 2026-08-19: `badgeHalfLifePolicy` — the badge's table-sourced
+  half-life constants; gated `CONFIDENCE_POLICY_BADGE_ENABLED`, 5-min cached, undefined-on-failure so the
+  hardcoded constants always remain the fallback),
   `jobChange.ts` (`detectJobChange` — compares CONFIDENCES, not timestamps; a departure is held to the same
   bar as a move) + `recordJobChange.ts` (the producer: intent_signal + alerts to users who SAVED the contact),
   `successor.ts` (`rankSuccessors` — who now holds a departed contact's role; seniority is a DISTANCE on the
@@ -545,6 +556,41 @@ apps/                           # deployable processes (thin transport adapters)
 - Opposite direction from `master-sync` across the same wall: that domain is the Forge→Layer-0 **write** ingress, this is
   the tenant-facing **read**. Reads only — no credit spend, no personal data (technology/vendor rows describe organizations)
 
+#### alerts — *the tenant signal feed substrate* (market-intelligence MI-S5/S6, [S-13][S-09][S-14]; DARK behind `SIGNAL_FANOUT_ENABLED`)
+- **api:** `features/alerts/` — `watchlistRoutes.ts` (/api/v1/watchlists: CRUD + members + PUT
+  /:id/subscription — the CALLER's subscription only, claims.sub, never a body-supplied user) ·
+  `signalRoutes.ts` (GET /api/v1/signals — the tenant_signals feed read, optional accountId filter;
+  never Layer 0)
+- **web (destination-keyed siblings):** `features/signals/` — the `/signals` rail destination:
+  family-filtered feed + watchlists panel (create/delete, per-user family subscription chips hydrated
+  from `myFamilies`); honest empty states while the pipeline is dark; `account_signal` notifications
+  deep-link here · `features/companies/` — the routed `/companies/:accountId` page (MI-1): the account
+  drawer's content on a canonical URL — firmographic header + Watch toggle (auto-created "Watched
+  accounts" list) + the SAME prospect-slice sections (headcount, technologies, displacement, alumni,
+  re-exported via the prospect barrel) + the account signal timeline. `GET /api/v1/accounts/:accountId`
+  (account-intelligence routes, `accountSearchRepository.getMaskedById` — search's own SELECTION, so
+  page and grid never disagree) is its base read. `/companies` INDEX (`CompaniesIndexPage`) hosts the
+  account-search surface as its own rail destination (reusing the URL-driven `useAccountSearch` engine +
+  filter rail + grid; a row opens the routed page); the Prospect Accounts toggle remains until the
+  cutover retires it with redirects. `contactsHrefForCompany` (prospect `searchUrlState`) is the
+  cross-surface "view contacts" deep-link builder
+- **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
+  `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
+- **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a
+  recorded_at watermark + the workspaces holding a bridged account, ids only, the C-02 boundary) ·
+  `tenantSignalsRepository.ts` (tenant-side INSERT..SELECT projection onto bridged accounts + the feed read) ·
+  `schema/tenantSignals.ts` + `rls/tenantSignals.sql` (0125: Layer-1 projection of `master_signals`;
+  family CHECK mirrors 0103 incl. NO 'intent'; `account_id OR contact_id` subject guard)
+- **db (MI-S5):** `watchlistRepository.ts` + `schema/watchlists.ts` + `rls/watchlists.sql` (0126:
+  `watchlists` / `watchlist_members` / `signal_subscriptions` — per-user family opt-in, families CHECK
+  `<@` the 0103 vocabulary; `subscribersFor` is the dispatch join)
+- **workers:** `signalFanout.ts` (leader-locked 15-min sweep, `jobChangeSweep` sibling — absent watermark
+  claims NOW and fans out nothing, the alert-storm defence; watermark advances only on a drained tick)
+- Dispatch: delivery notifies exactly the subscribed users (`account_signal` notification type), and only
+  for FRESHLY written rows — the unique wall doubles as the notification dedup
+- Layer 0 = the shared fact; `tenant_signals` = the delivered copy scoring and the (future MI-P2 watchlist)
+  feed read. `intent_signals`' shipped job_change path is unchanged — new company-fact families land here.
+
 #### reports — *client rollups + XLSX export* (web)
 - **web:** `features/reports/` — `rollups.ts` over `/credits/*` + `/contacts`; sections (CreditUsage, Funnel, DataHealth,
   Deliverability, Intent, LeadScore, TeamActivity); `charts/` (Bar/Line/Distribution/Funnel); `export/` (dependency-free
@@ -742,16 +788,21 @@ flowchart TD
 - **`packages/ui`** — the TruePoint **design system**: `tokens/primitives/theme.css` + `cn`; dashboard primitives (StatusBadge,
   Card, StatTile, Spinner, Avatar, Progress, Pagination, Icon), **State Kit** (`state.tsx`: Skeleton/Loading/Empty/Error/StateSwitch),
   Tp-prefixed form `controls.tsx` + `form.tsx`, `Tabs`, overlays (`overlay.tsx` Dialog/Drawer; `floating.tsx` Popover/DropdownMenu/Tooltip),
-  `Toast`, `DataTable`, `Combobox`, `PageHeader` (the one destination header all three frontends render), and
-  shadcn-pattern `components/ui/*` (used by the auth screens).
+  `Toast`, `DataTable`, `Combobox`, the page-scaffolding pair `PageHeader` (the one destination header) +
+  `PageContainer` (the one page container — `width="fluid"|"default"|"narrow"`, always centred, so no surface can
+  re-invent its own max-width), and shadcn-pattern `components/ui/*` (now used by ALL four frontends: the auth
+  screens moved onto the shared tokens + primitives and no longer carry Tailwind utilities in app JSX).
 - **`packages/app-shell`** — the **shared Next.js app chrome** consumed by `apps/web`, `apps/admin` and
   `apps/forge`: `AppShellFrame` (rail column + sticky top bar + internally-scrolling content, owning mobile
   sidebar state, the desktop rail pin and the density context), `Sidebar`/`NavItem`/`UserRow`, `TopBar` (+
   `DensityToggle`, `ShortcutsButton`), `CommandPalette` (⌘K), `ShortcutsDialog`, `Brandmark`/`Wordmark`/`Logo`,
-  and one `shell.css` carrying the `.tp-shell`/`.tp-sidebar`/`.tp-topbar`/`.tp-nav-*` chrome plus the console
-  page scaffold. Each app keeps only its own auth/staff gate, destination list, and app-specific widgets — this
-  package exists because those three shells had drifted into three near-identical copies. `next` and `react`
-  are peer deps so nothing Next-coupled leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
+  and one `shell.css` carrying the `.tp-shell`/`.tp-sidebar`/`.tp-topbar`/`.tp-nav-*` chrome, the console
+  page scaffold (`.tp-page`, now a centred alias of the `PageContainer` contract), the `.tp-palette-*` command
+  palette, and the base layer — `box-sizing`, `body`, the thin token-coloured scrollbars and `.app-button` —
+  which the three apps had each been carrying byte-identically in their own `globals.css`. Each app keeps only
+  its own auth/staff gate, destination list, and app-specific widgets — this package exists because those three
+  shells had drifted into three near-identical copies. `next` and `react` are peer deps so nothing Next-coupled
+  leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
 - **`packages/db`** — `drizzle.config.ts` + `drizzle.worktree.config.ts` (the worktree-scoped variant, for
   running migrations against a per-worktree database); `client.ts` (`withTenantTx`/`withPrivilegedTx`/`withPlatformTx`/`closeDb`), `applyMigrations.ts`
   (bootstrap → drizzle → RLS sorted → grants → **partition-ACL mirror, which must run last**), `bootstrapAdmin.ts`,

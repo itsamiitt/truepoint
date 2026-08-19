@@ -5,16 +5,16 @@
    3-col tiles → 2-col at 860px → 1-col at 540px; widget grid: 2-col → 1-col at 860px. */
 
 /* ── Page canvas + centered column ───────────────────────────────────────────────────────────────────── */
+/* The canvas comes from .tp-content now; this only guarantees the cockpit fills a short viewport. */
 .page {
   min-height: 100%;
-  background: var(--tp-surface-2);
 }
 
 .inner {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  max-width: 1200px;
+  max-width: var(--tp-page-max);
   margin: 0 auto;
   padding: 36px 32px 72px;
   animation: tp-rise-in var(--tp-duration-slow) var(--tp-ease-out) both;
@@ -374,7 +374,7 @@
 }
 
 /* ── Responsive breakpoints ───────────────────────────────────────────────────────────────────────── */
-@media (max-width: 860px) {
+@media (max-width: 768px) {
   .inner {
     padding: 24px 20px 56px;
     gap: 20px;
@@ -390,7 +390,7 @@
   }
 }
 
-@media (max-width: 540px) {
+@media (max-width: 480px) {
   .inner {
     padding: 20px 16px 44px;
     gap: 16px;

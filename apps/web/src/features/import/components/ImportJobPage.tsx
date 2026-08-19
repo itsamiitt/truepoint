@@ -12,6 +12,7 @@ import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import type { ImportJobCounts } from "@leadwolf/types";
 import {
   EmptyState,
+  PageContainer,
   PageHeader,
   Progress,
   Spinner,
@@ -188,7 +189,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
   }
 
   return (
-    <main className={styles.page}>
+    <PageContainer width="fluid">
       <PageHeader
         title={filename}
         subtitle={
@@ -373,6 +374,6 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
         busy={retry.isPending}
         onConfirm={onConfirmRetry}
       />
-    </main>
+    </PageContainer>
   );
 }

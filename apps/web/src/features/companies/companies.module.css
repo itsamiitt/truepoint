@@ -1,0 +1,216 @@
+/*
+ * companies.module.css — the /companies/:id page (MI-1). Two-column sections under a firmographic
+ * header; hairline discipline, --tp-* tokens only.
+ */
+
+.page {
+  max-width: 1040px;
+}
+
+.header {
+  border-bottom: 1px solid var(--tp-hairline);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.headerMain {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.domain {
+  color: var(--tp-text-muted);
+  font-size: 13px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 18px;
+  margin-top: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-text-muted);
+}
+
+.fieldValue {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+
+.sectionTitle:first-child {
+  margin-top: 0;
+}
+
+.signalList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.signalItem {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.signalItem:last-child {
+  border-bottom: none;
+}
+
+.signalHeadline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signalTime {
+  color: var(--tp-text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── /companies index ── */
+
+.indexLayout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .indexLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.indexMain {
+  min-width: 0;
+}
+
+.indexHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  max-width: 380px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--tp-text);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.deptSummary {
+  color: var(--tp-text-muted);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+/* ── Markets board ── */
+
+.boardWrap {
+  overflow-x: auto;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+}
+
+.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.board th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-text-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.board td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.board tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.marketsLink {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--tp-text-muted);
+  text-decoration: none;
+}
+
+.marketsLink:hover {
+  color: var(--tp-text);
+}

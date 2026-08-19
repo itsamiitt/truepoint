@@ -112,7 +112,7 @@ export function TenantMoneyApprovals({
                 alignItems: "center",
                 gap: 16,
                 padding: "12px 16px",
-                border: "1px solid var(--tp-border)",
+                border: "1px solid var(--tp-hairline-2)",
                 borderRadius: 8,
               }}
             >

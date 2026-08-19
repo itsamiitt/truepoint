@@ -78,6 +78,9 @@ export const masterCompanies = pgTable(
     parentCompanyId: uuid("parent_company_id").references((): AnyPgColumn => masterCompanies.id),
     industry: varchar("industry", { length: 100 }),
     subIndustry: varchar("sub_industry", { length: 100 }),
+    // Canonical taxonomy node (0128, MI-S3) — DERIVED from `industry` via master_industry_aliases at
+    // landing/backfill (the current_company_id posture); the free-text column stays the raw vendor truth.
+    industryId: uuid("industry_id"),
     employeeCount: integer("employee_count"), // raw value
     employeeBand: varchar("employee_band", { length: 20 }), // band ('11-50','51-200',…) = the search facet
     revenueRange: varchar("revenue_range", { length: 50 }),

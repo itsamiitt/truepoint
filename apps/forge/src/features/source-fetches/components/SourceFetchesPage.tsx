@@ -8,6 +8,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageContainer,
   PageHeader,
   StateSwitch,
   StatusBadge,
@@ -89,7 +90,7 @@ export function SourceFetchesPage() {
   const { fetches, loading, error, reload } = useSourceFetches();
 
   return (
-    <div className="tp-page">
+    <PageContainer width="fluid">
       <PageHeader
         title="Source fetches"
         subtitle="The URL fetch registry — what the extension harvested, what the origin fleet fetched, and what resolved."
@@ -110,6 +111,6 @@ export function SourceFetchesPage() {
       >
         <DataTable columns={columns} rows={fetches ?? []} rowKey={(f) => f.id} />
       </StateSwitch>
-    </div>
+    </PageContainer>
   );
 }
