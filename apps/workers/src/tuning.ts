@@ -77,6 +77,11 @@ export const EVENT_WORKER_TUNING: Readonly<Record<string, WorkerTuning>> = {
   firmographics: { concurrency: 4, ...EVENT_LOCK },
   "master-backfill": { concurrency: 2, ...EVENT_LOCK },
   reverification: { concurrency: 2, ...EVENT_LOCK },
+  // Customer-triggered per-account refresh (linkedin_api account lane) — it ran on BullMQ defaults
+  // (concurrency 1, 30s lock), so the whole fleet's "Refresh from source" clicks queued single-file behind
+  // one external fetch (perf-audit P4.3b). 3 parallelizes across accounts while staying gentle on the
+  // linkedin_api origin; spend is bounded structurally by the lane (not a credit path — F3 untouched).
+  account_refresh: { concurrency: 3, ...EVENT_LOCK },
   // CRM sync (crm-sync 00 §8). Modest concurrency plus an explicit LIMITER, which is the point: CRM APIs
   // rate-limit per org and per app, and unbounded parallelism turns a throttle into a ban. The limiter caps
   // jobs/second across the worker; the per-connection budget (a later slice) caps spend per org. Inbound and
@@ -115,6 +120,9 @@ export const PROCESSOR_DEADLINE_MS: Readonly<Record<string, number>> = {
   firmographics: 5 * 60_000,
   "master-backfill": 5 * 60_000,
   reverification: 5 * 60_000,
+  // One external fetch + parse + land per job — the enrichment bound fits (a hung origin fails the attempt
+  // into retry/DLQ instead of holding the lock; previously this queue had NO deadline at all).
+  account_refresh: 2 * 60_000,
   // CRM lanes: a pull page fetches + applies up to 100 records against a third-party API; a single inbound
   // or push job is one record plus one call. The erase lane is generous because a DSAR blocked by a
   // premature deadline is worse than one that takes a minute.

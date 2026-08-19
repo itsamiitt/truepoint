@@ -1832,7 +1832,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<LowBalanceNotifierSweepJobData>(
           LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
           makeProcessLowBalanceNotifierSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
       ),
@@ -1862,7 +1862,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<BillingReconSweepJobData>(
           BILLING_RECON_SWEEP_QUEUE,
           makeProcessBillingReconSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         BILLING_RECON_SWEEP_QUEUE,
       ),
@@ -1893,7 +1893,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<SubscriptionGrantSweepJobData>(
           SUBSCRIPTION_GRANT_SWEEP_QUEUE,
           makeProcessSubscriptionGrantSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         SUBSCRIPTION_GRANT_SWEEP_QUEUE,
       ),
@@ -1922,7 +1922,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<SubscriptionDunningSweepJobData>(
           SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
           makeProcessSubscriptionDunningSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
       ),
@@ -1951,7 +1951,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<GmailInboxPollJobData>(
           GMAIL_INBOX_POLL_QUEUE,
           makeProcessGmailInboxPoll(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         GMAIL_INBOX_POLL_QUEUE,
       ),
@@ -1978,7 +1978,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<LedgerBackfillSweepJobData>(
           LEDGER_BACKFILL_SWEEP_QUEUE,
           makeProcessLedgerBackfillSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         LEDGER_BACKFILL_SWEEP_QUEUE,
       ),
@@ -2012,7 +2012,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<ChannelBackfillSweepJobData>(
           CHANNEL_BACKFILL_SWEEP_QUEUE,
           makeProcessChannelBackfillSweep(connection, runChannelBackfillForWorkspace),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         CHANNEL_BACKFILL_SWEEP_QUEUE,
       ),
@@ -2046,7 +2046,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<ChannelReconcileSweepJobData>(
           CHANNEL_RECONCILE_SWEEP_QUEUE,
           makeProcessChannelReconcileSweep(connection, runChannelReconcileForWorkspace),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         CHANNEL_RECONCILE_SWEEP_QUEUE,
       ),
@@ -2077,7 +2077,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<JobChangeSweepJobData>(
           JOB_CHANGE_SWEEP_QUEUE,
           makeProcessJobChangeSweep(connection, runJobChangeSweepForWorkspace),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         JOB_CHANGE_SWEEP_QUEUE,
       ),
@@ -2103,7 +2103,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<SignalFanoutJobData>(
           SIGNAL_FANOUT_QUEUE,
           makeProcessSignalFanout(connection, fanoutSignalsToWorkspace),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         SIGNAL_FANOUT_QUEUE,
       ),
@@ -2136,7 +2136,7 @@ export function startWorkers(): Worker[] {
                 accountScoreRepository.listAccountsWithNewSignals(tx, since, limit),
               ),
           ),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         ACCOUNT_SCORING_SWEEP_QUEUE,
       ),
@@ -2164,7 +2164,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<MarketRollupSweepJobData>(
           MARKET_ROLLUP_SWEEP_QUEUE,
           makeProcessMarketRollupSweep(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         MARKET_ROLLUP_SWEEP_QUEUE,
       ),
@@ -2196,7 +2196,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<LinkedinCompanyRefreshJobData>(
           LINKEDIN_COMPANY_REFRESH_QUEUE,
           makeProcessLinkedinCompanyRefresh(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         LINKEDIN_COMPANY_REFRESH_QUEUE,
       ),
@@ -2225,7 +2225,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<LinkedinLinkFetchJobData>(
           LINKEDIN_LINK_FETCH_QUEUE,
           makeProcessLinkedinLinkFetch(connection),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         LINKEDIN_LINK_FETCH_QUEUE,
       ),
@@ -2252,9 +2252,15 @@ export function startWorkers(): Worker[] {
   if (env.LINKEDIN_ACCOUNT_REFRESH_ENABLED) {
     workers.push(
       instrument(
-        tracedWorker<AccountRefreshJobData>(ACCOUNT_REFRESH_QUEUE, processAccountRefresh, {
-          connection,
-        }),
+        tracedWorker<AccountRefreshJobData>(
+          ACCOUNT_REFRESH_QUEUE,
+          withDeadline(
+            ACCOUNT_REFRESH_QUEUE,
+            deadlineMs(ACCOUNT_REFRESH_QUEUE),
+            processAccountRefresh,
+          ),
+          { connection, ...eventTuning(ACCOUNT_REFRESH_QUEUE) },
+        ),
         ACCOUNT_REFRESH_QUEUE,
       ),
     );
@@ -2278,7 +2284,7 @@ export function startWorkers(): Worker[] {
         tracedWorker<AccountBackfillSweepJobData>(
           ACCOUNT_BACKFILL_SWEEP_QUEUE,
           makeProcessAccountBackfillSweep(connection, runAccountBackfillForWorkspace),
-          { connection },
+          { connection, ...SWEEP_WORKER_TUNING },
         ),
         ACCOUNT_BACKFILL_SWEEP_QUEUE,
       ),
