@@ -149,10 +149,14 @@ describe("M7+M8 activity timeline, engagement scoring & Sales Nav links DoD", ()
     });
     expect(callId).not.toBe(replyId);
 
-    const timeline = await activityRepository.timelineForContact(scope, contactId);
+    const { activities: timeline, nextCursor } = await activityRepository.timelineForContact(
+      scope,
+      contactId,
+    );
     expect(timeline.map((a) => a.activityType)).toEqual(["email_replied", "call_made"]);
     expect(timeline[0]?.actorUserId).toBe(ownerA);
     expect(timeline[1]?.note).toBe("Left a voicemail");
+    expect(nextCursor).toBeNull(); // 2 rows, default page 50 — no next page
 
     expect(await lastActivityAt(contactId)).toBe(tReply.getTime());
   });
@@ -171,7 +175,7 @@ describe("M7+M8 activity timeline, engagement scoring & Sales Nav links DoD", ()
     });
 
     expect(await lastActivityAt(contactId)).toBe(tReply.getTime()); // unchanged
-    const timeline = await activityRepository.timelineForContact(scope, contactId);
+    const { activities: timeline } = await activityRepository.timelineForContact(scope, contactId);
     expect(timeline.map((a) => a.activityType)).toEqual([
       "email_replied",
       "call_made",

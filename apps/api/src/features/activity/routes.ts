@@ -19,11 +19,36 @@ activityRoutes.get("/:id/activities", async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to view the timeline.");
-  const activities = await activityRepository.timelineForContact(
+  // Keyset cursor (perf-audit P2.6 tail): the timeline was a hard 50 with no way to reach older entries.
+  // ADDITIVE — `nextCursor` joins the response; the existing panel keeps ignoring it. A malformed cursor
+  // degrades to the first page, never a 500.
+  const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 100);
+  const rawCursor = c.req.query("cursor");
+  let cursor: { occurredAt: Date; id: string } | null = null;
+  if (rawCursor) {
+    try {
+      const [iso, id] = Buffer.from(rawCursor, "base64url").toString("utf8").split("|");
+      const occurredAt = iso ? new Date(iso) : null;
+      if (occurredAt && !Number.isNaN(occurredAt.getTime()) && id) cursor = { occurredAt, id };
+    } catch {
+      /* malformed cursor → first page */
+    }
+  }
+  const page = await activityRepository.timelineForContact(
     { tenantId: c.get("tenantId"), workspaceId },
     c.req.param("id"),
+    limit,
+    cursor,
   );
-  return c.json({ activities });
+  return c.json({
+    activities: page.activities,
+    nextCursor: page.nextCursor
+      ? Buffer.from(
+          `${page.nextCursor.occurredAt.toISOString()}|${page.nextCursor.id}`,
+          "utf8",
+        ).toString("base64url")
+      : null,
+  });
 });
 
 activityRoutes.post("/:id/activities", requireRole("owner", "admin", "member"), async (c) => {

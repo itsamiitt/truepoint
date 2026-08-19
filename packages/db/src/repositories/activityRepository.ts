@@ -4,7 +4,7 @@
 // String-typed like revealRepository: the closed enums live in @leadwolf/types and the CHECK constraints;
 // core/api narrow at the edge.
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { type SQL, and, desc, eq, gte, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { activities } from "../schema/activity.ts";
 
@@ -45,14 +45,32 @@ export const activityRepository = {
     return inserted[0]!.id;
   },
 
-  /** Newest-first timeline for the contact detail panel (05 §10). Workspace-scoped via RLS. */
+  /** Newest-first timeline for the contact detail panel (05 §10). Workspace-scoped via RLS.
+   *
+   *  KEYSET-paginated (perf-audit P2.6 tail): the timeline was a hard 50 with no cursor — a contact with
+   *  200 activities silently showed 50 with no next page, on a "cursor pagination" API. The (occurred_at
+   *  DESC, id DESC) tiebreaker also fixes non-deterministic page edges across same-timestamp bulk events.
+   *  Bonus on this RANGE-partitioned table: page 2+ carries an `occurred_at <` bound, so Postgres prunes to
+   *  the relevant monthly partitions — only page 1 still fans across all partition indexes (bounding THAT
+   *  is P2.2c, gated on a product decision about old-record visibility). */
   async timelineForContact(
     scope: TenantScope,
     contactId: string,
     limit = 50,
-  ): Promise<ActivityTimelineRow[]> {
-    return withTenantTx(scope, (tx) =>
-      tx
+    cursor: { occurredAt: Date; id: string } | null = null,
+  ): Promise<{
+    activities: ActivityTimelineRow[];
+    nextCursor: { occurredAt: Date; id: string } | null;
+  }> {
+    return withTenantTx(scope, async (tx) => {
+      const conds: SQL[] = [eq(activities.contactId, contactId) as SQL];
+      if (cursor) {
+        // Row-value seek: strictly after (occurred_at, id) in the same order the ORDER BY imposes.
+        conds.push(
+          sql`(${activities.occurredAt}, ${activities.id}) < (${cursor.occurredAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`,
+        );
+      }
+      const rows = await tx
         .select({
           id: activities.id,
           contactId: activities.contactId,
@@ -64,10 +82,17 @@ export const activityRepository = {
           occurredAt: activities.occurredAt,
         })
         .from(activities)
-        .where(eq(activities.contactId, contactId))
-        .orderBy(desc(activities.occurredAt))
-        .limit(limit),
-    );
+        .where(and(...conds))
+        .orderBy(desc(activities.occurredAt), desc(activities.id))
+        .limit(limit + 1);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      return {
+        activities: page,
+        nextCursor: hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
+      };
+    });
   },
 
   /** Recent activity volume per type — the engagement component's input (one grouped count query). */
