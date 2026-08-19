@@ -14,6 +14,7 @@
 
 import { env } from "@leadwolf/config";
 import {
+  CONTACT_COUNT_CAP,
   type TenantScope,
   type Tx,
   contactRepository,
@@ -462,19 +463,22 @@ function toCsv(rows: Array<Record<string, unknown>>): string {
 }
 
 // ── 9. Select-all-across-search count ────────────────────────────────────────────────────────────────────
-/** The exact total of workspace-visible contacts matching a query (powers "Select all N results"). */
+/** The total of workspace-visible contacts matching a query (powers "Select all N results"). CAPPED at
+ *  CONTACT_COUNT_CAP (perf-audit P2.3): `total` is clamped and `capped` says so — the UI renders "10,000+",
+ *  and the bulk footprint was already capped at the same 10k (BULK_SELECTION_CAP), so an exact number past
+ *  the cap informed nothing while its scan grew linearly with the workspace. */
 export async function searchCount(
   scope: WorkspaceScope,
   query: ContactQuery,
-): Promise<{ total: number }> {
+): Promise<{ total: number; capped?: boolean }> {
   // S-CH4b: the "Select all N" total MUST use the SAME child-presence predicates the search page did — else the
   // count could disagree with the visible page once channels_read flips. Evaluated once per call in its own tx
   // (env-off ⇒ zero queries, fail-closed ⇒ flat), exactly the searchPortProvider posture.
   const channelsFromChild = await channelReadFromChildEnabledForScope(scope);
-  const total = await searchRepository.countContacts(scope, expandTitleFilters(query), {
+  const n = await searchRepository.countContacts(scope, expandTitleFilters(query), {
     channelsFromChild,
   });
-  return { total };
+  return n > CONTACT_COUNT_CAP ? { total: CONTACT_COUNT_CAP, capped: true } : { total: n };
 }
 
 // ── 10. Credit ESTIMATE before run (D5, list-plan/06 §4.2) ───────────────────────────────────────────────

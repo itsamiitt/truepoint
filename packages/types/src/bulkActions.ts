@@ -148,7 +148,12 @@ export type BulkExportRequest = z.infer<typeof bulkExportSchema>;
  * count is exact (not capped) — only the per-request MUTATION footprint is capped (BULK_SELECTION_CAP), so the
  * UI can warn when the match set exceeds the cap.
  */
-export const searchCountResultSchema = z.object({ total: z.number().int().nonnegative() });
+/** `capped` (perf-audit P2.3): the server stops counting at its cap (matching BULK_SELECTION_CAP), so
+ *  `total` is a floor when set — the UI renders "10,000+" rather than an exact number nothing can act on. */
+export const searchCountResultSchema = z.object({
+  total: z.number().int().nonnegative(),
+  capped: z.boolean().optional(),
+});
 export type SearchCountResult = z.infer<typeof searchCountResultSchema>;
 
 // ── 10. Credit ESTIMATE before run (D5 — list-plan/06 §4.2) ──────────────────────────────────────────────

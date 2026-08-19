@@ -74,6 +74,12 @@ function emailDomainChildMatch(values: string[]): SQL | undefined {
   return sql`EXISTS (SELECT 1 FROM ${contactEmails} ce WHERE ce.contact_id = ${contacts.id} AND ce.deleted_at IS NULL AND (${or(...parts)}))`;
 }
 
+/** Counting stops here (perf-audit P2.3). Chosen to MATCH the bulk mutation footprint's
+ *  BULK_SELECTION_CAP (packages/types/src/bulkActions.ts): "Select all N matching" can act on at most 10k
+ *  rows, so a count that keeps scanning past 10k buys precision nothing can use, at a cost that grows
+ *  linearly with the workspace. Callers surface an over-cap result as "10,000+". */
+export const CONTACT_COUNT_CAP = 10_000;
+
 /** One keyset page of masked hits + the opaque cursor for the next page. */
 export interface SearchResultPage {
   hits: MaskedContact[];
@@ -465,8 +471,8 @@ export const searchRepository = {
 
   /**
    * The TOTAL count of workspace-visible contacts matching a query (same WHERE as searchContacts, no paging) —
-   * powers select-all-across-search ("Select all N results"). Workspace-isolated via RLS (withTenantTx). Exact,
-   * uncapped count: only the per-request bulk MUTATION footprint is capped (the caller slices resolveVisibleIds).
+   * powers select-all-across-search ("Select all N results"). Workspace-isolated via RLS (withTenantTx).
+   * Capped at CONTACT_COUNT_CAP (a return of CAP+1 means "more") — see countContactsTx for the reasoning.
    */
   async countContacts(
     scope: TenantScope,
@@ -476,16 +482,23 @@ export const searchRepository = {
     return withTenantTx(scope, (tx) => searchRepository.countContactsTx(tx, query, opts));
   },
 
-  /** The tx-aware core of countContacts — the exact match total computed inside an already-open withTenantTx
-   *  (so the Phase-4 dynamic-list read derives its member count in the SAME tx as the page it returns). */
+  /** The tx-aware core of countContacts — the match total computed inside an already-open withTenantTx
+   *  (so the Phase-4 dynamic-list read derives its member count in the SAME tx as the page it returns).
+   *  CAPPED (perf-audit P2.3): the subquery LIMIT bounds the SCAN, not just the number — count(*) visits at
+   *  most CAP+1 rows, so the busiest aggregate in the product stops being O(workspace). A return value of
+   *  CONTACT_COUNT_CAP + 1 means "more than the cap"; callers clamp and say "10,000+". Past the cap the
+   *  exact number informed nothing anyway — the bulk mutation footprint is capped at the same 10k
+   *  (BULK_SELECTION_CAP), and no UI decision changes between 10,001 and 4 million. */
   async countContactsTx(tx: Tx, query: ContactQuery, opts: SearchReadOpts = {}): Promise<number> {
     const where = buildWhere(query, opts);
-    const rows = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(contacts)
-      .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
-      .where(where);
-    return rows[0]?.n ?? 0;
+    const rows = (await tx.execute(sql`
+      SELECT count(*)::int AS n FROM (
+        SELECT 1 FROM ${contacts}
+        LEFT JOIN ${accounts} ON ${ACCOUNT_JOIN_LIVE}
+        WHERE ${where}
+        LIMIT ${CONTACT_COUNT_CAP + 1}
+      ) t`)) as unknown as Array<{ n: number }>;
+    return Number(rows[0]?.n ?? 0);
   },
 
   /**
@@ -503,12 +516,16 @@ export const searchRepository = {
     opts: SearchReadOpts = {},
   ): Promise<Map<string, number>> {
     if (items.length === 0) return new Map();
+    // Same cap as countContactsTx (a value of CAP+1 = "more"): a dynamic-list index page must not pay one
+    // O(workspace) aggregate per list it shows.
     const parts = items.map(
       (it) => sql`
-        SELECT ${it.key}::text AS k, count(*)::int AS n
-        FROM ${contacts}
-        LEFT JOIN ${accounts} ON ${ACCOUNT_JOIN_LIVE}
-        WHERE ${buildWhere(it.query, opts)}`,
+        SELECT ${it.key}::text AS k, count(*)::int AS n FROM (
+          SELECT 1 FROM ${contacts}
+          LEFT JOIN ${accounts} ON ${ACCOUNT_JOIN_LIVE}
+          WHERE ${buildWhere(it.query, opts)}
+          LIMIT ${CONTACT_COUNT_CAP + 1}
+        ) t`,
     );
     const rows = (await tx.execute(sql.join(parts, sql` UNION ALL `))) as unknown as Array<{
       k: string;

@@ -609,6 +609,7 @@ export {
   type ListMembersResultPage,
 } from "./repositories/listRepository.ts";
 export {
+  CONTACT_COUNT_CAP,
   searchRepository,
   type SearchResultPage,
 } from "./repositories/searchRepository.ts";

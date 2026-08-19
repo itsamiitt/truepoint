@@ -113,12 +113,15 @@ function ProspectPageInner() {
   const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
-  const totalCount = useQuery({
+  const countResult = useQuery({
     queryKey: prospectKeys.contactCount(query),
     queryFn: () => searchCount(query),
     enabled: contactsActive,
     staleTime: 30_000,
-  }).data?.total;
+  }).data;
+  const totalCount = countResult?.total;
+  // The server stops counting at its cap (P2.3) — render the floor as "10,000+", never as an exact number.
+  const totalCapped = countResult?.capped ?? false;
   const recent = useRecentSearches();
   const { tags } = useTags();
 
@@ -345,7 +348,7 @@ function ProspectPageInner() {
               {loading
                 ? "Loading…"
                 : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                    totalCount === undefined && hasMore ? "+" : ""
+                    totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
                   } in your workspace${
                     databaseCount > 0
                       ? ` · ${databaseCount.toLocaleString()} more in the database`
