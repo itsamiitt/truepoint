@@ -327,10 +327,17 @@ both present.
 
 ## 10. Phased build (each phase independently shippable, dark)
 
+Build order chosen 2026-08-19 on the "build where doubt is clear, keep the rest for later" steer: the
+client-side, no-regression parts of P1 shipped first; P0 (the non-blocking split) is **deferred** because
+it couples to P2 — without the SSE push, a cold profile would return instantly but the landed data can't
+reach the panel until the next lookup, and MV3's 1-minute alarm floor blocks a clean client re-poll. Build
+P0 + P2 together.
+
 | Phase | Scope | Primary files | Outcome |
 |---|---|---|---|
-| **P0** | Non-blocking lookup: split the inline `fetchAndLandUrl` into enqueue + instant return; add `freshness`/`refresh` to the response type | `contacts-resolve/routes.ts`, `@leadwolf/types`, `linkedinLinkFetchSweep`/`linkedin_link_fetch` enqueue | S-03 (instant card) |
-| **P1** | Redis lookup cache + SW memory/IDB cache + single-flight + `recent` TTL reaper | `apps/api/src/cache.ts`, `searchReadCache`-style key; `background/*`, `shared/idb.ts`, `events/manager.ts` | S-03 (warm path) |
+| **P0** *(deferred — pairs with P2)* | Non-blocking lookup: split the inline `fetchAndLandUrl` into enqueue + instant return; add `freshness`/`refresh` to the response type | `contacts-resolve/routes.ts`, `@leadwolf/types`, `linkedinLinkFetchSweep`/`linkedin_link_fetch` enqueue | S-03 (instant card) |
+| **P1 — SW half** ✅ *shipped @dbb2f07b* | SW single-flight coalescing + 60s warm cache for LOOKUP (`LookupCache`, cleared on mutation/scope-change, successes-only); `recent` TTL reaper on the flush alarm | `background/lookup/cache.ts`(+test), `background/bus/index.ts`, `queue/scheduler.ts`, `events/manager.ts` | S-03 (warm path) |
+| **P1 — server half** *(remaining)* | Redis read-through lookup cache in front of the workspace/Layer-0 reads; optional IDB persistence of the last result across SW wakes | `apps/api/src/cache.ts`, `searchReadCache`-style gen key; `shared/idb.ts` | S-03 (cross-user warm path) |
 | **P2** | Real-time subject-update topic: new event, outbox producer in landing tx, wire the dark SSE client's payload → `SUBJECT_STATUS`; panel hydrate-on-open | `realtimeEvents.ts`, `landSourcePayload.ts`, `eventStream.ts`, `Panel.tsx` | S-10/S-13 (live update) |
 | **P3** | Company path: company extractor + company lookup branch reusing `resolveCompany` + `linkedin_company_refresh` | `adapters/linkedin/*`, `content/index.ts`, `contacts-resolve`/`accounts` route | S-09/S-13 |
 | **P4** | Batch lookup endpoint + server dedup; add to `extensionScope` allowlist | `contacts-resolve/routes.ts`, `extensionScope.ts`, `contactRepository.findByDedupKeysBatch` | C-01 |
