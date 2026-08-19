@@ -9,7 +9,7 @@
 // the slice (api/bulkActionsApi).
 "use client";
 
-import type { ContactQuery, FacetKey } from "@leadwolf/types";
+import type { ContactQuery, FacetKey, Tag } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
@@ -18,7 +18,6 @@ import {
   StateSwitch,
   Tooltip,
   TpButton,
-  TpCheckbox,
   TpInput,
 } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -27,7 +26,11 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
-import { useBulkSelection } from "../hooks/useBulkSelection";
+import {
+  type BulkSelectionStore,
+  useBulkSelection,
+  useBulkSelectionStore,
+} from "../hooks/useBulkSelection";
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
@@ -59,6 +62,7 @@ import { RecordDetail } from "./RecordDetail";
 import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
 import { SaveSearchPanel } from "./SaveSearchPanel";
+import { RowSelectCheckbox, SelectAllCheckbox } from "./SelectionControls";
 
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
@@ -162,28 +166,21 @@ function ProspectPageInner() {
   const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
   const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
 
-  // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection).
-  const bulk = useBulkSelection();
+  // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection). The page
+  // holds only the STORE (identity-stable, costs no renders); the checkboxes and the bar host subscribe
+  // themselves, so a toggle re-renders 1-2 checkboxes instead of the whole page (perf-audit P3.1).
+  const selectionStore = useBulkSelectionStore();
   // Only OWNED rows are selectable: bulk actions address contacts by id, and a database row has none.
   const shownIds = useMemo(() => hits.filter((c) => !c.databaseSlug).map((c) => c.id), [hits]);
-  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
-  const selectedContacts = useMemo(
-    () => hits.filter((c) => bulk.selectedIds.has(c.id)),
-    [hits, bulk.selectedIds],
-  );
-  const revealableIds = useMemo(
-    () => selectedContacts.filter((c) => c.hasEmail && !c.isRevealed).map((c) => c.id),
-    [selectedContacts],
-  );
 
   // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
   const startRowAction = useCallback(
     (id: string, action: RowBulkAction) => {
-      bulk.clear();
-      bulk.setMany([id], true);
+      selectionStore.clear();
+      selectionStore.setMany([id], true);
       setRowAction(action);
     },
-    [bulk.clear, bulk.setMany],
+    [selectionStore],
   );
 
   const allColumns: Column<ProspectRow>[] = useMemo(
@@ -191,22 +188,19 @@ function ProspectPageInner() {
       {
         key: "select",
         header: (
-          <TpCheckbox
+          <SelectAllCheckbox
+            store={selectionStore}
+            shownIds={shownIds}
             className={styles.headCheck}
-            aria-label="Select all shown"
-            checked={allShownSelected}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
           />
         ),
         width: 36,
         cell: (c) => (
-          <TpCheckbox
+          <RowSelectCheckbox
+            store={selectionStore}
+            id={c.id}
+            label={`Select ${displayName(c)}`}
             className={styles.rowCheck}
-            checked={bulk.isSelected(c.id)}
-            onClick={(e) => e.stopPropagation()}
-            onChange={() => bulk.toggle(c.id)}
-            aria-label={`Select ${displayName(c)}`}
           />
         ),
       },
@@ -315,7 +309,9 @@ function ProspectPageInner() {
         ),
       },
     ],
-    [allShownSelected, shownIds, bulk, startRowAction, markRevealed],
+    // The store is identity-stable, so selection changes no longer rebuild the columns (and with them every
+    // cell of every row) — only new rows (shownIds) or new handlers do.
+    [selectionStore, shownIds, startRowAction, markRevealed],
   );
 
   // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
@@ -441,29 +437,75 @@ function ProspectPageInner() {
         }}
       />
 
-      {bulk.count > 0 && (
-        <BulkActionBar
-          selection={bulk}
-          query={query}
-          selectedContacts={selectedContacts}
-          revealableIds={revealableIds}
-          tags={tags}
-          requestedAction={rowAction}
-          onRequestHandled={() => setRowAction(null)}
-          onRevealed={(ids) => {
-            for (const id of ids) {
-              markRevealed(id);
-              // Hydrate each newly-revealed row so the grid shows its value inline (Phase 3 will batch this).
-              revealStore.refresh(id);
-            }
-            bulk.clear();
-          }}
-          onMutated={() => {
-            reload();
-          }}
-        />
-      )}
+      <ProspectBulkBar
+        store={selectionStore}
+        hits={hits}
+        query={query}
+        tags={tags}
+        requestedAction={rowAction}
+        onRequestHandled={() => setRowAction(null)}
+        onRevealed={(ids) => {
+          for (const id of ids) {
+            markRevealed(id);
+            // Hydrate each newly-revealed row so the grid shows its value inline (Phase 3 will batch this).
+            revealStore.refresh(id);
+          }
+          selectionStore.clear();
+        }}
+        onMutated={() => {
+          reload();
+        }}
+      />
     </div>
+  );
+}
+
+/**
+ * The bulk bar's SUBSCRIBING host (perf-audit P3.1): the one component that re-renders per selection change.
+ * It derives the selection view + the selected/revealable rows here so the page above never subscribes —
+ * mounting/unmounting the (dynamically-imported) bar as the count crosses zero, exactly as before.
+ */
+function ProspectBulkBar({
+  store,
+  hits,
+  query,
+  tags,
+  requestedAction,
+  onRequestHandled,
+  onRevealed,
+  onMutated,
+}: {
+  store: BulkSelectionStore;
+  hits: ProspectRow[];
+  query: ContactQuery;
+  tags: Tag[];
+  requestedAction: RowBulkAction | null;
+  onRequestHandled: () => void;
+  onRevealed: (ids: string[]) => void;
+  onMutated: () => void;
+}) {
+  const sel = useBulkSelection(store);
+  const selectedContacts = useMemo(
+    () => hits.filter((c) => sel.selectedIds.has(c.id)),
+    [hits, sel.selectedIds],
+  );
+  const revealableIds = useMemo(
+    () => selectedContacts.filter((c) => c.hasEmail && !c.isRevealed).map((c) => c.id),
+    [selectedContacts],
+  );
+  if (sel.count === 0) return null;
+  return (
+    <BulkActionBar
+      selection={sel}
+      query={query}
+      selectedContacts={selectedContacts}
+      revealableIds={revealableIds}
+      tags={tags}
+      requestedAction={requestedAction}
+      onRequestHandled={onRequestHandled}
+      onRevealed={onRevealed}
+      onMutated={onMutated}
+    />
   );
 }
 

@@ -12,12 +12,15 @@
 import {
   BulkActionBar,
   QuickViewDrawer,
+  RowSelectCheckbox,
+  SelectAllCheckbox,
   bulkEnrich,
   bulkEstimate,
   displayName,
   emailGlyphFor,
   maskedEmail,
   useBulkSelection,
+  useBulkSelectionStore,
   useTags,
 } from "@/features/prospect";
 import type {
@@ -38,7 +41,6 @@ import {
   type StatusTone,
   Tooltip,
   TpButton,
-  TpCheckbox,
   useToast,
 } from "@leadwolf/ui";
 import { ArrowLeft, ListChecks, RefreshCw, Trash2, Upload, Users } from "lucide-react";
@@ -119,9 +121,12 @@ export function ListDetailPage({ listId }: { listId: string }) {
   } | null>(null);
   const [reVerifyBusy, setReVerifyBusy] = useState(false);
 
-  const bulk = useBulkSelection();
+  // Selection lives in the shared store (perf-audit P3.1). Unlike ProspectPage — which fully de-subscribed —
+  // this page keeps ONE subscription (`bulk`) because its Remove/Re-verify dialogs read the selection at page
+  // level; the store still stabilizes the columns memo and the per-row checkboxes below re-render individually.
+  const selectionStore = useBulkSelectionStore();
+  const bulk = useBulkSelection(selectionStore);
   const shownIds = useMemo(() => members.map((m) => m.id), [members]);
-  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
   const selectedContacts = useMemo(
     () => members.filter((m) => bulk.selectedIds.has(m.id)),
     [members, bulk.selectedIds],
@@ -194,22 +199,19 @@ export function ListDetailPage({ listId }: { listId: string }) {
       {
         key: "select",
         header: (
-          <TpCheckbox
+          <SelectAllCheckbox
+            store={selectionStore}
+            shownIds={shownIds}
             className={styles.headCheck}
-            aria-label="Select all shown"
-            checked={allShownSelected}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
           />
         ),
         width: 36,
         cell: (c) => (
-          <TpCheckbox
+          <RowSelectCheckbox
+            store={selectionStore}
+            id={c.id}
+            label={`Select ${displayName(c)}`}
             className={styles.rowCheck}
-            checked={bulk.isSelected(c.id)}
-            onClick={(e) => e.stopPropagation()}
-            onChange={() => bulk.toggle(c.id)}
-            aria-label={`Select ${displayName(c)}`}
           />
         ),
       },
@@ -312,7 +314,8 @@ export function ListDetailPage({ listId }: { listId: string }) {
         ),
       },
     ],
-    [allShownSelected, shownIds, bulk, removeFromList],
+    // The store is identity-stable: selection changes no longer rebuild the columns (perf-audit P3.1).
+    [selectionStore, shownIds, removeFromList],
   );
 
   if (notFound) {

@@ -16,7 +16,13 @@ export { useRecentSearches, type RecentSearch } from "./hooks/useRecentSearches"
 // (no-cross-feature-import). The dependency is one-way (lists → prospect): prospect imports nothing from lists.
 export { BulkActionBar, type RowBulkAction } from "./components/BulkActionBar";
 export { AddToListDialog } from "./components/AddToListDialog";
-export { useBulkSelection, type ProspectBulkSelection } from "./hooks/useBulkSelection";
+export {
+  type BulkSelectionStore,
+  type ProspectBulkSelection,
+  useBulkSelection,
+  useBulkSelectionStore,
+} from "./hooks/useBulkSelection";
+export { RowSelectCheckbox, SelectAllCheckbox } from "./components/SelectionControls";
 export { displayName, emailGlyphFor, maskedEmail } from "./types";
 // The bulk enrich/re-verify + the D5 pre-flight estimate clients — reused by the Lists members surface for its
 // own "Re-verify" affordance (list-plan/06 §3.4, §5) so it drives the SAME contacts-bulk backend, not a fork.
