@@ -27,3 +27,15 @@ adopted; D-4/D-5/D-6/D-3-final still open — procurement/commercial).
 
 Update discipline: shipped-code-wins; every divergence from docs 04–07 gets a row
 here, not a silent doc edit.
+
+## Hardening sweep (2026-08-19, post-build)
+
+Full gates on the branch: 25/25 package typechecks · lint:boundaries 0 errors (13-warning
+baseline) · lint:import-pii clean · lint:lockfile in sync · 2292/2292 TruePoint unit tests ·
+all five MI itest suites green. Fixed in the sweep: the taxonomy app-grant that violated the
+executable Layer-0 wall (wall wins — er-only now), three MI census/rebuild repos registered in
+the raw-client ratchet with reasons, the snapshot-deficit ratchet advanced 83→89 (0125–0130
+accounted), and the historically-red grantOrder guard repaired (CRLF-blind comment stripping).
+`cascade/` root-sweep failures are the self-contained side project without installed deps —
+outside the Turbo gates. `AccountDetailDrawer` deleted (caller-less post-cutover); its
+org-kind copy nicety lives on the company page header.
