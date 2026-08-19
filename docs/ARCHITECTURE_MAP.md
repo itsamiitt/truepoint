@@ -562,8 +562,13 @@ apps/                           # deployable processes (thin transport adapters)
   `tenantSignalsRepository.ts` (tenant-side INSERT..SELECT projection onto bridged accounts + the feed read) ·
   `schema/tenantSignals.ts` + `rls/tenantSignals.sql` (0125: Layer-1 projection of `master_signals`;
   family CHECK mirrors 0103 incl. NO 'intent'; `account_id OR contact_id` subject guard)
+- **db (MI-S5):** `watchlistRepository.ts` + `schema/watchlists.ts` + `rls/watchlists.sql` (0126:
+  `watchlists` / `watchlist_members` / `signal_subscriptions` — per-user family opt-in, families CHECK
+  `<@` the 0103 vocabulary; `subscribersFor` is the dispatch join)
 - **workers:** `signalFanout.ts` (leader-locked 15-min sweep, `jobChangeSweep` sibling — absent watermark
   claims NOW and fans out nothing, the alert-storm defence; watermark advances only on a drained tick)
+- Dispatch: delivery notifies exactly the subscribed users (`account_signal` notification type), and only
+  for FRESHLY written rows — the unique wall doubles as the notification dedup
 - Layer 0 = the shared fact; `tenant_signals` = the delivered copy scoring and the (future MI-P2 watchlist)
   feed read. `intent_signals`' shipped job_change path is unchanged — new company-fact families land here.
 

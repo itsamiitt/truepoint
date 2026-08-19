@@ -180,6 +180,9 @@ export {
   tenantSignalsRepository,
   type TenantSignalRow,
 } from "./repositories/tenantSignalsRepository.ts";
+// Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
+// tenant_signals — the feed is browse, a notification requires a subscription naming the family.
+export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

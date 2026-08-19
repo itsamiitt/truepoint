@@ -130,14 +130,77 @@ describe("MI-S6 — company-signal fan-out into tenant_signals", () => {
     expect((n as { n: number }).n).toBe(1);
   });
 
-  test("4. RLS: each workspace reads only its own feed", async () => {
+  test("5. dispatch: only subscribed users are notified, only for subscribed families", async () => {
+    const [acc] = await admin`
+      SELECT id FROM accounts WHERE workspace_id = ${w1.workspaceId} AND master_company_id = ${companyId}`;
+    const accountId = (acc as { id: string }).id;
+    const scope = { tenantId: w1.tenantId, workspaceId: w1.workspaceId };
+
+    // Watchlist containing the account; the owner subscribes to leadership ONLY.
+    const watchlistId = await db.withTenantTx(scope, async (tx) => {
+      const id = await db.watchlistRepository.create(tx, {
+        ...scope,
+        name: "Territory",
+        createdByUserId: w1.ownerId,
+      });
+      await db.watchlistRepository.addMember(tx, {
+        ...scope,
+        watchlistId: id,
+        accountId,
+        addedByUserId: w1.ownerId,
+      });
+      await db.watchlistRepository.subscribe(tx, {
+        ...scope,
+        watchlistId: id,
+        userId: w1.ownerId,
+        families: ["leadership"],
+      });
+      return id;
+    });
+    expect(watchlistId).not.toBe("");
+
+    // A second leadership signal → exactly one notification for the subscriber.
+    const [s2] = await admin`
+      INSERT INTO master_signals (subject_type, subject_id, type_code, payload, observed_at)
+      VALUES ('company', ${companyId}, 'exec_departed', '{}'::jsonb, now()) RETURNING id`;
+    void s2;
+    const signals2 = await db.signalFanoutRepository.listNewCompanySignals(new Date(0), 10);
+    const res = await core.fanoutSignalsToWorkspace(scope, signals2);
+    expect(res.delivered).toBe(1); // only the new signal is fresh
+    expect(res.notified).toBe(1);
+    const notes = await admin`
+      SELECT type, entity_id, user_id FROM notifications WHERE workspace_id = ${w1.workspaceId}`;
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.type).toBe("account_signal");
+    expect(notes[0]!.entity_id).toBe(accountId);
+    expect(notes[0]!.user_id).toBe(w1.ownerId);
+
+    // A hiring-family signal: delivered to the feed, but the subscription names leadership only.
+    await admin`
+      INSERT INTO master_signals (subject_type, subject_id, type_code, payload, observed_at)
+      VALUES ('company', ${companyId}, 'headcount_surge', '{}'::jsonb, now())`;
+    const signals3 = await db.signalFanoutRepository.listNewCompanySignals(new Date(0), 10);
+    const res3 = await core.fanoutSignalsToWorkspace(scope, signals3);
+    expect(res3.delivered).toBe(1);
+    expect(res3.notified).toBe(0);
+
+    // Redelivery: nothing new lands, nobody is re-notified.
+    const resAgain = await core.fanoutSignalsToWorkspace(scope, signals3);
+    expect(resAgain.delivered).toBe(0);
+    expect(resAgain.notified).toBe(0);
+    const [n] = await admin`
+      SELECT count(*)::int AS n FROM notifications WHERE workspace_id = ${w1.workspaceId}`;
+    expect((n as { n: number }).n).toBe(1);
+  });
+
+  test("6. RLS: each workspace reads only its own feed", async () => {
     const w1Feed = await db.withTenantTx(
       { tenantId: w1.tenantId, workspaceId: w1.workspaceId },
       (tx) => db.tenantSignalsRepository.listRecent(tx),
     );
-    expect(w1Feed).toHaveLength(1);
-    expect(w1Feed[0]!.typeCode).toBe("exec_hired");
-    expect(w1Feed[0]!.family).toBe("leadership");
+    // Three signals landed for W1 across the suite (exec_hired, exec_departed, headcount_surge).
+    expect(w1Feed).toHaveLength(3);
+    expect(new Set(w1Feed.map((r) => r.family))).toEqual(new Set(["leadership", "hiring"]));
 
     const w2Feed = await db.withTenantTx(
       { tenantId: w2.tenantId, workspaceId: w2.workspaceId },

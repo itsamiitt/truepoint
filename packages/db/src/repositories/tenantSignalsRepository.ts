@@ -26,9 +26,13 @@ export const tenantSignalsRepository = {
    * Project one Layer-0 company signal onto every bridged account in THIS workspace.
    * INSERT..SELECT so account resolution and the write are one statement under RLS; ON CONFLICT on the
    * (workspace, master signal) wall makes redelivery a no-op — the sweep is at-least-once by design.
-   * Returns the number of rows actually written (0 = already delivered or no bridged account).
+   * Returns the rows ACTUALLY written (empty = already delivered or no bridged account) — the caller
+   * dispatches notifications for exactly these, so the unique wall is also the notification dedup.
    */
-  async projectCompanySignal(tx: Tx, signal: FanoutSignal): Promise<number> {
+  async projectCompanySignal(
+    tx: Tx,
+    signal: FanoutSignal,
+  ): Promise<Array<{ id: string; accountId: string }>> {
     const rows = (await tx.execute(
       sql`INSERT INTO tenant_signals
             (tenant_id, workspace_id, account_id, master_signal_id, type_code, family,
@@ -40,9 +44,9 @@ export const tenantSignalsRepository = {
            WHERE a.master_company_id = ${signal.masterCompanyId}::uuid
              AND a.deleted_at IS NULL
           ON CONFLICT (workspace_id, master_signal_id) DO NOTHING
-          RETURNING id`,
-    )) as unknown as Array<{ id: string }>;
-    return rows.length;
+          RETURNING id, account_id`,
+    )) as unknown as Array<{ id: string; account_id: string }>;
+    return rows.map((r) => ({ id: r.id, accountId: r.account_id }));
   },
 
   /** The feed read: recent-first, optionally scoped to one account. Keyset-free v1 — LIMIT-capped. */

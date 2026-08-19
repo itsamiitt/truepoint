@@ -26,6 +26,7 @@ export * from "./tags.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";
 export * from "./tenantSignals.ts";
+export * from "./watchlists.ts";
 export * from "./compliance.ts";
 export * from "./activity.ts";
 export * from "./salesnav.ts";

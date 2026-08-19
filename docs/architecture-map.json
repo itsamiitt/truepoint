@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2141,
-  "fileSetHash": "sha256:b21157f1b4779586319eb7d4b9c77ca3613a0a2f3d2c798db6fd9fb05ec83d64",
+  "fileCount": 2143,
+  "fileSetHash": "sha256:5163bd38696aa129203f3ac51ac1fc9ef24dd5f8f3034607ead1b6d8d4b81688",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -240,7 +240,8 @@
       ],
       "db": [
         "packages/db/src/repositories/signalFanoutRepository.ts",
-        "packages/db/src/repositories/tenantSignalsRepository.ts"
+        "packages/db/src/repositories/tenantSignalsRepository.ts",
+        "packages/db/src/repositories/watchlistRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/signalFanout.ts"
@@ -2963,6 +2964,7 @@
       "packages/db/src/schema/usageEvent.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
+      "packages/db/src/schema/watchlists.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/schema/workerOutbox.ts",
       "packages/db/src/seed.ts",
