@@ -312,6 +312,19 @@ export const contacts = pgTable(
     wsPriorityCoalescedIdx: index("idx_contacts_ws_priority_score_coalesced")
       .on(t.workspaceId, sql`(coalesce(${t.priorityScore}, -1)) DESC`, t.id.desc())
       .where(sql`${t.deletedAt} IS NULL`),
+    // Freshness re-verification, per-batch keyset read (ADR-0025; migration 0131, perf-audit P1.6):
+    // findStaleRevealedForReverify orders on the coalesce EXPRESSION under the RLS workspace predicate — only
+    // an expression index serves it (the wsPriorityCoalescedIdx precedent; keep the expression byte-in-step
+    // with the repository). Partial on the revealed live set — exactly the rows re-verification touches.
+    wsReverifyDueIdx: index("idx_contacts_ws_reverify_due")
+      .on(t.workspaceId, sql`(coalesce(${t.lastVerifiedAt}, ${t.createdAt}))`, t.id)
+      .where(sql`${t.isRevealed} = true AND ${t.deletedAt} IS NULL`),
+    // The daily sweep's fleet-wide DISTINCT (tenant_id, workspace_id) + staleness filter
+    // (listWorkspacesWithStaleRevealed, owner connection) — last_verified_at rides in the key so the read is
+    // answered index-only over the small partial set instead of heap-scanning every contact in the fleet.
+    reverifySweepIdx: index("idx_contacts_reverify_sweep")
+      .on(t.tenantId, t.workspaceId, t.lastVerifiedAt)
+      .where(sql`${t.isRevealed} = true AND ${t.deletedAt} IS NULL`),
   }),
 );
 

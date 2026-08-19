@@ -149,8 +149,13 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  tenant_signals + 0126 watchlists + 0129 account_scores are plain tables drizzle could snapshot, but the
  *  0107 chain HEAD still makes `generate` propose everything at once (the standing condition above); 0127
  *  is PARTITION BY HASH (inexpressible), 0128 is seed-heavy taxonomy DDL, 0130 is a hand-shaped rollup
- *  cache. All absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 89;
+ *  cache. All absorbed by the next rebaseline.
+ *
+ *  89 → 90 for 0131_reverify_indexes — 0123's category verbatim: CREATE INDEX CONCURRENTLY with an
+ *  expression key (coalesce(last_verified_at, created_at)) and partial predicates, which drizzle-kit does
+ *  not emit (perf-audit P1.6). The schema DSL carries matching index defs for documentation/dev-parity;
+ *  the migration is the authority. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 90;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
