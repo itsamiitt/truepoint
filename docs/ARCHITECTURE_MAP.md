@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2158 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2160 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -567,7 +567,11 @@ apps/                           # deployable processes (thin transport adapters)
   accounts" list) + the SAME prospect-slice sections (headcount, technologies, displacement, alumni,
   re-exported via the prospect barrel) + the account signal timeline. `GET /api/v1/accounts/:accountId`
   (account-intelligence routes, `accountSearchRepository.getMaskedById` — search's own SELECTION, so
-  page and grid never disagree) is its base read
+  page and grid never disagree) is its base read. `/companies` INDEX (`CompaniesIndexPage`) hosts the
+  account-search surface as its own rail destination (reusing the URL-driven `useAccountSearch` engine +
+  filter rail + grid; a row opens the routed page); the Prospect Accounts toggle remains until the
+  cutover retires it with redirects. `contactsHrefForCompany` (prospect `searchUrlState`) is the
+  cross-surface "view contacts" deep-link builder
 - **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
   `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
 - **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a

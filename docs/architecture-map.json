@@ -107,8 +107,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2158,
-  "fileSetHash": "sha256:23f898cbf4a96debc1835a325292c88a3c5f8c8ef276bd7c0c88b32f17e91236",
+  "fileCount": 2160,
+  "fileSetHash": "sha256:0c3bb3eba12303678b0e7bd53eaea53f471c1d0ec3d1e12b39c1d249503a45ad",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -383,6 +383,7 @@
     "companies": {
       "web": [
         "apps/web/src/features/companies/api.ts",
+        "apps/web/src/features/companies/components/CompaniesIndexPage.tsx",
         "apps/web/src/features/companies/components/CompanyPage.tsx",
         "apps/web/src/features/companies/hooks/useCompany.ts",
         "apps/web/src/features/companies/index.ts"
@@ -2681,6 +2682,7 @@
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
       "apps/web/src/app/(shell)/companies/[accountId]/page.tsx",
+      "apps/web/src/app/(shell)/companies/page.tsx",
       "apps/web/src/app/(shell)/crm-sync/page.tsx",
       "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",

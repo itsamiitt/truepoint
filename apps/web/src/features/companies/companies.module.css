@@ -120,3 +120,47 @@
   font-size: 12px;
   flex-shrink: 0;
 }
+
+/* ── /companies index ── */
+
+.indexLayout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .indexLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.indexMain {
+  min-width: 0;
+}
+
+.indexHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  max-width: 380px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--tp-text);
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}

@@ -11,12 +11,13 @@ import {
   AccountDisplacementSection,
   AccountTechnologySection,
   HeadcountSection,
+  contactsHrefForCompany,
 } from "@/features/prospect";
 import type { MaskedAccount, TenantSignal } from "@leadwolf/types";
 import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";
-import { useCompany, useWatchAccount } from "../hooks/useCompany";
 import styles from "../companies.module.css";
+import { useCompany, useWatchAccount } from "../hooks/useCompany";
 
 function show(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -63,9 +64,7 @@ function SignalsTimeline({ signals }: { signals: TenantSignal[] }) {
           <StatusBadge tone={s.family === "leadership" ? "warning" : "muted"}>
             {humanizeToken(s.family)}
           </StatusBadge>
-          <span className={styles.signalHeadline}>
-            {s.headline ?? humanizeToken(s.typeCode)}
-          </span>
+          <span className={styles.signalHeadline}>{s.headline ?? humanizeToken(s.typeCode)}</span>
           <span className={styles.signalTime}>{relTime(s.observedAt)}</span>
         </li>
       ))}
@@ -91,7 +90,7 @@ function Header({ account }: { account: MaskedAccount }) {
         >
           {watched ? "Watching" : "Watch"}
         </TpButton>
-        <Link href={`/prospect?account=${account.id}`}>
+        <Link href={contactsHrefForCompany(account.domain ?? account.name)}>
           <TpButton variant="ghost" size="sm">
             View {account.contactCount > 0 ? account.contactCount : ""} contacts
           </TpButton>

@@ -76,3 +76,5 @@ export { useTags, useTaggedIds } from "./hooks/useTags";
 export { HeadcountSection } from "./components/HeadcountSection";
 export { AccountTechnologySection } from "./components/AccountTechnologySections";
 export { AccountAlumniSection, AccountDisplacementSection } from "./components/AccountGraphSections";
+// Deep-link builder for "view this company's contacts" from non-prospect surfaces (companies page).
+export { contactsHrefForCompany } from "./searchUrlState";

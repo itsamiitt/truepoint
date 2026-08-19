@@ -5,6 +5,7 @@ import { type NavDestination, type PaletteEntry, isActive } from "@leadwolf/app-
 import {
   Activity,
   BarChart2,
+  Building2,
   HeartPulse,
   Home,
   Inbox,
@@ -38,6 +39,9 @@ export const IMPORTS_DESTINATION: NavDestination = {
 export const DESTINATIONS: NavDestination[] = [
   { label: "Home", href: "/home", match: "/home", icon: Home },
   { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
+  // Companies (market-intelligence MI-1, D-9 regroup): the account-search destination + routed company
+  // pages. The Prospect page's Accounts toggle remains until the cutover step retires it with redirects.
+  { label: "Companies", href: "/companies", match: "/companies", icon: Building2 },
   // Signals (market-intelligence MI-P2, D-9): the tenant signal feed + watchlists. Ungated in nav per the
   // imports precedent above — apps/web has no per-tenant flag reader; the page degrades to an honest
   // empty state while the fan-out pipeline is dark.
