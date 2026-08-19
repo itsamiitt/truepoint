@@ -58,11 +58,43 @@ interface ReverifiedRow {
   phoneLineType: PhoneLineType | null;
 }
 
+/** Bounded verify fan-out (perf-audit P1.1). Serial probing put a 500-row batch at 500 × (SMTP probe +
+ *  carrier lookup) ≈ minutes — guaranteed to blow the queue's 5-minute deadline on any real stale set. Eight
+ *  keeps the batch around a minute while staying gentle on Reacher/Twilio (both comfortable at single-digit
+ *  concurrency). A constant, not env: tune it together with PROCESSOR_DEADLINE_MS in apps/workers tuning.ts. */
+const VERIFY_CONCURRENCY = 8;
+
+/** Run `task` over every item with at most `limit` in flight. Tasks own their error handling (the caller's
+ *  task catches per row); a task that throws unhandled rejects the whole map, matching Promise.all. */
+async function mapBounded<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const lanes = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      await task(items[i]!);
+    }
+  });
+  await Promise.all(lanes);
+}
+
 /**
  * Re-verify the REVEALED, past-SLA contacts of ONE workspace, resetting their freshness clock. Walks keyset-paged
  * bounded batches until a short/empty page; returns the scanned / reverified / errored tally. `opts.verifier` is
  * injectable (the worker / tests pass one); it defaults to the configured verifier (Reacher when set, else the
  * pass-through → early no-op). `opts.now` is injectable for tests.
+ *
+ * Deadline cooperation (perf-audit P1.2/P1.3): `opts.signal` is the queue deadline's AbortSignal — checked
+ * between batches and between rows, so a killed attempt stops within one in-flight wave, stamps what it
+ * already graded, records its PARTIAL tally in the ledger, and leaves. `opts.onCheckpoint` receives the
+ * keyset cursor after each fully-stamped batch; the worker persists it onto the job so the retry RESUMES
+ * there instead of re-scanning (and re-paying) from the top. On an abort mid-batch the cursor deliberately
+ * does NOT advance: rows the killed wave already stamped left the stale set (their clock reset), so the
+ * resumed read from the old cursor returns exactly the still-unverified remainder — no skips, no re-pays.
  */
 export async function runReverification(
   scope: { tenantId: string; workspaceId: string },
@@ -71,6 +103,9 @@ export async function runReverification(
     verifier?: EmailVerifierPort;
     phoneVerifier?: PhoneVerifierPort;
     now?: Date;
+    signal?: AbortSignal;
+    resumeCursor?: { sortKey: Date; id: string } | null;
+    onCheckpoint?: (cursor: { sortKey: Date; id: string }) => void | Promise<void>;
   },
 ): Promise<ReverificationResult> {
   const verifier = opts?.verifier ?? defaultEmailVerifier();
@@ -101,34 +136,46 @@ export async function runReverification(
   const cutoff = reverifyCutoff(now, FRESHNESS_SLA_DAYS.email);
   // Composite keyset cursor (sortKey, id): the worst-first ordering leads on a NON-unique column, so an
   // id-only cursor would skip or repeat rows wherever a bulk import stamped many contacts identically.
-  let cursor: { sortKey: Date; id: string } | null = null;
+  // Starts at the persisted checkpoint when this attempt is a resume (see the doc comment above).
+  let cursor: { sortKey: Date; id: string } | null = opts?.resumeCursor ?? null;
   let scanned = 0;
   let reverified = 0;
   let errored = 0;
+  let aborted = false;
 
   for (;;) {
+    if (opts?.signal?.aborted) {
+      aborted = true;
+      break;
+    }
     // 1) Read one keyset-paged batch of revealed, past-SLA contacts under the workspace-scoped overlay role.
     const batch = await withTenantTx(scope, (tx) =>
       contactRepository.findStaleRevealedForReverify(tx, cutoff, cursor, limit),
     );
     if (batch.length === 0) break;
-    scanned += batch.length;
 
-    // 2) Verify OUTSIDE any transaction (network I/O — 14 §3.5). Decrypt only to call the verifier; plaintext
-    //    stays local. A row with no PII is skipped (nothing to verify → don't reset its clock). One bad row is
-    //    non-fatal: skip it (its clock is not reset, so a later sweep retries it).
+    // 2) Verify OUTSIDE any transaction (network I/O — 14 §3.5), VERIFY_CONCURRENCY rows in flight and each
+    //    row's email + phone probes in parallel (independent vendors). Decrypt only to call the verifier;
+    //    plaintext stays local. A row with no PII is skipped (nothing to verify → don't reset its clock).
+    //    One bad row is non-fatal: skip it (its clock is not reset, so a later sweep retries it). The
+    //    deadline signal is checked per row: an aborted attempt neither grades nor errs the remaining rows —
+    //    they stay in the stale set for the resumed attempt to read.
     const graded: ReverifiedRow[] = [];
-    for (const row of batch) {
+    await mapBounded(batch, VERIFY_CONCURRENCY, async (row) => {
+      if (opts?.signal?.aborted) return;
+      scanned += 1; // rows actually attempted — an aborted wave's untouched rows are the resume's to count
       try {
         const email = row.emailEnc ? decryptPii(row.emailEnc) : null;
         const phone = row.phoneEnc ? decryptPii(row.phoneEnc) : null;
-        if (!email && !phone) continue; // degenerate revealed row with no PII — leave its clock untouched
-        const emailStatus = email
-          ? await verifier.verify(email, row.emailStatus as EmailStatus)
-          : (row.emailStatus as EmailStatus);
-        const phoneResult = phone
-          ? await phoneVerifier.verify(phone, row.phoneStatus as PhoneStatus | null)
-          : null;
+        if (!email && !phone) return; // degenerate revealed row with no PII — leave its clock untouched
+        const [emailStatus, phoneResult] = await Promise.all([
+          email
+            ? verifier.verify(email, row.emailStatus as EmailStatus)
+            : Promise.resolve(row.emailStatus as EmailStatus),
+          phone
+            ? phoneVerifier.verify(phone, row.phoneStatus as PhoneStatus | null)
+            : Promise.resolve(null),
+        ]);
         const phoneStatus = phoneResult?.status ?? (row.phoneStatus as PhoneStatus | null);
         const phoneLineType = phoneResult?.lineType ?? null;
         graded.push({ contactId: row.id, emailStatus, phoneStatus, phoneLineType });
@@ -136,7 +183,8 @@ export async function runReverification(
         errored += 1;
         console.error("[reverify] verify failed; leaving row for a later sweep", row.id, err);
       }
-    }
+    });
+    if (opts?.signal?.aborted) aborted = true;
 
     // 3) Stamp the freshly-graded batch under ONE withTenantTx (RLS-scoped). Resetting last_verified_at takes the
     //    row out of the stale set. A per-row write failure is non-fatal — skip it (retried by a later sweep).
@@ -178,14 +226,27 @@ export async function runReverification(
       }
     });
 
-    // 4) Advance the keyset cursor; a short page means we reached the end of the stale set.
+    // 4) Advance the keyset cursor and persist the checkpoint; a short page means we reached the end of the
+    //    stale set. Under an abort the cursor deliberately does NOT advance (see the doc comment): stamped
+    //    rows left the stale set, so the resume re-reads exactly the unfinished remainder from the old cursor.
+    if (aborted) break;
     const last = batch[batch.length - 1]!;
     cursor = { sortKey: last.sortKey, id: last.id };
+    try {
+      await opts?.onCheckpoint?.(cursor);
+    } catch (err) {
+      // Best-effort: a failed checkpoint only means a retry re-reads this page — idempotent and cheap
+      // relative to failing a run whose grades are already stamped.
+      console.error("[reverify] checkpoint write failed (non-fatal)", scope.workspaceId, err);
+    }
     if (batch.length < limit) break;
   }
 
-  // Record the completed run in the audit ledger (PLAN_06) — best-effort: a ledger write must NEVER fail the run
+  // Record the run in the audit ledger (PLAN_06) — best-effort: a ledger write must NEVER fail the run
   // (the tally is already computed + the freshness clocks stamped). Workspace-scoped like every write.
+  // Written on the ABORTED path too (perf-audit P1.4): a deadline-killed attempt used to vanish without a
+  // trace — the user saw no run at all, forever. A deadline-split run now appears as several rows whose
+  // tallies sum to the whole scan (one per attempt); the ledger records work actually done, not intentions.
   try {
     await withTenantTx(scope, (tx) =>
       verificationJobRepository.record(tx, {

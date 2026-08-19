@@ -23,10 +23,22 @@ export const reverificationScopeSchema = z.object({
 });
 export type ReverificationScope = z.infer<typeof reverificationScopeSchema>;
 
-/** The job payload: the workspace scope to re-verify + an optional keyset batch size (defaults in core). */
+/** The keyset checkpoint a run persists after each completed batch (perf-audit P1.3): `sortKey` is the ISO
+ *  form of `coalesce(last_verified_at, created_at)` — serialized because job data crosses Redis as JSON.
+ *  A deadline-killed attempt's retry resumes FROM here instead of re-scanning (and re-paying) the workspace
+ *  from the top; rows the killed attempt already stamped left the stale set, so the resumed read is exact. */
+export const reverificationCursorSchema = z.object({
+  sortKey: z.string().min(1),
+  id: z.string().uuid(),
+});
+export type ReverificationCursor = z.infer<typeof reverificationCursorSchema>;
+
+/** The job payload: the workspace scope to re-verify + an optional keyset batch size (defaults in core) +
+ *  the resume checkpoint the WORKER writes back onto the job after each batch (producers never set it). */
 export const reverificationJobDataSchema = z.object({
   scope: reverificationScopeSchema,
   batchSize: z.number().int().positive().optional(),
+  resumeCursor: reverificationCursorSchema.optional(),
 });
 export type ReverificationJobData = z.infer<typeof reverificationJobDataSchema>;
 

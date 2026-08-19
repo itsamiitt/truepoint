@@ -5,9 +5,13 @@
 // path, and the queue keeps draining. Coarser than per-vendor-call aborts (those come with circuit
 // breakers); the per-queue bounds live in tuning.ts PROCESSOR_DEADLINE_MS.
 //
-// CAVEAT (documented in tuning.ts too): the orphaned work keeps running past the deadline — JS promises
-// aren't cancelled. That is safe here because every wrapped consumer is idempotent (a duplicate effect is a
-// no-op re-run); for outreach the attempts=2 double-send bound in retryPolicies.ts is the containment.
+// CANCELLATION (perf-audit P1.2): JS promises can't be killed, so the deadline additionally ABORTS an
+// AbortSignal handed to the processor. A signal-aware consumer (reverification) checks it between units of
+// work and stops within one in-flight wave — writing its partial tally and checkpoint on the way out —
+// instead of orphan-running (and orphan-SPENDING against vendors) to the end of its scan while the retry
+// re-does the same work. A consumer that ignores the signal behaves exactly as before: the attempt fails at
+// the deadline and the orphan runs on, contained by idempotency (and for outreach by the attempts=2
+// double-send bound in retryPolicies.ts).
 
 import type { Job } from "bullmq";
 
@@ -22,20 +26,24 @@ export class ProcessorDeadlineError extends Error {
   }
 }
 
-/** Wrap a processor so it fails (retryably) if it exceeds `deadlineMs`. The timer is cleared on settle. */
+/** Wrap a processor so it fails (retryably) if it exceeds `deadlineMs`, aborting the signal so a
+ *  cooperative processor can stop its orphaned work. The timer is cleared on settle. */
 export function withDeadline<TData, TResult>(
   queue: string,
   deadlineMs: number,
-  processor: (job: Job<TData>) => Promise<TResult>,
+  processor: (job: Job<TData>, signal: AbortSignal) => Promise<TResult>,
 ): (job: Job<TData>) => Promise<TResult> {
   return async (job) => {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
-        processor(job),
+        processor(job, controller.signal),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            reject(new ProcessorDeadlineError(queue, deadlineMs));
+            const err = new ProcessorDeadlineError(queue, deadlineMs);
+            controller.abort(err);
+            reject(err);
           }, deadlineMs);
         }),
       ]);
