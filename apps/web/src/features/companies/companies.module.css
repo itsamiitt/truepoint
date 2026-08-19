@@ -170,3 +170,47 @@
   font-size: 12px;
   margin: 0 0 8px;
 }
+
+/* ── Markets board ── */
+
+.boardWrap {
+  overflow-x: auto;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+}
+
+.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.board th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-text-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.board td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.board tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.marketsLink {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--tp-text-muted);
+  text-decoration: none;
+}
+
+.marketsLink:hover {
+  color: var(--tp-text);
+}

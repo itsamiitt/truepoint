@@ -2,3 +2,4 @@
 // routed company page.
 export { CompaniesIndexPage } from "./components/CompaniesIndexPage";
 export { CompanyPage } from "./components/CompanyPage";
+export { MarketsBoard } from "./components/MarketsBoard";

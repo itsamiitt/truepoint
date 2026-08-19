@@ -15,6 +15,7 @@ import {
 import type { AccountFacetKey } from "@leadwolf/types";
 import { EmptyState, StateSwitch, TpButton } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import styles from "../companies.module.css";
@@ -58,6 +59,9 @@ export function CompaniesIndexPage() {
             placeholder="Search companies…"
             aria-label="Search companies"
           />
+          <Link href="/companies/markets" className={styles.marketsLink}>
+            Markets →
+          </Link>
         </div>
         <StateSwitch
           loading={search.loading}
