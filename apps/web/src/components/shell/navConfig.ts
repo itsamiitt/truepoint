@@ -3,6 +3,7 @@
 // rail, top-bar title, command palette, and settings scope-nav all pick it up.
 import { type NavDestination, type PaletteEntry, isActive } from "@leadwolf/app-shell";
 import {
+  Activity,
   BarChart2,
   HeartPulse,
   Home,
@@ -37,6 +38,10 @@ export const IMPORTS_DESTINATION: NavDestination = {
 export const DESTINATIONS: NavDestination[] = [
   { label: "Home", href: "/home", match: "/home", icon: Home },
   { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
+  // Signals (market-intelligence MI-P2, D-9): the tenant signal feed + watchlists. Ungated in nav per the
+  // imports precedent above — apps/web has no per-tenant flag reader; the page degrades to an honest
+  // empty state while the fan-out pipeline is dark.
+  { label: "Signals", href: "/signals", match: "/signals", icon: Activity },
   { label: "Lists", href: "/lists", match: "/lists", icon: ListChecks },
   IMPORTS_DESTINATION,
   { label: "Sequences", href: "/sequences", match: "/sequences", icon: Send },

@@ -1,0 +1,149 @@
+/*
+ * signals.module.css — the Signals surface (feed + watchlists). Calm hairline lists like notifications;
+ * color from --tp-* tokens only. Structure here — TpButton/StatusBadge/EmptyState carry their own styling.
+ */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  border: 1px solid var(--tp-hairline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tp-text);
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chipActive {
+  border: 1px solid var(--tp-accent, currentColor);
+  border-radius: 999px;
+  background: var(--tp-accent-soft, rgba(0, 0, 0, 0.06));
+  color: var(--tp-text);
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.headline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--tp-text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.panel {
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.panelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.watchlistRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.watchlistRow:last-child {
+  border-bottom: none;
+}
+
+.watchlistName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memberCount {
+  color: var(--tp-text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.newForm {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.newInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--tp-text);
+}
+
+.familyToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}

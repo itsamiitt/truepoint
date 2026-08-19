@@ -42,6 +42,9 @@ export const CANONICAL_DOMAINS = [
   "ai",
   "ai-usage",
   "alerts",
+  // The Signals web DESTINATION (market-intelligence MI-P2, D-9 IA regroup). Web slices are
+  // destination-keyed while api/core/db stay resource-keyed under `alerts` — the reveal/prospect split.
+  "signals",
   "compliance",
   "admin-settings",
   "home",

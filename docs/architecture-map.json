@@ -91,6 +91,7 @@
     "settings-tenant",
     "settings-user",
     "settings-workspace",
+    "signals",
     "sourceLanding",
     "staff",
     "storage",
@@ -105,8 +106,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2147,
-  "fileSetHash": "sha256:bb1f53c4effb7ed47a1000b437db3310dc6cfb2f9f1c72b747e0d48d5e74c0da",
+  "fileCount": 2153,
+  "fileSetHash": "sha256:b154bfc362073e3b6d29a42112109a83553618b0b4933be38f8fd8599f1ef924",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2081,6 +2082,21 @@
       "workers": [],
       "integrations": []
     },
+    "signals": {
+      "web": [
+        "apps/web/src/features/signals/api.ts",
+        "apps/web/src/features/signals/components/SignalsPage.tsx",
+        "apps/web/src/features/signals/hooks/useSignals.ts",
+        "apps/web/src/features/signals/index.ts",
+        "apps/web/src/features/signals/keys.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "sourceLanding": {
       "web": [],
       "admin": [],
@@ -2686,6 +2702,7 @@
       "apps/web/src/app/(shell)/settings/sso/page.tsx",
       "apps/web/src/app/(shell)/settings/teams/page.tsx",
       "apps/web/src/app/(shell)/settings/workspace/page.tsx",
+      "apps/web/src/app/(shell)/signals/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
       "apps/web/src/app/auth/extension/page.tsx",
       "apps/web/src/app/import/page.tsx",
