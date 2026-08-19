@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2179,
-  "fileSetHash": "sha256:bcb30d827025bc472e134225a5902343358eac61562683a70eb6c3760422fcd4",
+  "fileCount": 2180,
+  "fileSetHash": "sha256:56596f531149ead9347ff4e0ad82bcfe35ae4c0ddec2b0d1665312ffd3b7eaf0",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1542,6 +1542,7 @@
         "apps/web/src/features/prospect/hooks/useContactProvenance.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
+        "apps/web/src/features/prospect/hooks/useDraftRange.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
         "apps/web/src/features/prospect/hooks/useProspectSearch.ts",
         "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
