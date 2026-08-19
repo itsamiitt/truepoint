@@ -19,8 +19,19 @@ export function AddToWorkspaceButton({ slug, name }: { slug: string; name: strin
       const res = await addFromDatabase(slug);
       if (res.contactId) {
         toast.success(`Added ${name} to your workspace`);
-        // The row changes side: it must leave the database half and appear as an owned contact.
-        void queryClient.invalidateQueries({ queryKey: ["prospect"] });
+        // The row changes side: it must leave the database half and appear as an owned contact. Invalidate
+        // exactly the query families that change — the two searches, the workspace count, the facet counts —
+        // NOT the whole ["prospect"] root (perf-audit P3.3): the root nuke refetched every mounted detail
+        // section, tags, stages, typeahead memos and reveal reads — dozens of requests for a one-row move.
+        for (const family of [
+          "contact-search",
+          "database-search",
+          "database-count",
+          "contact-count",
+          "contact-facets",
+        ]) {
+          void queryClient.invalidateQueries({ queryKey: ["prospect", family] });
+        }
       } else {
         toast.error("Could not add this contact", res.reason);
       }

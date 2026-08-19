@@ -36,6 +36,12 @@ export function StageSelector({
 
   async function onChange(value: string): Promise<void> {
     const next = value === NO_STAGE ? null : value;
+    // OPTIMISTIC (perf-audit P3.2): the select shows the pick NOW — the old shape held the previous value
+    // for the whole round trip, so the dropdown visibly snapped back and froze ("actions feel
+    // unresponsive"). `busy` still serializes overlapping picks; the server's answer (the rolled-up status +
+    // canonical stage id) replaces the optimistic value on success, and a failure reverts it with the toast.
+    const prev = current;
+    setCurrent(next);
     setBusy(true);
     try {
       const result = await assignStage(contactId, next);
@@ -46,6 +52,7 @@ export function StageSelector({
         next ? `Now ${OUTREACH_STATUS_LABELS[result.outreachStatus]}.` : undefined,
       );
     } catch (e) {
+      setCurrent(prev);
       toast.error("Could not update stage", e instanceof Error ? e.message : undefined);
     } finally {
       setBusy(false);

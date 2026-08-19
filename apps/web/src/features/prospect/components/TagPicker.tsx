@@ -64,15 +64,19 @@ export function TagPicker({
     if (busyId === tag.id) return; // guard same-tag double-fire from any entry point (chip × or option)
     const isOn = assignedIds.has(tag.id);
     setBusyId(tag.id);
+    // OPTIMISTIC (perf-audit P3.2): the chip flips NOW instead of after a full round trip — the visible
+    // freeze this picker had was the direct "actions feel unresponsive" complaint. A failure reverts the
+    // flip alongside the toast; the busyId guard above already serializes same-tag toggles, so the revert
+    // can never race a second in-flight change of this tag.
+    onChange((prev) => (isOn ? prev.filter((t) => t.id !== tag.id) : withTag(prev, tag)));
     try {
       if (isOn) {
         await unassignTag(tag.id, entity, recordId);
-        onChange((prev) => prev.filter((t) => t.id !== tag.id));
       } else {
         await assignTag(tag.id, entity, recordId);
-        onChange((prev) => withTag(prev, tag));
       }
     } catch (e) {
+      onChange((prev) => (isOn ? withTag(prev, tag) : prev.filter((t) => t.id !== tag.id)));
       toast.error("Could not update tag", e instanceof Error ? e.message : undefined);
     } finally {
       setBusyId(null);
