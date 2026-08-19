@@ -77,8 +77,11 @@ Postgres/Redis endpoints, OTLP collector + Prometheus scrape wired, seeded via t
    stable.
 4. **Cold-cache drill**: `FLUSHDB` on the CACHE instance under full load — the recompute storm must be
    absorbed by single-flight + the 15s statement budget + the replica pool; p95 recovers ≤ 60s; the
-   database stays alive. (Local rehearsal 2026-08-19: cold facet 8.2s → warm 12.6ms; the drill validates
-   the same curve at fleet concurrency.)
+   database stays alive. (Local rehearsal 2026-08-19, 8.25M-contact seed, c=8 steady load + 1/s facet
+   probes: flush → exactly ONE 13.2s recompute — single-flight held — then warm 40–113ms hits on the very
+   next probe; the healthy mix rode through at p95 764ms with zero errors. WATCH ITEM for the staging run:
+   the under-load whale recompute (13–14s local) sits close to the 15s statement budget on small hardware —
+   confirm prod headroom or the drill's recompute trips the budget and serves a 5xx instead of a slow fill.)
 5. **Invalidation spot-check**: bulk status mutation → facet response reflects it ≤ 2s (event bump), and
    after an import promotion ≤ 60s (TTL class) — per the confirmed §4 consistency table.
 
