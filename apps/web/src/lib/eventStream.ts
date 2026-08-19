@@ -21,6 +21,19 @@ export interface StreamedEvent {
 const RECONNECT_MIN_MS = 3_000;
 const RECONNECT_MAX_MS = 60_000;
 
+// ── Stream liveness signal (perf-audit P3.8a) ────────────────────────────────────────────────────────────
+// Pollers use this to pick a cadence: while the stream is LIVE, pushed events are the primary signal and a
+// poll can drop to a slow backstop; while it is DARK (REALTIME_SSE_ENABLED off → the stream 404s, permanent)
+// or not yet known, the poll IS the signal and keeps its short cadence. "active" is sticky across reconnect
+// gaps on purpose — the backoff re-establishes within a bounded window and the backstop poll covers the gap.
+type RealtimeStreamState = "unknown" | "active" | "disabled";
+let streamState: RealtimeStreamState = "unknown";
+
+/** Whether the SSE stream is live, permanently dark, or not yet known this session. */
+export function realtimeStreamState(): RealtimeStreamState {
+  return streamState;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -86,7 +99,10 @@ export function connectEventStream(onEvent: (ev: StreamedEvent) => void): () => 
             ...(lastEventId ? { "last-event-id": lastEventId } : {}),
           },
         });
-        if (res.status === 404) return; // realtime disabled — don't reconnect
+        if (res.status === 404) {
+          streamState = "disabled"; // realtime dark — don't reconnect; pollers keep their short cadence
+          return;
+        }
         if (!res.ok || !res.body) {
           await delay(jittered(reconnectMs));
           reconnectMs = Math.min(reconnectMs * 2, RECONNECT_MAX_MS);
@@ -94,6 +110,7 @@ export function connectEventStream(onEvent: (ev: StreamedEvent) => void): () => 
         }
         // Streaming for real — the service is healthy, so the next drop starts from the short step again.
         reconnectMs = RECONNECT_MIN_MS;
+        streamState = "active";
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";

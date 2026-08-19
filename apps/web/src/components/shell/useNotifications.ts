@@ -7,6 +7,7 @@
 "use client";
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { realtimeStreamState } from "@/lib/eventStream";
 import { API_BASE } from "@/lib/publicConfig";
 import { sharedKeys } from "@/lib/queryKeys";
 import type { Notification, NotificationType } from "@leadwolf/types";
@@ -23,8 +24,12 @@ export interface AppNotification {
   href: string;
 }
 
-/** Badge/feed refresh cadence (ms) — keeps the count truthful without a realtime channel. */
+/** Badge/feed refresh cadence (ms) while the realtime stream is dark — the poll IS the signal then. */
 const POLL_MS = 60_000;
+/** Backstop cadence while the SSE stream is LIVE (perf-audit P3.8a): notification.created events invalidate
+ *  the feed the moment a row lands (RealtimeBridge), so a permanent per-tab-per-minute floor of requests —
+ *  ~24k/h at a 200-seat customer with two tabs each — buys nothing; the slow poll only covers missed frames. */
+const BACKSTOP_POLL_MS = 5 * 60_000;
 
 const TONE: Record<NotificationType, NotificationTone> = {
   low_credits: "warning",
@@ -99,7 +104,9 @@ export function useNotifications(): NotificationsState {
     queryFn: ({ signal }) => fetchFeed(signal),
     // The hand-rolled setInterval kept polling while the tab was hidden and while the request was already in
     // flight. RQ pauses the interval for a background tab and never overlaps a fetch with itself.
-    refetchInterval: POLL_MS,
+    // Cadence follows the stream (P3.8a): pushed events are the primary signal once the SSE stream is live,
+    // so the poll drops to the backstop; while realtime is dark or unknown, the short poll stays the signal.
+    refetchInterval: () => (realtimeStreamState() === "active" ? BACKSTOP_POLL_MS : POLL_MS),
   });
   const feed = query.data ?? EMPTY;
 

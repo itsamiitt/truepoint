@@ -9,8 +9,10 @@
 
 import { invalidateCreditSignals } from "@/lib/credits";
 import { connectEventStream } from "@/lib/eventStream";
+import { sharedKeys } from "@/lib/queryKeys";
 import {
   EVENT_CREDITS_CHANGED,
+  EVENT_NOTIFICATION_CREATED,
   EVENT_REVEAL_COMPLETED,
   EVENT_REVEAL_JOB_COMPLETED,
 } from "@leadwolf/types";
@@ -27,6 +29,12 @@ export function RealtimeBridge() {
         ev.event === EVENT_REVEAL_JOB_COMPLETED
       ) {
         invalidateCreditSignals(qc);
+      }
+      // A notification landed for someone in this workspace (perf-audit P3.8a) — re-read the bell's feed.
+      // The event is workspace-scoped, so occasionally another user's notification triggers a refetch of
+      // one's own (correct, cheap); this is what lets the 60s poll drop to a 5-minute backstop.
+      if (ev.event === EVENT_NOTIFICATION_CREATED) {
+        void qc.invalidateQueries({ queryKey: sharedKeys.notifications() });
       }
       if (ev.event === EVENT_REVEAL_COMPLETED) {
         try {

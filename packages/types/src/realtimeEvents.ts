@@ -10,6 +10,12 @@ export const EVENT_REVEAL_COMPLETED = "reveal.completed";
 export const EVENT_CREDITS_CHANGED = "credits.changed";
 export const EVENT_REVEAL_JOB_PROGRESS = "reveal.job.progress";
 export const EVENT_REVEAL_JOB_COMPLETED = "reveal.job.completed";
+/** One notification landed for a user (perf-audit P3.8a). Emitted by notificationRepository.create in the
+ *  SAME transaction as the row, so every producer — sweeps, alerts, job-change, import-notify — gets the
+ *  event for free and an event exists iff the row does. Payload is ids/enum only (userId + type — the
+ *  title/body stay out per the PII-free contract); the web bridge invalidates the bell's feed query, turning
+ *  its 60s poll into a 5-minute backstop while the stream is live. */
+export const EVENT_NOTIFICATION_CREATED = "notification.created";
 
 // ── Import v2 job events (import-redesign 09 §4.4, S-Q6) — names RESERVED, wiring DARK ───────────────────
 // No producer writes these yet: the outbox writers land with S-Q3 and stay behind the untouched

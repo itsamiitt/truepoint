@@ -3,10 +3,12 @@
 // RLS GUC carries no user id). Reads are keyset-paginated over the v7 id (newest-first). Producers `create` a
 // notification inside their own withTenantTx (the workspace GUC must be set for the RLS WITH CHECK).
 
-import type { NotificationType } from "@leadwolf/types";
+import { env } from "@leadwolf/config";
+import { EVENT_NOTIFICATION_CREATED, type NotificationType } from "@leadwolf/types";
 import { and, count, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { notifications } from "../schema/notifications.ts";
+import { eventOutboxRepository } from "./eventOutboxRepository.ts";
 
 export interface NotificationRow {
   id: string;
@@ -57,7 +59,13 @@ function decodeCursor(cursor: string): string | null {
 
 export const notificationRepository = {
   /** Insert one notification for a recipient. Composed inside the caller's withTenantTx (the workspace GUC must
-   *  be set for the RLS WITH CHECK). Returns the new id. */
+   *  be set for the RLS WITH CHECK). Returns the new id.
+   *
+   *  Realtime (perf-audit P3.8a): when the SSE backbone is on, a `notification.created` outbox row is appended
+   *  in the SAME transaction — one change point covers every producer (sweeps, alerts, job-change,
+   *  import-notify), atomically: the event exists iff the notification does, and the relay publishes it
+   *  post-commit. Payload is ids/enum only (recipient + type) per the events' PII-free contract — never the
+   *  title/body. Gate-off ⇒ zero extra statements, byte-identical to the pre-P3.8a write. */
   async create(tx: Tx, input: CreateNotificationInput): Promise<string> {
     const [row] = await tx
       .insert(notifications)
@@ -72,6 +80,14 @@ export const notificationRepository = {
         entityId: input.entityId ?? null,
       })
       .returning({ id: notifications.id });
+    if (env.REALTIME_SSE_ENABLED) {
+      await eventOutboxRepository.append(tx, {
+        tenantId: input.tenantId,
+        workspaceId: input.workspaceId,
+        eventType: EVENT_NOTIFICATION_CREATED,
+        payload: { userId: input.userId, type: input.type },
+      });
+    }
     return row?.id ?? "";
   },
 
