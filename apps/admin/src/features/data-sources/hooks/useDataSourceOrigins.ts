@@ -11,9 +11,13 @@ export function useDataSourceOrigins() {
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Refreshes (post-mutation reloads) report here — re-raising `loading` would blank the populated table
+  // back to the StateSwitch skeleton (perf-audit P3.6).
+  const [refreshing, setRefreshing] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { initial?: boolean }) => {
+    if (opts?.initial) setLoading(true);
+    else setRefreshing(true);
     setError(null);
     setUnavailable(false);
     try {
@@ -25,13 +29,16 @@ export function useDataSourceOrigins() {
         setError(e instanceof Error ? e.message : "Failed to load data sources");
       }
     } finally {
-      setLoading(false);
+      if (opts?.initial) setLoading(false);
+      else setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const reload = useCallback(() => load(), [load]);
 
-  return { origins, error, unavailable, loading, reload };
+  useEffect(() => {
+    void load({ initial: true });
+  }, [load]);
+
+  return { origins, error, unavailable, loading, refreshing, reload };
 }

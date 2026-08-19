@@ -15,23 +15,30 @@ export function useCrmDeadLetters() {
   const [rows, setRows] = useState<StaffCrmDeadLetter[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Refreshes (the post-triage reload) report here — re-raising `loading` would blank the populated queue
+  // back to the StateSwitch skeleton (perf-audit P3.6).
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { initial?: boolean }) => {
+    if (opts?.initial) setLoading(true);
+    else setRefreshing(true);
     setError(null);
     try {
       setRows(await fetchCrmDeadLetters());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load the dead-letter queue");
     } finally {
-      setLoading(false);
+      if (opts?.initial) setLoading(false);
+      else setRefreshing(false);
     }
   }, []);
 
+  const reload = useCallback(() => load(), [load]);
+
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void load({ initial: true });
+  }, [load]);
 
   const triage = useCallback(
     async (id: string, status: "retrying" | "resolved" | "ignored") => {
@@ -49,5 +56,5 @@ export function useCrmDeadLetters() {
     [reload],
   );
 
-  return { rows, error, loading, busy, reload, triage };
+  return { rows, error, loading, refreshing, busy, reload, triage };
 }

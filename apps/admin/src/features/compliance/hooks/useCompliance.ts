@@ -11,16 +11,21 @@ export function useCompliance() {
   const [status, setStatusState] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Post-mutation reloads report here — re-raising `loading` would blank the populated table back to the
+  // StateSwitch skeleton (perf-audit P3.6). A status-filter change still raises `loading`.
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async (s: string) => {
-    setLoading(true);
+  const load = useCallback(async (s: string, opts?: { refresh?: boolean }) => {
+    if (opts?.refresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       setDsars(await fetchDsars(s || undefined));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load DSAR requests");
     } finally {
-      setLoading(false);
+      if (opts?.refresh) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -40,8 +45,9 @@ export function useCompliance() {
     dsars,
     status,
     loading,
+    refreshing,
     error,
     setStatus,
-    reload: useCallback(() => load(status), [load, status]),
+    reload: useCallback(() => load(status, { refresh: true }), [load, status]),
   };
 }

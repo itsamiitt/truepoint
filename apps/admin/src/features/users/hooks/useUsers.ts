@@ -1,6 +1,7 @@
 // useUsers.ts — loads the cross-tenant user directory (GET /admin/users) with a server-side email/name search
 // and keyset "Load more" pagination (13a F5). Holds the active search, the next-page cursor, and separate
-// loading (initial / re-search) vs loadingMore (append) flags. Presentation state only; fetch lives in api.ts.
+// loading (initial / re-search) vs refreshing (post-mutation reload) vs loadingMore (append) flags.
+// Presentation state only; fetch lives in api.ts.
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -14,11 +15,15 @@ export function useUsers() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Post-mutation reloads report here — re-raising `loading` would blank the populated table back to the
+  // StateSwitch skeleton (perf-audit P3.6). A re-search still raises `loading` (the result set is replaced).
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
-  const load = useCallback(async (q: string, st: string) => {
-    setLoading(true);
+  const load = useCallback(async (q: string, st: string, opts?: { refresh?: boolean }) => {
+    if (opts?.refresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const page = await fetchUsers({ search: q || undefined, status: st || undefined });
@@ -27,7 +32,8 @@ export function useUsers() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users");
     } finally {
-      setLoading(false);
+      if (opts?.refresh) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
@@ -78,11 +84,12 @@ export function useUsers() {
     status,
     error,
     loading,
+    refreshing,
     loadingMore,
     loadMoreError,
     applySearch,
     applyStatus,
     loadMore,
-    reload: useCallback(() => load(search, status), [load, search, status]),
+    reload: useCallback(() => load(search, status, { refresh: true }), [load, search, status]),
   };
 }
