@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2143,
-  "fileSetHash": "sha256:5163bd38696aa129203f3ac51ac1fc9ef24dd5f8f3034607ead1b6d8d4b81688",
+  "fileCount": 2147,
+  "fileSetHash": "sha256:bb1f53c4effb7ed47a1000b437db3310dc6cfb2f9f1c72b747e0d48d5e74c0da",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -234,7 +234,11 @@
     "alerts": {
       "web": [],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/alerts/index.ts",
+        "apps/api/src/features/alerts/signalRoutes.ts",
+        "apps/api/src/features/alerts/watchlistRoutes.ts"
+      ],
       "core": [
         "packages/core/src/alerts/fanoutSignals.ts"
       ],
@@ -3264,6 +3268,7 @@
       "packages/types/src/tenantAdmin.ts",
       "packages/types/src/userAdmin.ts",
       "packages/types/src/validation.ts",
+      "packages/types/src/watchlists.ts",
       "packages/types/src/webhooks.ts",
       "packages/types/src/workerQueues.ts"
     ],

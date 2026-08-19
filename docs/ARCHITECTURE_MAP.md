@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2141 source files · 87 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2147 source files · 87 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -554,7 +554,11 @@ apps/                           # deployable processes (thin transport adapters)
 - Opposite direction from `master-sync` across the same wall: that domain is the Forge→Layer-0 **write** ingress, this is
   the tenant-facing **read**. Reads only — no credit spend, no personal data (technology/vendor rows describe organizations)
 
-#### alerts — *the tenant signal feed substrate* (market-intelligence MI-S6, [S-13][S-09]; DARK behind `SIGNAL_FANOUT_ENABLED`)
+#### alerts — *the tenant signal feed substrate* (market-intelligence MI-S5/S6, [S-13][S-09][S-14]; DARK behind `SIGNAL_FANOUT_ENABLED`)
+- **api:** `features/alerts/` — `watchlistRoutes.ts` (/api/v1/watchlists: CRUD + members + PUT
+  /:id/subscription — the CALLER's subscription only, claims.sub, never a body-supplied user) ·
+  `signalRoutes.ts` (GET /api/v1/signals — the tenant_signals feed read, optional accountId filter;
+  never Layer 0)
 - **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
   `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
 - **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a

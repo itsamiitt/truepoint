@@ -10,7 +10,7 @@ adopted; D-4/D-5/D-6/D-3-final still open — procurement/commercial).
 | Leadership-signal emitter (`exec_hired`/`exec_departed` in `landSourcePayload` step 8) | MI-P1 | ✅ built | company-subject, transition-guarded, evidence-idempotent; itest 3+4 extended |
 | C9 confidence unification (D-2 default) | MI-P0 | ✅ built | `ConfidenceHalfLifePolicy` param on the leaf fn; `masterConfidencePolicyRepository.loadBadgeHalfLives` + gated cached loader (`badgeHalfLifePolicy`); wired into reveal badge + provenance route; dark behind `CONFIDENCE_POLICY_BADGE_ENABLED` |
 | MI-S6 `tenant_signals` + `signal_fanout` worker | MI-P1 | ✅ built | migration 0125 + RLS, census/projection repos, core `fanoutSignalsToWorkspace`, leader-locked sweep dark behind `SIGNAL_FANOUT_ENABLED`; itest 4/4 (routing, delivery, idempotency, RLS) |
-| MI-S5 watchlists + subscriptions + dispatch | MI-P2 | ✅ built (backend) | migration 0126 + RLS; `watchlistRepository` (CRUD, members, subscribe, `subscribersFor`); dispatch inside `fanoutSignalsToWorkspace` → `account_signal` notifications, fresh-rows-only dedup; itest 5/5. API routes + web UI still owed |
+| MI-S5 watchlists + subscriptions + dispatch | MI-P2 | ✅ built (backend + API) | migration 0126 + RLS; `watchlistRepository` (CRUD, members, subscribe, `subscribersFor`); dispatch inside `fanoutSignalsToWorkspace` → `account_signal` notifications, fresh-rows-only dedup; itest 5/5. API: `/api/v1/watchlists` CRUD+members+subscription, `GET /api/v1/signals` feed (`apps/api/src/features/alerts/`). Web UI still owed |
 | MI-1 `/companies` destination + IA regroup | MI-P1 | ⬜ | after fan-out so page has tenant signal feed |
 | MI-S3 industry taxonomy + alias backfill | MI-P5 | ⬜ | |
 | MI-S4 `account_scores` + scoring worker | MI-P5 | ⬜ | |
