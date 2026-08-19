@@ -40,6 +40,7 @@ decided; it cites it. Same posture toward `prospect-company-data/`,
 | [07-product-surfaces.md](07-product-surfaces.md) | The `/companies` destination, watchlists/alerts, IA regroup, admin surfaces |
 | [08-compliance.md](08-compliance.md) | Per-pillar compliance posture under `docs/strategy/09-compliance.md` |
 | [09-roadmap-and-decisions.md](09-roadmap-and-decisions.md) | Phased roadmap with gates + the human decision register |
+| [10-enablement-runbook.md](10-enablement-runbook.md) | The deploy-side flag-flip runbook (MI-9): stages, probes, rollback |
 
 ## Ground rules this series inherits (binding)
 
