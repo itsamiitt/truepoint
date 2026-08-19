@@ -371,6 +371,29 @@ export const sessionRepository = {
     await db.update(userSessions).set({ revokedAt: new Date() }).where(eq(userSessions.id, id));
   },
 
+  /**
+   * Retention sweep (perf-audit P2.8 — the prune the refresh-hash index comment in schema/auth.ts promised):
+   * delete sessions that are DEAD (revoked by rotation/logout, or past expiry) for longer than
+   * `olderThanDays`. The table grows on every login AND every rotation and nothing else ever removes a row,
+   * so the silent-refresh hot path's index — and every sessions-for-user read — degraded without bound.
+   * 30 days keeps the admin recent-sessions views and reuse-detection forensics intact; a session dead for a
+   * month serves no read. SYSTEM path (owner connection, cross-tenant), batched like idempotency's sweep so
+   * a large first backlog never locks the table in one statement. Returns rows reclaimed.
+   */
+  async deleteExpired(olderThanDays: number, batchLimit = 5000): Promise<number> {
+    const rows = (await db.execute(sql`
+      DELETE FROM user_sessions
+       WHERE id IN (
+         SELECT id FROM user_sessions
+          WHERE (revoked_at IS NOT NULL AND revoked_at < now() - (${olderThanDays} * interval '1 day'))
+             OR (expires_at < now() - (${olderThanDays} * interval '1 day'))
+          LIMIT ${batchLimit}
+       )
+      RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return rows.length;
+  },
+
   // Pin the session's active workspace (chosen at the workspace-selection step; ADR-0019). Durable on the
   // auth origin, so it runs on the global client like the rest of the session aggregate.
   async setWorkspace(sessionId: string, workspaceId: string): Promise<void> {
