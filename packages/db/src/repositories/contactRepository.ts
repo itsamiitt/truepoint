@@ -650,23 +650,37 @@ export const contactRepository = {
   },
 
   /**
-   * Batched updates for an import chunk. This LOOPS the single-row update rather than one set-based statement on
-   * purpose: each row writes a DIFFERENT subset of columns (after planFieldWrite drops the rows' pinned scalars),
-   * and definedOnly (never clobber a value with undefined) is inherently per-row — a single CASE/VALUES-join
-   * UPDATE could not express the heterogeneous column sets safely. The batching win the design wants is the ONE
-   * withTenantTx per chunk (not one tx per row), which the caller already owns; each iteration is byte-identical
-   * to update (definedOnly + updatedAt bump), so semantics are preserved exactly.
+   * Batched updates for an import chunk. Still one statement PER ROW on purpose: each row writes a DIFFERENT
+   * subset of columns (after planFieldWrite drops the rows' pinned scalars), and definedOnly (never clobber a
+   * value with undefined) is inherently per-row — a single CASE/VALUES-join UPDATE could not express the
+   * heterogeneous column sets safely across every ContactWriteValues type (bytea/jsonb/citext casts included).
+   *
+   * PIPELINED, not awaited one-by-one (perf-audit P2.7): the sequential loop paid one network round trip per
+   * row — ~10s of pure latency for a 10k chunk — inside one held transaction, pinning a tenant-pool
+   * connection and its row locks the whole time. Issuing every statement before awaiting lets postgres.js
+   * pipeline them on the transaction's reserved connection (submission order is preserved; the server still
+   * executes them serially inside the tx, so semantics are byte-identical to the loop). allSettled + rethrow
+   * rather than Promise.all: after one statement fails, the pipeline's later statements reject with
+   * "transaction is aborted" — they must be OBSERVED (or bun reports unhandled rejections) and the FIRST
+   * error is the one the caller's rollback wants. `updatedAt` is one timestamp per chunk now (previously
+   * drifted a few ms across the loop) — a chunk is one logical write, so uniform is the truer stamp.
    */
   async updateBatch(
     tx: Tx,
     updates: Array<{ id: string; values: Partial<ContactWriteValues> }>,
   ): Promise<void> {
-    for (const u of updates) {
-      await tx
-        .update(contacts)
-        .set({ ...definedOnly(u.values), updatedAt: new Date() })
-        .where(eq(contacts.id, u.id));
-    }
+    if (updates.length === 0) return;
+    const updatedAt = new Date();
+    const results = await Promise.allSettled(
+      updates.map((u) =>
+        tx
+          .update(contacts)
+          .set({ ...definedOnly(u.values), updatedAt })
+          .where(eq(contacts.id, u.id)),
+      ),
+    );
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
   },
 
   /** The non-PII inputs the rule-based scorer reads (ADR-0008). Tx-aware: composed in the score tx. */
