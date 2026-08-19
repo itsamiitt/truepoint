@@ -231,7 +231,7 @@ describe("provider_origins — the origin fleet (0117)", () => {
       accountId,
       fetchCompany: stubFetch,
     });
-    expect(second.cacheHit).toBe(true);
+    expect("cacheHit" in second && second.cacheHit).toBe(true);
     expect(vendorCalls).toBe(1);
   });
 

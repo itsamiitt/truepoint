@@ -62,7 +62,7 @@ export interface PersonLandingRow {
   fieldProvenance: Record<string, unknown>;
   currentCompanyId: string | null;
   /** The current primary employment edge, when one exists. */
-  primaryEmployment: { id: string; masterCompanyId: string | null } | null;
+  primaryEmployment: { id: string; masterCompanyId: string | null; title: string | null } | null;
 }
 
 export interface CompanyLandingRow {
@@ -111,7 +111,8 @@ export const masterProfileRepository = {
   async readPersonForLanding(tx: Tx, masterPersonId: string): Promise<PersonLandingRow | null> {
     const rows = (await tx.execute(sql`
       SELECT p.id, p.is_suppressed, p.field_provenance, p.current_company_id,
-             e.id AS primary_employment_id, e.master_company_id AS primary_company_id
+             e.id AS primary_employment_id, e.master_company_id AS primary_company_id,
+             e.title AS primary_title
         FROM master_persons p
         LEFT JOIN master_employment e
           ON e.master_person_id = p.id AND e.is_primary
@@ -124,6 +125,7 @@ export const masterProfileRepository = {
       current_company_id: string | null;
       primary_employment_id: string | null;
       primary_company_id: string | null;
+      primary_title: string | null;
     }>;
     const r = rows[0];
     if (!r) return null;
@@ -133,7 +135,7 @@ export const masterProfileRepository = {
       fieldProvenance: r.field_provenance ?? {},
       currentCompanyId: r.current_company_id,
       primaryEmployment: r.primary_employment_id
-        ? { id: r.primary_employment_id, masterCompanyId: r.primary_company_id }
+        ? { id: r.primary_employment_id, masterCompanyId: r.primary_company_id, title: r.primary_title }
         : null,
     };
   },
