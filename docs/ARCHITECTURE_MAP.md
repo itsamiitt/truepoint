@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2188 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2190 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -498,7 +498,7 @@ apps/                           # deployable processes (thin transport adapters)
 - **workers:** `queues/crmSync.ts` (pull·inbound·push·backfill), `queues/crmSyncSweep.ts` (leader-locked
   delta·reconcile·refresh·alert ticks), `queues/crmErase.ts` (outbound DSAR erase); `crm-sync/` deps factory
   + alert tick + durable dead-letter writer
-- **integrations:** `crm-sync/` — HubSpot + Salesforce adapters, the Redis budget store
+- **integrations:** `crm-sync/` — HubSpot + Salesforce adapters, the Redis budget store, `connectorsFromEnv` (the one env→credential composition point all three roots build from)
 - **web:** `features/crm-sync/` — connections + sync activity + mapping editor + conflict review; `(shell)/crm-sync`
 - **admin:** `features/crm-sync/` — the cross-tenant fleet monitor + the poison-job triage console
 

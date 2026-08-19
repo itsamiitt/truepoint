@@ -90,6 +90,10 @@ export { redisCacheStore } from "./redisCacheStore.ts";
 // recorded fixtures. core OWNS the port; this package implements it (16 §5).
 export { hubspotConnector, defaultCrmConnectors, type HubspotConfig } from "./crm-sync/hubspot.ts";
 export {
+  crmConnectorsFromEnv,
+  type CrmCredentialEnv,
+} from "./crm-sync/connectorsFromEnv.ts";
+export {
   defaultCrmFetch,
   classifyHubspotStatus,
   parseHubspotLimits,

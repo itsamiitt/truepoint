@@ -520,6 +520,16 @@ export const appEnvSchema = z
     // the provider's app config, and is compared on the callback — a mismatch is a failed exchange, not a
     // silent fallback.
     CRM_OAUTH_REDIRECT_URI: z.string().optional(),
+    // Per-provider OAuth APP credentials (crm-sync 00 §5.2/§10.5) — the client id/secret of OUR registered
+    // HubSpot / Salesforce app, which the connect flow and the workers' token refresh both need. All
+    // optional so boot never breaks: absent → that provider's connector reports configured=false and the
+    // connect route refuses with a typed error instead of a broken redirect. Server-only, never logged.
+    // (Named CRM_<PROVIDER>_* to match the webhook secrets above; the plan's §10.5 sketch used bare
+    // HUBSPOT_*/SALESFORCE_* — the deployed convention wins.)
+    CRM_HUBSPOT_CLIENT_ID: z.string().optional(),
+    CRM_HUBSPOT_CLIENT_SECRET: z.string().optional(),
+    CRM_SALESFORCE_CLIENT_ID: z.string().optional(),
+    CRM_SALESFORCE_CLIENT_SECRET: z.string().optional(),
     // Filesystem root for the DEV/TEST local-disk FileStore (packages/core diskFileStore). The PRODUCTION
     // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
     // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.

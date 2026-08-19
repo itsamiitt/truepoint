@@ -28,7 +28,7 @@ import {
 } from "@leadwolf/db";
 import {
   clamdScanner,
-  defaultCrmConnectors,
+  crmConnectorsFromEnv,
   defaultProviders,
   redisBreakerStore,
   redisCrmBudgetStore,
@@ -412,7 +412,7 @@ export const crmBackfillQueue = tracedQueue<CrmBackfillJob>(CRM_SYNC_BACKFILL_QU
 // residual on its DSAR, so these must retry rather than fail quietly.
 export const crmEraseQueue = tracedQueue<CrmEraseJobData>(CRM_ERASE_QUEUE, { connection });
 /** The configured connector set. Client id/secret come from env at the composition root, never from core. */
-const crmConnectors = defaultCrmConnectors();
+const crmConnectors = crmConnectorsFromEnv();
 // The per-connection API budget store (crm-sync §8.2). Redis-backed because workers are horizontally
 // scaled: a process-local counter would let N workers each grant the full budget. Shares the existing
 // BullMQ connection rather than opening another.

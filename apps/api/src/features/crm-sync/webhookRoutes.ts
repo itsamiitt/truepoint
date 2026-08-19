@@ -25,13 +25,13 @@
 
 import { env } from "@leadwolf/config";
 import { crmConnectionRepository, crmInboundEventRepository, withTenantTx } from "@leadwolf/db";
-import { defaultCrmConnectors } from "@leadwolf/integrations";
+import { crmConnectorsFromEnv } from "@leadwolf/integrations";
 import { Hono } from "hono";
 import { enqueueCrmInbound } from "./crmQueue.ts";
 
 export const crmWebhookRoutes = new Hono();
 
-const connectors = defaultCrmConnectors();
+const connectors = crmConnectorsFromEnv();
 
 /**
  * The provider's account id, read from the (already signature-verified) body.

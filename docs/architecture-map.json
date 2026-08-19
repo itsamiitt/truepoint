@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2188,
-  "fileSetHash": "sha256:f380b82900e31ea79ced5cadbde1c074e21e0cd67e6309486c31d216b3de6aeb",
+  "fileCount": 2190,
+  "fileSetHash": "sha256:e1e892a66319c6a037fffd3513893168de1dfbd04a4e61d910e1e5cdc019868f",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3210,6 +3210,8 @@
       "packages/integrations/src/anthropic/nlSearchAdapter.ts",
       "packages/integrations/src/anthropic/replyClassifierAdapter.test.ts",
       "packages/integrations/src/anthropic/replyClassifierAdapter.ts",
+      "packages/integrations/src/crm-sync/connectorsFromEnv.test.ts",
+      "packages/integrations/src/crm-sync/connectorsFromEnv.ts",
       "packages/integrations/src/crm-sync/crmBudgetStore.ts",
       "packages/integrations/src/crm-sync/hubspot.ts",
       "packages/integrations/src/crm-sync/hubspotHttp.ts",

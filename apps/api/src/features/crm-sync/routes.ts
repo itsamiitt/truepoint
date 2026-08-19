@@ -19,7 +19,7 @@ import {
   crmSyncStateRepository,
   withTenantTx,
 } from "@leadwolf/db";
-import { defaultCrmConnectors } from "@leadwolf/integrations";
+import { crmConnectorsFromEnv } from "@leadwolf/integrations";
 import {
   ValidationError,
   crmConflictResolveSchema,
@@ -38,7 +38,9 @@ export const crmRoutes = new Hono<{ Variables: TenancyVariables }>();
 crmRoutes.use("*", authn);
 crmRoutes.use("*", tenancy);
 
-const connectors = defaultCrmConnectors();
+// Built WITH the deployment credentials (crm-sync 00 §10.5) — a bare defaultCrmConnectors() left
+// every provider permanently unconfigured, so connect could never start.
+const connectors = crmConnectorsFromEnv();
 
 /** Least-privilege scope sets (00 §5.2). Pinned in code, never taken from the client. */
 const SCOPES: Record<string, string[]> = {
