@@ -49,6 +49,36 @@ export const sourceFetchRegistryRepository = {
     return { id: r.id, lastFetchedAt: last, fetchCount: r.fetch_count };
   },
 
+  /** Batch sibling of registerUrl (perf-audit P2.7b): upsert MANY URLs in ONE statement. The link-capture
+   *  route opened one withPrivilegedTx PER URL — a 100-URL envelope serialized 100 transactions on the
+   *  4-connection owner pool, queueing behind itself and starving the DSAR/admin paths that share it. Same
+   *  first-seen-only semantics as registerUrl (last_fetched_at never moves here; that is recordFetch's clock).
+   *  Inputs are de-duplicated on the conflict key defensively — a multi-row INSERT ... ON CONFLICT errors
+   *  outright ("cannot affect row a second time") if one key appears twice in its VALUES. Returns the number
+   *  of rows upserted. */
+  async registerUrls(tx: Tx, inputs: RegisterUrlInput[]): Promise<number> {
+    if (inputs.length === 0) return 0;
+    const unique = new Map<string, RegisterUrlInput>();
+    for (const input of inputs) unique.set(`${input.entityKind}:${input.normalizedUrl}`, input);
+    const values = sql.join(
+      [...unique.values()].map(
+        (input) =>
+          sql`(${input.entityKind}, ${input.normalizedUrl}, ${input.externalId ?? null}, ${input.sourceName ?? "linkedin_api"})`,
+      ),
+      sql`, `,
+    );
+    const rows = (await tx.execute(sql`
+      INSERT INTO source_fetch_registry (entity_kind, normalized_url, external_id, source_name)
+      VALUES ${values}
+      ON CONFLICT (entity_kind, normalized_url)
+      DO UPDATE SET
+        external_id = COALESCE(source_fetch_registry.external_id, EXCLUDED.external_id),
+        updated_at  = now()
+      RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return rows.length;
+  },
+
   /** The sweep read: per-kind, never-fetched first, then stalest past the freshness window. */
   async listDueForFetch(
     tx: Tx,

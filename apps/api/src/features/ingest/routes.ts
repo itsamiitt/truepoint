@@ -125,17 +125,19 @@ ingestRoutes.post("/linkedin-links", async (c) => {
       ext: key.externalId,
     });
   }
-  let registered = 0;
-  for (const t of targets.values()) {
-    await withPrivilegedTx((tx) =>
-      sourceFetchRegistryRepository.registerUrl(tx, {
+  // ONE privileged transaction + ONE multi-row upsert for the whole envelope (perf-audit P2.7b): the
+  // per-URL loop opened a full withPrivilegedTx per link on the 4-connection OWNER pool — a 100-URL batch
+  // serialized 100 transactions, queueing behind itself and starving the DSAR/admin paths sharing that pool.
+  const registered = await withPrivilegedTx((tx) =>
+    sourceFetchRegistryRepository.registerUrls(
+      tx,
+      [...targets.values()].map((t) => ({
         entityKind: t.entityKind,
         normalizedUrl: t.url,
         externalId: t.ext,
-      }),
-    );
-    registered += 1;
-  }
+      })),
+    ),
+  );
   return c.json({ accepted: true, registered, dropped: parsed.data.urls.length - registered }, 202);
 });
 
