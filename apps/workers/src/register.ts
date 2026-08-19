@@ -5,9 +5,9 @@
 import { env } from "@leadwolf/config";
 import {
   FastImportFailedError,
+  computeAccountScore,
   defaultEmailVerifier,
   defaultPhoneVerifier,
-  computeAccountScore,
   diskFileStore,
   fanoutSignalsToWorkspace,
   markFastImportFailed,
@@ -79,6 +79,11 @@ import {
   makeProcessAccountBackfillSweep,
 } from "./queues/accountBackfillSweep.ts";
 import { processAccountRefresh } from "./queues/accountRefresh.ts";
+import {
+  ACCOUNT_SCORING_SWEEP_QUEUE,
+  type AccountScoringSweepJobData,
+  makeProcessAccountScoringSweep,
+} from "./queues/accountScoringSweep.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -194,21 +199,6 @@ import {
   makeProcessJobChangeSweep,
 } from "./queues/jobChangeSweep.ts";
 import {
-  SIGNAL_FANOUT_QUEUE,
-  type SignalFanoutJobData,
-  makeProcessSignalFanout,
-} from "./queues/signalFanout.ts";
-import {
-  ACCOUNT_SCORING_SWEEP_QUEUE,
-  type AccountScoringSweepJobData,
-  makeProcessAccountScoringSweep,
-} from "./queues/accountScoringSweep.ts";
-import {
-  MARKET_ROLLUP_SWEEP_QUEUE,
-  type MarketRollupSweepJobData,
-  makeProcessMarketRollupSweep,
-} from "./queues/marketRollupSweep.ts";
-import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
   makeProcessLedgerBackfillSweep,
@@ -228,6 +218,11 @@ import {
   type LowBalanceNotifierSweepJobData,
   makeProcessLowBalanceNotifierSweep,
 } from "./queues/lowBalanceNotifierSweep.ts";
+import {
+  MARKET_ROLLUP_SWEEP_QUEUE,
+  type MarketRollupSweepJobData,
+  makeProcessMarketRollupSweep,
+} from "./queues/marketRollupSweep.ts";
 import {
   MASTER_BACKFILL_DLQ,
   MASTER_BACKFILL_QUEUE,
@@ -287,6 +282,11 @@ import {
   type SequenceTickJobData,
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
+import {
+  SIGNAL_FANOUT_QUEUE,
+  type SignalFanoutJobData,
+  makeProcessSignalFanout,
+} from "./queues/signalFanout.ts";
 import {
   SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
   type SubscriptionDunningSweepJobData,
@@ -599,56 +599,84 @@ export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promi
   return String(job.id);
 }
 
-/** Register the single repeatable sequence-tick job (M12 P4). Stable jobId → BullMQ keeps exactly one. */
+/**
+ * Register a repeatable via the v5 JOB SCHEDULER and RETIRE the legacy add({repeat, jobId}) entry it
+ * replaces (perf-audit P4.3). The scheduler stores under its LITERAL id (bullmq job-scheduler.js:
+ * `repeat:<id>`), so a changed interval REPLACES the schedule on next boot; the legacy form stored under an
+ * md5 of `name:jobId:::every` (repeat.js getRepeatConcatOptions), so an interval change abandoned the old
+ * entry and left BOTH schedules firing — the hazard the linkedin-link-fetch migration documented.
+ * removeRepeatable recomputes exactly that md5 from the same (name, every, jobId) triple each call site
+ * already carried, so the retirement is precise — it can never touch the scheduler's literal-id key (our ids
+ * are not 32-char hex) — and a no-op on a fresh database or once retired. An interval changed ACROSS deploys
+ * of the legacy era would have left a differently-keyed stray; none of these intervals ever changed, and if
+ * a stray ever surfaces: getRepeatableJobs() + removeRepeatableByKey. Throws like the calls it replaces —
+ * every caller already handles/ignores scheduling failure its own way.
+ */
+/** The two scheduler methods with their generics collapsed: BullMQ's ExtractNameType conditional cannot
+ *  reduce over an open T, and the runtime contract here is plainly (string, number, string, T). */
+interface RepeatableSeam<T> {
+  upsertJobScheduler(
+    id: string,
+    repeat: { every: number },
+    template: { name: string; data: T },
+  ): Promise<unknown>;
+  removeRepeatable(name: string, repeat: { every: number; jobId: string }): Promise<boolean>;
+}
+
+async function upsertRepeatable<T>(
+  queue: Queue<T>,
+  schedulerId: string,
+  everyMs: number,
+  name: string,
+  // NoInfer: T comes from the QUEUE, so a payload literal must satisfy the queue's data type instead of
+  // silently widening it (e.g. {kind: "delta"} must fit CrmSyncSweepJobData, not become {kind: string}).
+  data: NoInfer<T>,
+): Promise<void> {
+  const q = queue as unknown as RepeatableSeam<T>;
+  await q.upsertJobScheduler(schedulerId, { every: everyMs }, { name, data });
+  await q.removeRepeatable(name, { every: everyMs, jobId: schedulerId });
+}
+
+/** Register the single repeatable sequence-tick job (M12 P4). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleSequenceTick(): Promise<void> {
-  await sequenceTickQueue.add(
-    "tick",
-    {},
-    { repeat: { every: 60_000 }, jobId: "email-sequence-tick" },
-  );
+  await upsertRepeatable(sequenceTickQueue, "email-sequence-tick", 60_000, "tick", {});
 }
 
-/** Register the daily retention sweep (M12 P6). Stable jobId → exactly one repeatable. */
+/** Register the daily retention sweep (M12 P6). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleRetentionSweep(): Promise<void> {
-  await retentionSweepQueue.add(
+  await upsertRepeatable(
+    retentionSweepQueue,
+    "email-retention-sweep",
+    24 * 60 * 60_000,
     "sweep",
     {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "email-retention-sweep" },
   );
 }
 
-/** Register the repeatable OAuth token-refresh sweep (M12 P1). Stable jobId → exactly one repeatable. */
+/** Register the repeatable OAuth token-refresh sweep (M12 P1). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleTokenRefresh(): Promise<void> {
-  await tokenRefreshQueue.add(
-    "refresh",
-    {},
-    { repeat: { every: 2 * 60_000 }, jobId: "email-token-refresh" },
-  );
+  await upsertRepeatable(tokenRefreshQueue, "email-token-refresh", 2 * 60_000, "refresh", {});
 }
 
-/** Register the daily master-backfill sweep (PLAN_07 Stage B). Stable jobId → exactly one repeatable. */
+/** Register the daily master-backfill sweep (PLAN_07 Stage B). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleMasterBackfillSweep(): Promise<void> {
-  await masterBackfillSweepQueue.add(
+  await upsertRepeatable(
+    masterBackfillSweepQueue,
+    "master-backfill-sweep",
+    24 * 60 * 60_000,
     "sweep",
     {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "master-backfill-sweep" },
   );
 }
 
-/** Register the daily survivorship-projection sweep (prospect-database-platform I1). Stable jobId → exactly one
- *  repeatable. Additive: a no-op while INGESTION_EVIDENCE_ENABLED is off (the outbox stays empty). */
+/** Register the daily survivorship-projection sweep (prospect-database-platform I1). Scheduler-id keyed (see upsertRepeatable). Additive: a no-op while INGESTION_EVIDENCE_ENABLED is off (the outbox stays empty). */
 export async function scheduleProjectionSweep(): Promise<void> {
-  await projectionSweepQueue.add(
-    "sweep",
-    {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "projection-sweep" },
-  );
+  await upsertRepeatable(projectionSweepQueue, "projection-sweep", 24 * 60 * 60_000, "sweep", {});
 }
 
-/** Register the daily probabilistic-ER shadow sweep (prospect-database-platform I5). Stable jobId → exactly one
- *  repeatable. Additive: the processor returns immediately while ER_SHADOW_ENABLED is off (proposes nothing). */
+/** Register the daily probabilistic-ER shadow sweep (prospect-database-platform I5). Scheduler-id keyed (see upsertRepeatable). Additive: the processor returns immediately while ER_SHADOW_ENABLED is off (proposes nothing). */
 export async function scheduleErSweep(): Promise<void> {
-  await erSweepQueue.add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "er-sweep" });
+  await upsertRepeatable(erSweepQueue, "er-sweep", 24 * 60 * 60_000, "sweep", {});
 }
 
 /** Submit a per-workspace freshness re-verification (ADR-0025; from the sweep or on demand). Idempotent —
@@ -678,75 +706,68 @@ export async function enqueueReverification(
  *
  * Registered unconditionally. The processor checks CRM_SYNC_ENABLED before it takes the leader lock, so a
  * dark engine costs one no-op tick rather than a Redis round-trip per worker — and enabling the engine
- * needs no redeploy of the schedule. Stable jobIds → exactly one repeatable each.
+ * needs no redeploy of the schedule. Scheduler-id keyed (see upsertRepeatable).
  */
 export async function scheduleCrmSyncSweeps(): Promise<void> {
-  await crmSyncSweepQueue.add(
-    "sweep",
-    { kind: "delta" },
-    { repeat: { every: 60_000 }, jobId: "crm-sync-delta-tick" },
-  );
-  await crmSyncSweepQueue.add(
-    "sweep",
-    { kind: "refresh" },
-    { repeat: { every: 10 * 60_000 }, jobId: "crm-sync-refresh-tick" },
-  );
+  await upsertRepeatable(crmSyncSweepQueue, "crm-sync-delta-tick", 60_000, "sweep", {
+    kind: "delta",
+  });
+  await upsertRepeatable(crmSyncSweepQueue, "crm-sync-refresh-tick", 10 * 60_000, "sweep", {
+    kind: "refresh",
+  });
   // The health evaluation (§9.5). Silent when the fleet is healthy — a tick that logs "all clear" every
   // minute trains people to filter the channel, which is how a real alert gets missed.
-  await crmSyncSweepQueue.add(
-    "sweep",
-    { kind: "alert" },
-    { repeat: { every: 60_000 }, jobId: "crm-sync-alert-tick" },
-  );
+  await upsertRepeatable(crmSyncSweepQueue, "crm-sync-alert-tick", 60_000, "sweep", {
+    kind: "alert",
+  });
   // The 24h correctness backstop (§3.3). Webhooks are the LATENCY layer and can be missed — a provider
   // outage, a dropped delivery, a bug in our own apply path. Without a periodic wide re-read those gaps sit
   // below the watermark permanently and silently.
-  await crmSyncSweepQueue.add(
-    "sweep",
-    { kind: "reconcile" },
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "crm-sync-reconcile-tick" },
-  );
+  await upsertRepeatable(crmSyncSweepQueue, "crm-sync-reconcile-tick", 24 * 60 * 60_000, "sweep", {
+    kind: "reconcile",
+  });
 }
 
-/** Register the daily reverification sweep (ADR-0025). Stable jobId → exactly one repeatable. */
+/** Register the daily reverification sweep (ADR-0025). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleReverificationSweep(): Promise<void> {
-  await reverificationSweepQueue.add(
+  await upsertRepeatable(
+    reverificationSweepQueue,
+    "reverification-sweep",
+    24 * 60 * 60_000,
     "sweep",
     {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "reverification-sweep" },
   );
 }
 
-/** Register the daily Data Health snapshot sweep (10 §5). Stable jobId → exactly one repeatable. */
+/** Register the daily Data Health snapshot sweep (10 §5). Scheduler-id keyed (see upsertRepeatable). */
 export async function scheduleDataQualitySnapshotSweep(): Promise<void> {
-  await dataQualitySnapshotSweepQueue.add(
+  await upsertRepeatable(
+    dataQualitySnapshotSweepQueue,
+    "data-quality-snapshot-sweep",
+    24 * 60 * 60_000,
     "sweep",
     {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-quality-snapshot-sweep" },
   );
 }
 
-/** Register the daily retention SHADOW sweep (data-management #6, phase 2). Stable jobId → exactly one
- *  repeatable. Harmless to schedule unconditionally: each per-tenant pass is gated by the per-tenant
+/** Register the daily retention SHADOW sweep (data-management #6, phase 2). Scheduler-id keyed (see upsertRepeatable). Harmless to schedule unconditionally: each per-tenant pass is gated by the per-tenant
  *  retention_engine_enabled flag (off by default) and DELETES NOTHING (counts + records only). */
 export async function scheduleDataRetentionSweep(): Promise<void> {
-  await dataRetentionSweepQueue.add(
+  await upsertRepeatable(
+    dataRetentionSweepQueue,
+    "data-retention-sweep",
+    24 * 60 * 60_000,
     "sweep",
     {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-retention-sweep" },
   );
 }
 
-/** Register the daily partition-maintenance sweep (E-6.4). Stable jobId → exactly one repeatable.
+/** Register the daily partition-maintenance sweep (E-6.4). Scheduler-id keyed (see upsertRepeatable).
  *  Safe to schedule unconditionally: with no partitioned tables it finds nothing to do. It is scheduled
  *  BEFORE any conversion on purpose — a partitioned table whose next month does not exist stops accepting
  *  writes, so the maintenance has to be running by the time the first conversion lands, not after. */
 export async function schedulePartitionSweep(): Promise<void> {
-  await partitionSweepQueue.add(
-    "sweep",
-    {},
-    { repeat: { every: 24 * 60 * 60_000 }, jobId: "partition-sweep" },
-  );
+  await upsertRepeatable(partitionSweepQueue, "partition-sweep", 24 * 60 * 60_000, "sweep", {});
 }
 
 /** Submit a per-workspace contact dedup pass (24 Phase-0.5; e.g. after an import or on a schedule). */
@@ -1512,20 +1533,17 @@ export function startWorkers(): Worker[] {
         IMPORT_PROMOTION_SWEEP_QUEUE,
       ),
     );
-    void importPromotionSweepQueue
-      .add(
-        "sweep",
-        {},
-        {
-          repeat: { every: IMPORT_PROMOTION_SWEEP_EVERY_MS },
-          jobId: "import-promotion-sweep",
-        },
-      )
-      .catch((e) =>
-        log.error("failed to schedule the import-promotion sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      importPromotionSweepQueue,
+      "import-promotion-sweep",
+      IMPORT_PROMOTION_SWEEP_EVERY_MS,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the import-promotion sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
 
     // S-Q5: the leader-locked IMPORT REAPER (09 §7 row 2 / §8) — the DB-backed recovery + observe spine.
     // Gate-independent hardening (observe/recover only; never touches the happy path). Constructed under the
@@ -1577,17 +1595,17 @@ export function startWorkers(): Worker[] {
         IMPORT_REAPER_SWEEP_QUEUE,
       ),
     );
-    void importReaperSweepQueue
-      .add(
-        "sweep",
-        {},
-        { repeat: { every: env.IMPORT_REAPER_SWEEP_EVERY_MS }, jobId: "import-reaper-sweep" },
-      )
-      .catch((e) =>
-        log.error("failed to schedule the import-reaper sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      importReaperSweepQueue,
+      "import-reaper-sweep",
+      env.IMPORT_REAPER_SWEEP_EVERY_MS,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the import-reaper sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
 
     // S-S7 (13 §4.4): the leader-locked ARTIFACT LIFECYCLE sweep — TTL-expires the PII-bearing error
     // artifacts (objects deleted, keys nulled ⇒ honest "expired" UI state). Rides the same construction
@@ -1611,17 +1629,17 @@ export function startWorkers(): Worker[] {
         IMPORT_ARTIFACT_SWEEP_QUEUE,
       ),
     );
-    void importArtifactSweepQueue
-      .add(
-        "sweep",
-        {},
-        { repeat: { every: env.IMPORT_ARTIFACT_SWEEP_EVERY_MS }, jobId: "import-artifact-sweep" },
-      )
-      .catch((e) =>
-        log.error("failed to schedule the import-artifact sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      importArtifactSweepQueue,
+      "import-artifact-sweep",
+      env.IMPORT_ARTIFACT_SWEEP_EVERY_MS,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the import-artifact sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
 
     // P5 (08 §9): the leader-locked SCHEDULED-IMPORT sweep — fires due schedules by enqueuing an ordinary
     // fast-lane job onto THIS unified queue (so it rides the unified-queue construction gate — a scheduled
@@ -1659,20 +1677,17 @@ export function startWorkers(): Worker[] {
           SCHEDULED_IMPORT_SWEEP_QUEUE,
         ),
       );
-      void scheduledImportSweepQueue
-        .add(
-          "sweep",
-          {},
-          {
-            repeat: { every: env.SCHEDULED_IMPORT_SWEEP_EVERY_MS },
-            jobId: "scheduled-import-sweep",
-          },
-        )
-        .catch((e) =>
-          log.error("failed to schedule the scheduled-import sweep", {
-            error: e instanceof Error ? e.message : String(e),
-          }),
-        );
+      void upsertRepeatable(
+        scheduledImportSweepQueue,
+        "scheduled-import-sweep",
+        env.SCHEDULED_IMPORT_SWEEP_EVERY_MS,
+        "sweep",
+        {},
+      ).catch((e) =>
+        log.error("failed to schedule the scheduled-import sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
   }
   // Bulk (existing-contact) re-enrich money path (prospect-database-platform I3 / audit A3/P08) — GATED DARK behind
@@ -1822,17 +1837,17 @@ export function startWorkers(): Worker[] {
         LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
       ),
     );
-    void lowBalanceNotifierQueue
-      .add(
-        "sweep",
-        {},
-        { repeat: { every: 24 * 60 * 60_000 }, jobId: "low-balance-notifier-sweep" },
-      )
-      .catch((e) =>
-        log.error("failed to schedule the low-balance notifier sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      lowBalanceNotifierQueue,
+      "low-balance-notifier-sweep",
+      24 * 60 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the low-balance notifier sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // Credit-ledger reconciliation sweep (M11, ADR-0029) — DARK by default (BILLING_RECON_ENABLED=false). Purely
   // additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY —
@@ -1852,13 +1867,17 @@ export function startWorkers(): Worker[] {
         BILLING_RECON_SWEEP_QUEUE,
       ),
     );
-    void billingReconQueue
-      .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "billing-recon-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the billing-recon sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      billingReconQueue,
+      "billing-recon-sweep",
+      24 * 60 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the billing-recon sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // Subscription monthly-grant/reset sweep (M11 subs, ADR-0041) — DARK by default
   // (BILLING_SUBSCRIPTIONS_ENABLED=false). Purely additive: when off, nothing is built. Grants due
@@ -1879,13 +1898,17 @@ export function startWorkers(): Worker[] {
         SUBSCRIPTION_GRANT_SWEEP_QUEUE,
       ),
     );
-    void subscriptionGrantQueue
-      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "subscription-grant-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the subscription-grant sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      subscriptionGrantQueue,
+      "subscription-grant-sweep",
+      15 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the subscription-grant sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
 
     // Subscription dunning SIGNAL (M11 subs, ADR-0041) — READ-ONLY: surfaces subscriptions past_due beyond the
     // grace window as an ops signal. Stripe drives the real dunning (retry → deleted → revert-to-free via the
@@ -1904,17 +1927,17 @@ export function startWorkers(): Worker[] {
         SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
       ),
     );
-    void subscriptionDunningQueue
-      .add(
-        "sweep",
-        {},
-        { repeat: { every: 24 * 60 * 60_000 }, jobId: "subscription-dunning-sweep" },
-      )
-      .catch((e) =>
-        log.error("failed to schedule the subscription-dunning sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      subscriptionDunningQueue,
+      "subscription-dunning-sweep",
+      24 * 60 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the subscription-dunning sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // M12 P3 inbound-reply poller (Gmail history sweep) — DARK by default (EMAIL_INBOX_ENABLED=false). Purely
   // additive: when off, nothing is built. Per connected Google mailbox it polls new replies, records them, and
@@ -1933,13 +1956,11 @@ export function startWorkers(): Worker[] {
         GMAIL_INBOX_POLL_QUEUE,
       ),
     );
-    void gmailInboxQueue
-      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "gmail-inbox-poll" })
-      .catch((e) =>
-        log.error("failed to schedule the gmail-inbox poll", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(gmailInboxQueue, "gmail-inbox-poll", 5 * 60_000, "sweep", {}).catch((e) =>
+      log.error("failed to schedule the gmail-inbox poll", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // One-time credit-ledger backfill sweep (M11, ADR-0029) — DARK by default (BILLING_LEDGER_BACKFILL_ENABLED=
   // false). Purely additive: when off, nothing is built. Self-terminating (no-ops once every active tenant
@@ -1962,13 +1983,17 @@ export function startWorkers(): Worker[] {
         LEDGER_BACKFILL_SWEEP_QUEUE,
       ),
     );
-    void ledgerBackfillQueue
-      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "ledger-backfill-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the ledger-backfill sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      ledgerBackfillQueue,
+      "ledger-backfill-sweep",
+      5 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the ledger-backfill sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // S-CH3 channel-backfill sweep (import-redesign 15 §M-SEQ seq 46, mechanics 15 §2.1) — DARK by default,
   // double env-gated: CHANNEL_DUAL_WRITE (S-CH3 runs strictly after S-CH2 in the rollout train) AND
@@ -1992,13 +2017,17 @@ export function startWorkers(): Worker[] {
         CHANNEL_BACKFILL_SWEEP_QUEUE,
       ),
     );
-    void channelBackfillQueue
-      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "channel-backfill-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the channel-backfill sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      channelBackfillQueue,
+      "channel-backfill-sweep",
+      5 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the channel-backfill sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // S-CH5 channel reconcile / drift sweep (import-redesign 05 §3.4/§5, 15 §M-SEQ seq 48) — DARK by default,
   // double env-gated: CHANNEL_DUAL_WRITE (the train needs dual-write to be meaningful) AND
@@ -2022,13 +2051,17 @@ export function startWorkers(): Worker[] {
         CHANNEL_RECONCILE_SWEEP_QUEUE,
       ),
     );
-    void channelReconcileQueue
-      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "channel-reconcile-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the channel-reconcile sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      channelReconcileQueue,
+      "channel-reconcile-sweep",
+      15 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the channel-reconcile sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1) — DARK by default behind
   // JOB_CHANGE_SWEEP_ENABLED. The detection stack (detectJobChange + recordJobChange + the successor ranker)
@@ -2049,13 +2082,11 @@ export function startWorkers(): Worker[] {
         JOB_CHANGE_SWEEP_QUEUE,
       ),
     );
-    void jobChangeQueue
-      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "job-change-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the job-change sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(jobChangeQueue, "job-change-sweep", 15 * 60_000, "sweep", {}).catch((e) =>
+      log.error("failed to schedule the job-change sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // Signal fan-out sweep (market-intelligence MI-S6) — DARK behind SIGNAL_FANOUT_ENABLED. The
   // jobChangeSweep sibling for COMPANY-subject signals: Layer-0 master_signals reaching every workspace
@@ -2077,13 +2108,12 @@ export function startWorkers(): Worker[] {
         SIGNAL_FANOUT_QUEUE,
       ),
     );
-    void signalFanoutQueue
-      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "signal-fanout-sweep" })
-      .catch((e) =>
+    void upsertRepeatable(signalFanoutQueue, "signal-fanout-sweep", 15 * 60_000, "sweep", {}).catch(
+      (e) =>
         log.error("failed to schedule the signal fan-out sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
-      );
+    );
   }
   // Account-scoring sweep (market-intelligence MI-S4) — DARK behind ACCOUNT_SCORING_ENABLED. Event-driven
   // rescore: accounts whose tenant_signals moved since the watermark get a fresh versioned account_scores
@@ -2111,13 +2141,17 @@ export function startWorkers(): Worker[] {
         ACCOUNT_SCORING_SWEEP_QUEUE,
       ),
     );
-    void accountScoringQueue
-      .add("sweep", {}, { repeat: { every: 30 * 60_000 }, jobId: "account-scoring-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the account-scoring sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      accountScoringQueue,
+      "account-scoring-sweep",
+      30 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the account-scoring sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // Market rollup sweep (market-intelligence MI-S7) — DARK behind MARKET_ROLLUPS_ENABLED. Daily
   // full-window rebuild of the non-PII segment cache; failure mode = stale board, never a wrong number.
@@ -2135,13 +2169,17 @@ export function startWorkers(): Worker[] {
         MARKET_ROLLUP_SWEEP_QUEUE,
       ),
     );
-    void marketRollupQueue
-      .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "market-rollup-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the market rollup sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      marketRollupQueue,
+      "market-rollup-sweep",
+      24 * 60 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the market rollup sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // linkedin_api company-refresh sweep (docs/planning/linkedin-source-ingestion/) — TRIPLE-DARK: this env
   // gate for registration, the key/base-URL pair for any fetch (absent until the vendor's ToS/DPA review,
@@ -2163,13 +2201,17 @@ export function startWorkers(): Worker[] {
         LINKEDIN_COMPANY_REFRESH_QUEUE,
       ),
     );
-    void linkedinRefreshQueue
-      .add("sweep", {}, { repeat: { every: 6 * 60 * 60_000 }, jobId: "linkedin-company-refresh" })
-      .catch((e) =>
-        log.error("failed to schedule the linkedin company refresh sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      linkedinRefreshQueue,
+      "linkedin-company-refresh",
+      6 * 60 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the linkedin company refresh sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   // linkedin_api link-fetch sweep (docs/planning ecosystem) — the 30-day freshness sweep over the URL
   // registry (source_fetch_registry, 0118). Same triple-dark posture as the company sweep; replaces the
@@ -2241,13 +2283,17 @@ export function startWorkers(): Worker[] {
         ACCOUNT_BACKFILL_SWEEP_QUEUE,
       ),
     );
-    void accountBackfillQueue
-      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "account-backfill-sweep" })
-      .catch((e) =>
-        log.error("failed to schedule the account-backfill sweep", {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
+    void upsertRepeatable(
+      accountBackfillQueue,
+      "account-backfill-sweep",
+      5 * 60_000,
+      "sweep",
+      {},
+    ).catch((e) =>
+      log.error("failed to schedule the account-backfill sweep", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   }
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
