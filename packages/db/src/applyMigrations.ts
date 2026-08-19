@@ -390,6 +390,12 @@ const GRANTS = `
   -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
   -- policy are authored by staff, not by an ingest path.
   GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
+  -- Industry taxonomy (0128, MI-S3): shared REFERENCE data. The er role resolves aliases at landing;
+  -- the APP role gets SELECT deliberately (unlike master_signal_types) — the facet/label join runs inside
+  -- tenant transactions, and denormalizing labels onto every account row would be the real inconsistency.
+  -- Writes stay revoked everywhere (curation is staff/migration work).
+  GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_er;
+  GRANT SELECT ON master_industries, master_industry_aliases TO leadwolf_app;
   -- source_fetch_registry (0118) — URLs + ids only, no PII. READ by the ER role so the database lookup and
   -- the add-to-workspace materializer can hop a Sales-Nav lead URL → resolved_person_id in the same withErTx
   -- as the person read (D8). Writes stay on the owner/withPrivilegedTx path (registerUrl/recordFetch).

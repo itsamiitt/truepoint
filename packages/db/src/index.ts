@@ -183,6 +183,11 @@ export {
 // Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
 // tenant_signals — the feed is browse, a notification requires a subscription naming the family.
 export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
+// Industry taxonomy (MI-S3, 0128): alias resolution at landing + the tree read for facets/curation.
+export {
+  masterIndustryRepository,
+  type IndustryNode,
+} from "./repositories/masterIndustryRepository.ts";
 // Hiring-intelligence evidence table (MI-S1, 0127). Writer ships ahead of its producer (D-6 feed) —
 // the master_company_funding posture; reads feed the /accounts/:id/postings seam.
 export {

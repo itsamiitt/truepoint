@@ -196,6 +196,8 @@ export const REPO_DOMAIN = {
   masterConfidencePolicy: "master-sync",
   // Layer-0 hiring-intelligence evidence table (0127, MI-S1) — same system-owned graph.
   masterJobPostings: "master-sync",
+  // Industry taxonomy reference tables (0128, MI-S3) — curated beside the same graph.
+  masterIndustry: "master-sync",
   // The signal fan-out pair (market-intelligence MI-S6): the owner-conn census and the tenant_signals
   // projection. Registered under the canonical `alerts` domain — tenant_signals IS the alerts substrate.
   signalFanout: "alerts",

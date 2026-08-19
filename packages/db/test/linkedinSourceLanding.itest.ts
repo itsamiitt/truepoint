@@ -410,8 +410,14 @@ describe("linkedin_api Layer-0 landing (landLinkedinPayload)", () => {
     const [company] = await admin`
       SELECT name, description, ownership_type, year_founded, website_url,
              revenue_min_minor, revenue_max_minor, revenue_currency, revenue_range,
-             primary_domain, linkedin_company_id, hq_country, hq_city
+             primary_domain, linkedin_company_id, hq_country, hq_city, industry, industry_id
         FROM master_companies WHERE id = ${companyId}`;
+    // MI-S3: the vendor spelling stays raw; the CANONICAL node is resolved via the alias table at landing
+    // ("Hospitals and Health Care" → providers-hospitals).
+    expect(company!.industry).toBe("Hospitals and Health Care");
+    const [node] = await admin`
+      SELECT code FROM master_industries WHERE id = ${company!.industry_id}`;
+    expect(node!.code).toBe("providers-hospitals");
     expect(company!.ownership_type).toBe("public");
     expect(company!.year_founded).toBe(1946);
     expect(Number(company!.revenue_min_minor)).toBe(500_000_000);

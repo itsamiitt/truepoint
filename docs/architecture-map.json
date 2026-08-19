@@ -107,8 +107,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2164,
-  "fileSetHash": "sha256:3bcbfd7006ee82d25f7617dedc5d169d6f3a24b0fb51d53b0e86f45e1c7b634f",
+  "fileCount": 2166,
+  "fileSetHash": "sha256:976487adf56462f01621614287359df2e50e3c5c7a8532e046ba4683afde1daa",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1329,6 +1329,7 @@
         "packages/db/src/repositories/masterEducationRepository.ts",
         "packages/db/src/repositories/masterEmploymentReadRepository.ts",
         "packages/db/src/repositories/masterGraphRepository.ts",
+        "packages/db/src/repositories/masterIndustryRepository.ts",
         "packages/db/src/repositories/masterJobPostingsRepository.ts",
         "packages/db/src/repositories/masterPersonReadRepository.ts",
         "packages/db/src/repositories/masterPersonSearchRepository.ts",
@@ -2979,6 +2980,7 @@
       "packages/db/src/schema/masterEducation.ts",
       "packages/db/src/schema/masterGraph.ts",
       "packages/db/src/schema/masterHeadcount.ts",
+      "packages/db/src/schema/masterIndustries.ts",
       "packages/db/src/schema/masterJobPostings.ts",
       "packages/db/src/schema/masterPersonAttributes.ts",
       "packages/db/src/schema/masterSignals.ts",

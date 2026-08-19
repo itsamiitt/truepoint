@@ -34,6 +34,7 @@ import {
   evidenceRepository,
   masterEducationRepository,
   masterGraphRepository,
+  masterIndustryRepository,
   masterProfileRepository,
   masterSignalsRepository,
   withErTx,
@@ -517,6 +518,16 @@ async function landCompany(
       writableValues,
       fold.provenance,
     );
+    // 4a′. Canonical industry node (0128, MI-S3) — a DERIVED column, resolved from the vendor spelling via
+    // the alias table, deliberately outside the fold (the current_company_id posture: the fold governs the
+    // raw `industry` string; the node is a normalization of whatever won). Unresolved spellings stay NULL —
+    // an honest gap curation closes by adding an alias, not a code change.
+    const rawIndustry = mapped.fields.industry;
+    if (typeof rawIndustry === "string" && rawIndustry) {
+      const industryId = await masterIndustryRepository.resolveIdForLabel(tx, rawIndustry);
+      if (industryId) await masterIndustryRepository.setCompanyIndustry(tx, masterCompanyId, industryId);
+    }
+
     // 4b. Domain fill for a company minted domainless (from a position's numeric id): the company document
     // carries the website, and accounts are keyed by registrable domain — without this the add-to-workspace
     // materializer could never upsert the employer account. FILL only; a domain another company holds is an
