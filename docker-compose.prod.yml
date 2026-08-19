@@ -71,6 +71,15 @@ services:
   api:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/api", "start"]
+    # Interactive statement budget — API SERVICE ONLY (launch-scale Phase 7 S3, arch doc §1 A3). The env
+    # default stays 0 because workers legitimately run minutes-long tenant statements (the env.ts comment
+    # on DB_STATEMENT_TIMEOUT_MS records the by-process reasoning); the request path is where a >15s
+    # statement is pathological. Phase 2 measured an abandoned facet query burning CPU 78s+ after its
+    # client disconnected — this is the hard bound that ends that class. Applies to every pool the API
+    # process opens (owner included: its API-process uses are short platform ops, and bounding them is
+    # protective, not risky).
+    environment:
+      DB_STATEMENT_TIMEOUT_MS: "15000"
     # Reserve a modest CPU/memory floor for this latency-sensitive service so a noisy neighbour on the
     # same host can't starve it during a sign-in/redirect (RC#12). Reservations are a soft floor (not a
     # hard cap), so this never throttles the service — it only guarantees the scheduler keeps room for it.

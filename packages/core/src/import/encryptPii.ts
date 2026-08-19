@@ -25,3 +25,15 @@ export function decryptPii(blob: Uint8Array): string {
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }
+
+/** decryptPii, corruption-tolerant: null instead of a throw when the blob fails AES-GCM authentication
+ *  (truncated/corrupted ciphertext, wrong key epoch). One bad row's field must degrade to "masked" — never
+ *  500 a reveal read or a whole batch-hydration page (launch-scale Phase 2 finding F5: a single poisoned
+ *  ciphertext 500'd every page containing the row). Pure by design — the caller decides how to record it. */
+export function decryptPiiOrNull(blob: Uint8Array): string | null {
+  try {
+    return decryptPii(blob);
+  } catch {
+    return null;
+  }
+}

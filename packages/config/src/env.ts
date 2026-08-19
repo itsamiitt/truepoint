@@ -134,6 +134,11 @@ export const appEnvSchema = z
     // over a large tenant can legitimately run for minutes. Any single value that bounds the first would kill
     // the second. Turning this on safely needs the pool split this item describes — until then the knob exists
     // so an operator who knows their workload can set it, and the reasoning is here rather than lost.
+    //
+    // THE SANCTIONED SPLIT IS BY PROCESS, NOT BY POOL (launch-scale Phase 7 S3): the prod compose sets
+    // 15000 on the API SERVICE ONLY — the request path gets the hard statement budget (Phase 2 measured an
+    // abandoned facet query burning CPU 78s+ past its client's disconnect; the budget is what ends that
+    // class), while workers keep 0 so long sweeps stay legal. Same knob, per-service value — no new env.
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
     // The Forge pool's OWN statement timeout (E-6.6). SEPARATE from DB_STATEMENT_TIMEOUT_MS on purpose, and
     // this is the whole reason the Forge timeout stayed off: one value cannot be correct for both workloads.

@@ -22,7 +22,26 @@ import type {
   RevealedPhoneValue,
 } from "@leadwolf/types";
 import { isChannelReadFromChildEnabled } from "../channels/channelRead.ts";
-import { decryptPii } from "../import/encryptPii.ts";
+import { decryptPiiOrNull } from "../import/encryptPii.ts";
+
+/** One corrupted ciphertext masks THAT FIELD, never the row and never the page (F5). The warn carries ids
+ *  only — never ciphertext, never plaintext. Rate: at most one line per bad field per read; corruption is
+ *  rare-by-design (AES-GCM auth failure ⇒ storage/key incident, which ops must see). */
+function decryptOwned(contactId: string, field: string, blob: Uint8Array): string | null {
+  const value = decryptPiiOrNull(blob);
+  if (value === null) {
+    console.error(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        level: "warn",
+        msg: "reveal.decrypt_failed",
+        contactId,
+        field,
+      }),
+    );
+  }
+  return value;
+}
 
 type Claim = {
   revealType: string;
@@ -62,32 +81,40 @@ function buildRevealedContact(
     (c) => c.revealType === "phone" || c.revealType === "full_profile",
   );
 
-  // Decrypt ONLY owned fields — the ownership check is the security boundary.
-  const email = ownedEmail && view.emailEnc ? decryptPii(view.emailEnc) : null;
-  const phone = ownedPhone && view.phoneEnc ? decryptPii(view.phoneEnc) : null;
+  // Decrypt ONLY owned fields — the ownership check is the security boundary. A corrupted blob degrades to
+  // null (reads as masked) instead of throwing, so one bad row can never 500 a batch page (F5).
+  const email =
+    ownedEmail && view.emailEnc ? decryptOwned(contactId, "email", view.emailEnc) : null;
+  const phone =
+    ownedPhone && view.phoneEnc ? decryptOwned(contactId, "phone", view.phoneEnc) : null;
 
   // S-CH4 (05 §5): an owned email/phone claim unmasks ALL live values of that channel, primary-first (the
   // repo's ordering). ADDITIVE + gate-on only — `live` is undefined gate-off ⇒ `emails`/`phones` are absent
   // and the payload is byte-identical; the scalar `email`/`phone` above keep meaning THE PRIMARY (CH-INV-1).
   const emails: RevealedEmailValue[] | undefined =
     ownedEmail && live?.emails
-      ? live.emails.map((r) => ({
-          value: decryptPii(r.valueEnc),
-          type: r.type,
-          status: r.status,
-          isPrimary: r.isPrimary,
-        }))
+      ? live.emails.flatMap((r) => {
+          const value = decryptOwned(contactId, "emails[]", r.valueEnc);
+          if (value === null) return []; // corrupted child value: drop it, keep the rest (F5)
+          return [{ value, type: r.type, status: r.status, isPrimary: r.isPrimary }];
+        })
       : undefined;
   const phones: RevealedPhoneValue[] | undefined =
     ownedPhone && live?.phones
-      ? live.phones.map((r) => ({
-          value: decryptPii(r.valueEnc),
-          type: r.type,
-          status: r.status,
-          lineType: r.lineType,
-          extension: r.extension,
-          isPrimary: r.isPrimary,
-        }))
+      ? live.phones.flatMap((r) => {
+          const value = decryptOwned(contactId, "phones[]", r.valueEnc);
+          if (value === null) return []; // corrupted child value: drop it, keep the rest (F5)
+          return [
+            {
+              value,
+              type: r.type,
+              status: r.status,
+              lineType: r.lineType,
+              extension: r.extension,
+              isPrimary: r.isPrimary,
+            },
+          ];
+        })
       : undefined;
 
   const revealedFields: string[] = [];
@@ -203,7 +230,22 @@ export async function getRevealedContactsBatch(
       const live: LiveChannelValues | undefined = liveEmailsById
         ? { emails: liveEmailsById.get(id) ?? [], phones: livePhonesById?.get(id) ?? [] }
         : undefined;
-      out.push(buildRevealedContact(id, cs, view, live));
+      // Belt-and-braces per-row guard (F5): decrypt failures already degrade field-level above, so this
+      // only catches the unforeseen — and the contract is the same either way: one broken row is skipped
+      // with a marker, the other rows on the page still hydrate.
+      try {
+        out.push(buildRevealedContact(id, cs, view, live));
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: "warn",
+            msg: "reveal.batch_row_failed",
+            contactId: id,
+            name: err instanceof Error ? err.name : "unknown",
+          }),
+        );
+      }
     }
     return out;
   });
