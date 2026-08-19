@@ -7,19 +7,17 @@
 // expire on their ≤60s TTL backstop (that bound is exactly what the §4 consistency table promises), and a
 // cache blip must never fail a mutation that already committed.
 
-import { searchVersionKey } from "@leadwolf/core";
+import { bumpSearchVersion as bump } from "@leadwolf/integrations";
 import type { MiddlewareHandler } from "hono";
 import { cacheRedis } from "../cache.ts";
 
+/** The api-process binding of the shared fail-open bump (@leadwolf/integrations owns the semantics; the
+ *  workers bind the same helper to their BullMQ connection in register.ts). */
 export async function bumpSearchVersion(scope: {
   tenantId: string;
   workspaceId: string;
 }): Promise<void> {
-  try {
-    await cacheRedis().incr(searchVersionKey(scope));
-  } catch {
-    // swallowed: TTL backstop covers it (see header)
-  }
+  await bump(cacheRedis(), scope);
 }
 
 /**

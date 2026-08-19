@@ -83,6 +83,11 @@ export {
   type FetchJson as ForgeExtractionFetchJson,
 } from "./forgeAnthropicExtraction.ts";
 export { redisCacheStore } from "./redisCacheStore.ts";
+export {
+  bumpSearchVersion,
+  scopeFromJobData,
+  type SearchBumpRedis,
+} from "./searchCacheBump.ts";
 
 // CRM connector adapters (crm-sync §5.1): the HubSpot + Salesforce adapters implementing core's CrmConnector
 // port, plus the configured-set factory (mirrors defaultProviders()). The transport is the injectable

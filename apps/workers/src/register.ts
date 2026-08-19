@@ -27,6 +27,7 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import {
+  bumpSearchVersion,
   clamdScanner,
   crmConnectorsFromEnv,
   defaultProviders,
@@ -34,6 +35,7 @@ import {
   redisCrmBudgetStore,
   redisProviderGate,
   s3FileStoreFromEnv,
+  scopeFromJobData,
 } from "@leadwolf/integrations";
 import {
   ACCOUNT_REFRESH_QUEUE,
@@ -2363,5 +2365,30 @@ export function startWorkers(): Worker[] {
       error: e instanceof Error ? e.message : String(e),
     }),
   );
+
+  // ── S5b (launch-scale arch doc §3): worker-side search-cache invalidation ─────────────────────────────
+  // Any completed job on a queue that lands rows in `contacts` retires the workspace's cached facet/count
+  // aggregates via one generation INCR (fail-open; ≤60s TTL backstop if Redis blips). ONE generic listener
+  // instead of per-processor plumbing: the scope comes off job.data (nested `scope` or flat ids — see
+  // scopeFromJobData), so a queue added here later inherits the behaviour by carrying a scope in its data.
+  // A job that changed nothing still bumps — one spurious cache miss, harmless by design. forge-worker is
+  // deliberately NOT an emitter: it holds only withForgeTx (no tenant-contact writes exist there); overlay
+  // landings happen through the import/enrichment paths below.
+  const searchMutatingQueues = new Set<string>([
+    IMPORTS_QUEUE,
+    BULK_IMPORTS_QUEUE,
+    ENRICHMENT_QUEUE,
+    BULK_ENRICHMENT_QUEUE,
+    BULK_REVEAL_QUEUE,
+    REVERIFICATION_QUEUE,
+  ]);
+  for (const w of workers) {
+    if (!searchMutatingQueues.has(w.name)) continue;
+    w.on("completed", (job) => {
+      const scope = scopeFromJobData(job?.data);
+      if (scope) void bumpSearchVersion(connection, scope);
+    });
+  }
+
   return workers;
 }
