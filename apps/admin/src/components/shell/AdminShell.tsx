@@ -10,9 +10,8 @@
 // notice, both deliberate reminders that this surface reads across tenants.
 "use client";
 
-import { verifyPlatformAdmin } from "@/lib/adminGate";
-import { fetchWithAuth, getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
+import { type StaffMePayload, verifyPlatformAdmin } from "@/lib/adminGate";
+import { getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
 import { StaffMeProvider } from "@/lib/staffMe";
 import {
   AppShellFrame,
@@ -45,7 +44,7 @@ type GateState = "loading" | "redirecting" | "verifying" | "staff" | "forbidden"
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>("loading");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [staffMe, setStaffMe] = useState<StaffMePayload | null>(null);
 
   async function runGate() {
     try {
@@ -57,16 +56,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
       }
       // Stage 1 done — a token is held. Show the console NOW and verify staff underneath it.
       setState("verifying");
-      // Authoritative staff check: the api `/admin/*` guard (signed `pa` claim).
+      // Authoritative staff check: the api `/admin/*` guard (signed `pa` claim), probed via `/admin/me` —
+      // whose payload seeds StaffMeProvider below, so the console's identity read is not fetched twice
+      // (and the old probe, the 22-queue system-health fan-out, is no longer paid per page load).
       let verdict = await verifyPlatformAdmin();
       // A 401 here means we DID hold a token but the api rejected it (expired, or an audience/JWKS
       // mismatch). Try ONE silent refresh + re-probe; only restart login if that yields a fresh token.
       // We never re-login on a still-rejected token — that would be a tight redirect loop (a fresh token
       // would keep failing the same way) — so we fall through to the error state instead, like apps/web.
-      if (verdict === "unauthenticated") {
+      if (verdict.result === "unauthenticated") {
         const refreshed = await silentRefresh();
         if (refreshed) verdict = await verifyPlatformAdmin();
-        if (verdict === "unauthenticated") {
+        if (verdict.result === "unauthenticated") {
           if (!getAccessToken()) {
             setState("redirecting");
             await startLogin();
@@ -76,24 +77,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
           return;
         }
       }
-      if (verdict === "forbidden") {
+      if (verdict.result === "forbidden") {
         setState("forbidden");
         return;
       }
-      if (verdict !== "staff") {
+      if (verdict.result !== "staff") {
         setState("error");
         return;
       }
-      // Best-effort identity for the rail (the gate above already authorized the session).
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (res.ok) {
-          const session = (await res.json()) as { userId?: string };
-          setUserEmail(session.userId ?? null);
-        }
-      } catch {
-        // Non-fatal: the console still renders without the identity label.
-      }
+      setStaffMe(verdict.me ?? null);
       setState("staff");
     } catch (err: unknown) {
       console.warn(`[admin] gate failed: ${err instanceof Error ? err.message : "unknown"}`);
@@ -156,7 +148,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <StaffMeProvider>
+    <StaffMeProvider me={staffMe}>
       <AppShellFrame
         renderSidebar={({ isOpen, close }) => (
           <Sidebar
@@ -167,7 +159,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
             onClose={close}
             footer={
               <UserRow
-                email={userEmail}
+                // The old label here was `/auth/session`'s userId rendered AS an email — a wrong value
+                // bought with an extra round trip per load. The staff ROLE from the gate's own payload
+                // is the honest identity this console has.
+                email={staffMe?.staffRole ?? null}
                 roleLabel="Platform staff"
                 onSignOut={() => void logout()}
               />

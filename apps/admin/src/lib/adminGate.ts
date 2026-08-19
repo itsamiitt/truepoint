@@ -1,24 +1,57 @@
 // adminGate.ts — the staff-only authorization check layered on top of authClient (ADR-0011 / ADR-0034).
 // A valid access token proves the caller signed in; it does NOT prove they are platform staff. The api
 // `/admin/*` surface is gated on the signed `pa` claim and 403s a non-staff caller (platformAdmin guard), so
-// the console verifies staff status by probing a cheap `/admin/*` read: 200 ⇒ staff, 403 ⇒ signed in but not
-// staff, 401 ⇒ no/again-expired token. The console NEVER trusts a client-set flag — the api is the gate.
+// the console verifies staff status by probing an `/admin/*` read. The console NEVER trusts a client-set
+// flag — the api is the gate.
+//
+// The probe is `GET /admin/me`, and it returns its payload (perf-audit P0.9, porting apps/forge's forgeGate
+// fix). It used to probe `GET /admin/system-health` and THROW THE BODY AWAY, purely to read the status code —
+// and system-health is the single most expensive read on the admin surface: an audited withPlatformTx tally
+// plus a fan-out probe of ~22 BullMQ queues over Redis, paid on EVERY staff page load before the console
+// rendered (the System-health page then paid it a second time for the actual data). `/admin/me` is the right
+// probe: it is the cheapest read on the surface (one indexed role lookup), it answers the same authorization
+// question through the same pa-claim gate, and its body is exactly what StaffMeProvider needs next — so the
+// shell seeds the provider from the verdict instead of fetching `/admin/me` a second time.
 
+import type { StaffCapability } from "@leadwolf/types";
 import { fetchWithAuth } from "./authClient";
 import { API_BASE } from "./publicConfig";
 
 export type AdminGateResult = "staff" | "forbidden" | "unauthenticated" | "error";
 
-/** Probe the platform-admin surface to classify the caller. Uses the cheap system-health read. */
-export async function verifyPlatformAdmin(): Promise<AdminGateResult> {
+/** What `GET /admin/me` returns — the caller's active staff role + the capabilities it grants (13a F3). */
+export interface StaffMePayload {
+  staffRole: string | null;
+  capabilities: StaffCapability[];
+}
+
+export interface AdminGateVerdict {
+  result: AdminGateResult;
+  /** Present only on a 200, so the shell can seed StaffMeProvider rather than repeating the read. */
+  me?: StaffMePayload;
+}
+
+/** Probe `GET /admin/me` to classify the caller, returning the payload so it need not be fetched twice.
+ *  A 200 with `staffRole: null` (a pa-claim holder without an active platform_staff row) classifies as
+ *  `forbidden` — the api 403s their actual reads regardless; this only decides which shell state to render. */
+export async function verifyPlatformAdmin(): Promise<AdminGateVerdict> {
   try {
-    const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/system-health`);
-    if (res.ok) return "staff";
-    if (res.status === 403) return "forbidden";
-    if (res.status === 401) return "unauthenticated";
-    return "error";
+    const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/me`);
+    if (res.ok) {
+      const me = (await res.json()) as Partial<StaffMePayload>;
+      const payload: StaffMePayload = {
+        staffRole: me.staffRole ?? null,
+        capabilities: Array.isArray(me.capabilities) ? me.capabilities : [],
+      };
+      return payload.staffRole
+        ? { result: "staff", me: payload }
+        : { result: "forbidden", me: payload };
+    }
+    if (res.status === 403) return { result: "forbidden" };
+    if (res.status === 401) return { result: "unauthenticated" };
+    return { result: "error" };
   } catch {
-    return "error";
+    return { result: "error" };
   }
 }
 
