@@ -8,6 +8,7 @@ import {
   defaultEmailVerifier,
   defaultPhoneVerifier,
   diskFileStore,
+  fanoutSignalsToWorkspace,
   markFastImportFailed,
   registerEmailProviders,
   runAccountBackfillForWorkspace,
@@ -190,6 +191,11 @@ import {
   type JobChangeSweepJobData,
   makeProcessJobChangeSweep,
 } from "./queues/jobChangeSweep.ts";
+import {
+  SIGNAL_FANOUT_QUEUE,
+  type SignalFanoutJobData,
+  makeProcessSignalFanout,
+} from "./queues/signalFanout.ts";
 import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
@@ -2027,6 +2033,34 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "job-change-sweep" })
       .catch((e) =>
         log.error("failed to schedule the job-change sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Signal fan-out sweep (market-intelligence MI-S6) — DARK behind SIGNAL_FANOUT_ENABLED. The
+  // jobChangeSweep sibling for COMPANY-subject signals: Layer-0 master_signals reaching every workspace
+  // holding a bridged account, as tenant_signals rows the feed/scoring/alerts read under RLS. Owner-conn
+  // census returns ids only (the C-02 boundary); delivery runs one withTenantTx per workspace and
+  // collapses redeliveries on the (workspace, master_signal_id) unique wall. The sweep re-checks the env
+  // gate before its leader lock, so an unset env leaves it inert.
+  if (env.SIGNAL_FANOUT_ENABLED) {
+    const signalFanoutQueue = tracedQueue<SignalFanoutJobData>(SIGNAL_FANOUT_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<SignalFanoutJobData>(
+          SIGNAL_FANOUT_QUEUE,
+          makeProcessSignalFanout(connection, fanoutSignalsToWorkspace),
+          { connection },
+        ),
+        SIGNAL_FANOUT_QUEUE,
+      ),
+    );
+    void signalFanoutQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "signal-fanout-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the signal fan-out sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

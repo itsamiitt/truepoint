@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2135 source files · 86 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2141 source files · 87 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -553,6 +553,19 @@ apps/                           # deployable processes (thin transport adapters)
   is a 400, never a merged list. An account ER has not yet bridged returns `resolved:false` rather than a bare empty list
 - Opposite direction from `master-sync` across the same wall: that domain is the Forge→Layer-0 **write** ingress, this is
   the tenant-facing **read**. Reads only — no credit spend, no personal data (technology/vendor rows describe organizations)
+
+#### alerts — *the tenant signal feed substrate* (market-intelligence MI-S6, [S-13][S-09]; DARK behind `SIGNAL_FANOUT_ENABLED`)
+- **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
+  `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
+- **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a
+  recorded_at watermark + the workspaces holding a bridged account, ids only, the C-02 boundary) ·
+  `tenantSignalsRepository.ts` (tenant-side INSERT..SELECT projection onto bridged accounts + the feed read) ·
+  `schema/tenantSignals.ts` + `rls/tenantSignals.sql` (0125: Layer-1 projection of `master_signals`;
+  family CHECK mirrors 0103 incl. NO 'intent'; `account_id OR contact_id` subject guard)
+- **workers:** `signalFanout.ts` (leader-locked 15-min sweep, `jobChangeSweep` sibling — absent watermark
+  claims NOW and fans out nothing, the alert-storm defence; watermark advances only on a drained tick)
+- Layer 0 = the shared fact; `tenant_signals` = the delivered copy scoring and the (future MI-P2 watchlist)
+  feed read. `intent_signals`' shipped job_change path is unchanged — new company-fact families land here.
 
 #### reports — *client rollups + XLSX export* (web)
 - **web:** `features/reports/` — `rollups.ts` over `/credits/*` + `/contacts`; sections (CreditUsage, Funnel, DataHealth,

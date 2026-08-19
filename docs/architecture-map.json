@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2135,
-  "fileSetHash": "sha256:cdf6c595d3a3b1e24fa376cb16afc499b4594fbd9cb4d3aa562e53a347c68f91",
+  "fileCount": 2141,
+  "fileSetHash": "sha256:b21157f1b4779586319eb7d4b9c77ca3613a0a2f3d2c798db6fd9fb05ec83d64",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -229,6 +229,22 @@
       "core": [],
       "db": [],
       "workers": [],
+      "integrations": []
+    },
+    "alerts": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/alerts/fanoutSignals.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/signalFanoutRepository.ts",
+        "packages/db/src/repositories/tenantSignalsRepository.ts"
+      ],
+      "workers": [
+        "apps/workers/src/queues/signalFanout.ts"
+      ],
       "integrations": []
     },
     "announcements": {
@@ -2943,6 +2959,7 @@
       "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/teams.ts",
+      "packages/db/src/schema/tenantSignals.ts",
       "packages/db/src/schema/usageEvent.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
@@ -3059,6 +3076,7 @@
       "packages/db/test/tags.itest.ts",
       "packages/db/test/templateIsolation.itest.ts",
       "packages/db/test/tenantPoolIdentity.itest.ts",
+      "packages/db/test/tenantSignals.itest.ts",
       "packages/db/test/trackingIngest.itest.ts",
       "packages/db/test/userScopedAuthIsolation.itest.ts",
       "packages/db/test/verificationJobs.itest.ts",

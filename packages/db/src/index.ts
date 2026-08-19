@@ -168,6 +168,18 @@ export {
 // Confidence policy constants for the badge (C9 resolution, decisions.md 2026-08-19): field half-lives
 // only — the per-source-type dimension parameterizes the (unwired) fold, not the badge.
 export { masterConfidencePolicyRepository } from "./repositories/masterConfidencePolicyRepository.ts";
+// Signal fan-out (market-intelligence MI-S6): the owner-conn census (jobChangeSweepRepository twin) and
+// the tenant-side projection writer/reader over tenant_signals. Layer 0 = the fact; tenant_signals = the
+// delivered copy scoring and alerts read under RLS.
+export {
+  signalFanoutRepository,
+  type FanoutSignal,
+  type FanoutWorkspace,
+} from "./repositories/signalFanoutRepository.ts";
+export {
+  tenantSignalsRepository,
+  type TenantSignalRow,
+} from "./repositories/tenantSignalsRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

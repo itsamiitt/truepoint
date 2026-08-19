@@ -622,6 +622,13 @@ export {
   type JobChangeSweepResult,
   type JobChangeSweepScope,
 } from "./data-health/runJobChangeSweep.ts";
+// Signal fan-out delivery (market-intelligence MI-S6): the per-workspace tenant half of the
+// signal_fanout sweep — projects Layer-0 company signals onto bridged accounts under RLS.
+export {
+  fanoutSignalsToWorkspace,
+  type FanoutResult,
+  type FanoutScope,
+} from "./alerts/fanoutSignals.ts";
 // The other half of a departure (S-14): once someone leaves, the seller's problem is who to talk to instead.
 // Pure ranking over a supplied candidate set — finding people at a company is already a query
 // (erRepository.findBlockingCandidates); which of them succeeded the role is the judgement.

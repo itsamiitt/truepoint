@@ -846,6 +846,13 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // SIGNAL_FANOUT_ENABLED — market-intelligence MI-S6: the leader-locked sweep projecting Layer-0
+    // company signals (master_signals) onto tenant_signals for every workspace holding a bridged account.
+    // Off ⇒ the queue is not built and tenant_signals stays empty.
+    SIGNAL_FANOUT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // LINKEDIN_CHANNELS_ENABLED — the landing's master_emails/master_phones contribution (multi-value,
     // typed, encrypted). Separate from the main landing gate because channel PII is the co-op boundary's
     // sensitive half: a paid provider MAY contribute email_enc/phone_enc (masterGraph.ts channel notes),

@@ -125,6 +125,8 @@ export const QUEUE_DOMAIN = {
   // The S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1) — the trigger the shipped
   // detectJobChange/recordJobChange stack never had. Freshness/decay, so data-health rather than scoring.
   jobChangeSweep: "data-health",
+  // The company-signal fan-out sweep (market-intelligence MI-S6) — the alerts substrate's delivery step.
+  signalFanout: "alerts",
 };
 export const REPO_DOMAIN = {
   // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
@@ -186,6 +188,10 @@ export const REPO_DOMAIN = {
   // Layer-0 confidence-policy constants (migration 0107; C9 resolution 2026-08-19) — same system-owned
   // graph, read under the same withErTx access path as its siblings.
   masterConfidencePolicy: "master-sync",
+  // The signal fan-out pair (market-intelligence MI-S6): the owner-conn census and the tenant_signals
+  // projection. Registered under the canonical `alerts` domain — tenant_signals IS the alerts substrate.
+  signalFanout: "alerts",
+  tenantSignals: "alerts",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
   // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of

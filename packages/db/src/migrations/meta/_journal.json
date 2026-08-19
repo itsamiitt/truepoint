@@ -869,6 +869,13 @@
       "when": 1787179812000,
       "tag": "0124_reset_unresolved_fetch_clock",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1787179813000,
+      "tag": "0125_tenant_signals",
+      "breakpoints": true
     }
   ]
 }
