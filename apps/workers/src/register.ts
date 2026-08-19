@@ -7,6 +7,7 @@ import {
   FastImportFailedError,
   defaultEmailVerifier,
   defaultPhoneVerifier,
+  computeAccountScore,
   diskFileStore,
   fanoutSignalsToWorkspace,
   markFastImportFailed,
@@ -18,6 +19,7 @@ import {
   stubMalwareScanner,
 } from "@leadwolf/core";
 import {
+  accountScoreRepository,
   crmConnectionRepository,
   db,
   notificationRepository,
@@ -196,6 +198,11 @@ import {
   type SignalFanoutJobData,
   makeProcessSignalFanout,
 } from "./queues/signalFanout.ts";
+import {
+  ACCOUNT_SCORING_SWEEP_QUEUE,
+  type AccountScoringSweepJobData,
+  makeProcessAccountScoringSweep,
+} from "./queues/accountScoringSweep.ts";
 import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
@@ -2061,6 +2068,40 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "signal-fanout-sweep" })
       .catch((e) =>
         log.error("failed to schedule the signal fan-out sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Account-scoring sweep (market-intelligence MI-S4) — DARK behind ACCOUNT_SCORING_ENABLED. Event-driven
+  // rescore: accounts whose tenant_signals moved since the watermark get a fresh versioned account_scores
+  // row (fit + momentum, breakdown-explained); the DB trigger caches fit onto accounts.icp_fit_score.
+  // Same census/watermark discipline as signal_fanout directly above.
+  if (env.ACCOUNT_SCORING_ENABLED) {
+    const accountScoringQueue = tracedQueue<AccountScoringSweepJobData>(
+      ACCOUNT_SCORING_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        tracedWorker<AccountScoringSweepJobData>(
+          ACCOUNT_SCORING_SWEEP_QUEUE,
+          makeProcessAccountScoringSweep(
+            connection,
+            (input) => computeAccountScore(input),
+            (scope, since, limit) =>
+              withTenantTx(scope, (tx) =>
+                accountScoreRepository.listAccountsWithNewSignals(tx, since, limit),
+              ),
+          ),
+          { connection },
+        ),
+        ACCOUNT_SCORING_SWEEP_QUEUE,
+      ),
+    );
+    void accountScoringQueue
+      .add("sweep", {}, { repeat: { every: 30 * 60_000 }, jobId: "account-scoring-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the account-scoring sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

@@ -133,6 +133,8 @@ export const QUEUE_DOMAIN = {
   jobChangeSweep: "data-health",
   // The company-signal fan-out sweep (market-intelligence MI-S6) — the alerts substrate's delivery step.
   signalFanout: "alerts",
+  // The account-rescore sweep (MI-S4) — scoring, beside its contact-grain sibling.
+  accountScoringSweep: "scoring",
 };
 export const REPO_DOMAIN = {
   // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
@@ -204,6 +206,8 @@ export const REPO_DOMAIN = {
   tenantSignals: "alerts",
   // Watchlists + signal subscriptions (MI-S5) — the opt-in layer of the same alerts substrate.
   watchlist: "alerts",
+  // Account-grain score history (MI-S4) — scoring, beside `score` (the contact grain).
+  accountScore: "scoring",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
   // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of

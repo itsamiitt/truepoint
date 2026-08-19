@@ -897,6 +897,13 @@
       "when": 1787179816000,
       "tag": "0128_industry_taxonomy",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1787179817000,
+      "tag": "0129_account_scores",
+      "breakpoints": true
     }
   ]
 }

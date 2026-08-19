@@ -183,6 +183,11 @@ export {
 // Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
 // tenant_signals — the feed is browse, a notification requires a subscription naming the family.
 export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
+// Account-grain scoring (MI-S4, 0129): append-per-rescore history + the sweep's census/worklist reads.
+export {
+  accountScoreRepository,
+  type AppendAccountScoreInput,
+} from "./repositories/accountScoreRepository.ts";
 // Industry taxonomy (MI-S3, 0128): alias resolution at landing + the tree read for facets/curation.
 export {
   masterIndustryRepository,

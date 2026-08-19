@@ -853,6 +853,13 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // ACCOUNT_SCORING_ENABLED — market-intelligence MI-S4: the leader-locked sweep rescoring accounts
+    // whose tenant_signals moved since the watermark (computeAccountScore appends versioned rows; the DB
+    // trigger caches fit onto accounts.icp_fit_score). Off ⇒ not built.
+    ACCOUNT_SCORING_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // LINKEDIN_CHANNELS_ENABLED — the landing's master_emails/master_phones contribution (multi-value,
     // typed, encrypted). Separate from the main landing gate because channel PII is the co-op boundary's
     // sensitive half: a paid provider MAY contribute email_enc/phone_enc (masterGraph.ts channel notes),

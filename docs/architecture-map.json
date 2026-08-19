@@ -107,8 +107,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2166,
-  "fileSetHash": "sha256:976487adf56462f01621614287359df2e50e3c5c7a8532e046ba4683afde1daa",
+  "fileCount": 2171,
+  "fileSetHash": "sha256:b99c742a27b97adbf02e8d0b3d6aee30622b8896a6e9abe82c88f278d33b1b0e",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1809,13 +1809,17 @@
         "apps/api/src/features/scoring/routes.ts"
       ],
       "core": [
+        "packages/core/src/scoring/computeAccountScore.test.ts",
+        "packages/core/src/scoring/computeAccountScore.ts",
         "packages/core/src/scoring/computeScore.ts"
       ],
       "db": [
+        "packages/db/src/repositories/accountScoreRepository.ts",
         "packages/db/src/repositories/intentSignalRepository.ts",
         "packages/db/src/repositories/scoreRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/accountScoringSweep.ts",
         "apps/workers/src/queues/scoring.ts"
       ],
       "integrations": []
@@ -2950,6 +2954,7 @@
       "packages/db/src/roleCache.test.ts",
       "packages/db/src/roleCache.ts",
       "packages/db/src/schema/accountChildren.ts",
+      "packages/db/src/schema/accountScores.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",

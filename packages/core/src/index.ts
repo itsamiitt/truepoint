@@ -647,6 +647,15 @@ export {
   type ComputeScoreInput,
   type ComputeScoreResult,
 } from "./scoring/computeScore.ts";
+// Account-grain scorer (MI-S4/MI-7): company facts + delivered-signal momentum, breakdown-explained.
+export {
+  ACCOUNT_SCORE_MODEL_VERSION,
+  accountIcpFit,
+  accountMomentum,
+  computeAccountScore,
+  type AccountFitInputs,
+  type ComputeAccountScoreResult,
+} from "./scoring/computeAccountScore.ts";
 export { logActivity, type LogActivityInput } from "./activity/logActivity.ts";
 
 // Sales Navigator assisted (HITL) capture (05 §5, M7, ADR-0009): a human pastes a link; we parse a dedup id

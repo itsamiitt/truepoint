@@ -193,6 +193,26 @@ describe("MI-S6 — company-signal fan-out into tenant_signals", () => {
     expect((n as { n: number }).n).toBe(1);
   });
 
+  test("7. account scoring (MI-S4): versioned row appended, fit cached onto accounts.icp_fit_score", async () => {
+    const [acc] = await admin`
+      SELECT id FROM accounts WHERE workspace_id = ${w1.workspaceId} AND master_company_id = ${companyId}`;
+    const accountId = (acc as { id: string }).id;
+    const res = await core.computeAccountScore({
+      scope: { tenantId: w1.tenantId, workspaceId: w1.workspaceId },
+      accountId,
+    });
+    // Fit: only domain is missing on the seeded account (name+bridge only) → sparse fit; momentum: three
+    // fresh signals (leadership ×2 + hiring) clamp high. Pin the mechanics, not brittle exact values.
+    expect(res.momentum).toBeGreaterThan(50);
+    expect(res.composite).toBeGreaterThan(0);
+    const [scoreRow] = await admin`
+      SELECT model_version, icp_fit, breakdown FROM account_scores WHERE account_id = ${accountId}`;
+    expect(scoreRow!.model_version).toBe("v1");
+    expect(scoreRow!.breakdown.momentum.leadership).toBeGreaterThan(0);
+    const [cached] = await admin`SELECT icp_fit_score FROM accounts WHERE id = ${accountId}`;
+    expect(cached!.icp_fit_score).toBe(res.icpFit); // the trigger keeps the cache = FIT, not composite
+  });
+
   test("6. RLS: each workspace reads only its own feed", async () => {
     const w1Feed = await db.withTenantTx(
       { tenantId: w1.tenantId, workspaceId: w1.workspaceId },
