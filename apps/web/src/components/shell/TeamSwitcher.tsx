@@ -4,7 +4,9 @@
 // "team:changed". The full persona-aware behavior is wired by the X8 cross-cutting unit; this is the slot.
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { sharedKeys } from "@/lib/queryKeys";
 import { DropdownMenu, Icon } from "@leadwolf/ui";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -16,26 +18,27 @@ interface Team {
 const STORAGE_KEY = "tp-active-team";
 
 export function TeamSwitcher() {
-  const [teams, setTeams] = useState<Team[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
+  // A query, not a raw useEffect fetch (perf-audit P3.5): the team list re-fetched on every hard load for a
+  // control that renders nothing until the M15 backend exists. The queryFn swallows everything — teams are a
+  // seam and absence is expected, exactly the prior silent posture — so there is nothing to retry either.
+  const teamsQuery = useQuery({
+    queryKey: sharedKeys.teams(),
+    queryFn: async (): Promise<Team[]> => {
       try {
         const res = await fetchWithAuth(`${API_BASE}/api/v1/teams`);
-        if (!res.ok) return;
+        if (!res.ok) return [];
         const data = (await res.json()) as { teams?: Team[] } | Team[];
-        const list = Array.isArray(data) ? data : (data.teams ?? []);
-        if (!cancelled) setTeams(list);
+        return Array.isArray(data) ? data : (data.teams ?? []);
       } catch {
-        // Teams are an M15 seam; absence is expected — stay silent and render nothing.
+        return [];
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const teams = teamsQuery.data ?? [];
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);

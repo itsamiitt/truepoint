@@ -6,8 +6,10 @@
 
 import { fetchWithAuth, switchWorkspace } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { sharedKeys } from "@/lib/queryKeys";
 import { getSessionProbe } from "@/lib/sessionProbe";
 import type { WorkspaceRole } from "@leadwolf/types";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import styles from "./WorkspaceSwitcher.module.css";
 
@@ -17,40 +19,36 @@ interface WorkspaceOption {
   role: WorkspaceRole;
 }
 
-type LoadState = "loading" | "ready" | "error";
-
 export function WorkspaceSwitcher() {
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState<LoadState>("loading");
-  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // The workspace LIST is a query, not a raw useEffect fetch (perf-audit P3.5): cached across remounts and
+  // hard loads (switching rotates the session + reloads the shell, so a 5-minute staleTime cannot go stale
+  // in practice). The ACTIVE id still comes from the shared session probe — single-flight, usually already
+  // resolved by the shell — so mounting here never re-requests /auth/session.
+  const workspacesQuery = useQuery({
+    queryKey: sharedKeys.workspaces(),
+    queryFn: async (): Promise<WorkspaceOption[]> => {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/workspaces`);
+      if (!res.ok) throw new Error(`workspaces read failed (${res.status})`);
+      const list = (await res.json()) as { workspaces: WorkspaceOption[] };
+      return list.workspaces;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const workspaces = workspacesQuery.data ?? [];
+
   useEffect(() => {
-    void (async () => {
-      try {
-        // The workspace LIST is this component's own fetch; the session profile comes from the shared probe
-        // (sessionProbe), so mounting inside the shell no longer re-requests /auth/session that the shell has
-        // already asked for. Still issued concurrently — the probe is usually already resolved by now.
-        const [listRes, probed] = await Promise.all([
-          fetchWithAuth(`${API_BASE}/api/v1/workspaces`),
-          getSessionProbe(),
-        ]);
-        if (!listRes.ok) {
-          setState("error");
-          return;
-        }
-        const list = (await listRes.json()) as { workspaces: WorkspaceOption[] };
-        setWorkspaces(list.workspaces);
-        if (probed.ok) {
-          setActiveId(probed.session.workspaceId);
-        }
-        setState("ready");
-      } catch {
-        setState("error");
-      }
-    })();
+    let live = true;
+    void getSessionProbe().then((probed) => {
+      if (live && probed.ok) setActiveId(probed.session.workspaceId);
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   // The command palette opens this control via a window event (decoupled — no shared module import).
@@ -81,10 +79,9 @@ export function WorkspaceSwitcher() {
   }, [open]);
 
   const active = workspaces.find((w) => w.id === activeId) ?? null;
-  const label =
-    state === "loading"
-      ? "Loading…"
-      : (active?.name ?? (activeId ? `Workspace ${activeId.slice(0, 8)}` : "No workspace"));
+  const label = workspacesQuery.isPending
+    ? "Loading…"
+    : (active?.name ?? (activeId ? `Workspace ${activeId.slice(0, 8)}` : "No workspace"));
 
   // switchWorkspace reloads the page on success; on a non-2xx it throws ("switch_failed"). Catch here so the
   // failure surfaces inline instead of dead-ending as an unhandled rejection that silently strands the user.
@@ -125,13 +122,13 @@ export function WorkspaceSwitcher() {
       {open && (
         // biome-ignore lint/a11y/useSemanticElements: listbox is an ARIA composite widget with no native HTML element.
         <div className={styles.menu} role="listbox" aria-label="Switch workspace" tabIndex={-1}>
-          {state === "loading" && <p className={styles.state}>Loading workspaces…</p>}
-          {state === "error" && <p className={styles.state}>Couldn’t load workspaces.</p>}
+          {workspacesQuery.isPending && <p className={styles.state}>Loading workspaces…</p>}
+          {workspacesQuery.isError && <p className={styles.state}>Couldn’t load workspaces.</p>}
           {switchError && <p className={styles.state}>{switchError}</p>}
-          {state === "ready" && workspaces.length === 0 && (
+          {workspacesQuery.isSuccess && workspaces.length === 0 && (
             <p className={styles.state}>No workspaces.</p>
           )}
-          {state === "ready" &&
+          {workspacesQuery.isSuccess &&
             workspaces.map((w) => (
               <button
                 key={w.id}

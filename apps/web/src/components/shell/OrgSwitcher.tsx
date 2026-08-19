@@ -5,32 +5,27 @@
 // Mirrors WorkspaceSwitcher (shared layout-only styles + the tp-ws-switcher class).
 "use client";
 
-import { type OrgOption, listOrgs, switchOrg } from "@/lib/authClient";
+import { listOrgs, switchOrg } from "@/lib/authClient";
+import { sharedKeys } from "@/lib/queryKeys";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import styles from "./WorkspaceSwitcher.module.css";
 
-type LoadState = "loading" | "ready" | "error";
-
 export function OrgSwitcher() {
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState<LoadState>("loading");
-  const [orgs, setOrgs] = useState<OrgOption[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const { orgs: list, activeTenantId } = await listOrgs();
-        setOrgs(list);
-        setActiveId(activeTenantId);
-        setState("ready");
-      } catch {
-        setState("error");
-      }
-    })();
-  }, []);
+  // A query, not a raw useEffect fetch (perf-audit P3.5 — the project's own state-and-data rule): the org
+  // list used to re-fetch on every hard load for a control most users never see (single-org → renders
+  // nothing). Cached hard: membership changes rarely, and switching reloads the whole shell anyway.
+  const orgsQuery = useQuery({
+    queryKey: sharedKeys.orgs(),
+    queryFn: listOrgs,
+    staleTime: 5 * 60_000,
+  });
+  const orgs = orgsQuery.data?.orgs ?? [];
+  const activeId = orgsQuery.data?.activeTenantId ?? null;
 
   // Dismiss on outside click + Escape so the pop-up never traps focus or lingers.
   useEffect(() => {
@@ -50,7 +45,7 @@ export function OrgSwitcher() {
   }, [open]);
 
   // A single-org user has nothing to switch — render nothing (and never while still loading the list).
-  if (state !== "ready" || orgs.length < 2) return null;
+  if (!orgsQuery.isSuccess || orgs.length < 2) return null;
 
   const active = orgs.find((o) => o.tenantId === activeId) ?? null;
   const label = active?.tenantName ?? "Organization";

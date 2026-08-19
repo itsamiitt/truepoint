@@ -14,4 +14,16 @@ export const sharedKeys = {
   dataQuality: () => ["data-quality", "rollup"] as const,
   /** The Data Health trend series (`GET /home/data-quality/history`), read by the same two surfaces. */
   dataQualityTrend: () => ["data-quality", "history"] as const,
+  // ── Shell chrome reads (perf-audit P3.5). These were raw useEffect fetches outside the query cache, so
+  // they re-fired on every hard load with no dedup, no staleTime, and no cache — four requests of the ~8
+  // the chrome issued before any route data. As queries they dedupe, cache across remounts, and stop
+  // re-paying on navigation. All change rarely; switching org/workspace reloads the whole shell anyway.
+  /** The caller's organizations (GET /orgs on the auth origin) — the org switcher. */
+  orgs: () => ["shell", "orgs"] as const,
+  /** The caller's reachable workspaces (`GET /workspaces`) — the workspace switcher. */
+  workspaces: () => ["shell", "workspaces"] as const,
+  /** The workspace's teams (`GET /teams`, the M15 seam) — the team switcher. */
+  teams: () => ["shell", "teams"] as const,
+  /** The tenant's active announcements (`GET /announcements/active`) — the banner. */
+  announcements: () => ["shell", "announcements"] as const,
 };

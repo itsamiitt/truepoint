@@ -3,8 +3,10 @@
 // so a dismissed banner stays gone across reloads. Non-fatal: if the read fails there is simply no banner.
 "use client";
 
-import { type CSSProperties, useEffect, useState } from "react";
-import { type ActiveAnnouncement, fetchActiveAnnouncements } from "./api";
+import { sharedKeys } from "@/lib/queryKeys";
+import { useQuery } from "@tanstack/react-query";
+import { type CSSProperties, useState } from "react";
+import { fetchActiveAnnouncements } from "./api";
 
 const DISMISS_KEY = "tp-dismissed-announcements";
 
@@ -41,18 +43,18 @@ function toneStyle(level: string): CSSProperties {
 }
 
 export function AnnouncementBanner() {
-  const [items, setItems] = useState<ActiveAnnouncement[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed());
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetchActiveAnnouncements().then((a) => {
-      if (!cancelled) setItems(a);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // A query, not a raw useEffect fetch (perf-audit P3.5): announcements re-fetched on every hard load with
+  // no cache. 5 minutes of staleness is fine for a banner; a failed read stays what it always was — no
+  // banner (non-fatal, no retry storm).
+  const items =
+    useQuery({
+      queryKey: sharedKeys.announcements(),
+      queryFn: fetchActiveAnnouncements,
+      staleTime: 5 * 60_000,
+      retry: false,
+    }).data ?? [];
 
   // Maintenance notices are non-dismissible — they ignore the per-user dismiss set so a critical system
   // message can't be permanently hidden by a click.
