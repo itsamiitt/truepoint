@@ -35,11 +35,17 @@ export interface CachedToken {
 }
 let cached: CachedToken | null = null;
 let inFlight: Promise<string | null> | null = null;
+/** When the last mint FAILED (0 = never). Failures are negatively cached briefly (perf-audit P4.4): without
+ *  this, every subsequent enrich re-paid a fresh auth round trip — up to the provider timeout, inside the
+ *  waterfall — against the token endpoint ZoomInfo rate-limits separately from the data endpoints. */
+let mintFailedAtMs = 0;
+const MINT_FAILURE_COOLDOWN_MS = 30_000;
 
 /** Test seam + operator escape hatch: drop the cached token (a rotated credential must not wait an hour). */
 export function resetZoominfoToken(): void {
   cached = null;
   inFlight = null;
+  mintFailedAtMs = 0;
 }
 
 function privateKeyPem(): string | undefined {
@@ -227,11 +233,15 @@ export async function zoominfoToken(
 ): Promise<string | null> {
   const now = Date.now();
   if (cached && cached.expiresAtMs - RENEW_SKEW_MS > now) return cached.token;
+  // Negative cache: a mint that just failed will not succeed milliseconds later — answer `miss` fast for
+  // the cooldown window instead of paying an auth round trip per enrich against a rate-limited endpoint.
+  if (mintFailedAtMs !== 0 && now - mintFailedAtMs < MINT_FAILURE_COOLDOWN_MS) return null;
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
     const minted = await mint(authFetch);
     cached = minted;
+    mintFailedAtMs = minted ? 0 : Date.now();
     return minted?.token ?? null;
   })().finally(() => {
     inFlight = null;

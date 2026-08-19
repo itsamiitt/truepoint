@@ -293,6 +293,33 @@ describe("zoominfoIsBillable", () => {
     }
   });
 
+  // The Enterprise envelope (perf-audit P4.4): 42e7e2ab freed the GTM shape's non-matches, but the
+  // Enterprise `{ data: { result: [...] } }` shape — which extractZoominfo explicitly supports above —
+  // still booked spend for a declared non-match, tripping the daily budget breaker against money never
+  // spent. Both directions pinned so a vendor-side envelope migration cannot re-open either bug.
+  test("an Enterprise-envelope non-match is free too", () => {
+    expect(zoominfoIsBillable({ data: { result: [{ matchStatus: "NO_MATCH", data: [] }] } })).toBe(
+      false,
+    );
+    expect(
+      zoominfoIsBillable({
+        data: { result: [{ matchStatus: "NON_MATCH_BY_REQUIRED_FIELDS", data: [] }] },
+      }),
+    ).toBe(false);
+  });
+
+  test("an Enterprise-envelope match is billable even when nothing is extracted", () => {
+    expect(
+      zoominfoIsBillable({ data: { result: [{ matchStatus: "FULL_MATCH", data: [{}] }] } }),
+    ).toBe(true);
+    // Mixed: one match among non-matches is still a billed response.
+    expect(
+      zoominfoIsBillable({
+        data: { result: [{ matchStatus: "NO_MATCH" }, { matchStatus: "FULL_MATCH" }] },
+      }),
+    ).toBe(true);
+  });
+
   test("the provider books ZERO cost for a no-match answer", async () => {
     const provider = vendorProvider(
       {

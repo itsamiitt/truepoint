@@ -176,6 +176,13 @@ export function extractZoominfo(
   // that vocabulary forever, and the failure mode of guessing wrong is another person's contact details
   // landing on this record.
   if (matchStatus !== undefined && !/(^|_)(FULL|PARTIAL)_MATCH$/.test(matchStatus.toUpperCase())) {
+    // The KNOWN refusals stay silent; an UNRECOGNIZED status is logged loudly (status string only — no
+    // record data): it may be affirmative vocabulary the allowlist doesn't know yet, in which case a PAID
+    // match is silently yielding zero fields, and this line is how anyone ever notices (perf-audit P4.4).
+    const s = matchStatus.toUpperCase();
+    if (!isNonMatchStatus(s) && !s.includes("OPT_OUT") && !s.includes("LIMIT_EXCEEDED")) {
+      console.warn("[zoominfo] unrecognized matchStatus treated as non-match", { matchStatus });
+    }
     return {};
   }
 
@@ -230,23 +237,44 @@ export function zoominfoMatchBody(req: EnrichRequest): {
   };
 }
 
+/** A declared non-match, in either envelope's vocabulary. */
+function isNonMatchStatus(status: string): boolean {
+  const s = status.toUpperCase();
+  return s.includes("NO_MATCH") || s.includes("NON_MATCH");
+}
+
 /**
  * Whether a fieldless ZoomInfo answer cost anything. ZoomInfo bills per MATCHED record: a response whose
  * every entry is a declared non-match is free, and booking it as spend would throttle the daily budget
  * gate against money we never spent. A response we cannot read is assumed billable — the safe direction
  * for a spend counter is to over-report, never to under-report.
+ *
+ * BOTH envelopes are handled, mirroring extractZoominfo (perf-audit P4.4): the 42e7e2ab fix covered only
+ * the GTM array shape, so an Enterprise `{ data: { result: [{ matchStatus: "NO_MATCH" }] } }` — a shape
+ * extractZoominfo explicitly supports and tests — still booked 60,000µ for a declared non-match, tripping
+ * the daily budget breaker against money never spent.
  */
 export function zoominfoIsBillable(json: unknown): boolean {
   if (typeof json !== "object" || json === null) return true;
   const data = (json as Record<string, unknown>).data;
+  // Enterprise: { data: { result: [ { matchStatus } ] } }
+  if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+    const result = (data as Record<string, unknown>).result;
+    if (!Array.isArray(result) || result.length === 0) return true;
+    return !result.every((entry) => {
+      if (typeof entry !== "object" || entry === null) return false;
+      const status = (entry as Record<string, unknown>).matchStatus;
+      return typeof status === "string" && isNonMatchStatus(status);
+    });
+  }
+  // GTM: { data: [ { type, meta: { matchStatus } } ] }
   if (!Array.isArray(data) || data.length === 0) return true;
   return !data.every((entry) => {
     if (typeof entry !== "object" || entry === null) return false;
     const e = entry as Record<string, unknown>;
     if (e.type === "NoMatch") return true;
     const meta = e.meta as Record<string, unknown> | undefined;
-    const status = typeof meta?.matchStatus === "string" ? meta.matchStatus.toUpperCase() : "";
-    return status.includes("NO_MATCH") || status.includes("NON_MATCH");
+    return typeof meta?.matchStatus === "string" && isNonMatchStatus(meta.matchStatus);
   });
 }
 
