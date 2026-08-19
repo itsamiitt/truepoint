@@ -2,27 +2,49 @@
 // typed response (03 §1.8). Unknown/invalid messages are dropped. Returns `true` to keep the channel
 // open for the async response.
 import { type RequestMessage, requestMessage } from "../../shared/messages.ts";
+import type { SubjectStatus } from "../../shared/types.ts";
 import { ApiError } from "../api/client.ts";
 import type { RuntimeContext } from "../context.ts";
+import { LookupCache } from "../lookup/cache.ts";
 import type { JobScheduler } from "../queue/scheduler.ts";
 
 export function registerBus(ctx: RuntimeContext, scheduler: JobScheduler): void {
+  // One warm cache per registration. Lives in the service worker's memory and dies with it (a cold worker
+  // re-resolves), so it never disagrees with the server — see lookup/cache.ts. Held here, not on
+  // RuntimeContext, because only the router reads and clears it.
+  const lookupCache = new LookupCache();
   chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     const parsed = requestMessage.safeParse(raw);
     if (!parsed.success) {
       sendResponse({ error: "bad_message" });
       return false;
     }
-    handle(ctx, scheduler, parsed.data)
+    handle(ctx, scheduler, lookupCache, parsed.data)
       .then(sendResponse)
       .catch((error: unknown) => sendResponse({ error: String(error) }));
     return true;
   });
 }
 
+/** Resolve a subject to its non-PII status: the DB-first /contacts/lookup, then the older slug resolver as a
+ *  fallback for an out-of-date server. Throws if BOTH fail so the caller degrades to "unknown" without the
+ *  failure being cached. */
+async function resolveStatus(
+  ctx: RuntimeContext,
+  subjectKey: string,
+  sourceUrl: string,
+): Promise<SubjectStatus> {
+  try {
+    return await ctx.api.lookupByUrl(sourceUrl);
+  } catch {
+    return await ctx.api.resolveByLinkedin(subjectKey);
+  }
+}
+
 async function handle(
   ctx: RuntimeContext,
   scheduler: JobScheduler,
+  lookupCache: LookupCache,
   msg: RequestMessage,
 ): Promise<unknown> {
   switch (msg.type) {
@@ -43,26 +65,28 @@ async function handle(
     case "LOOKUP": {
       // The one-round-trip DB-first / vendor-fallback lookup (extension-intelligence-loop slice C): the
       // server canonicalizes the page URL (public AND Sales-Nav forms), answers from the workspace when it
-      // can, and otherwise pulls the licensed document so a Save lands enriched. Falls back to the plain
-      // slug resolve (older server), then degrades to "unknown" (offline / signed-out) so the in-page card
-      // never blocks the profile.
+      // can, and otherwise pulls the licensed document so a Save lands enriched.
+      //
+      // Wrapped in the warm cache so the nav + settle pair the observer fires for one profile — and a bounce
+      // back to a just-seen profile — coalesce to a single request. The broadcast still fires on a cached hit
+      // (a freshly-mounted panel/hover card needs the status regardless of who paid for it). Total failure
+      // degrades to "unknown" and is NOT cached, so an offline blip never sticks.
       try {
-        const status = await ctx.api.lookupByUrl(msg.sourceUrl);
+        const status = await lookupCache.resolve(msg.subjectKey, () =>
+          resolveStatus(ctx, msg.subjectKey, msg.sourceUrl),
+        );
         ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
         return { status };
       } catch {
-        try {
-          const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
-          ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
-          return { status };
-        } catch {
-          return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
-        }
+        return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
       }
     }
 
     case "CAPTURE": {
       await ctx.queue.enqueue(msg.record);
+      // The subject's status will change once the capture lands; drop its warm entry so the next LOOKUP
+      // re-resolves rather than serving the pre-capture status.
+      lookupCache.invalidate(msg.record.subjectKey);
       await ctx.telemetry.event("capture_click", {
         adapterId: msg.record.adapter,
         pageType: msg.record.pageType,
@@ -82,6 +106,9 @@ async function handle(
       // degrade to "rejected" on any failure so the card shows the truth.
       try {
         const status = await ctx.api.addFromDatabase(msg.url, crypto.randomUUID());
+        // The person is now a workspace contact — a later LOOKUP must return "found", not "in_database". We
+        // don't hold the subjectKey here (only the URL), so clear the whole warm cache; it's a rare click.
+        lookupCache.clear();
         await ctx.telemetry.event("database_add", {});
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return { status };
@@ -102,6 +129,9 @@ async function handle(
         });
         // The reveal charged credits — update the pill from the server-authoritative post-charge balance.
         ctx.credits.applyReveal(data.balanceAfter);
+        // Reveal changes owned/availability for this contact; the LOOKUP is keyed by subjectKey and we hold
+        // only the contactId here, so clear the warm cache rather than guess the mapping.
+        lookupCache.clear();
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return {
           ok: true,
@@ -147,6 +177,8 @@ async function handle(
     case "AUTH_LOGIN": {
       try {
         const state = await ctx.auth.login();
+        // Signing in establishes the scope every lookup answer is relative to — start from an empty cache.
+        lookupCache.clear();
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return state;
       } catch {
@@ -157,6 +189,8 @@ async function handle(
     case "AUTH_LOGOUT": {
       const state = await ctx.auth.logout();
       ctx.credits.clear();
+      // Never serve one session's workspace-scoped lookups to the next.
+      lookupCache.clear();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
@@ -164,6 +198,8 @@ async function handle(
     case "SWITCH_WORKSPACE": {
       const state = await ctx.auth.switchWorkspace(msg.workspaceId);
       await ctx.credits.refresh(true); // balance is tenant-scoped — re-pull after a scope change
+      // Lookup answers are workspace-scoped (found/in_database differ per workspace) — drop them on switch.
+      lookupCache.clear();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
@@ -171,6 +207,7 @@ async function handle(
     case "SWITCH_ORG": {
       const state = await ctx.auth.switchOrg(msg.tenantId);
       await ctx.credits.refresh(true);
+      lookupCache.clear();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }

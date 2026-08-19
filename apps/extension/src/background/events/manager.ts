@@ -50,6 +50,8 @@ export class BrowserEventManager {
       await this.scheduler.drain();
     } else if (alarm.name === "flush") {
       await this.ctx.telemetry.flush();
+      // Same low-frequency alarm trims the other unbounded IndexedDB store: expired `recent` rows.
+      await this.scheduler.reapRecent();
     } else if (alarm.name === "auth-refresh") {
       // Silent pre-refresh: wakes the worker if needed and re-mints before the token expires (doc 10 §4.3).
       await this.ctx.auth.refreshNow();

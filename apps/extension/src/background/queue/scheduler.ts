@@ -68,4 +68,15 @@ export class JobScheduler {
       expiresAt: Date.now() + RECENT_TTL_MS,
     });
   }
+
+  /** Delete `recent` rows past their TTL. `addRecent` has always stamped `expiresAt` (now + 24h) but nothing
+   *  ever enforced it: the Captured tab does a bare getAll("recent"), so the list grew without bound and a
+   *  capture from weeks ago still showed. Reaped on the same `flush` alarm as telemetry. getAll+delete (not a
+   *  cursor) keeps the `recent` store's small size cheap and mirrors addRecent's put. */
+  async reapRecent(now: number = Date.now()): Promise<void> {
+    const database = await db();
+    for (const row of await database.getAll("recent")) {
+      if (row.expiresAt <= now) await database.delete("recent", row.contactId);
+    }
+  }
 }
