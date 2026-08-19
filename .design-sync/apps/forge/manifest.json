@@ -1,0 +1,31 @@
+{
+  "_comment": "apps/forge — the operator console. Only the token client and Next's router are stubbed; the staff gate, the data hooks and the shell all run their real code against fixtured /bff routes.",
+  "srcRoots": [
+    "apps/forge/src"
+  ],
+  "nodeModules": "apps/forge/node_modules",
+  "aliases": {
+    "next/navigation": "next-navigation.tsx",
+    "next/link": "next-link.tsx"
+  },
+  "tsPaths": {
+    "@/*": [
+      "apps/forge/src/*"
+    ]
+  },
+  "dtsInclude": [
+    "apps/forge/src/features/**/*.ts",
+    "apps/forge/src/features/**/*.tsx",
+    "apps/forge/src/components/**/*.tsx",
+    "apps/forge/src/lib/**/*.ts",
+    "apps/forge/src/lib/**/*.tsx"
+  ],
+  "extraCss": [
+    "packages/app-shell/src/shell.css",
+    "apps/forge/src/app/globals.css"
+  ],
+  "aliasPatterns": {
+    "(^|/)authClient$": "authClient.ts",
+    "(^|/)publicConfig$": "publicConfig.ts"
+  }
+}

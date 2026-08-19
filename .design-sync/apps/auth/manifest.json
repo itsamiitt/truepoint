@@ -1,0 +1,30 @@
+{
+  "_comment": "apps/auth — the identity app. Its route pages are async Server Components and cannot be carded (see entry.tsx); what ships is the client-renderable layer they are built from. Stubs: the two `./actions` server-action modules and next/script (Turnstile).",
+  "srcRoots": [
+    "apps/auth/src"
+  ],
+  "nodeModules": "apps/auth/node_modules",
+  "aliases": {
+    "next/navigation": "next-navigation.tsx",
+    "next/link": "next-link.tsx",
+    "next/script": "next-script.tsx"
+  },
+  "aliasPatterns": {
+    "/actions$": "actions.ts"
+  },
+  "tsPaths": {
+    "@/*": [
+      "apps/auth/src/*"
+    ]
+  },
+  "dtsInclude": [
+    "apps/auth/src/shared/**/*.tsx",
+    "apps/auth/src/app/account/security/*.tsx",
+    "apps/auth/src/app/account/security/*.ts",
+    "apps/auth/src/app/mfa/PasskeySignIn.tsx",
+    "apps/auth/src/lib/authUrl.ts"
+  ],
+  "extraCss": [
+    "apps/auth/src/app/globals.css"
+  ]
+}

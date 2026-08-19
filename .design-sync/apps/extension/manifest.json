@@ -1,0 +1,25 @@
+{
+  "_comment": "apps/extension — the MV3 extension's UI surfaces. Only shared/client.ts (the chrome.runtime message bus) is stubbed; i18n, env, idb and the zod schemas all run for real. Matched by aliasPatterns because the UI imports it relatively from two different depths.",
+  "srcRoots": [
+    "apps/extension/src"
+  ],
+  "nodeModules": "apps/extension/node_modules",
+  "aliasPatterns": {
+    "shared/client\\.ts$": "client.ts"
+  },
+  "tsPaths": {
+    "@/*": [
+      "apps/extension/src/*"
+    ]
+  },
+  "dtsInclude": [
+    "apps/extension/src/ui/**/*.tsx",
+    "apps/extension/src/shared/**/*.ts",
+    "apps/extension/src/i18n/**/*.ts"
+  ],
+  "tsTypes": [
+    "react",
+    "react-dom",
+    "chrome"
+  ]
+}

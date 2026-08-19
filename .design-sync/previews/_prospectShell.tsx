@@ -7,7 +7,7 @@
 // and three read the RevealStore. In the app both come from the shell, so a standalone card has to compose
 // them — that is the true render, not a workaround. ProspectPage wraps its own RevealStore, so it only
 // needs `toast`.
-import { RevealStoreProvider, ToastProvider, useRevealStore } from "@leadwolf/ui";
+import { Providers, RevealStoreProvider, ToastProvider, useRevealStore } from "@leadwolf/ui";
 import { type ReactNode, useEffect, useRef } from "react";
 
 /**
@@ -56,7 +56,16 @@ export function Shell({
   hydrate?: string[];
 }) {
   const inner = hydrate?.length ? <Hydrate ids={hydrate}>{children}</Hydrate> : children;
-  return <ToastProvider>{reveal || hydrate?.length ? <RevealStoreProvider>{inner}</RevealStoreProvider> : inner}</ToastProvider>;
+  // Providers is the app's own client provider stack (TanStack Query). It wraps everything because the
+  // query client is mounted by the ROOT layout in the app, above the shell — and because a component that
+  // calls useQueryClient() throws outside it, which is exactly how 17 prospect cards went blank at once.
+  return (
+    <Providers>
+      <ToastProvider>
+        {reveal || hydrate?.length ? <RevealStoreProvider>{inner}</RevealStoreProvider> : inner}
+      </ToastProvider>
+    </Providers>
+  );
 }
 
 /**

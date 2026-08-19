@@ -1,13 +1,15 @@
 {
-  "projectId": "8701fad5-fc47-48dc-8b1d-6cfe419da901",
+  "projectId": "4985491c-de04-440c-ac1f-e9eff59c76ac",
   "shape": "package",
   "pkg": "@leadwolf/ui",
   "globalName": "TruePointUI",
   "entry": "packages/ui/dist/ds-entry.js",
   "srcDir": "../src",
   "cssEntry": "_compiled.css",
-  "extraFonts": ["_fonts.css"],
-  "buildCmd": "node .design-sync/build-ui.mjs",
+  "extraFonts": [
+    "_fonts.css"
+  ],
+  "buildCmd": "node .design-sync/build-app.mjs --app web",
   "readmeHeader": ".design-sync/conventions.md",
   "componentSrcMap": {
     "RevealStoreProvider": null,
@@ -37,7 +39,137 @@
     "StageManagementPanel": "../../../apps/web/src/features/prospect/components/StageManagementPanel.tsx",
     "StageSelector": "../../../apps/web/src/features/prospect/components/StageSelector.tsx",
     "TagChip": "../../../apps/web/src/features/prospect/components/TagChip.tsx",
-    "TagPicker": "../../../apps/web/src/features/prospect/components/TagPicker.tsx"
+    "TagPicker": "../../../apps/web/src/features/prospect/components/TagPicker.tsx",
+    "Providers": null,
+    "ActivityFeedCard": "../../../apps/web/src/features/home/components/ActivityFeedCard.tsx",
+    "AddSendingDomainForm": "../../../apps/web/src/features/settings-mailboxes/components/AddSendingDomainForm.tsx",
+    "AnnouncementBanner": "../../../apps/web/src/features/announcements/AnnouncementBanner.tsx",
+    "ApiDocsPanel": "../../../apps/web/src/features/settings-developer/components/ApiDocsPanel.tsx",
+    "ApiKeysPanel": "../../../apps/web/src/features/settings-developer/components/ApiKeysPanel.tsx",
+    "AppShell": "../../../apps/web/src/components/shell/AppShell.tsx",
+    "AuthAuditList": "../../../apps/web/src/features/settings-tenant/components/AuthAuditList.tsx",
+    "AutoEnrichPanel": "../../../apps/web/src/features/settings-enrichment/components/AutoEnrichPanel.tsx",
+    "BarChart": "../../../apps/web/src/features/reports/charts/BarChart.tsx",
+    "BillingPage": "../../../apps/web/src/features/settings-billing/components/BillingPage.tsx",
+    "BulkImportProgress": "../../../apps/web/src/features/import/components/BulkImportProgress.tsx",
+    "BurnSparkline": "../../../apps/web/src/features/home/components/BurnSparkline.tsx",
+    "CaptureForm": "../../../apps/web/src/features/sales-navigator/components/CaptureForm.tsx",
+    "CompliancePage": "../../../apps/web/src/features/settings-compliance/components/CompliancePage.tsx",
+    "ConfirmDialog": "../../../apps/web/src/features/import/components/shared/ConfirmDialog.tsx",
+    "ConflictQueue": "../../../apps/web/src/features/crm-sync/components/ConflictQueue.tsx",
+    "ConnectMailboxForm": "../../../apps/web/src/features/settings-mailboxes/components/ConnectMailboxForm.tsx",
+    "ContactsTable": "../../../apps/web/src/features/import/components/ContactsTable.tsx",
+    "CreditPill": "../../../apps/web/src/components/shell/CreditPill.tsx",
+    "CreditUsageSection": "../../../apps/web/src/features/reports/components/CreditUsageSection.tsx",
+    "CreditsTab": "../../../apps/web/src/features/settings-billing/components/tabs/CreditsTab.tsx",
+    "CrmSyncPage": "../../../apps/web/src/features/crm-sync/components/CrmSyncPage.tsx",
+    "CustomFieldsPanel": "../../../apps/web/src/features/settings-custom-fields/components/CustomFieldsPanel.tsx",
+    "DataHealthCard": "../../../apps/web/src/features/home/components/DataHealthCard.tsx",
+    "DataHealthPage": "../../../apps/web/src/features/data-health/components/DataHealthPage.tsx",
+    "DataHealthSection": "../../../apps/web/src/features/reports/components/DataHealthSection.tsx",
+    "DataHealthTrendCard": "../../../apps/web/src/features/home/components/DataHealthTrendCard.tsx",
+    "DeleteListDialog": "../../../apps/web/src/features/lists/components/DeleteListDialog.tsx",
+    "DeliverabilitySection": "../../../apps/web/src/features/reports/components/DeliverabilitySection.tsx",
+    "DeveloperPage": "../../../apps/web/src/features/settings-developer/components/DeveloperPage.tsx",
+    "DistributionChart": "../../../apps/web/src/features/reports/charts/DistributionChart.tsx",
+    "DraftReviewPanel": "../../../apps/web/src/features/sequences/components/DraftReviewPanel.tsx",
+    "DsarForm": "../../../apps/web/src/features/settings-compliance/components/DsarForm.tsx",
+    "DuplicatesSection": "../../../apps/web/src/features/data-health/components/DuplicatesSection.tsx",
+    "EnrichmentActivityCard": "../../../apps/web/src/features/home/components/EnrichmentActivityCard.tsx",
+    "EnrichmentJobsPage": "../../../apps/web/src/features/enrichment-jobs/components/EnrichmentJobsPage.tsx",
+    "EnrollmentLogTable": "../../../apps/web/src/features/sequences/components/EnrollmentLogTable.tsx",
+    "EnrollmentPanel": "../../../apps/web/src/features/sequences/components/EnrollmentPanel.tsx",
+    "FreshnessTrend": "../../../apps/web/src/features/data-health/components/FreshnessTrend.tsx",
+    "FunnelChart": "../../../apps/web/src/features/reports/charts/FunnelChart.tsx",
+    "FunnelSection": "../../../apps/web/src/features/reports/components/FunnelSection.tsx",
+    "GlobalSearch": "../../../apps/web/src/components/shell/GlobalSearch.tsx",
+    "HistoryTab": "../../../apps/web/src/features/settings-billing/components/tabs/HistoryTab.tsx",
+    "HomePage": "../../../apps/web/src/features/home/components/HomePage.tsx",
+    "HotLeadsCard": "../../../apps/web/src/features/home/components/HotLeadsCard.tsx",
+    "IdentityPanel": "../../../apps/web/src/features/settings-tenant/components/IdentityPanel.tsx",
+    "ImportDraftFlow": "../../../apps/web/src/features/import/components/ImportDraftFlow.tsx",
+    "ImportDraftPreviewPanel": "../../../apps/web/src/features/import/components/ImportDraftPreviewPanel.tsx",
+    "ImportDraftsBanner": "../../../apps/web/src/features/import/components/ImportDraftsBanner.tsx",
+    "ImportIntoListDialog": "../../../apps/web/src/features/lists/components/ImportIntoListDialog.tsx",
+    "ImportJobDrawer": "../../../apps/web/src/features/import/components/ImportJobDrawer.tsx",
+    "ImportJobPage": "../../../apps/web/src/features/import/components/ImportJobPage.tsx",
+    "ImportJobsHistoryPage": "../../../apps/web/src/features/import/components/ImportJobsHistoryPage.tsx",
+    "ImportPage": "../../../apps/web/src/features/import/components/ImportPage.tsx",
+    "ImportWizard": "../../../apps/web/src/features/import/components/ImportWizard.tsx",
+    "InboxPage": "../../../apps/web/src/features/inbox/components/InboxPage.tsx",
+    "IntentSection": "../../../apps/web/src/features/reports/components/IntentSection.tsx",
+    "InvoicesTab": "../../../apps/web/src/features/settings-billing/components/tabs/InvoicesTab.tsx",
+    "JobDetailDrawer": "../../../apps/web/src/features/enrichment-jobs/components/JobDetailDrawer.tsx",
+    "LeadScoreSection": "../../../apps/web/src/features/reports/components/LeadScoreSection.tsx",
+    "LineChart": "../../../apps/web/src/features/reports/charts/LineChart.tsx",
+    "LinksTable": "../../../apps/web/src/features/sales-navigator/components/LinksTable.tsx",
+    "ListDetailPage": "../../../apps/web/src/features/lists/components/ListDetailPage.tsx",
+    "ListFormDialog": "../../../apps/web/src/features/lists/components/ListFormDialog.tsx",
+    "ListsPage": "../../../apps/web/src/features/lists/components/ListsPage.tsx",
+    "MailboxList": "../../../apps/web/src/features/settings-mailboxes/components/MailboxList.tsx",
+    "MailboxesPage": "../../../apps/web/src/features/settings-mailboxes/components/MailboxesPage.tsx",
+    "MappingEditor": "../../../apps/web/src/features/crm-sync/components/MappingEditor.tsx",
+    "MappingGrid": "../../../apps/web/src/features/import/components/MappingGrid.tsx",
+    "MembersPanel": "../../../apps/web/src/features/settings-workspace/components/MembersPanel.tsx",
+    "MergeReviewDrawer": "../../../apps/web/src/features/data-health/components/MergeReviewDrawer.tsx",
+    "MetricsSection": "../../../apps/web/src/features/data-health/components/MetricsSection.tsx",
+    "NotificationsBell": "../../../apps/web/src/components/shell/NotificationsBell.tsx",
+    "NotificationsPage": "../../../apps/web/src/features/notifications/components/NotificationsPage.tsx",
+    "NotificationsPanel": "../../../apps/web/src/features/settings-user/components/NotificationsPanel.tsx",
+    "OAuthAppsPanel": "../../../apps/web/src/features/settings-developer/components/OAuthAppsPanel.tsx",
+    "OrgSwitcher": "../../../apps/web/src/components/shell/OrgSwitcher.tsx",
+    "OrganizationPanel": "../../../apps/web/src/features/settings-tenant/components/OrganizationPanel.tsx",
+    "PerFieldFill": "../../../apps/web/src/features/data-health/components/PerFieldFill.tsx",
+    "PlanTab": "../../../apps/web/src/features/settings-billing/components/tabs/PlanTab.tsx",
+    "ProfilePanel": "../../../apps/web/src/features/settings-user/components/ProfilePanel.tsx",
+    "ProviderPriorityPanel": "../../../apps/web/src/features/settings-enrichment/components/ProviderPriorityPanel.tsx",
+    "PublicPricingPage": "../../../apps/web/src/features/public-pricing/components/PublicPricingPage.tsx",
+    "QuickActionsRow": "../../../apps/web/src/features/home/components/QuickActionsRow.tsx",
+    "RecentImportsCard": "../../../apps/web/src/features/home/components/RecentImportsCard.tsx",
+    "RecentRevealsCard": "../../../apps/web/src/features/home/components/RecentRevealsCard.tsx",
+    "RepliesCard": "../../../apps/web/src/features/home/components/RepliesCard.tsx",
+    "ReportsPage": "../../../apps/web/src/features/reports/components/ReportsPage.tsx",
+    "RetentionActivity": "../../../apps/web/src/features/data-health/components/RetentionActivity.tsx",
+    "ReverificationActivity": "../../../apps/web/src/features/data-health/components/ReverificationActivity.tsx",
+    "ReverifyNowButton": "../../../apps/web/src/features/data-health/components/ReverifyNowButton.tsx",
+    "SalesNavPage": "../../../apps/web/src/features/sales-navigator/components/SalesNavPage.tsx",
+    "SectionCard": "../../../apps/web/src/features/data-health/components/SectionCard.tsx",
+    "SecurityAccessPanel": "../../../apps/web/src/features/settings-tenant/components/SecurityAccessPanel.tsx",
+    "SecurityPanel": "../../../apps/web/src/features/settings-user/components/SecurityPanel.tsx",
+    "SendStatusDashboard": "../../../apps/web/src/features/sequences/components/SendStatusDashboard.tsx",
+    "SendingDomainList": "../../../apps/web/src/features/settings-mailboxes/components/SendingDomainList.tsx",
+    "SequenceBuilder": "../../../apps/web/src/features/sequences/components/SequenceBuilder.tsx",
+    "SequenceList": "../../../apps/web/src/features/sequences/components/SequenceList.tsx",
+    "SequenceSnapshot": "../../../apps/web/src/features/home/components/SequenceSnapshot.tsx",
+    "SequencesPage": "../../../apps/web/src/features/sequences/components/SequencesPage.tsx",
+    "SessionsPanel": "../../../apps/web/src/features/settings-workspace/components/SessionsPanel.tsx",
+    "SettingsNav": "../../../apps/web/src/features/settings-shell/components/SettingsNav.tsx",
+    "SettingsPlaceholder": "../../../apps/web/src/features/settings-shell/components/SettingsPlaceholder.tsx",
+    "SettingsScopeLayout": "../../../apps/web/src/features/settings-shell/components/SettingsScopeLayout.tsx",
+    "SourceCoverageSection": "../../../apps/web/src/features/data-health/components/SourceCoverageSection.tsx",
+    "SsoConfigPanel": "../../../apps/web/src/features/settings-tenant/components/SsoConfigPanel.tsx",
+    "SubscriptionTab": "../../../apps/web/src/features/settings-billing/components/tabs/SubscriptionTab.tsx",
+    "SuppressionForm": "../../../apps/web/src/features/settings-compliance/components/SuppressionForm.tsx",
+    "SuppressionList": "../../../apps/web/src/features/settings-compliance/components/SuppressionList.tsx",
+    "SyncActivity": "../../../apps/web/src/features/crm-sync/components/SyncActivity.tsx",
+    "TasksCard": "../../../apps/web/src/features/home/components/TasksCard.tsx",
+    "TasksPanel": "../../../apps/web/src/features/inbox/components/TasksPanel.tsx",
+    "TeamActivitySection": "../../../apps/web/src/features/reports/components/TeamActivitySection.tsx",
+    "TeamSwitcher": "../../../apps/web/src/components/shell/TeamSwitcher.tsx",
+    "TeamsPanel": "../../../apps/web/src/features/settings-teams/components/TeamsPanel.tsx",
+    "TemplateControls": "../../../apps/web/src/features/import/components/TemplateControls.tsx",
+    "TemplateEditor": "../../../apps/web/src/features/sequences/components/TemplateEditor.tsx",
+    "TemplatesPanel": "../../../apps/web/src/features/sequences/components/TemplatesPanel.tsx",
+    "ThreadList": "../../../apps/web/src/features/inbox/components/ThreadList.tsx",
+    "ThreadView": "../../../apps/web/src/features/inbox/components/ThreadView.tsx",
+    "UsageTab": "../../../apps/web/src/features/settings-billing/components/tabs/UsageTab.tsx",
+    "UsageTable": "../../../apps/web/src/features/settings-billing/components/UsageTable.tsx",
+    "VerificationBreakdown": "../../../apps/web/src/features/data-health/components/VerificationBreakdown.tsx",
+    "VersionHistoryDrawer": "../../../apps/web/src/features/sequences/components/VersionHistoryDrawer.tsx",
+    "WebhooksPanel": "../../../apps/web/src/features/settings-developer/components/WebhooksPanel.tsx",
+    "WidgetCard": "../../../apps/web/src/features/home/components/WidgetCard.tsx",
+    "WorkspaceGeneralPanel": "../../../apps/web/src/features/settings-workspace/components/WorkspaceGeneralPanel.tsx",
+    "WorkspaceSwitcher": "../../../apps/web/src/components/shell/WorkspaceSwitcher.tsx"
   },
   "dtsPropsFor": {
     "AccountDetailDrawer": "/** The previewed company; null closes the Drawer. */\naccount: MaskedAccount | null;\nonClose: () => void;\n/** Switch the page to the Contacts scope filtered by this account. Omit to hide the button. */\nonViewContacts?: (account: MaskedAccount) => void;",
@@ -60,47 +192,570 @@
     "TagPicker": "recordId: string;\nentity?: TaggableEntity;\n/** The tags currently assigned to this record (owned by the parent so chips re-render on change). */\nassigned: PickerTag[];\n/** Apply the next assigned-tag list. A functional updater (prev → next) so concurrent assign/unassign/create mutations compose instead of clobbering each other. */\nonChange: (updater: (prev: PickerTag[]) => PickerTag[]) => void;\n/** Called after a NEW workspace tag is created, so callers can refresh a workspace-wide tag list. */\nonTagCreated?: () => void;"
   },
   "overrides": {
-    "Dialog": { "cardMode": "single", "viewport": "720x520" },
-    "Drawer": { "cardMode": "single", "viewport": "880x560" },
-    "DataTable": { "cardMode": "column" },
-    "Popover": { "cardMode": "single", "viewport": "620x460" },
-    "DropdownMenu": { "cardMode": "single", "viewport": "620x500" },
-    "Tooltip": { "cardMode": "single", "viewport": "480x300" },
-    "ToastProvider": { "cardMode": "single", "viewport": "640x460" },
-    "EmptyState": { "cardMode": "column" },
-    "ErrorState": { "cardMode": "column" },
-    "FieldGroup": { "cardMode": "column" },
-    "FormRow": { "cardMode": "column" },
-    "FormSection": { "cardMode": "column" },
-    "LoadingState": { "cardMode": "column" },
-    "Skeleton": { "cardMode": "column" },
-    "StateSwitch": { "cardMode": "column" },
-    "StatTile": { "cardMode": "column" },
-    "Tabs": { "cardMode": "column" },
-    "TpButton": { "cardMode": "column" },
-    "PageHeader": { "cardMode": "column" },
-
-    "ProspectPage": { "cardMode": "single", "viewport": "1440x900" },
-    "RecordDetail": { "cardMode": "single", "viewport": "1000x760" },
-    "QuickViewDrawer": { "cardMode": "single", "viewport": "980x620" },
-    "AccountDetailDrawer": { "cardMode": "single", "viewport": "980x620" },
-    "AddToListDialog": { "cardMode": "single", "viewport": "720x560" },
-    "RevealDialog": { "cardMode": "single", "viewport": "720x520" },
-    "BulkRevealDialog": { "cardMode": "single", "viewport": "760x600" },
-    "BulkRevealJobDialog": { "cardMode": "single", "viewport": "760x600" },
-    "RowActions": { "cardMode": "single", "viewport": "620x520" },
-    "AccountsTable": { "cardMode": "column" },
-    "BulkActionBar": { "cardMode": "column" },
-    "ProspectToolbar": { "cardMode": "column" },
-    "FilterRail": { "cardMode": "column" },
-    "FilterPanel": { "cardMode": "column" },
-    "AccountFilterPanel": { "cardMode": "column" },
-    "SaveSearchPanel": { "cardMode": "column" },
-    "StageManagementPanel": { "cardMode": "column" },
-    "AiSearchBox": { "cardMode": "column" },
-    "ParsedFilterPreview": { "cardMode": "column" },
-    "RecentSearches": { "cardMode": "column" },
-    "FacetTypeahead": { "cardMode": "column" },
-    "TagPicker": { "cardMode": "column" }
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "Drawer": {
+      "cardMode": "single",
+      "viewport": "880x560"
+    },
+    "DataTable": {
+      "cardMode": "column"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "620x460"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "620x500"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "480x300"
+    },
+    "ToastProvider": {
+      "cardMode": "single",
+      "viewport": "640x460"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "ErrorState": {
+      "cardMode": "column"
+    },
+    "FieldGroup": {
+      "cardMode": "column"
+    },
+    "FormRow": {
+      "cardMode": "column"
+    },
+    "FormSection": {
+      "cardMode": "column"
+    },
+    "LoadingState": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    },
+    "StateSwitch": {
+      "cardMode": "column"
+    },
+    "StatTile": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "TpButton": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "ProspectPage": {
+      "cardMode": "single",
+      "viewport": "1440x900"
+    },
+    "RecordDetail": {
+      "cardMode": "single",
+      "viewport": "1000x760"
+    },
+    "QuickViewDrawer": {
+      "cardMode": "single",
+      "viewport": "980x620"
+    },
+    "AccountDetailDrawer": {
+      "cardMode": "single",
+      "viewport": "980x620"
+    },
+    "AddToListDialog": {
+      "cardMode": "single",
+      "viewport": "720x560"
+    },
+    "RevealDialog": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "BulkRevealDialog": {
+      "cardMode": "single",
+      "viewport": "760x600"
+    },
+    "BulkRevealJobDialog": {
+      "cardMode": "single",
+      "viewport": "760x600"
+    },
+    "RowActions": {
+      "cardMode": "single",
+      "viewport": "620x520"
+    },
+    "AccountsTable": {
+      "cardMode": "column"
+    },
+    "BulkActionBar": {
+      "cardMode": "single",
+      "viewport": "1100x420",
+      "primaryStory": "AllMatching"
+    },
+    "ProspectToolbar": {
+      "cardMode": "column"
+    },
+    "FilterRail": {
+      "cardMode": "column"
+    },
+    "FilterPanel": {
+      "cardMode": "column"
+    },
+    "AccountFilterPanel": {
+      "cardMode": "column"
+    },
+    "SaveSearchPanel": {
+      "cardMode": "column"
+    },
+    "StageManagementPanel": {
+      "cardMode": "column"
+    },
+    "AiSearchBox": {
+      "cardMode": "single",
+      "viewport": "900x520",
+      "primaryStory": "Compiled"
+    },
+    "ParsedFilterPreview": {
+      "cardMode": "column"
+    },
+    "RecentSearches": {
+      "cardMode": "column"
+    },
+    "FacetTypeahead": {
+      "cardMode": "column"
+    },
+    "TagPicker": {
+      "cardMode": "column"
+    },
+    "ActivityFeedCard": {
+      "cardMode": "column"
+    },
+    "AddSendingDomainForm": {
+      "cardMode": "column"
+    },
+    "AnnouncementBanner": {
+      "cardMode": "column"
+    },
+    "ApiDocsPanel": {
+      "cardMode": "column"
+    },
+    "ApiKeysPanel": {
+      "cardMode": "column"
+    },
+    "AppShell": {
+      "cardMode": "single",
+      "viewport": "1440x1020"
+    },
+    "AuthAuditList": {
+      "cardMode": "column"
+    },
+    "AutoEnrichPanel": {
+      "cardMode": "column"
+    },
+    "BarChart": {
+      "cardMode": "column"
+    },
+    "BillingPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "BulkImportProgress": {
+      "cardMode": "column"
+    },
+    "BurnSparkline": {
+      "cardMode": "column"
+    },
+    "CaptureForm": {
+      "cardMode": "column"
+    },
+    "CompliancePage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "viewport": "820x500"
+    },
+    "ConflictQueue": {
+      "cardMode": "column"
+    },
+    "ConnectMailboxForm": {
+      "cardMode": "column"
+    },
+    "ContactsTable": {
+      "cardMode": "column"
+    },
+    "CreditPill": {
+      "cardMode": "column"
+    },
+    "CreditUsageSection": {
+      "cardMode": "column"
+    },
+    "CreditsTab": {
+      "cardMode": "column"
+    },
+    "CrmSyncPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "CustomFieldsPanel": {
+      "cardMode": "column"
+    },
+    "DataHealthCard": {
+      "cardMode": "column"
+    },
+    "DataHealthPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "DataHealthSection": {
+      "cardMode": "column"
+    },
+    "DataHealthTrendCard": {
+      "cardMode": "column"
+    },
+    "DeleteListDialog": {
+      "cardMode": "single",
+      "viewport": "820x500"
+    },
+    "DeliverabilitySection": {
+      "cardMode": "column"
+    },
+    "DeveloperPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "DistributionChart": {
+      "cardMode": "column"
+    },
+    "DraftReviewPanel": {
+      "cardMode": "column"
+    },
+    "DsarForm": {
+      "cardMode": "column"
+    },
+    "DuplicatesSection": {
+      "cardMode": "column"
+    },
+    "EnrichmentActivityCard": {
+      "cardMode": "column"
+    },
+    "EnrichmentJobsPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "EnrollmentLogTable": {
+      "cardMode": "column"
+    },
+    "EnrollmentPanel": {
+      "cardMode": "single",
+      "viewport": "1100x780"
+    },
+    "FreshnessTrend": {
+      "cardMode": "column"
+    },
+    "FunnelChart": {
+      "cardMode": "column"
+    },
+    "FunnelSection": {
+      "cardMode": "column"
+    },
+    "GlobalSearch": {
+      "cardMode": "column"
+    },
+    "HistoryTab": {
+      "cardMode": "column"
+    },
+    "HomePage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "HotLeadsCard": {
+      "cardMode": "column"
+    },
+    "IdentityPanel": {
+      "cardMode": "column"
+    },
+    "ImportDraftFlow": {
+      "cardMode": "column"
+    },
+    "ImportDraftPreviewPanel": {
+      "cardMode": "column"
+    },
+    "ImportDraftsBanner": {
+      "cardMode": "column"
+    },
+    "ImportIntoListDialog": {
+      "cardMode": "single",
+      "viewport": "820x720"
+    },
+    "ImportJobDrawer": {
+      "cardMode": "single",
+      "viewport": "1100x720"
+    },
+    "ImportJobPage": {
+      "cardMode": "single",
+      "viewport": "1440x980"
+    },
+    "ImportJobsHistoryPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "ImportPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "ImportWizard": {
+      "cardMode": "single",
+      "viewport": "1440x900"
+    },
+    "InboxPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "IntentSection": {
+      "cardMode": "column"
+    },
+    "InvoicesTab": {
+      "cardMode": "column"
+    },
+    "JobDetailDrawer": {
+      "cardMode": "single",
+      "viewport": "1100x720"
+    },
+    "LeadScoreSection": {
+      "cardMode": "column"
+    },
+    "LineChart": {
+      "cardMode": "column"
+    },
+    "LinksTable": {
+      "cardMode": "column"
+    },
+    "ListDetailPage": {
+      "cardMode": "single",
+      "viewport": "1440x980"
+    },
+    "ListFormDialog": {
+      "cardMode": "single",
+      "viewport": "820x520"
+    },
+    "ListsPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "MailboxList": {
+      "cardMode": "column"
+    },
+    "MailboxesPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "MappingEditor": {
+      "cardMode": "column"
+    },
+    "MappingGrid": {
+      "cardMode": "column"
+    },
+    "MembersPanel": {
+      "cardMode": "column"
+    },
+    "MergeReviewDrawer": {
+      "cardMode": "single",
+      "viewport": "1100x720",
+      "primaryStory": "Reviewing"
+    },
+    "MetricsSection": {
+      "cardMode": "column"
+    },
+    "NotificationsBell": {
+      "cardMode": "column"
+    },
+    "NotificationsPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "NotificationsPanel": {
+      "cardMode": "column"
+    },
+    "OAuthAppsPanel": {
+      "cardMode": "column"
+    },
+    "OrgSwitcher": {
+      "cardMode": "column"
+    },
+    "OrganizationPanel": {
+      "cardMode": "column"
+    },
+    "PerFieldFill": {
+      "cardMode": "column"
+    },
+    "PlanTab": {
+      "cardMode": "column"
+    },
+    "ProfilePanel": {
+      "cardMode": "column"
+    },
+    "ProviderPriorityPanel": {
+      "cardMode": "column"
+    },
+    "PublicPricingPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "QuickActionsRow": {
+      "cardMode": "column"
+    },
+    "RecentImportsCard": {
+      "cardMode": "column"
+    },
+    "RecentRevealsCard": {
+      "cardMode": "column"
+    },
+    "RepliesCard": {
+      "cardMode": "column"
+    },
+    "ReportsPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "RetentionActivity": {
+      "cardMode": "column"
+    },
+    "ReverificationActivity": {
+      "cardMode": "column"
+    },
+    "ReverifyNowButton": {
+      "cardMode": "column"
+    },
+    "SalesNavPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "SectionCard": {
+      "cardMode": "column"
+    },
+    "SecurityAccessPanel": {
+      "cardMode": "column"
+    },
+    "SecurityPanel": {
+      "cardMode": "column"
+    },
+    "SendStatusDashboard": {
+      "cardMode": "column"
+    },
+    "SendingDomainList": {
+      "cardMode": "column"
+    },
+    "SequenceBuilder": {
+      "cardMode": "single",
+      "viewport": "1100x720",
+      "primaryStory": "Open"
+    },
+    "SequenceList": {
+      "cardMode": "column"
+    },
+    "SequenceSnapshot": {
+      "cardMode": "column"
+    },
+    "SequencesPage": {
+      "cardMode": "single",
+      "viewport": "1440x1000"
+    },
+    "SessionsPanel": {
+      "cardMode": "column"
+    },
+    "SettingsNav": {
+      "cardMode": "column"
+    },
+    "SettingsPlaceholder": {
+      "cardMode": "column"
+    },
+    "SettingsScopeLayout": {
+      "cardMode": "column"
+    },
+    "SourceCoverageSection": {
+      "cardMode": "column"
+    },
+    "SsoConfigPanel": {
+      "cardMode": "column"
+    },
+    "SubscriptionTab": {
+      "cardMode": "column"
+    },
+    "SuppressionForm": {
+      "cardMode": "column"
+    },
+    "SuppressionList": {
+      "cardMode": "column"
+    },
+    "SyncActivity": {
+      "cardMode": "column"
+    },
+    "TasksCard": {
+      "cardMode": "column"
+    },
+    "TasksPanel": {
+      "cardMode": "column"
+    },
+    "TeamActivitySection": {
+      "cardMode": "column"
+    },
+    "TeamSwitcher": {
+      "cardMode": "column"
+    },
+    "TeamsPanel": {
+      "cardMode": "column"
+    },
+    "TemplateControls": {
+      "cardMode": "column"
+    },
+    "TemplateEditor": {
+      "cardMode": "single",
+      "viewport": "1100x780"
+    },
+    "TemplatesPanel": {
+      "cardMode": "column"
+    },
+    "ThreadList": {
+      "cardMode": "column"
+    },
+    "ThreadView": {
+      "cardMode": "single",
+      "viewport": "1100x700",
+      "primaryStory": "Open"
+    },
+    "UsageTab": {
+      "cardMode": "column"
+    },
+    "UsageTable": {
+      "cardMode": "column"
+    },
+    "VerificationBreakdown": {
+      "cardMode": "column"
+    },
+    "VersionHistoryDrawer": {
+      "cardMode": "single",
+      "viewport": "1100x700"
+    },
+    "WebhooksPanel": {
+      "cardMode": "column"
+    },
+    "WidgetCard": {
+      "cardMode": "column"
+    },
+    "WorkspaceGeneralPanel": {
+      "cardMode": "column"
+    },
+    "WorkspaceSwitcher": {
+      "cardMode": "column"
+    }
   }
 }

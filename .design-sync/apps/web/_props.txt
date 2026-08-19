@@ -1,0 +1,70 @@
+ActivityFeedCard           { items, loading, error, onRetry, }: { items: ActivityFeedItem[]; loading: boolean; error: string | null; onRetry?: () => void; }
+AddSendingDomainForm       { onAdded }: { onAdded: () => void }
+AppShell                   { children }: { children: ReactNode }
+BarChart                   { data, max, width = 560, ariaLabel, }: { data: BarDatum[]; /** Shared denominator so multiple charts/series stay comparable (≥ 1 to avoid divide-by-zero). */ max: number; width?: number; ariaLabel...
+BulkImportProgress         { jobId }: { jobId: string }
+BurnSparkline              { burn, loading, error, onRetry, }: { burn: BurnPoint[]; loading: boolean; error: string | null; onRetry?: () => void; }
+CaptureForm                { onCapture, }: { /** Resolves to whether the capture deduped onto an existing row. Throws on failure. */ onCapture: (body: SalesNavLinkRequest) => Promise<{ deduped: boolean }>; }
+ConfirmDialog              { open, onClose, title, body, confirmLabel, cancelLabel = "Keep it", destructive = false, busy = false, onConfirm, }: { open: boolean; onClose: () => void; title: ReactNode; body: ReactNode; confir...
+ConflictQueue              { conflicts, loading, error, resolving, onResolve, onRetry, }: { conflicts: CrmConflictView[] | null; loading: boolean; error: string | null; resolving: boolean; onResolve: (id: string, status: "re...
+ConnectMailboxForm         { domains, onConnected, }: { domains: SendingDomainView[]; onConnected: () => void; }
+ContactsTable              { contacts }: { contacts: MaskedContact[] }
+CreditUsageSection         { balance, rollup, loading, error, onRetry, }: { balance: number | null; rollup: CreditRollup | null; loading: boolean; error: string | null; onRetry: () => void; }
+CreditsTab                 { balance, topUp, canPurchase = true, }: { balance: number | null; topUp: (pack: string) => Promise<string | null>; canPurchase?: boolean; }
+DataHealthCard             { metrics, loading, error, onRetry, }: { metrics: WorkspaceDataQuality | null; loading: boolean; error: string | null; onRetry?: () => void; }
+DataHealthSection          { rollup, loading, error, onRetry, }: { rollup: DataHealthRollup | null; loading: boolean; error: string | null; onRetry: () => void; }
+DataHealthTrendCard        { trend, loading, error, onRetry, }: { trend: DataQualityTrendPoint[] | null; loading: boolean; error: string | null; onRetry?: () => void; }
+DeleteListDialog           { open, list, onClose, onDeleted, }: { open: boolean; /** The list to delete; null keeps the dialog inert. */ list: List | null; onClose: () => void; /** Fired after a successful delete (the parent...
+DeliverabilitySection      { onConnect }: { onConnect: () => void }
+DistributionChart          { segments, width = 560, ariaLabel, }: { segments: DistributionSegment[]; width?: number; ariaLabel?: string; }
+DuplicatesSection          { pairs, loading, error, unmarking, onRetry, onUnmark, onMerged, }: { pairs: DuplicatePairView[] | null; loading: boolean; error: string | null; unmarking: string | null; onRetry: () => void; onUnm...
+EnrichmentActivityCard     { activity, loading, error, onRetry, }: { activity: EnrichmentActivity[]; loading: boolean; error: string | null; onRetry?: () => void; }
+EnrollmentLogTable         { entries, sendingId, sendFailures, onSend, }: { entries: EnrollmentEntry[]; sendingId: string | null; sendFailures: Record<string, SendFailure>; onSend: (logId: string) => void; }
+EnrollmentPanel            { sequence, onClose, onChanged, }: { sequence: SequenceSummary; onClose: () => void; onChanged: () => void; }
+FreshnessTrend             { trend, loading, error, onRetry, }: { trend: DataQualityTrendPoint[] | null; loading: boolean; error: string | null; onRetry: () => void; }
+FunnelChart                { data, max, width = 560, ariaLabel, }: { data: FunnelDatum[]; /** The widest stage count (≥ 1) — the full-width reference. */ max: number; width?: number; ariaLabel?: string; }
+FunnelSection              { rollup, loading, error, onRetry, }: { rollup: FunnelRollup | null; loading: boolean; error: string | null; onRetry: () => void; }
+HotLeadsCard               { leads, loading, error, onRetry, }: { leads: HotLead[]; loading: boolean; error: string | null; onRetry?: () => void; }
+ImportDraftFlow            ?
+ImportDraftPreviewPanel    { preview, cached, busy, onRerun, }: { preview: ImportDraftPreviewResponse | null; /** True when `summary` is the row's cached preview_summary (resume) — samples need a fresh pass. */ cached: boole...
+ImportIntoListDialog       { open, list, onClose, onImported, }: { open: boolean; list: List | null; onClose: () => void; /** Fired once per completed import so the parent can reload the members table + list member count. */...
+ImportJobDrawer            { jobId, fallback, open, onClose, }: { jobId: string | null; fallback: ImportJobListItem | null; open: boolean; onClose: () => void; }
+ImportJobPage              { jobId }: { jobId: string }
+ImportWizard               { onImported, onStarted, targetListId, targetListName, resumeDraftId, initialStep, onDraftUrlChange, }: ImportWizardProps
+JobDetailDrawer            { job, open, onClose, }: { job: EnrichmentJobSummary | null; open: boolean; onClose: () => void; }
+LineChart                  { data, width = 560, height = 120, ariaLabel, }: { data: LinePoint[]; width?: number; height?: number; ariaLabel?: string; }
+LinksTable                 { links, loading, error, onReload, onDelete, }: { links: SalesNavLinkDTO[]; loading: boolean; error: string | null; onReload: () => void; onDelete: (id: string) => Promise<void>; }
+ListDetailPage             { listId }: { listId: string }
+ListFormDialog             { open, list, onClose, onSaved, }: { open: boolean; /** null → create mode; a list → rename/edit mode. */ list: List | null; onClose: () => void; /** Fired with the created/updated list after a suc...
+MailboxList                { mailboxes, available, loading, error, reload, }: { mailboxes: MailboxView[]; available: boolean; loading: boolean; error: string | null; reload: () => void; }
+MappingEditor              { connectionId }: { connectionId: string | null }
+MappingGrid                { headers, mapping, onChange, }: { headers: string[]; mapping: Partial<Record<CanonicalField, string>>; onChange: (field: CanonicalField, value: string) => void; }
+MergeReviewDrawer          { pair, onClose, onMerged, onNotEnabled, }: { /** The queue pair under review; `null` closes the drawer. */ pair: DuplicatePairView | null; onClose: () => void; /** Drop the resolved pair from the ...
+MetricsSection             { metrics, loading, error, onRetry, }: { metrics: WorkspaceDataQuality | null; loading: boolean; error: string | null; onRetry: () => void; }
+PerFieldFill               { metrics, loading, error, onRetry, }: { metrics: WorkspaceDataQuality | null; loading: boolean; error: string | null; onRetry: () => void; }
+PlanTab                    { plan }: { plan: TenantPlan | null }
+RecentImportsCard          { imports, loading, error, onRetry, }: { imports: RecentImport[]; loading: boolean; error: string | null; onRetry?: () => void; }
+RecentRevealsCard          { reveals, loading, error, onRetry, }: { reveals: RecentReveal[]; loading: boolean; error: string | null; onRetry?: () => void; }
+RepliesCard                { replies, loading, error, onRetry, }: { replies: RecentReply[]; loading: boolean; error: string | null; onRetry?: () => void; }
+RetentionActivity          { runs, loading, error, onRetry, }: { runs: RetentionRun[] | null; loading: boolean; error: string | null; onRetry: () => void; }
+ReverificationActivity     { runs, loading, error, onRetry, }: { runs: ReverificationRun[] | null; loading: boolean; error: string | null; onRetry: () => void; }
+ReverifyNowButton          { canTrigger, onQueued, }: { canTrigger: boolean; onQueued: () => void; }
+SectionCard                { title, hint, children, }: { title: string; hint?: ReactNode; children: ReactNode; }
+SendStatusDashboard        { sequences, loading, error, onRetry, }: { sequences: SequenceSummary[]; loading: boolean; error: string | null; onRetry: () => void; }
+SendingDomainList          { domains, available, loading, error, reload, verify, verifyingId, actionError, }: { domains: SendingDomainView[]; available: boolean; loading: boolean; error: string | null; reload: () => void; ve...
+SequenceBuilder            { open, onClose, onCreated, }: { open: boolean; onClose: () => void; onCreated: () => void; }
+SequenceList               { sequences, loading, error, onRetry, onSelect, onCreate, onSetStatus, pendingId, }: { sequences: SequenceSummary[]; loading: boolean; error: string | null; onRetry: () => void; onSelect: (s: Seque...
+SequenceSnapshot           { snapshot, loading, error, onRetry, }: { snapshot: SequenceSnapshotData | null; loading: boolean; error: string | null; onRetry?: () => void; }
+SettingsPlaceholder        { title, description, }: { title: string; description?: string; }
+SettingsScopeLayout        { children }: { children: ReactNode }
+SourceCoverageSection      { trend, loading, error, onRetry, }: { trend: DataQualityTrendPoint[] | null; loading: boolean; error: string | null; onRetry: () => void; }
+SyncActivity               { runs, loading, error, onRetry, }: { runs: CrmSyncRunView[] | null; loading: boolean; error: string | null; onRetry: () => void; }
+TasksCard                  { tasks, loading, error, onRetry, }: { tasks: TodaysTask[]; loading: boolean; error: string | null; onRetry?: () => void; }
+TeamActivitySection        { rollup, loading, error, onRetry, }: { rollup: TeamRollup | null; loading: boolean; error: string | null; onRetry: () => void; }
+TemplateControls           { templates, onApply, templateName, onTemplateName, onSave, saving, canSave, message, children, }: { templates: ImportMappingTemplate[]; onApply: (id: string) => void; templateName: string; onTempl...
+TemplateEditor             { templateId, open, onClose, onSaved, }: { /** null = create a new template; a string = edit/view the existing one. */ templateId: string | null; open: boolean; onClose: () => void; onSaved: () => ...
+ThreadView                 { threadId, onClose, onChanged, }: { threadId: string | null; onClose: () => void; onChanged: () => void; }
+UsageTable                 { reveals }: { reveals: UsageReveal[] }
+VerificationBreakdown      { metrics, loading, error, onRetry, }: { metrics: WorkspaceDataQuality | null; loading: boolean; error: string | null; onRetry: () => void; }
+VersionHistoryDrawer       { templateId, canEdit, currentVersion, open, onClose, onRestored, }: { templateId: string; canEdit: boolean; currentVersion: number | null; open: boolean; onClose: () => void; onRestored: (version:...
+WidgetCard                 { title, icon, hint, loading, error, empty, onRetry, emptyIcon, emptyTitle, emptyDescription, emptyAction, skeletonRows = 4, skeleton, children, style, }: { title: string; icon?: IconComponent; hin...

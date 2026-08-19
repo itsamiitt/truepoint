@@ -2,12 +2,10 @@
 
 Every component loads from the global `window.TruePointUI` — e.g. `const { Card, TpButton, DataTable } = window.TruePointUI`. React must already be on the page; mount your tree into a dedicated child node (not the host's root). **Light theme only.**
 
-**The primitives need no provider** — everything in the `general` group renders standalone. Two providers exist, and the `prospect` group needs them: wrap the subtree in `<ToastProvider>` (then `useToast()` fires toasts), and in `<RevealStoreProvider>` for anything that touches contact reveal data. See **The prospect surface** below.
-
 ## Two component families, one token system
 
 - **Token primitives** — `Card`, `StatTile`, `StatusBadge`, `Avatar`, `Progress`, `Pagination`, `Spinner`, `Icon`, the state kit (`Skeleton`/`LoadingState`/`EmptyState`/`ErrorState`/`StateSwitch`), the `Tp*` form controls (`TpButton`, `TpInput`, `TpTextarea`, `TpSelect`, `TpCheckbox`, `TpSwitch`, `TpChip`, `TpIconButton`), `Tabs`/`SegmentedControl`, overlays (`Dialog`/`Drawer`), floating (`Popover`/`DropdownMenu`/`Tooltip`), `DataTable`, `Combobox`, and the form layout (`FormSection`/`FieldGroup`/`FormRow`). These are pre-styled from `.tp-ui-*` classes + the `--tp-*` tokens. Drive them with props — e.g. `<TpButton variant="danger">`, `<StatusBadge tone="success">`, `<Progress value={70} />`.
-- **shadcn primitives** — `Button`, `Input`, `Label`, `Alert`, `Badge`, `Separator`, `Checkbox`, `RadioGroup`/`RadioOption`. Same look, themed via Tailwind utilities from the same tokens. Use props: `<Button variant="outline" size="sm">`.
+- **shadcn primitives** — `Button`, `Input`, `Label`, `Alert`, `Badge`, `Separator`, `Checkbox`, `RadioGroup`/`RadioOption`. Same look, themed via Tailwind utilities from the same tokens. Use props: `<Button variant="outline" size="sm">`. `Button`'s variants are exactly `default | outline | ghost | link` — an unknown name silently renders with no surface at all.
 
 **This is a component + token system, not a utility-class kit.** Don't invent class names. Compose the shipped components; for your own layout glue (grids, spacing, a one-off accent) use inline styles that read the `--tp-*` CSS variables — never hardcode a brand hex.
 
@@ -19,11 +17,15 @@ Every component loads from the global `window.TruePointUI` — e.g. `const { Car
 - **Brand cobalt** (fills/accents, never body text): `--tp-cobalt`, `--tp-cobalt-700`, `--tp-cobalt-50`
 - **Primary action fill** (ink, not cobalt): `--tp-btn`, `--tp-btn-700` (hover) — with `--tp-on-fill` text
 - **Status**: `--success`, `--warning`, `--danger`, `--danger-700` (destructive hover / error text). There is **no `--accent`** — the old Wolf-Indigo accent was retired; use `--tp-cobalt`.
-- **Soft danger** (the *exclusion* surface, not destructive actions): `--danger-tint` (block background), `--danger-50` (chip fill), `--danger-100` / `--danger-200` (borders), `--danger-ink` (muted rose copy, AA-safe). Used by the progressive-exclude blocks in `FilterPanel` / `AccountFilterPanel`.
+- **Soft danger** (an *exclusion* surface, not destructive actions): `--danger-tint` (block background), `--danger-50` (chip fill), `--danger-100` / `--danger-200` (borders), `--danger-ink` (muted rose copy, AA-safe).
 - **Shape**: `--radius` (8px), `--tp-radius-sm` (6px), `--tp-radius-card` (14px, for cards/tiles)
 - **Spacing** (4px scale): `--tp-space-1` … `--tp-space-8`
 - **Type**: `--font-sans` (Geist), `--font-mono` (Geist Mono)
 - **Elevation**: `--tp-shadow-card`, `--tp-shadow-card-hover` (dashboard cards/tiles), `--tp-shadow-popover`, `--tp-shadow-drawer`, `--tp-shadow-dialog`, `--tp-shadow-rail`; **z-scale**: `--tp-z-sticky/-drawer/-overlay/-modal/-popover/-toast`
+
+## Providers
+
+**The primitives need no provider** — everything in the `general` group renders standalone. The `prospect` group needs three, and the app's own root supplies all of them: `<Providers>` (the TanStack Query client — components that read server state call `useQueryClient()`, which **throws** without it), `<ToastProvider>` (fourteen prospect components call `useToast()`), and `<RevealStoreProvider>` for anything touching contact reveal data.
 
 ## The prospect surface (`prospect` group)
 
@@ -32,16 +34,18 @@ Alongside the primitives the bundle ships the **real prospect surface** — 27 c
 - **Whole page**: `ProspectPage` takes no props. It reads its search/filter state from the URL and loads its own data.
 - **Pieces**: `FilterPanel` / `FilterRail` / `FacetTypeahead` (faceted rails), `AccountFilterPanel` + `AccountsTable` + `AccountDetailDrawer` (the company scope), `ProspectToolbar`, `QuickViewDrawer` → `RecordDetail`, `RowActions`, `BulkActionBar`, `SaveSearchPanel`, `RecentSearches`, `AiSearchBox` + `ParsedFilterPreview`, `TagChip` / `TagPicker`, `StageSelector` / `StageManagementPanel`.
 
-**Providers.** Fourteen of them call `useToast()`, so `<ToastProvider>` is mandatory. `RevealCell`, `RevealDialog` and `RecordDetail` also read the reveal store — wrap those in `<RevealStoreProvider>`, and call `useRevealStore().hydrate(ids)` for the rows on screen or they render the "Revealed" flag without the value:
+Call `useRevealStore().hydrate(ids)` for the rows on screen or reveal-aware cells render the "Revealed" flag without the value:
 
 ```jsx
-const { ToastProvider, RevealStoreProvider, ProspectPage } = window.TruePointUI;
+const { Providers, ToastProvider, RevealStoreProvider, ProspectPage } = window.TruePointUI;
 
-<ToastProvider>
-  <RevealStoreProvider>
-    <ProspectPage />
-  </RevealStoreProvider>
-</ToastProvider>
+<Providers>
+  <ToastProvider>
+    <RevealStoreProvider>
+      <ProspectPage />
+    </RevealStoreProvider>
+  </ToastProvider>
+</Providers>
 ```
 
 **Masked by default.** A contact row carries no PII — only a masked domain, status flags and counts. `RevealCell` / `RevealDialog` / `BulkRevealDialog` spend credits to unlock a value and always state the cost first; `QuickViewDrawer` is masked-only by design and hands off to `RecordDetail`. Never design a screen that shows an email address on a row that hasn't been revealed.

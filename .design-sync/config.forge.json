@@ -1,0 +1,116 @@
+{
+  "shape": "package",
+  "pkg": "@leadwolf/ui",
+  "globalName": "TruePointUI",
+  "entry": "packages/ui/dist/ds-entry.js",
+  "srcDir": "../src",
+  "cssEntry": "_compiled.css",
+  "extraFonts": [
+    "_fonts.css"
+  ],
+  "buildCmd": "node .design-sync/build-app.mjs --app forge",
+  "readmeHeader": ".design-sync/conventions.forge.md",
+  "componentSrcMap": {
+    "OverviewPage": "../../../apps/forge/src/features/overview/components/OverviewPage.tsx",
+    "CapturesPage": "../../../apps/forge/src/features/captures/components/CapturesPage.tsx",
+    "ParsersPage": "../../../apps/forge/src/features/parsers/components/ParsersPage.tsx",
+    "ReviewPage": "../../../apps/forge/src/features/review/components/ReviewPage.tsx",
+    "SourceFetchesPage": "../../../apps/forge/src/features/source-fetches/components/SourceFetchesPage.tsx",
+    "SyncStatusPage": "../../../apps/forge/src/features/sync-status/components/SyncStatusPage.tsx",
+    "ForgeShell": "../../../apps/forge/src/components/shell/ForgeShell.tsx"
+  },
+  "overrides": {
+    "OverviewPage": {
+      "cardMode": "single",
+      "viewport": "1280x900"
+    },
+    "CapturesPage": {
+      "cardMode": "single",
+      "viewport": "1280x760"
+    },
+    "ParsersPage": {
+      "cardMode": "single",
+      "viewport": "1280x760"
+    },
+    "ReviewPage": {
+      "cardMode": "single",
+      "viewport": "1280x760"
+    },
+    "SourceFetchesPage": {
+      "cardMode": "single",
+      "viewport": "1280x760"
+    },
+    "SyncStatusPage": {
+      "cardMode": "single",
+      "viewport": "1280x700"
+    },
+    "ForgeShell": {
+      "cardMode": "single",
+      "viewport": "1440x900"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "Drawer": {
+      "cardMode": "single",
+      "viewport": "880x560"
+    },
+    "DataTable": {
+      "cardMode": "column"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "620x460"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "620x500"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "480x300"
+    },
+    "ToastProvider": {
+      "cardMode": "single",
+      "viewport": "640x460"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "ErrorState": {
+      "cardMode": "column"
+    },
+    "FieldGroup": {
+      "cardMode": "column"
+    },
+    "FormRow": {
+      "cardMode": "column"
+    },
+    "FormSection": {
+      "cardMode": "column"
+    },
+    "LoadingState": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    },
+    "StateSwitch": {
+      "cardMode": "column"
+    },
+    "StatTile": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "TpButton": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    }
+  },
+  "projectId": "eb2cf971-95ba-4025-ade0-c59996927d09"
+}

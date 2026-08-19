@@ -1,0 +1,32 @@
+{
+  "_comment": "apps/admin — the internal staff console. Only the token client, Next's router and the public-config constants are stubbed; the staff gates (adminGate, StaffMeProvider) run their real probe-the-api classification against fixtured routes.",
+  "srcRoots": [
+    "apps/admin/src"
+  ],
+  "nodeModules": "apps/admin/node_modules",
+  "aliases": {
+    "next/navigation": "next-navigation.tsx",
+    "next/link": "next-link.tsx",
+    "next/dynamic": "next-dynamic.tsx"
+  },
+  "tsPaths": {
+    "@/*": [
+      "apps/admin/src/*"
+    ]
+  },
+  "dtsInclude": [
+    "apps/admin/src/features/**/*.ts",
+    "apps/admin/src/features/**/*.tsx",
+    "apps/admin/src/components/**/*.tsx",
+    "apps/admin/src/lib/**/*.ts",
+    "apps/admin/src/lib/**/*.tsx"
+  ],
+  "extraCss": [
+    "packages/app-shell/src/shell.css",
+    "apps/admin/src/app/globals.css"
+  ],
+  "aliasPatterns": {
+    "(^|/)authClient$": "authClient.ts",
+    "(^|/)publicConfig$": "publicConfig.ts"
+  }
+}

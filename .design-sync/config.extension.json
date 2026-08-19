@@ -1,0 +1,99 @@
+{
+  "shape": "package",
+  "pkg": "@leadwolf/ui",
+  "globalName": "TruePointUI",
+  "entry": "packages/ui/dist/ds-entry.js",
+  "srcDir": "../src",
+  "cssEntry": "_compiled.css",
+  "extraFonts": [
+    "_fonts.css"
+  ],
+  "buildCmd": "node .design-sync/build-app.mjs --app extension",
+  "readmeHeader": ".design-sync/conventions.extension.md",
+  "projectId": "f626dd3f-b146-4930-9b01-a98fc0129853",
+  "componentSrcMap": {
+    "Panel": "../../../apps/extension/src/ui/panel/Panel.tsx",
+    "Popup": "../../../apps/extension/src/ui/popup/Popup.tsx",
+    "CreditsPill": "../../../apps/extension/src/ui/brand/CreditsPill.tsx",
+    "Mark": "../../../apps/extension/src/ui/brand/Mark.tsx"
+  },
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "Drawer": {
+      "cardMode": "single",
+      "viewport": "880x560"
+    },
+    "DataTable": {
+      "cardMode": "column"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "620x460"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "620x500"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "480x300"
+    },
+    "ToastProvider": {
+      "cardMode": "single",
+      "viewport": "640x460"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "ErrorState": {
+      "cardMode": "column"
+    },
+    "FieldGroup": {
+      "cardMode": "column"
+    },
+    "FormRow": {
+      "cardMode": "column"
+    },
+    "FormSection": {
+      "cardMode": "column"
+    },
+    "LoadingState": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    },
+    "StateSwitch": {
+      "cardMode": "column"
+    },
+    "StatTile": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "TpButton": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "Panel": {
+      "cardMode": "single",
+      "viewport": "460x760"
+    },
+    "Popup": {
+      "cardMode": "single",
+      "viewport": "420x560"
+    },
+    "CreditsPill": {
+      "cardMode": "column"
+    },
+    "Mark": {
+      "cardMode": "column"
+    }
+  }
+}

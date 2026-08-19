@@ -45,3 +45,10 @@ export { TagPicker } from "../../apps/web/src/features/prospect/components/TagPi
 // the provider to mount the store, and the hook to bulk-hydrate owned reveal data the way ProspectPage
 // does on load — without that a standalone RevealCell can only render the coarse "Revealed" badge.
 export { RevealStoreProvider, useRevealStore } from "../../apps/web/src/features/prospect/hooks/useRevealStore";
+
+// The app's REAL client provider stack (apps/web/src/app/providers.tsx), mounted once by the root layout.
+// Fourteen prospect components now read server state through TanStack Query, and `useQueryClient()` throws
+// outside its provider — which took out every prospect card at once. Exporting the app's own Providers (not
+// a hand-rolled QueryClientProvider) means a card gets the same client configuration the surface runs with:
+// staleTime 30s, no refetch-on-focus, one retry. Carded out via componentSrcMap — it is plumbing.
+export { Providers } from "../../apps/web/src/app/providers";

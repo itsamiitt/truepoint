@@ -1,0 +1,36 @@
+{
+  "_comment": "apps/web - the customer app. Full scope: the prospect slice plus every other feature surface and the shell chrome. Stubs still live under .design-sync/prospect/ because that slice was built first and its fixture router serves the whole app.",
+  "stubsDir": ".design-sync/prospect/stubs",
+  "srcRoots": [
+    "apps/web/src"
+  ],
+  "nodeModules": "apps/web/node_modules",
+  "aliases": {
+    "next/navigation": "next-navigation.tsx",
+    "next/link": "next-link.tsx",
+    "@leadwolf/types": "types-values.ts",
+    "next/dynamic": "next-dynamic.tsx"
+  },
+  "tsPaths": {
+    "@/*": [
+      "apps/web/src/*"
+    ]
+  },
+  "dtsInclude": [
+    "apps/web/src/features/**/*.ts",
+    "apps/web/src/features/**/*.tsx",
+    "apps/web/src/components/**/*.ts",
+    "apps/web/src/components/**/*.tsx",
+    "apps/web/src/app/providers.tsx",
+    "apps/web/src/lib/**/*.ts",
+    "apps/web/src/lib/**/*.tsx"
+  ],
+  "extraCss": [
+    "packages/app-shell/src/shell.css",
+    "apps/web/src/app/globals.css"
+  ],
+  "aliasPatterns": {
+    "(^|/)authClient$": "authClient.ts",
+    "(^|/)publicConfig$": "publicConfig.ts"
+  }
+}

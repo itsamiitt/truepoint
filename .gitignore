@@ -27,16 +27,19 @@ next-env.d.ts
 # TypeScript incremental-build state (written by tsc --noEmit with incremental projects)
 *.tsbuildinfo
 
-# claude.ai/design sync (/design-sync) — staging scripts, generated bundle, scratch build, machine state.
-# The durable inputs under .design-sync/ (config.json, NOTES.md, conventions.md, previews/, build-ui.mjs)
-# ARE committed; everything below is regenerated per run / per clone.
+# claude.ai/design sync (/design-sync) — staging scripts, generated bundles, scratch build, machine state.
+# The durable inputs under .design-sync/ (config*.json, NOTES.md, conventions*.md, previews/, apps/, lib/,
+# stubs/, build-app.mjs) ARE committed; everything below is regenerated per run / per clone.
+# One output dir per app now: ds-bundle (web) + ds-bundle-{admin,forge,auth,extension}.
 .ds-sync/
 ds-bundle/
+ds-bundle-*/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
 packages/ui/.ds-tsconfig.json
 .ds-prospect-tsconfig.json
+.ds-app-tsconfig.json
 # (the scratch built-package goes in packages/ui/dist/ — already covered by the dist/ rule above,
 #  and excluded from the architecture-map scan, which skips dist/ segments)
 

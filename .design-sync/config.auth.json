@@ -1,0 +1,137 @@
+{
+  "shape": "package",
+  "pkg": "@leadwolf/ui",
+  "globalName": "TruePointUI",
+  "entry": "packages/ui/dist/ds-entry.js",
+  "srcDir": "../src",
+  "cssEntry": "_compiled.css",
+  "extraFonts": [
+    "_fonts.css"
+  ],
+  "buildCmd": "node .design-sync/build-app.mjs --app auth",
+  "readmeHeader": ".design-sync/conventions.auth.md",
+  "projectId": "aecf862c-1c2b-47e7-973a-db366ba06454",
+  "componentSrcMap": {
+    "AuthShell": "../../../apps/auth/src/shared/AuthShell.tsx",
+    "AccountShell": "../../../apps/auth/src/shared/AccountShell.tsx",
+    "BrandLockup": "../../../apps/auth/src/shared/BrandLockup.tsx",
+    "SubmitButton": "../../../apps/auth/src/shared/SubmitButton.tsx",
+    "OtpInput": "../../../apps/auth/src/shared/OtpInput.tsx",
+    "TurnstileWidget": "../../../apps/auth/src/shared/TurnstileWidget.tsx",
+    "MfaSection": "../../../apps/auth/src/app/account/security/MfaSection.tsx",
+    "PasskeySection": "../../../apps/auth/src/app/account/security/PasskeySection.tsx",
+    "SessionsSection": "../../../apps/auth/src/app/account/security/SessionsSection.tsx",
+    "HistorySection": "../../../apps/auth/src/app/account/security/HistorySection.tsx",
+    "PasskeySignIn": "../../../apps/auth/src/app/mfa/PasskeySignIn.tsx"
+  },
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "Drawer": {
+      "cardMode": "single",
+      "viewport": "880x560"
+    },
+    "DataTable": {
+      "cardMode": "column"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "620x460"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "viewport": "620x500"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "viewport": "480x300"
+    },
+    "ToastProvider": {
+      "cardMode": "single",
+      "viewport": "640x460"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "ErrorState": {
+      "cardMode": "column"
+    },
+    "FieldGroup": {
+      "cardMode": "column"
+    },
+    "FormRow": {
+      "cardMode": "column"
+    },
+    "FormSection": {
+      "cardMode": "column"
+    },
+    "LoadingState": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    },
+    "StateSwitch": {
+      "cardMode": "column"
+    },
+    "StatTile": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "TpButton": {
+      "cardMode": "column"
+    },
+    "PageHeader": {
+      "cardMode": "column"
+    },
+    "AuthShell": {
+      "cardMode": "single",
+      "viewport": "1000x700",
+      "primaryStory": "SignIn"
+    },
+    "AccountShell": {
+      "cardMode": "single",
+      "viewport": "1100x1600",
+      "primaryStory": "SecuritySurface"
+    },
+    "BrandLockup": {
+      "cardMode": "column"
+    },
+    "SubmitButton": {
+      "cardMode": "column"
+    },
+    "OtpInput": {
+      "cardMode": "column"
+    },
+    "TurnstileWidget": {
+      "cardMode": "column"
+    },
+    "MfaSection": {
+      "cardMode": "single",
+      "viewport": "1000x760",
+      "primaryStory": "Registered"
+    },
+    "PasskeySection": {
+      "cardMode": "single",
+      "viewport": "1000x680",
+      "primaryStory": "Registered"
+    },
+    "SessionsSection": {
+      "cardMode": "single",
+      "viewport": "1000x640",
+      "primaryStory": "MultipleDevices"
+    },
+    "HistorySection": {
+      "cardMode": "single",
+      "viewport": "1000x640",
+      "primaryStory": "RecentActivity"
+    },
+    "PasskeySignIn": {
+      "cardMode": "column"
+    }
+  }
+}

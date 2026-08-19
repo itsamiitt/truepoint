@@ -1,0 +1,518 @@
+[
+ {
+  "name": "ActivityFeedCard",
+  "path": "apps/web/src/features/home/components/ActivityFeedCard.tsx"
+ },
+ {
+  "name": "AddSendingDomainForm",
+  "path": "apps/web/src/features/settings-mailboxes/components/AddSendingDomainForm.tsx"
+ },
+ {
+  "name": "AnnouncementBanner",
+  "path": "apps/web/src/features/announcements/AnnouncementBanner.tsx"
+ },
+ {
+  "name": "ApiDocsPanel",
+  "path": "apps/web/src/features/settings-developer/components/ApiDocsPanel.tsx"
+ },
+ {
+  "name": "ApiKeysPanel",
+  "path": "apps/web/src/features/settings-developer/components/ApiKeysPanel.tsx"
+ },
+ {
+  "name": "AppShell",
+  "path": "apps/web/src/components/shell/AppShell.tsx"
+ },
+ {
+  "name": "AuthAuditList",
+  "path": "apps/web/src/features/settings-tenant/components/AuthAuditList.tsx"
+ },
+ {
+  "name": "AutoEnrichPanel",
+  "path": "apps/web/src/features/settings-enrichment/components/AutoEnrichPanel.tsx"
+ },
+ {
+  "name": "BarChart",
+  "path": "apps/web/src/features/reports/charts/BarChart.tsx"
+ },
+ {
+  "name": "BillingPage",
+  "path": "apps/web/src/features/settings-billing/components/BillingPage.tsx"
+ },
+ {
+  "name": "BulkImportProgress",
+  "path": "apps/web/src/features/import/components/BulkImportProgress.tsx"
+ },
+ {
+  "name": "BurnSparkline",
+  "path": "apps/web/src/features/home/components/BurnSparkline.tsx"
+ },
+ {
+  "name": "CaptureForm",
+  "path": "apps/web/src/features/sales-navigator/components/CaptureForm.tsx"
+ },
+ {
+  "name": "CompliancePage",
+  "path": "apps/web/src/features/settings-compliance/components/CompliancePage.tsx"
+ },
+ {
+  "name": "ConfirmDialog",
+  "path": "apps/web/src/features/import/components/shared/ConfirmDialog.tsx"
+ },
+ {
+  "name": "ConflictQueue",
+  "path": "apps/web/src/features/crm-sync/components/ConflictQueue.tsx"
+ },
+ {
+  "name": "ConnectMailboxForm",
+  "path": "apps/web/src/features/settings-mailboxes/components/ConnectMailboxForm.tsx"
+ },
+ {
+  "name": "ContactsTable",
+  "path": "apps/web/src/features/import/components/ContactsTable.tsx"
+ },
+ {
+  "name": "CreditPill",
+  "path": "apps/web/src/components/shell/CreditPill.tsx"
+ },
+ {
+  "name": "CreditUsageSection",
+  "path": "apps/web/src/features/reports/components/CreditUsageSection.tsx"
+ },
+ {
+  "name": "CreditsTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/CreditsTab.tsx"
+ },
+ {
+  "name": "CrmSyncPage",
+  "path": "apps/web/src/features/crm-sync/components/CrmSyncPage.tsx"
+ },
+ {
+  "name": "CustomFieldsPanel",
+  "path": "apps/web/src/features/settings-custom-fields/components/CustomFieldsPanel.tsx"
+ },
+ {
+  "name": "DataHealthCard",
+  "path": "apps/web/src/features/home/components/DataHealthCard.tsx"
+ },
+ {
+  "name": "DataHealthPage",
+  "path": "apps/web/src/features/data-health/components/DataHealthPage.tsx"
+ },
+ {
+  "name": "DataHealthSection",
+  "path": "apps/web/src/features/reports/components/DataHealthSection.tsx"
+ },
+ {
+  "name": "DataHealthTrendCard",
+  "path": "apps/web/src/features/home/components/DataHealthTrendCard.tsx"
+ },
+ {
+  "name": "DeleteListDialog",
+  "path": "apps/web/src/features/lists/components/DeleteListDialog.tsx"
+ },
+ {
+  "name": "DeliverabilitySection",
+  "path": "apps/web/src/features/reports/components/DeliverabilitySection.tsx"
+ },
+ {
+  "name": "DeveloperPage",
+  "path": "apps/web/src/features/settings-developer/components/DeveloperPage.tsx"
+ },
+ {
+  "name": "DistributionChart",
+  "path": "apps/web/src/features/reports/charts/DistributionChart.tsx"
+ },
+ {
+  "name": "DraftReviewPanel",
+  "path": "apps/web/src/features/sequences/components/DraftReviewPanel.tsx"
+ },
+ {
+  "name": "DsarForm",
+  "path": "apps/web/src/features/settings-compliance/components/DsarForm.tsx"
+ },
+ {
+  "name": "DuplicatesSection",
+  "path": "apps/web/src/features/data-health/components/DuplicatesSection.tsx"
+ },
+ {
+  "name": "EnrichmentActivityCard",
+  "path": "apps/web/src/features/home/components/EnrichmentActivityCard.tsx"
+ },
+ {
+  "name": "EnrichmentJobsPage",
+  "path": "apps/web/src/features/enrichment-jobs/components/EnrichmentJobsPage.tsx"
+ },
+ {
+  "name": "EnrollmentLogTable",
+  "path": "apps/web/src/features/sequences/components/EnrollmentLogTable.tsx"
+ },
+ {
+  "name": "EnrollmentPanel",
+  "path": "apps/web/src/features/sequences/components/EnrollmentPanel.tsx"
+ },
+ {
+  "name": "FreshnessTrend",
+  "path": "apps/web/src/features/data-health/components/FreshnessTrend.tsx"
+ },
+ {
+  "name": "FunnelChart",
+  "path": "apps/web/src/features/reports/charts/FunnelChart.tsx"
+ },
+ {
+  "name": "FunnelSection",
+  "path": "apps/web/src/features/reports/components/FunnelSection.tsx"
+ },
+ {
+  "name": "GlobalSearch",
+  "path": "apps/web/src/components/shell/GlobalSearch.tsx"
+ },
+ {
+  "name": "HistoryTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/HistoryTab.tsx"
+ },
+ {
+  "name": "HomePage",
+  "path": "apps/web/src/features/home/components/HomePage.tsx"
+ },
+ {
+  "name": "HotLeadsCard",
+  "path": "apps/web/src/features/home/components/HotLeadsCard.tsx"
+ },
+ {
+  "name": "IdentityPanel",
+  "path": "apps/web/src/features/settings-tenant/components/IdentityPanel.tsx"
+ },
+ {
+  "name": "ImportDraftFlow",
+  "path": "apps/web/src/features/import/components/ImportDraftFlow.tsx"
+ },
+ {
+  "name": "ImportDraftPreviewPanel",
+  "path": "apps/web/src/features/import/components/ImportDraftPreviewPanel.tsx"
+ },
+ {
+  "name": "ImportDraftsBanner",
+  "path": "apps/web/src/features/import/components/ImportDraftsBanner.tsx"
+ },
+ {
+  "name": "ImportIntoListDialog",
+  "path": "apps/web/src/features/lists/components/ImportIntoListDialog.tsx"
+ },
+ {
+  "name": "ImportJobDrawer",
+  "path": "apps/web/src/features/import/components/ImportJobDrawer.tsx"
+ },
+ {
+  "name": "ImportJobPage",
+  "path": "apps/web/src/features/import/components/ImportJobPage.tsx"
+ },
+ {
+  "name": "ImportJobsHistoryPage",
+  "path": "apps/web/src/features/import/components/ImportJobsHistoryPage.tsx"
+ },
+ {
+  "name": "ImportPage",
+  "path": "apps/web/src/features/import/components/ImportPage.tsx"
+ },
+ {
+  "name": "ImportWizard",
+  "path": "apps/web/src/features/import/components/ImportWizard.tsx"
+ },
+ {
+  "name": "InboxPage",
+  "path": "apps/web/src/features/inbox/components/InboxPage.tsx"
+ },
+ {
+  "name": "IntentSection",
+  "path": "apps/web/src/features/reports/components/IntentSection.tsx"
+ },
+ {
+  "name": "InvoicesTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/InvoicesTab.tsx"
+ },
+ {
+  "name": "JobDetailDrawer",
+  "path": "apps/web/src/features/enrichment-jobs/components/JobDetailDrawer.tsx"
+ },
+ {
+  "name": "LeadScoreSection",
+  "path": "apps/web/src/features/reports/components/LeadScoreSection.tsx"
+ },
+ {
+  "name": "LineChart",
+  "path": "apps/web/src/features/reports/charts/LineChart.tsx"
+ },
+ {
+  "name": "LinksTable",
+  "path": "apps/web/src/features/sales-navigator/components/LinksTable.tsx"
+ },
+ {
+  "name": "ListDetailPage",
+  "path": "apps/web/src/features/lists/components/ListDetailPage.tsx"
+ },
+ {
+  "name": "ListFormDialog",
+  "path": "apps/web/src/features/lists/components/ListFormDialog.tsx"
+ },
+ {
+  "name": "ListsPage",
+  "path": "apps/web/src/features/lists/components/ListsPage.tsx"
+ },
+ {
+  "name": "MailboxList",
+  "path": "apps/web/src/features/settings-mailboxes/components/MailboxList.tsx"
+ },
+ {
+  "name": "MailboxesPage",
+  "path": "apps/web/src/features/settings-mailboxes/components/MailboxesPage.tsx"
+ },
+ {
+  "name": "MappingEditor",
+  "path": "apps/web/src/features/crm-sync/components/MappingEditor.tsx"
+ },
+ {
+  "name": "MappingGrid",
+  "path": "apps/web/src/features/import/components/MappingGrid.tsx"
+ },
+ {
+  "name": "MembersPanel",
+  "path": "apps/web/src/features/settings-workspace/components/MembersPanel.tsx"
+ },
+ {
+  "name": "MergeReviewDrawer",
+  "path": "apps/web/src/features/data-health/components/MergeReviewDrawer.tsx"
+ },
+ {
+  "name": "MetricsSection",
+  "path": "apps/web/src/features/data-health/components/MetricsSection.tsx"
+ },
+ {
+  "name": "NotificationsBell",
+  "path": "apps/web/src/components/shell/NotificationsBell.tsx"
+ },
+ {
+  "name": "NotificationsPage",
+  "path": "apps/web/src/features/notifications/components/NotificationsPage.tsx"
+ },
+ {
+  "name": "NotificationsPanel",
+  "path": "apps/web/src/features/settings-user/components/NotificationsPanel.tsx"
+ },
+ {
+  "name": "OAuthAppsPanel",
+  "path": "apps/web/src/features/settings-developer/components/OAuthAppsPanel.tsx"
+ },
+ {
+  "name": "OrgSwitcher",
+  "path": "apps/web/src/components/shell/OrgSwitcher.tsx"
+ },
+ {
+  "name": "OrganizationPanel",
+  "path": "apps/web/src/features/settings-tenant/components/OrganizationPanel.tsx"
+ },
+ {
+  "name": "PerFieldFill",
+  "path": "apps/web/src/features/data-health/components/PerFieldFill.tsx"
+ },
+ {
+  "name": "PlanTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/PlanTab.tsx"
+ },
+ {
+  "name": "ProfilePanel",
+  "path": "apps/web/src/features/settings-user/components/ProfilePanel.tsx"
+ },
+ {
+  "name": "ProviderPriorityPanel",
+  "path": "apps/web/src/features/settings-enrichment/components/ProviderPriorityPanel.tsx"
+ },
+ {
+  "name": "PublicPricingPage",
+  "path": "apps/web/src/features/public-pricing/components/PublicPricingPage.tsx"
+ },
+ {
+  "name": "QuickActionsRow",
+  "path": "apps/web/src/features/home/components/QuickActionsRow.tsx"
+ },
+ {
+  "name": "RecentImportsCard",
+  "path": "apps/web/src/features/home/components/RecentImportsCard.tsx"
+ },
+ {
+  "name": "RecentRevealsCard",
+  "path": "apps/web/src/features/home/components/RecentRevealsCard.tsx"
+ },
+ {
+  "name": "RepliesCard",
+  "path": "apps/web/src/features/home/components/RepliesCard.tsx"
+ },
+ {
+  "name": "ReportsPage",
+  "path": "apps/web/src/features/reports/components/ReportsPage.tsx"
+ },
+ {
+  "name": "RetentionActivity",
+  "path": "apps/web/src/features/data-health/components/RetentionActivity.tsx"
+ },
+ {
+  "name": "ReverificationActivity",
+  "path": "apps/web/src/features/data-health/components/ReverificationActivity.tsx"
+ },
+ {
+  "name": "ReverifyNowButton",
+  "path": "apps/web/src/features/data-health/components/ReverifyNowButton.tsx"
+ },
+ {
+  "name": "SalesNavPage",
+  "path": "apps/web/src/features/sales-navigator/components/SalesNavPage.tsx"
+ },
+ {
+  "name": "SectionCard",
+  "path": "apps/web/src/features/data-health/components/SectionCard.tsx"
+ },
+ {
+  "name": "SecurityAccessPanel",
+  "path": "apps/web/src/features/settings-tenant/components/SecurityAccessPanel.tsx"
+ },
+ {
+  "name": "SecurityPanel",
+  "path": "apps/web/src/features/settings-user/components/SecurityPanel.tsx"
+ },
+ {
+  "name": "SendStatusDashboard",
+  "path": "apps/web/src/features/sequences/components/SendStatusDashboard.tsx"
+ },
+ {
+  "name": "SendingDomainList",
+  "path": "apps/web/src/features/settings-mailboxes/components/SendingDomainList.tsx"
+ },
+ {
+  "name": "SequenceBuilder",
+  "path": "apps/web/src/features/sequences/components/SequenceBuilder.tsx"
+ },
+ {
+  "name": "SequenceList",
+  "path": "apps/web/src/features/sequences/components/SequenceList.tsx"
+ },
+ {
+  "name": "SequenceSnapshot",
+  "path": "apps/web/src/features/home/components/SequenceSnapshot.tsx"
+ },
+ {
+  "name": "SequencesPage",
+  "path": "apps/web/src/features/sequences/components/SequencesPage.tsx"
+ },
+ {
+  "name": "SessionsPanel",
+  "path": "apps/web/src/features/settings-workspace/components/SessionsPanel.tsx"
+ },
+ {
+  "name": "SettingsNav",
+  "path": "apps/web/src/features/settings-shell/components/SettingsNav.tsx"
+ },
+ {
+  "name": "SettingsPlaceholder",
+  "path": "apps/web/src/features/settings-shell/components/SettingsPlaceholder.tsx"
+ },
+ {
+  "name": "SettingsScopeLayout",
+  "path": "apps/web/src/features/settings-shell/components/SettingsScopeLayout.tsx"
+ },
+ {
+  "name": "SourceCoverageSection",
+  "path": "apps/web/src/features/data-health/components/SourceCoverageSection.tsx"
+ },
+ {
+  "name": "SsoConfigPanel",
+  "path": "apps/web/src/features/settings-tenant/components/SsoConfigPanel.tsx"
+ },
+ {
+  "name": "SubscriptionTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/SubscriptionTab.tsx"
+ },
+ {
+  "name": "SuppressionForm",
+  "path": "apps/web/src/features/settings-compliance/components/SuppressionForm.tsx"
+ },
+ {
+  "name": "SuppressionList",
+  "path": "apps/web/src/features/settings-compliance/components/SuppressionList.tsx"
+ },
+ {
+  "name": "SyncActivity",
+  "path": "apps/web/src/features/crm-sync/components/SyncActivity.tsx"
+ },
+ {
+  "name": "TasksCard",
+  "path": "apps/web/src/features/home/components/TasksCard.tsx"
+ },
+ {
+  "name": "TasksPanel",
+  "path": "apps/web/src/features/inbox/components/TasksPanel.tsx"
+ },
+ {
+  "name": "TeamActivitySection",
+  "path": "apps/web/src/features/reports/components/TeamActivitySection.tsx"
+ },
+ {
+  "name": "TeamSwitcher",
+  "path": "apps/web/src/components/shell/TeamSwitcher.tsx"
+ },
+ {
+  "name": "TeamsPanel",
+  "path": "apps/web/src/features/settings-teams/components/TeamsPanel.tsx"
+ },
+ {
+  "name": "TemplateControls",
+  "path": "apps/web/src/features/import/components/TemplateControls.tsx"
+ },
+ {
+  "name": "TemplateEditor",
+  "path": "apps/web/src/features/sequences/components/TemplateEditor.tsx"
+ },
+ {
+  "name": "TemplatesPanel",
+  "path": "apps/web/src/features/sequences/components/TemplatesPanel.tsx"
+ },
+ {
+  "name": "ThreadList",
+  "path": "apps/web/src/features/inbox/components/ThreadList.tsx"
+ },
+ {
+  "name": "ThreadView",
+  "path": "apps/web/src/features/inbox/components/ThreadView.tsx"
+ },
+ {
+  "name": "UsageTab",
+  "path": "apps/web/src/features/settings-billing/components/tabs/UsageTab.tsx"
+ },
+ {
+  "name": "UsageTable",
+  "path": "apps/web/src/features/settings-billing/components/UsageTable.tsx"
+ },
+ {
+  "name": "VerificationBreakdown",
+  "path": "apps/web/src/features/data-health/components/VerificationBreakdown.tsx"
+ },
+ {
+  "name": "VersionHistoryDrawer",
+  "path": "apps/web/src/features/sequences/components/VersionHistoryDrawer.tsx"
+ },
+ {
+  "name": "WebhooksPanel",
+  "path": "apps/web/src/features/settings-developer/components/WebhooksPanel.tsx"
+ },
+ {
+  "name": "WidgetCard",
+  "path": "apps/web/src/features/home/components/WidgetCard.tsx"
+ },
+ {
+  "name": "WorkspaceGeneralPanel",
+  "path": "apps/web/src/features/settings-workspace/components/WorkspaceGeneralPanel.tsx"
+ },
+ {
+  "name": "WorkspaceSwitcher",
+  "path": "apps/web/src/components/shell/WorkspaceSwitcher.tsx"
+ }
+]

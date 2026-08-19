@@ -208,3 +208,168 @@ clicking Ask.
 - **`packages/ui/node_modules/@leadwolf/types` is a copy refreshed on every build-ui run**, so it tracks
   `packages/types`. A `bun install --force` that wipes it is self-healing on the next build.
 - **`.ds-prospect-tsconfig.json`** is generated at the repo root each build and is gitignored.
+
+---
+
+# 2026-08-19 - five projects, one per app
+
+The repo now syncs to **five** Claude Design projects, not one. Each carries the shared `@leadwolf/ui`
+primitives plus one app's real components. Configs are `.design-sync/config.json` (web) and
+`config.<app>.json` for admin / forge / auth / extension; each pins its own `projectId`.
+
+| App | Project | Components | Build |
+|---|---|---|---|
+| web | TruePoint Web | 71 (44 + 27 prospect) | `node .design-sync/build-app.mjs --app web` |
+| admin | TruePoint Admin | 102 (44 + 58) | `--app admin` |
+| auth | Modernist (reused; the tool has no rename method) | 55 (44 + 11) | `--app auth` |
+| forge | TruePoint Forge | 51 (44 + 7) | `--app forge` |
+| extension | TruePoint Extension | 48 (44 + 4) | `--app extension` |
+
+`build-ui.mjs` is superseded by **`build-app.mjs`** - the same pipeline parameterised by
+`.design-sync/apps/<app>/manifest.json` + `entry.tsx` + `stubs/`. Shared stubs live in `.design-sync/stubs/`
+(an app's own `stubs/` wins on name collision).
+
+## Traps this pass hit - read before touching any of it
+
+- **The review cache is SHARED and every capture PRUNES it.** `.design-sync/.cache/review/` is one directory
+  for all five bundles, and `package-capture.mjs` deletes the state of any component not in the bundle it was
+  pointed at. Capturing admin destroyed web's 27 prospect grades and vice versa. A scoped `--components X`
+  run prunes just as hard. Restoring only `<Name>.grade.json` does nothing - the sidecar `<Name>.json`
+  carries the gradeKey and must come back too. What actually makes a grade durable is the uploaded
+  `_ds_sync.json`, now in place for all five.
+- **Changing `readmeHeader` clears grades.** It is preview-affecting config, so repointing each app at its
+  own conventions file invalidated every grade in that bundle. Author the header BEFORE grading.
+- **Fixture edits need `build-app.mjs` re-run, not just `package-build.mjs`.** Fixtures compile into
+  `packages/ui/dist/app.js`. Re-running only the converter silently ships the previous fixture data - this
+  cost a round trip on the retention vocabulary.
+- **`process is not defined` kills the WHOLE bundle.** The apps read `NEXT_PUBLIC_*` off `process.env`, which
+  Next inlines and nothing defines here. One unguarded reference threw at module scope and every card - all
+  44 unrelated primitives included - rendered empty. Fixed with a `globalThis.process ??= { env: {} }` banner
+  in build-app.mjs. If every card in a bundle goes blank at once, suspect a module-scope throw, not the cards.
+- **Aliasing a bare specifier is not enough.** `@/lib/authClient` and `@/lib/publicConfig` are also imported
+  RELATIVELY (`./authClient`) by sibling lib modules, which bypasses esbuild's exact-specifier `alias` and
+  reaches the real network - ForgeShell rendered "Forge API returned 404" until those seams moved to
+  `aliasPatterns` (regex against the raw specifier).
+- **`next/dynamic` is CommonJS.** It calls `require("react/jsx-runtime")` at module scope, which esbuild emits
+  as `__require` and throws on evaluation. Stubbed at `.design-sync/stubs/next-dynamic.tsx` with a React.lazy
+  equivalent that preserves the loader and `options.loading`.
+- **App-level CSS is not in `@leadwolf/ui`.** The console page scaffold (`.tp-page`, `.tp-stat-grid`,
+  `.tp-section-title`, `.tp-cell-mono`) lives in `@leadwolf/app-shell/shell.css`, and each app layers more in
+  its own `globals.css`. Without them a page card renders perfectly-styled components inside a completely
+  unstyled page - KPI tiles stacked in one column. Wired via `manifest.extraCss`.
+- **Tailwind's auto-detection made the CSS build order-dependent.** v4 scans the cwd, so a leftover
+  `ds-bundle-*` dir leaked its class names into the next app's stylesheet (46 KB -> 56 KB purely from build
+  order). Now pinned with explicit `@source` lines.
+- **Route names do not follow feature-directory names.** `/admin/auth/platform-policy` (not `/auth-policy`),
+  `/admin/retention-policies` and `/admin/retention-runs` (not `/retention/...`). A wrong pattern is SILENT -
+  it falls through to `EMPTY_OK` and the surface renders its empty state, or crashes on a missing collection
+  key. Read the `adminFetch("...")` call; never infer from the directory name.
+- **Two different retention "policy" shapes exist.** The compliance surface records prose commitments
+  (`{entity, retentionDays, reason}`); the retention ENGINE reads `{dataClass, ttlDays, mode}` and is what
+  actually deletes. Mode values are `disabled | shadow | enforce` - "observe" is UI copy, not a value, and
+  passing it falls back to the first select option.
+- **Enum-bound fields must use real enum members.** Validation-rule `field` values must come from
+  `canonicalField` (`jobTitle`, `locationCountry`, ...); "title"/"country" silently fell back to `firstName`.
+- **`useToast()` throws outside `<ToastProvider>`, and `useQueryClient()` outside `<Providers>`.** 28 admin
+  cards and 17 prospect cards rendered empty on those two alone. The shared preview helpers
+  (`previews/_appPage.tsx`, `previews/_adminFixtures.tsx`, `previews/_prospectShell.tsx`) now carry them.
+- **The lucide barrel is generated, not hand-written.** `lib/gen-lucide.mjs` scans the app AND every
+  `packages/*/src` (a slice reaches lucide through `@leadwolf/app-shell`) and re-exports only the icons used,
+  from lucide's own per-icon modules. The old hand-inlined stub broke the build whenever a component
+  imported a new glyph - it did, on four icons, the first time this ran.
+
+## Known render warns (checked and benign)
+
+- `[RENDER_THIN] StageSelector: variants render identically` (web). False positive - the two cells plainly
+  differ ("Engaged -> Replied" vs "No stage"); the heuristic compares measured text and misses it.
+- SystemHealthPage: the fixture includes an unreachable queue (all counts `null`) to exercise the
+  null-not-zero rule, and it does not appear in the rendered live-queue table even though the component has
+  no filter for it. Worth confirming against a real reading - not a preview defect.
+
+## Per-app conventions headers
+
+`readmeHeader` is now per app: `conventions.md` (web), `conventions.admin.md`, `conventions.forge.md`,
+`conventions.auth.md`, `conventions.extension.md`. The single shared file described web's prospect surface
+and was being stitched into all five READMEs, telling four design agents about components they do not ship.
+Every component name in all five headers was cross-checked against that bundle's `components/` tree.
+
+## Re-sync risks
+
+- **Grades are only as durable as the uploaded `_ds_sync.json`.** Any local capture can prune them (above).
+- **Fixtures are hand-written mirrors of app types.** They drift when a `types.ts` changes, and the failure
+  is silent (a blank column, an empty state), not a build error. Re-read the sheets after any app-side schema
+  change rather than trusting a green validate.
+- **apps/auth route pages remain uncardable** - they are async Server Components. If they ever become client
+  components, the screens currently reconstructed in `previews/AuthShell.tsx` should be replaced by the real
+  pages.
+- **apps/web now covers the WHOLE app: 200 components across 30 groups** (44 shared primitives + 156 feature
+  and shell components). Adding another means: extend `.design-sync/apps/web/entry.tsx`, fixture its routes
+  in `prospect/stubs/authClient.ts`, add its `componentSrcMap` entry + any override, then author a preview.
+
+## 2026-08-19 — the web expansion (71 → 200 components)
+
+Every one of the 200 renders cleanly and is graded `good`. What that cost, and what to know next time.
+
+### The failure mode that dominated: fixture shape drift
+
+Nearly every blank panel, empty badge and `NaN%` traced to a fixture whose shape had drifted from the type
+the component actually reads. It is silent — `bun run typecheck` never sees these files, validate stays
+green, and the card renders "empty" rather than failing. **The only detector is reading the screenshot.**
+Roughly twenty of them, and the pattern repeats:
+
+- **Envelope vs body.** `GET /credits/subscription` is `{ subscription }`; a bare body reads as `null` and
+  renders the month-to-month default instead of the live subscription. Same class: `/settings/security/auth-audit`
+  is keyed `events`, not `entries`.
+- **Wire shape vs view shape.** The webhook delivery log arrives as `{status, responseCode, attemptedAt}` and
+  the api layer renames all three to `{outcome, status, createdAt}`. A fixture written in view terms lands as
+  empty badges and em dashes.
+- **Closed enums.** An off-vocabulary value renders an EMPTY badge, never a fallback. Bit us on
+  `mfaEnforcement: "required_for_admins"` (only off|optional|required — and it read as the WEAKER "Off"),
+  sequence `status: "draft"` (active|paused|archived), enrollment `status: "sent"` (a send event, not an
+  enrollment status), `linkType: "lead"` (it is `profile`), and CRM `direction: "push"/"two_way"`
+  (inbound|outbound|bidirectional|disabled — it silently misstated which way data flows).
+- **Fractions vs whole percents.** The pure rollups emit `Math.round(n/total*100)`, and the components print
+  the number with a literal `%`. A fraction renders `0.82%` where the truth is 82%.
+- **A collection answering a singular route.** `/workspaces/current` is a flat `WorkspaceGeneral`; answering
+  it with the workspaces LIST left every field blank. Same for `/imports/:id` (a detail, not the list) —
+  which made every import read "Waiting to start", because a missing `statusV2` falls back to `queued`.
+- **Prefix rules stealing a sibling.** `seg[0] === "custom-fields"` swallowed the settings DEFINITIONS route
+  on its way to the prospect VALUES route. Order matters: specific before prefix.
+
+### Traps worth remembering
+
+- **The capture harness PINS the browser clock** to `2024-05-15T12:00:00Z` (`page.clock.setFixedTime` in
+  package-capture.mjs). Absolute dates are unaffected, but every relative-time surface measured against the
+  2026 fixture timeline read "Due in 825d". The inbox and notifications fixtures therefore sit around the
+  pinned instant on purpose — there is a note above `THREADS` saying so. Do not "fix" them to 2026.
+- **Backslashes are halved somewhere in the bash heredoc path.** `"\n"` written into a heredoc arrives as a
+  real newline, which breaks a TS string literal across lines and fails the esbuild with
+  `Unterminated string literal`. It also makes a "collapse the multi-line string" repair script a silent
+  no-op (it rejoins with a real newline, reproducing the input byte for byte). Use `chr(92) + "n"`.
+- **`--entry` matters.** The converter must be pointed at `packages/ui/dist/ds-entry.js` (the COMBINED
+  surface), not `index.js` (the plain @leadwolf/ui barrel). Pointing at `index.js` produced a 250 KB bundle
+  where every app component was `undefined`, and all 156 of them rendered `root empty` with the same
+  React "Element type is invalid" error.
+- **Only `good` counts as graded.** package-capture treats any other verdict as `pendingGrade`, so an honest
+  `ok` re-captures forever. If a card is faithful but the underlying app has a nit, grade it `good` and put
+  the nit in the note.
+- **Overlays need a sized Stage, not a Frame.** ThreadView rendered header-only inside an auto-height frame;
+  its Drawer is fixed-position and everything below the header was clipped.
+
+### Two app-side findings surfaced by this pass (NOT preview defects)
+
+- **Five CSS custom properties are referenced but defined nowhere in the repo**: `--tp-line`, `--tp-text`,
+  `--tp-text-sm`, `--tp-text-xs`, `--tp-text-muted`, used by `features/crm-sync/crm-sync.module.css` and
+  `settings-enrichment.module.css`. This is the standing `[TOKENS_MISSING]` validate warning.
+- **`RecentRevealsCard` formats a zero-cost reveal as `-0 credits`** rather than `Free` or `0 credits`; the
+  component prefixes every row with a minus.
+
+### Project state
+
+| App | Project | Components |
+|---|---|---|
+| web | TruePoint Web `4985491c` | 200 — **built and graded locally; upload still pending** |
+| admin | TruePoint Admin `90237c62` | uploaded |
+| forge | TruePoint Forge `eb2cf971` | uploaded |
+| extension | TruePoint Extension `f626dd3f` | uploaded |
+| auth | **"Modernist"** `aecf862c` | 55 — uploaded. The project NAME is still the one it was created with; DesignSync has no rename method, so renaming it is a manual step in the UI. |

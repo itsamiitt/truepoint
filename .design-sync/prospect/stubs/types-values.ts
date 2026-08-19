@@ -19,3 +19,14 @@ export {
   seniorityLevel,
   sourceName,
 } from "../../../packages/types/src/contacts";
+// Provenance copy (RecordDetail) and field-age math (RevealDialog). Both modules are pure — sourceLabel.ts
+// is a string map and dataHealth.ts is documented PURE scoring math — so neither drags zod in.
+export { sourceLabel } from "../../../packages/types/src/sourceLabel";
+export { ageDaysSince } from "../../../packages/types/src/dataHealth";
+
+// Runtime values the wider app slice reads. Each is imported from its OWN module rather than the barrel,
+// for the reason in the header: the barrel constructs every zod schema at module scope, so aliasing it
+// pulls ~500 KB of unreachable schemas into the bundle.
+export { mergePreviewSchema, mergeResultSchema } from "../../../packages/types/src/contactMerge";
+export { reportsSummarySchema } from "../../../packages/types/src/reports";
+export { KNOWN_ENRICH_PROVIDERS } from "../../../packages/types/src/intel";
