@@ -258,6 +258,21 @@ export const accountHeadcountResponse = z.object({
 });
 export type AccountHeadcountResponse = z.infer<typeof accountHeadcountResponse>;
 
+// ── Open job postings (0127, MI-S1; empty until the D-6 licensed feed lands) ──────────────────────────
+export const jobPostingDto = z.object({
+  title: z.string(),
+  department: z.string().nullable(),
+  seniority_level: z.string().nullable(),
+  location: z.string().nullable(),
+  posted_at: z.string().nullable(),
+});
+export const accountPostingsResponse = z.object({
+  resolved: z.boolean(),
+  postings: z.array(jobPostingDto),
+  by_department: z.array(z.object({ department: z.string().nullable(), count: z.number().int() })),
+});
+export type AccountPostingsResponse = z.infer<typeof accountPostingsResponse>;
+
 // ── Provenance / confidence (plan 33 · A1) ────────────────────────────────────────────────────────────────
 // The evidence behind a field, readable WITHOUT spending a credit. Until now the confidence model surfaced
 // only inside RevealDialog, so a customer saw it at the moment they paid and never again.

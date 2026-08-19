@@ -183,6 +183,13 @@ export {
 // Watchlists + per-user signal subscriptions (market-intelligence MI-S5): the opt-in layer over
 // tenant_signals — the feed is browse, a notification requires a subscription naming the family.
 export { watchlistRepository, type WatchlistRow } from "./repositories/watchlistRepository.ts";
+// Hiring-intelligence evidence table (MI-S1, 0127). Writer ships ahead of its producer (D-6 feed) —
+// the master_company_funding posture; reads feed the /accounts/:id/postings seam.
+export {
+  masterJobPostingsRepository,
+  type JobPostingInput,
+  type JobPostingRow,
+} from "./repositories/masterJobPostingsRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

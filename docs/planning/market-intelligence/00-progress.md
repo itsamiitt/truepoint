@@ -18,7 +18,7 @@ adopted; D-4/D-5/D-6/D-3-final still open — procurement/commercial).
 | MI-S3 industry taxonomy + alias backfill | MI-P5 | ⬜ | |
 | MI-S4 `account_scores` + scoring worker | MI-P5 | ⬜ | |
 | MI-S7 `market_rollups` + boards | MI-P5 | ⬜ | |
-| MI-S1 `job_postings` schema (producer blocked on D-6 feed) | MI-P4 | ⬜ | schema + dark reader only until feed |
+| MI-S1 `master_job_postings` schema + reader | MI-P4 | ✅ built | migration 0127 (HASH(company)×32, the 0114 pattern), er-grant + partition-ACL, `masterJobPostingsRepository` (upsert-in-place writer ready for the D-6 feed, open-list + by-dept reads), `GET /accounts/:id/postings`, self-hiding `PostingsSection` on the company page; itest 3/3 incl. app-role denial on parent AND partition. **Producer stays blocked on D-6** |
 | Funding ingest | MI-P3 | ⛔ blocked D-4 | writer exists, no source |
 | Technographics seed + feed | MI-P3 | ⛔ blocked D-5/C4 | |
 | Enablement runbook (MI-9) | parallel | ⬜ | env flips are deploy-side, not repo-side |

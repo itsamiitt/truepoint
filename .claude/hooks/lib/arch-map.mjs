@@ -194,6 +194,8 @@ export const REPO_DOMAIN = {
   // Layer-0 confidence-policy constants (migration 0107; C9 resolution 2026-08-19) — same system-owned
   // graph, read under the same withErTx access path as its siblings.
   masterConfidencePolicy: "master-sync",
+  // Layer-0 hiring-intelligence evidence table (0127, MI-S1) — same system-owned graph.
+  masterJobPostings: "master-sync",
   // The signal fan-out pair (market-intelligence MI-S6): the owner-conn census and the tenant_signals
   // projection. Registered under the canonical `alerts` domain — tenant_signals IS the alerts substrate.
   signalFanout: "alerts",

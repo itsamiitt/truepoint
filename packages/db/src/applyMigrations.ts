@@ -373,6 +373,11 @@ const GRANTS = `
   -- checks the parent's privileges); its partitions pick the ACL up via mirror_partition_acl at the very
   -- end of this block, same order-sensitivity note as the 0100-0107 grants above.
   GRANT SELECT, INSERT, UPDATE ON master_company_identifiers, master_company_headcount TO leadwolf_er;
+  -- master_job_postings (MI-S1, market-intelligence): the hiring-intelligence evidence table, written by a
+  -- future licensed-feed ingest under withErTx (producer gated on the D-6 procurement decision). Same
+  -- PARTITIONED posture as master_company_headcount directly above: parent grant here, partitions via
+  -- mirror_partition_acl at the end of this block. SELECT/INSERT/UPDATE, never DELETE.
+  GRANT SELECT, INSERT, UPDATE ON master_job_postings TO leadwolf_er;
   -- Multi-value person attributes (0116), written by the same landing path. Same posture: never DELETE.
   GRANT SELECT, INSERT, UPDATE ON master_person_skills, master_person_languages TO leadwolf_er;
   -- master_education (0108) — the education stint edge, the sibling of master_employment above and written by

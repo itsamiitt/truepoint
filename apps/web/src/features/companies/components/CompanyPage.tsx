@@ -18,6 +18,7 @@ import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";
 import styles from "../companies.module.css";
 import { useCompany, useWatchAccount } from "../hooks/useCompany";
+import { PostingsSection } from "./PostingsSection";
 
 function show(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -126,6 +127,7 @@ export function CompanyPage({ accountId }: { accountId: string }) {
             <section>
               <h2 className={styles.sectionTitle}>Momentum</h2>
               <HeadcountSection accountId={accountId} />
+              <PostingsSection accountId={accountId} />
               <h2 className={styles.sectionTitle}>Signals</h2>
               <StateSwitch
                 loading={signals.isPending}

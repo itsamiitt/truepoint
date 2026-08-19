@@ -30,6 +30,7 @@ import {
   intentSignalRepository,
   masterEducationRepository,
   masterEmploymentReadRepository,
+  masterJobPostingsRepository,
   masterProfileRepository,
   masterTechnologyRepository,
   provenanceBadgeRepository,
@@ -43,6 +44,7 @@ import {
   accountAlumniResponse,
   accountDisplacementResponse,
   accountHeadcountResponse,
+  accountPostingsResponse,
   accountTechnologiesResponse,
   contactAttributesResponse,
   contactEducationResponse,
@@ -636,6 +638,47 @@ accountIntelligenceRoutes.get("/:accountId/headcount", async (c) => {
     accountHeadcountResponse.parse({
       resolved: true,
       series: series.map((p) => ({ month: p.month, employee_count: p.employeeCount })),
+    }),
+  );
+});
+
+/**
+ * GET /:accountId/postings — open job postings for this account's company (0127, MI-S1).
+ * Same two-transaction shape as headcount. Organization facts only — the table carries no person data by
+ * design. Empty until the D-6 licensed postings feed lands; the UI self-hides on an empty answer.
+ */
+accountIntelligenceRoutes.get("/:accountId/postings", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view postings.");
+  }
+
+  const { masterCompanyId } = await resolveBridge(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("accountId"),
+  );
+  if (!masterCompanyId) {
+    return c.json(accountPostingsResponse.parse({ resolved: false, postings: [], by_department: [] }));
+  }
+
+  const [postings, byDepartment] = await withErTx(async (tx: Tx) =>
+    Promise.all([
+      masterJobPostingsRepository.listOpenForCompany(tx, masterCompanyId, 50),
+      masterJobPostingsRepository.countOpenByDepartment(tx, masterCompanyId),
+    ]),
+  );
+
+  return c.json(
+    accountPostingsResponse.parse({
+      resolved: true,
+      postings: postings.map((p) => ({
+        title: p.title,
+        department: p.department,
+        seniority_level: p.seniorityLevel,
+        location: p.location,
+        posted_at: p.postedAt,
+      })),
+      by_department: byDepartment,
     }),
   );
 });
