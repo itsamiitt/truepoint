@@ -17,6 +17,7 @@ x-app: &app
   restart: unless-stopped
   depends_on:
     redis: { condition: service_healthy }
+    cache-redis: { condition: service_healthy }
 
 services:
   # ── Infrastructure ────────────────────────────────────────────────────────────
@@ -25,6 +26,33 @@ services:
     image: redis:7
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # The DEDICATED CACHE Redis (launch-scale S7, arch doc §5). Deliberately a SECOND instance rather than a
+  # second database on the one above: the two roles have opposite eviction contracts and must not share a
+  # memory budget. `redis` is durable — noeviction + AOF — because losing a BullMQ job, a rate-limit counter
+  # or a session-revocation entry is a correctness bug. This one is a pure cache: allkeys-lru so it sheds
+  # cold keys under pressure instead of erroring, and persistence OFF because every entry is reconstructible
+  # from Postgres. If one instance served both, cache growth would start evicting queue state.
+  #
+  # maxmemory is sized for this host (7.6 GB total, ~5.5 GB available): 1 GB is ample for the
+  # generation-keyed facet/count/suggest entries and leaves the app services their headroom.
+  cache-redis:
+    image: redis:7
+    command:
+      [
+        "redis-server",
+        "--save", "",
+        "--appendonly", "no",
+        "--maxmemory", "1gb",
+        "--maxmemory-policy", "allkeys-lru",
+      ]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
