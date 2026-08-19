@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2180,
-  "fileSetHash": "sha256:56596f531149ead9347ff4e0ad82bcfe35ae4c0ddec2b0d1665312ffd3b7eaf0",
+  "fileCount": 2181,
+  "fileSetHash": "sha256:5d70232756fa0540b65b5cb2aaa22b1681574dda433a5d92ec42a3d74faf8501",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2409,6 +2409,7 @@
     ],
     "apps/api/lib": [
       "apps/api/src/lib/csvDownload.ts",
+      "apps/api/src/lib/gateMemo.ts",
       "apps/api/src/lib/roleCache.test.ts",
       "apps/api/src/lib/roleCache.ts",
       "apps/api/src/lib/tracedQueue.ts"

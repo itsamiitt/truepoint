@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2180 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2181 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -876,8 +876,12 @@ flowchart TD
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `enrichment/zoominfoAuth.ts` (the minted-jwt credential for ZoomInfo) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
-- **`apps/api`** — `app.ts`, `server.ts`, `instrumentation.ts`; **`apps/api/middleware`** — `authn`, `tenancy`, `error`,
-  `rateLimit`, `idempotency` (the DB uniques remain the real double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
+- **`apps/api`** — `app.ts`, `server.ts`, `instrumentation.ts`; `lib/gateMemo.ts` (30s in-process memos for
+  per-tenant gate reads on hot paths — flag gates + the entitlement basis — invalidated synchronously by the
+  admin flag/plan writes; the spend-release gates stay live on purpose); **`apps/api/middleware`** — `authn`
+  (per-subject request budget charged post-verify; failed verifies billed to the IP backstop), `tenancy`,
+  `error`, `rateLimit` (the unauthenticated per-IP backstop), `idempotency` (the DB uniques remain the real
+  double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
 - **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
