@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2093 source files · 90 code-bearing domains · 39 shared areas · 53 domain-vocabulary warnings · 2
+> **2135 source files · 86 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -71,7 +71,8 @@
 > when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
 > when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
 > never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
-> that a Layer-0 module belongs to the one system-owned graph. The remaining two are not registered because
+> that a Layer-0 module belongs to the one system-owned graph; `masterConfidencePolicyRepository` was
+> registered under `master-sync` in the same commit that created it, C9. The remaining two are not registered because
 > no existing domain is clearly right for them, and the generator's own rule is that a confidently wrong
 > home is worse than an honest gap.)
 >
@@ -218,10 +219,14 @@ apps/                           # deployable processes (thin transport adapters)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
   `mapLinkedinPayload.ts` (pure mapper; the raw-only compliance boundary: pronoun/photos/skills etc. never leave
   `source_records.raw_data`) + `landSourcePayload.ts` (one withErTx: evidence chokepoint → resolve → suppression guard →
-  provenance fold → stints/education/identifiers/headcount → same-tx events (D7) → `job_change`/`headcount_*` signals);
+  provenance fold → stints/education/identifiers/headcount → same-tx events (D7) → `job_change` +
+  `exec_hired`/`exec_departed` (company-subject leadership signals when the title infers c_suite/vp) +
+  `headcount_*` signals);
   hooked post-evidence in `enrichContactV2` and driven fleet-wide by `queues/linkedinCompanyRefresh.ts` (leader-locked,
-  25/tick @ 6h). db writers: `masterProfileRepository` (master-sync). Design:
-  [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md)
+  25/tick @ 6h). db writers: `masterProfileRepository` (master-sync); `masterConfidencePolicyRepository` (master-sync)
+  reads the 0107 policy constants for the badge (C9). Design:
+  [`linkedin-source-ingestion/`](./planning/linkedin-source-ingestion/README.md) +
+  [`market-intelligence/`](./planning/market-intelligence/README.md)
 - **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
   customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
   unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
@@ -259,6 +264,9 @@ apps/                           # deployable processes (thin transport adapters)
   `dataQualitySummary.ts` (`buildDataQualitySummary` — the per-workspace fill/verification/freshness count rollup the Data Health dashboard reads),
   `dataQualitySnapshot.ts` (`captureDataQualitySnapshot` — persists a daily WorkspaceDataQuality trend point),
   `badgeV1.ts` (confidence badge v0 over provenance aggregates; `now` injected so it stays pure),
+  `confidencePolicy.ts` (C9, decisions.md 2026-08-19: `badgeHalfLifePolicy` — the badge's table-sourced
+  half-life constants; gated `CONFIDENCE_POLICY_BADGE_ENABLED`, 5-min cached, undefined-on-failure so the
+  hardcoded constants always remain the fallback),
   `jobChange.ts` (`detectJobChange` — compares CONFIDENCES, not timestamps; a departure is held to the same
   bar as a move) + `recordJobChange.ts` (the producer: intent_signal + alerts to users who SAVED the contact),
   `successor.ts` (`rankSuccessors` — who now holds a departed contact's role; seniority is a DISTANCE on the

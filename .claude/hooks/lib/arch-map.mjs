@@ -183,6 +183,9 @@ export const REPO_DOMAIN = {
   masterTechnology: "master-sync",
   // Layer-0 canonical signal store (migration 0103) — same system-owned graph.
   masterSignals: "master-sync",
+  // Layer-0 confidence-policy constants (migration 0107; C9 resolution 2026-08-19) — same system-owned
+  // graph, read under the same withErTx access path as its siblings.
+  masterConfidencePolicy: "master-sync",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
   // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of

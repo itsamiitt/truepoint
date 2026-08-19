@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2133,
-  "fileSetHash": "sha256:19549da5141233d359bebb36a2c69ac2db6b1d8d54c4b6cf7f2aac2ddc9d8b7c",
+  "fileCount": 2135,
+  "fileSetHash": "sha256:cdf6c595d3a3b1e24fa376cb16afc499b4594fbd9cb4d3aa562e53a347c68f91",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -622,6 +622,7 @@
         "packages/core/src/data-health/badgeV1.ts",
         "packages/core/src/data-health/chargeFor.test.ts",
         "packages/core/src/data-health/chargeFor.ts",
+        "packages/core/src/data-health/confidencePolicy.ts",
         "packages/core/src/data-health/dataQualityScore.test.ts",
         "packages/core/src/data-health/dataQualityScore.ts",
         "packages/core/src/data-health/dataQualitySnapshot.ts",
@@ -1285,6 +1286,7 @@
       "db": [
         "packages/db/src/repositories/masterChannelReadRepository.ts",
         "packages/db/src/repositories/masterCompanyDetailRepository.ts",
+        "packages/db/src/repositories/masterConfidencePolicyRepository.ts",
         "packages/db/src/repositories/masterEducationRepository.ts",
         "packages/db/src/repositories/masterEmploymentReadRepository.ts",
         "packages/db/src/repositories/masterGraphRepository.ts",
