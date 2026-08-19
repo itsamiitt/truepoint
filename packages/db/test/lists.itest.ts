@@ -181,7 +181,7 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
   });
 
   test("the masked contact list is workspace-isolated and surfaces the soft owner", async () => {
-    const aRows = await db.contactRepository.listByWorkspace(scopeA(), 100);
+    const aRows = (await db.contactRepository.listByWorkspace(scopeA(), 100)).contacts;
     const aIds = aRows.map((r) => r.id);
     expect(aIds).toContain(contactA1);
     expect(aIds).toContain(contactA2);
@@ -189,7 +189,7 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
     expect(aRows.find((r) => r.id === contactA1)?.ownerUserId).toBe(ownerA);
     expect(aRows.find((r) => r.id === contactA2)?.ownerUserId).toBe(coworkerA); // soft owner, distinct member
 
-    const bRows = await db.contactRepository.listByWorkspace(scopeB(), 100);
+    const bRows = (await db.contactRepository.listByWorkspace(scopeB(), 100)).contacts;
     const bIds = bRows.map((r) => r.id);
     expect(bIds).toContain(contactB1);
     expect(bIds).not.toContain(contactA1); // A's contacts never surface in B

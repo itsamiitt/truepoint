@@ -196,7 +196,7 @@ describe("M5 compliance hardening DoD", () => {
       { tenantId: tenantA, workspaceId: wsA },
       100,
     );
-    expect(list.some((c) => c.emailDomain === "acme.com")).toBe(false);
+    expect(list.contacts.some((c) => c.emailDomain === "acme.com")).toBe(false);
 
     const [tomb] = await admin`
       SELECT id FROM contacts WHERE workspace_id = ${wsA} AND deleted_at IS NOT NULL LIMIT 1`;

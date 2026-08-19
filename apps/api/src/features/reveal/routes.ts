@@ -85,11 +85,35 @@ revealRoutes.get("/", async (c) => {
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to view contacts.");
   const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 500);
-  const contacts = await contactRepository.listByWorkspace(
+  // Keyset cursor (perf-audit P2.6) — the api-contract mandate this list never honored: without it row
+  // limit+1 was unreachable. ADDITIVE: `nextCursor` joins the response and every existing consumer (all
+  // bounded pickers/samples) keeps ignoring it. A malformed cursor degrades to the first page, never a 500.
+  const rawCursor = c.req.query("cursor");
+  let cursor: { createdAt: Date; id: string } | null = null;
+  if (rawCursor) {
+    try {
+      const [iso, id] = Buffer.from(rawCursor, "base64url").toString("utf8").split("|");
+      const createdAt = iso ? new Date(iso) : null;
+      if (createdAt && !Number.isNaN(createdAt.getTime()) && id) cursor = { createdAt, id };
+    } catch {
+      /* malformed cursor → first page */
+    }
+  }
+  const page = await contactRepository.listByWorkspace(
     { tenantId: c.get("tenantId"), workspaceId },
     limit,
+    {},
+    cursor,
   );
-  return c.json({ contacts });
+  return c.json({
+    contacts: page.contacts,
+    nextCursor: page.nextCursor
+      ? Buffer.from(
+          `${page.nextCursor.createdAt.toISOString()}|${page.nextCursor.id}`,
+          "utf8",
+        ).toString("base64url")
+      : null,
+  });
 });
 
 // The single monetized path (09 §3.2): idempotent, suppression-gated, charged against the tenant counter.

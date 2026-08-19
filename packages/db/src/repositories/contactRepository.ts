@@ -13,7 +13,20 @@ import {
   computeContactDataQuality,
   reverifyCutoff,
 } from "@leadwolf/types";
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  type SQL,
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
@@ -806,21 +819,41 @@ export const contactRepository = {
 
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII.
    *  `opts.channelsFromChild` (caller-evaluated S-CH4 gate) adds the masked `channels` summaries + derives
-   *  has_email/has_phone from live child rows; default off ⇒ byte-identical to the pre-S-CH4 projection. */
+   *  has_email/has_phone from live child rows; default off ⇒ byte-identical to the pre-S-CH4 projection.
+   *
+   *  KEYSET-paginated (perf-audit P2.6): the list was LIMIT-only — row limit+1 was unreachable by contract
+   *  on a "cursor pagination" API. The (created_at DESC, id DESC) order matches idx_contacts_ws_created_at
+   *  exactly (the id tiebreaker also fixes non-deterministic page edges where a bulk import stamped many
+   *  rows with one timestamp), and a `limit+1` probe decides `nextCursor` without a count. */
   async listByWorkspace(
     scope: TenantScope,
     limit = 100,
     opts: ContactReadOpts = {},
-  ): Promise<MaskedContact[]> {
+    cursor: { createdAt: Date; id: string } | null = null,
+  ): Promise<{ contacts: MaskedContact[]; nextCursor: { createdAt: Date; id: string } | null }> {
     return withTenantTx(scope, async (tx) => {
       // DSAR tombstones never surface (08 §4.2).
+      const conds: SQL[] = [isNull(contacts.deletedAt) as SQL];
+      if (cursor) {
+        // Row-value seek: strictly after (created_at, id) in the same order the ORDER BY imposes.
+        conds.push(
+          sql`(${contacts.createdAt}, ${contacts.id}) < (${cursor.createdAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`,
+        );
+      }
       const rows = await tx
         .select(MASKED_COLUMNS)
         .from(contacts)
-        .where(isNull(contacts.deletedAt))
-        .orderBy(desc(contacts.createdAt))
-        .limit(limit);
-      return withChannelSummaries(tx, rows, opts);
+        .where(and(...conds))
+        .orderBy(desc(contacts.createdAt), desc(contacts.id))
+        .limit(limit + 1);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      return {
+        contacts: await withChannelSummaries(tx, page, opts),
+        nextCursor:
+          hasMore && last ? { createdAt: last.createdAt as Date, id: last.id as string } : null,
+      };
     });
   },
 
