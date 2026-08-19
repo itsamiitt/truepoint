@@ -40,7 +40,17 @@ function reverificationQueue(): Queue<ReverificationJobData> {
 
 /** Enqueue an on-demand per-workspace re-verification (data-management #3). Idempotent + flag-gated in the worker. */
 export async function enqueueReverification(scope: ReverificationScope): Promise<string> {
-  const job = await reverificationQueue().add("reverify", { scope });
+  const job = await reverificationQueue().add(
+    "reverify",
+    { scope },
+    {
+      // ONE live run per workspace, shared with the worker sweep producer (same id scheme): clicking
+      // "Re-verify now" while the sweep's run is queued/active must not stack a duplicate scan of the same
+      // contacts (perf-audit RC3). `deduplication`, not `jobId`, so the guard clears when the run finishes —
+      // a retained completed job never blocks the next legitimate trigger.
+      deduplication: { id: `reverify:${scope.workspaceId}` },
+    },
+  );
   return String(job.id);
 }
 

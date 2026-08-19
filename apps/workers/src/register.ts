@@ -660,7 +660,15 @@ export async function enqueueReverification(
   const job = await reverificationQueue.add(
     "reverify",
     { scope, batchSize: opts?.batchSize },
-    REVERIFICATION_RETRY,
+    {
+      ...REVERIFICATION_RETRY,
+      // ONE live run per workspace. Without this the daily sweep, the on-demand button (the api producer uses
+      // the same id) and a backoff retry could STACK concurrent runs of the same scan — at concurrency 2 both
+      // start from cursor null and re-verify the same contacts, doubling wall time and vendor spend
+      // (perf-audit RC3). `deduplication`, not `jobId`: the guard must clear the moment the run finishes, so
+      // yesterday's retained completed job can never swallow today's sweep or a user's next click.
+      deduplication: { id: `reverify:${scope.workspaceId}` },
+    },
   );
   return String(job.id);
 }

@@ -34,7 +34,27 @@ class TracedQueue<T> extends Queue<T> {
   }
 }
 
-/** Construct a Queue that propagates trace context. Drop-in for `new Queue<T>(name, opts)`. */
+/**
+ * Retention every worker-root queue gets unless its construction or a specific `.add()` says otherwise.
+ * BullMQ's default is keep-EVERYTHING-forever, and none of the ~24 queues built here passed options, so every
+ * completed tick and failed job accumulated as a permanent Redis hash (~5.5k/day from the minute-ticks alone
+ * before any real traffic) — unbounded Redis growth that also slowed every getJobCounts scrape (perf-audit RC8).
+ * Completed jobs are kept briefly for inspection; failed jobs a week (where a queue has a DLQ, the DLQ copy is
+ * the durable evidence — buildDeadLetter writes it on final failure). Explicit opts still win: queue-level
+ * defaultJobOptions passed by a caller override these, and per-job options passed to `.add()` override both,
+ * so a queue that deliberately keeps failures forever (e.g. compliance lanes) keeps doing so by saying so.
+ * apps/api's producers and apps/forge-worker already set their own retention; this closes the worker root.
+ */
+export const WORKER_DEFAULT_JOB_OPTIONS = {
+  removeOnComplete: { age: 24 * 3600, count: 1000 },
+  removeOnFail: { age: 7 * 24 * 3600 },
+} as const;
+
+/** Construct a Queue that propagates trace context. Drop-in for `new Queue<T>(name, opts)`, plus the bounded
+ *  retention defaults above (overridable per queue and per job). */
 export function tracedQueue<T>(name: string, opts: QueueOptions): Queue<T> {
-  return new TracedQueue<T>(name, opts);
+  return new TracedQueue<T>(name, {
+    ...opts,
+    defaultJobOptions: { ...WORKER_DEFAULT_JOB_OPTIONS, ...opts.defaultJobOptions },
+  });
 }
