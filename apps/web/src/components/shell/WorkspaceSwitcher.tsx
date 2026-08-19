@@ -19,6 +19,12 @@ interface WorkspaceOption {
   role: WorkspaceRole;
 }
 
+// One-shot boot flag (P3.5b): the boot probe carries the workspace directory (?include=workspaces), so the
+// FIRST load of this query consumes that instead of issuing a second request. Later refetches (staleTime
+// expiry on a long-lived page) go to the live endpoint — the probe is cached for the page, and re-reading
+// it would pin a stale list for the rest of the page's life.
+let bootDirectoryConsumed = false;
+
 export function WorkspaceSwitcher() {
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -28,10 +34,17 @@ export function WorkspaceSwitcher() {
   // The workspace LIST is a query, not a raw useEffect fetch (perf-audit P3.5): cached across remounts and
   // hard loads (switching rotates the session + reloads the shell, so a 5-minute staleTime cannot go stale
   // in practice). The ACTIVE id still comes from the shared session probe — single-flight, usually already
-  // resolved by the shell — so mounting here never re-requests /auth/session.
+  // resolved by the shell — so mounting here never re-requests /auth/session. On boot the list itself ALSO
+  // rides that probe (P3.5b — the fold above): zero extra requests until something actually refetches.
   const workspacesQuery = useQuery({
     queryKey: sharedKeys.workspaces(),
     queryFn: async (): Promise<WorkspaceOption[]> => {
+      if (!bootDirectoryConsumed) {
+        bootDirectoryConsumed = true;
+        const probed = await getSessionProbe();
+        if (probed.ok && probed.session.workspaces) return probed.session.workspaces;
+        // Probe failed or the server predates the fold — fall through to the live endpoint.
+      }
       const res = await fetchWithAuth(`${API_BASE}/api/v1/workspaces`);
       if (!res.ok) throw new Error(`workspaces read failed (${res.status})`);
       const list = (await res.json()) as { workspaces: WorkspaceOption[] };

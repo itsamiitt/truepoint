@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 let calls = 0;
+let lastUrl = "";
 let respond: () => Response = () =>
   new Response(
     JSON.stringify({
@@ -21,8 +22,9 @@ let respond: () => Response = () =>
   );
 
 mock.module("@/lib/authClient", () => ({
-  fetchWithAuth: async () => {
+  fetchWithAuth: async (url: string) => {
     calls++;
+    lastUrl = url;
     return respond();
   },
 }));
@@ -70,6 +72,25 @@ describe("getSessionProbe de-duplication", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected ok");
     expect(r.session).toMatchObject({ userId: "u1", workspaceId: "w1", role: "admin" });
+  });
+
+  test("requests the workspace-directory fold and passes it through (P3.5b — boot is ONE request)", async () => {
+    respond = () =>
+      new Response(
+        JSON.stringify({
+          userId: "u1",
+          tenantId: "t1",
+          workspaceId: "w1",
+          role: "admin",
+          scope: [],
+          workspaces: [{ id: "w1", name: "Acme", role: "admin" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    const r = await getSessionProbe();
+    expect(lastUrl).toContain("include=workspaces");
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.session.workspaces).toEqual([{ id: "w1", name: "Acme", role: "admin" }]);
   });
 });
 

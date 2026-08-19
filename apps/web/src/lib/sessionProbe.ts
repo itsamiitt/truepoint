@@ -19,6 +19,14 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import type { WorkspaceRole } from "@leadwolf/types";
+
+/** One entry of the folded workspace directory — the switcher's option shape (same as GET /workspaces). */
+export interface SessionWorkspace {
+  id: string;
+  name: string;
+  role: WorkspaceRole;
+}
 
 /** The session profile the API returns. Presentation only — the server re-checks authorization on every call. */
 export interface SessionProfile {
@@ -27,6 +35,9 @@ export interface SessionProfile {
   workspaceId: string | null;
   role: string | null;
   scope: string[];
+  /** The caller's workspace directory, folded into the boot probe via ?include=workspaces (perf-audit
+   *  P3.5b) so the switcher's first load costs no second request. Absent on servers that predate the fold. */
+  workspaces?: SessionWorkspace[];
 }
 
 /** Discriminated result. `status` is surfaced because AppShell must treat 401/403 as a revoked session (clear
@@ -38,7 +49,7 @@ export type SessionProbeResult =
 let inFlight: Promise<SessionProbeResult> | null = null;
 
 async function probe(): Promise<SessionProbeResult> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session?include=workspaces`);
   if (!res.ok) return { ok: false, status: res.status };
   return { ok: true, session: (await res.json()) as SessionProfile };
 }

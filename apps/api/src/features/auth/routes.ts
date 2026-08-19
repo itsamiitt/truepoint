@@ -18,11 +18,21 @@ authRoutes.get("/session", async (c) => {
   const role = claims.wid
     ? await workspaceRepository.getRoleForUser(claims.tid, claims.wid, claims.sub)
     : null;
+  // ?include=workspaces folds the workspace switcher's directory read into the boot probe (perf-audit
+  // P3.5b): the web shell pays ONE request per hard load instead of two. Opt-in + additive, so every other
+  // session consumer (extension, hooks, admin tooling) keeps the lean payload. Same projection as
+  // GET /workspaces — both call listForUser. Orgs deliberately NOT folded (the auth origin owns org
+  // membership); teams not folded (M15 seam — nothing to return yet).
+  const workspaces =
+    c.req.query("include") === "workspaces"
+      ? await workspaceRepository.listForUser(claims.tid, claims.sub)
+      : undefined;
   return c.json({
     userId: claims.sub,
     tenantId: claims.tid,
     workspaceId: claims.wid ?? null,
     scope: claims.scope,
     role,
+    ...(workspaces !== undefined ? { workspaces } : {}),
   });
 });
