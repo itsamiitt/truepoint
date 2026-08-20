@@ -6,7 +6,14 @@
 // workspace-wide under RLS). The slug alone is never trusted: RLS pins the read to the caller's workspace.
 import { checkCaptureRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
-import { blindIndex, fetchAndLandUrl, linkedinUrlKey } from "@leadwolf/core";
+import {
+  LOOKUP_INTEREST_TTL_S,
+  blindIndex,
+  fetchAndLandUrl,
+  linkedinUrlKey,
+  lookupInterestKey,
+  lookupInterestMember,
+} from "@leadwolf/core";
 import {
   contactRepository,
   masterPersonReadRepository,
@@ -16,6 +23,7 @@ import {
 } from "@leadwolf/db";
 import { ForbiddenError, ValidationError } from "@leadwolf/types";
 import { Hono } from "hono";
+import { cacheRedis } from "../../cache.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
@@ -110,6 +118,25 @@ contactsResolveRoutes.post("/lookup", async (c) => {
   if (!key || key.entityKind !== "person") {
     return c.json({ status: "not_supported", contactId: null, contact: null });
   }
+
+  // Register this workspace's interest so the background 30-day sweep can push contact.lookup_updated when it
+  // next (re)lands this URL (chrome-extension/15 §13, option D) — the receiver end shipped in the sweep + the
+  // extension SSE consumer. Best-effort and TTL-bounded: a Redis blip or an expired interest just means no
+  // push, and the extension's next LOOKUP re-reads the truth. multi() so the set never lingers without a TTL.
+  // Gated on REALTIME_SSE_ENABLED because nothing consumes the set otherwise.
+  if (env.REALTIME_SSE_ENABLED) {
+    try {
+      const interestKey = lookupInterestKey(key.normalizedUrl);
+      await cacheRedis()
+        .multi()
+        .sadd(interestKey, lookupInterestMember(claims.tid, workspaceId))
+        .expire(interestKey, LOOKUP_INTEREST_TTL_S)
+        .exec();
+    } catch {
+      // best-effort — the live push is a nice-to-have layered on the poll safety net
+    }
+  }
+
   const isSlugForm = key.normalizedUrl.includes("/in/");
   const slug = isSlugForm ? key.externalId?.toLowerCase() : undefined;
   const salesNavLeadId = isSlugForm ? undefined : (key.externalId ?? undefined);
