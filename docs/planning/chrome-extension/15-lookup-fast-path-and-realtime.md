@@ -366,4 +366,55 @@ P0 + P2 together.
 - Not adding a WebSocket — SSE is the chosen transport and is already built.
 - Not caching absence in a way that hides a newly-added record (role-cache lesson: never cache `null` past
   a short TTL; invalidate on landing).
-```
+
+## 13. Resolved design decision — P2 producer routing (2026-08-20)
+
+The blocker that surfaced while sequencing P2: the `contact.lookup_updated` event must reach the extension
+of the user who requested the lookup, on their `rt:ws:<wid>` channel — but **Layer-0 landing
+(`landSourcePayload`) is deliberately tenant-agnostic**, and the sweep-based fetch (`source_fetch_registry`
++ `linkedinLinkFetchSweep`) is a global, dedup'd queue that tracks **no "which workspace is waiting."** So
+the event cannot be emitted from inside the Layer-0 landing transaction (wrong layer, no workspace in scope).
+
+Options weighed:
+- **(A) Emit from the Layer-0 landing tx, threading a `workspaceId` in.** Rejected — couples tenant-free
+  Layer-0 to a specific tenant; breaks the layer boundary the whole graph rests on.
+- **(B) Track an "interested workspaces" set per registry URL** (new column/table). Rejected *for now* — a
+  schema change (`drizzle-kit generate` is unsafe here; needs a hand-authored migration verified in CI) on a
+  billions-scale table, for a nice-to-have push. Keep as the upgrade path if per-requester delivery ever
+  matters — it needs **no change to the event contract**.
+- **(C) CHOSEN — the async fetch job carries the requesting `workspaceId`; the WORKER emits the event
+  post-landing to that one workspace.** When P0's non-blocking `/lookup` misses/stale, it enqueues a
+  `linkedin_link_fetch` job with `jobId = normalizedUrl` (dedup) and data
+  `{ normalizedUrl, entityKind, requestedByWorkspaceId }`. The worker lands via the existing tenant-free
+  `fetchAndLandUrl`, then — **outside** the Layer-0 tx, in a workspace-scoped `withTenantTx` — appends the
+  `contact.lookup_updated` outbox row to the requesting workspace, behind `REALTIME_SSE_ENABLED`.
+
+**Why the worker, not the route:** once P0 makes the fetch async the route no longer holds the landed result
+— the worker does, and the worker is where the workspace context (job data) lives. One event per real
+landing, naturally throttled by the 30-day registry clock (a fresh URL never re-fetches, so never re-emits).
+
+**Dedup tradeoff (accepted, documented):** `jobId = normalizedUrl` collapses concurrent cross-workspace
+requesters to one job carrying the *first* requester's `workspaceId`, so a second workspace viewing the same
+profile in the same fetch window won't get the push. Acceptable because the push is a nice-to-have, not
+correctness — that user's next LOOKUP is cache-cheap and returns fresh data (**poll is the safety net**, the
+contract's stated posture). Upgrade to (B) if this ever matters.
+
+**D7 boundary (important):** the realtime event is a *notification*, not a *fact*. Unlike the provenance
+event — which MUST be atomic with the landing (D7: a fact must not survive without its assertion) — the
+outbox append here is **best-effort, log-and-continue**, and lives *outside* the landing tx. A dropped event
+must never fail or roll back a landing; the poll safety net covers it.
+
+**Build order (each dark, independently verifiable):**
+1. ✅ Reserve the event + payload (iter3, `@b0d02d7f`).
+2. **Producer** — extend the `linkedin_link_fetch` job data with `requestedByWorkspaceId`; the worker appends
+   the outbox event post-landing in `withTenantTx` behind `REALTIME_SSE_ENABLED`. **Verified in CI** (itests
+   need Postgres; no local Docker on the build host). Payload from `linkedinUrlKey(normalizedUrl)` + the
+   `fetchAndLand` outcome.
+3. **P0** — make `/lookup` non-blocking: enqueue that job (carrying `workspaceId`) instead of awaiting
+   `fetchAndLandUrl`; return instantly with `freshness`/`refresh`.
+4. **Consumer** — `eventStream.ts` routes `contact.lookup_updated` → reconstruct the URL from the payload →
+   invalidate the `LookupCache` subject → re-lookup → broadcast `SUBJECT_STATUS`. Requires promoting
+   `LookupCache` from a bus-local instance to a shared module singleton so the SSE handler can invalidate it.
+
+Steps 2–4 are one coherent server+client change that wants a focused, CI-watched push (it touches the worker
+landing path and money-adjacent-but-dark code), not an unattended loop tick — flagged for that.
