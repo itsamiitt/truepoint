@@ -382,39 +382,56 @@ Options weighed:
   schema change (`drizzle-kit generate` is unsafe here; needs a hand-authored migration verified in CI) on a
   billions-scale table, for a nice-to-have push. Keep as the upgrade path if per-requester delivery ever
   matters — it needs **no change to the event contract**.
-- **(C) CHOSEN — the async fetch job carries the requesting `workspaceId`; the WORKER emits the event
-  post-landing to that one workspace.** When P0's non-blocking `/lookup` misses/stale, it enqueues a
-  `linkedin_link_fetch` job with `jobId = normalizedUrl` (dedup) and data
-  `{ normalizedUrl, entityKind, requestedByWorkspaceId }`. The worker lands via the existing tenant-free
-  `fetchAndLandUrl`, then — **outside** the Layer-0 tx, in a workspace-scoped `withTenantTx` — appends the
-  `contact.lookup_updated` outbox row to the requesting workspace, behind `REALTIME_SSE_ENABLED`.
+- **(C) The async fetch job carries the requesting `workspaceId`; the worker emits per job.** ~~Chosen~~
+  **REJECTED on reading the as-built code (2026-08-20, iter5).** There is no per-URL fetch job to attach a
+  workspace to: `linkedin_link_fetch`'s job data is `Record<string, never>` (`linkedinLinkFetchSweep.ts:35`)
+  — a leader-locked **sweep** that drains `listDueForFetch` (every registry URL past 30 days, global, no
+  requester) once per tick. `/lookup`'s cold path calls `fetchAndLandUrl` **inline** (no job at all). So
+  option C would require inventing a parallel per-request fetch path that duplicates the sweep's dedup +
+  origin-backoff — not worth it.
+- **(D) CHOSEN — a Redis "interested workspaces" set per URL, drained by the sweep.** Fits the as-built sweep
+  and needs **no schema change**:
+  - `/lookup`, on a stale/absent record, does `SADD lookup:interested:<normalizedUrl> <workspaceId>` with a
+    short `EXPIRE` (≈ the fetch-latency window) and ensures the URL is registered (`registerUrl`, idempotent).
+  - The **sweep**, after `fetchAndLandUrl` returns `landed`/`duplicate` for a URL, reads `SMEMBERS`, appends
+    `contact.lookup_updated` to **each** interested workspace's outbox (behind `REALTIME_SSE_ENABLED`,
+    best-effort per D7), then `DEL`s the set.
+  - Handles multiple concurrent workspaces (no dedup loss, unlike the rejected C), is CI-verifiable, and the
+    TTL bounds delivery to "was actually viewing recently."
 
-**Why the worker, not the route:** once P0 makes the fetch async the route no longer holds the landed result
-— the worker does, and the worker is where the workspace context (job data) lives. One event per real
-landing, naturally throttled by the 30-day registry clock (a fresh URL never re-fetches, so never re-emits).
+**As-built correction that changes the shape of Scenario C:** stale `in_database` records are **already**
+re-fetched by this sweep — their URL is in the registry, and once older than 30 days `listDueForFetch`
+returns it (`sourceFetchRegistryRepository.ts:83`). So the background-refresh half of Scenario C largely
+**exists today** on sweep cadence. P0's real job is only (a) registering a cold/absent URL promptly (a
+never-fetched URL sorts `NULLS FIRST`, so the next tick picks it up) and (b) the interested-set so the
+extension learns when the refresh lands. No new fetch path, no per-URL job.
 
-**Dedup tradeoff (accepted, documented):** `jobId = normalizedUrl` collapses concurrent cross-workspace
-requesters to one job carrying the *first* requester's `workspaceId`, so a second workspace viewing the same
-profile in the same fetch window won't get the push. Acceptable because the push is a nice-to-have, not
-correctness — that user's next LOOKUP is cache-cheap and returns fresh data (**poll is the safety net**, the
-contract's stated posture). Upgrade to (B) if this ever matters.
+**Why the sweep, not the route:** once P0 makes `/lookup` non-blocking the route no longer holds the landed
+result — the sweep is where landings happen, and now (via the Redis set) where the interested workspaces are
+known. One event per real landing, naturally throttled by the 30-day clock (a fresh URL never re-fetches).
+
+**Cadence caveat:** the sweep is periodic, so "live" here means *sweep-latency*, not instant. Expediting the
+just-viewed URL (a priority lane ahead of the FIFO-by-staleness sweep) is a later optimization, out of scope.
 
 **D7 boundary (important):** the realtime event is a *notification*, not a *fact*. Unlike the provenance
 event — which MUST be atomic with the landing (D7: a fact must not survive without its assertion) — the
-outbox append here is **best-effort, log-and-continue**, and lives *outside* the landing tx. A dropped event
-must never fail or roll back a landing; the poll safety net covers it.
+outbox append here is **best-effort, log-and-continue**, outside the landing tx. A dropped event must never
+fail or roll back a landing; the poll safety net covers it. (Option B — a persistent interested-workspaces
+column/table — remains the durable upgrade if the Redis TTL's "viewing within the window" proves too narrow;
+it needs no change to the event contract.)
 
 **Build order (each dark, independently verifiable):**
 1. ✅ Reserve the event + payload (iter3, `@b0d02d7f`).
-2. **Producer** — extend the `linkedin_link_fetch` job data with `requestedByWorkspaceId`; the worker appends
-   the outbox event post-landing in `withTenantTx` behind `REALTIME_SSE_ENABLED`. **Verified in CI** (itests
-   need Postgres; no local Docker on the build host). Payload from `linkedinUrlKey(normalizedUrl)` + the
-   `fetchAndLand` outcome.
-3. **P0** — make `/lookup` non-blocking: enqueue that job (carrying `workspaceId`) instead of awaiting
-   `fetchAndLandUrl`; return instantly with `freshness`/`refresh`.
+2. **Producer** — the sweep, after a `landed`/`duplicate`, reads `lookup:interested:<url>` and appends
+   `contact.lookup_updated` to each workspace's outbox behind `REALTIME_SSE_ENABLED`; payload from
+   `linkedinUrlKey(normalizedUrl)` + the `fetchAndLand` outcome. **CI-verified** (itests need Postgres; no
+   local Docker on the build host).
+3. **P0** — `/lookup`, on stale/absent, `SADD`s the interested-set + `registerUrl`, and returns instantly
+   with `freshness`/`refresh` instead of awaiting `fetchAndLandUrl` (the `found`/`in_database` fast reads
+   stay unchanged).
 4. **Consumer** — `eventStream.ts` routes `contact.lookup_updated` → reconstruct the URL from the payload →
    invalidate the `LookupCache` subject → re-lookup → broadcast `SUBJECT_STATUS`. Requires promoting
    `LookupCache` from a bus-local instance to a shared module singleton so the SSE handler can invalidate it.
 
-Steps 2–4 are one coherent server+client change that wants a focused, CI-watched push (it touches the worker
+Steps 2–4 are one coherent server+client change that wants a focused, CI-watched push (it touches the sweep
 landing path and money-adjacent-but-dark code), not an unattended loop tick — flagged for that.
