@@ -36,6 +36,15 @@ export const EVENT_IMPORT_JOB_CANCELLED = "import.job.cancelled";
  *  IMPORT_PROGRESS_MIN_INTERVAL_MS carries the same value for the write-side cadence. */
 export const IMPORT_JOB_PROGRESS_THROTTLE_MS = 2_000;
 
+// ── Extension lookup event (chrome-extension/15 P2) — name RESERVED, wiring DARK ─────────────────────────
+// A background lookup/enrichment for a profile the user viewed in the extension landed or refreshed, so the
+// side panel / hover card can update that one row without a page reload. Like the import events above this is
+// RESERVED: no producer (the landing-tx outbox append) or consumer (the SW SSE client) exists yet — they land
+// in the P0/P2 wiring slices, dark behind the untouched REALTIME_SSE_ENABLED gate. Reserved now so the payload
+// shape is stable when wiring lands, and so poll / manual re-check stays the safety net — no client behavior
+// may REQUIRE it (same posture as the reserved import events).
+export const EVENT_CONTACT_LOOKUP_UPDATED = "contact.lookup_updated";
+
 /** The Redis pub/sub channel a workspace's live events fan out on (one topic per workspace). */
 export function workspaceEventChannel(workspaceId: string): string {
   return `rt:ws:${workspaceId}`;
@@ -107,4 +116,18 @@ export interface ImportJobTerminalPayload {
   jobId: string;
   counters: ImportJobCountersSnapshot;
   artifactAvailable: boolean;
+}
+
+/** contact.lookup_updated — routes to the viewed subject by its public addressing key so the extension can
+ *  re-check just that subject. Carries NO channel data: it is an "invalidate + re-lookup" signal (like
+ *  notification.created), and the re-lookup returns the authoritative, workspace-scoped status. The LinkedIn
+ *  public id / Sales-Nav lead id are the free addressing keys (2026-08-18 Layer-0-as-database decision — the
+ *  slug/URL address the record; the paid product is the channels), never an email/phone/name. */
+export interface ContactLookupUpdatedPayload {
+  /** `/in/<slug>` public id — present when the viewed page was a public profile (the extension's join key). */
+  linkedinPublicId?: string;
+  /** `/sales/lead/<id>` lead id — present when the viewed page was a Sales-Navigator lead. */
+  salesNavLeadId?: string;
+  /** What happened to the licensed document, so the card can pick a treatment without a re-fetch if it wants. */
+  outcome: "landed" | "refreshed" | "unavailable";
 }
