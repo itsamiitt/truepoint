@@ -93,16 +93,31 @@ function EmptyState({ title, hint }: { title: string; hint: string }): React.Rea
 function CapturedTab(): React.ReactElement {
   const [load, setLoad] = useState<Load<RecentItem[]>>({ status: "loading" });
 
-  const reload = useCallback(() => {
-    setLoad({ status: "loading" });
+  // `silent` distinguishes a foreground load (mount / the retry button — show the spinner, surface an error)
+  // from a background refresh (a capture landed while the panel is open — swap the rows in place with no
+  // loading flash, and keep the last good list if the read blips). Only the scheduler's addRecent writes the
+  // `recent` store, and it broadcasts STATE_CHANGED at drain completion — so that is the live-update signal.
+  const read = useCallback((silent: boolean) => {
+    if (!silent) setLoad({ status: "loading" });
     db()
       .then((database) => database.getAll("recent"))
       .then((rows) => setLoad({ status: "ready", data: rows }))
-      .catch(() => setLoad({ status: "error" }));
+      .catch(() => {
+        if (!silent) setLoad({ status: "error" });
+      });
   }, []);
 
-  // reload is a stable useCallback([]) — run once on mount.
-  useEffect(reload, []);
+  useEffect(() => read(false), [read]);
+  // Live-refresh without a page reload: re-read on drain completion so a capture that lands with the panel
+  // open appears immediately. LOOKUP only emits SUBJECT_STATUS, so filtering to STATE_CHANGED avoids a
+  // re-read on every profile navigation.
+  useEffect(
+    () =>
+      onBroadcast((msg) => {
+        if (msg.type === "STATE_CHANGED") read(true);
+      }),
+    [read],
+  );
 
   if (load.status === "loading") {
     return <div style={muted}>{t("state.loading")}</div>;
@@ -111,7 +126,7 @@ function CapturedTab(): React.ReactElement {
     return (
       <div style={{ textAlign: "center", padding: "40px 0" }}>
         <div style={{ marginBottom: 8 }}>{t("panel.errorLoad")}</div>
-        <button type="button" style={tabStyle(false)} onClick={reload}>
+        <button type="button" style={tabStyle(false)} onClick={() => read(false)}>
           {t("panel.retry")}
         </button>
       </div>
