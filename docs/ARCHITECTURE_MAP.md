@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2201 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2203 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -1040,4 +1040,9 @@ flowchart TD
   `shared["apps/extension/background"]` — `lookup/cache.ts` (the single-flight warm cache for LOOKUP) and
   its test. A new `background/lookup/` submodule under the existing extension background area, so no new
   domain and no new warning; unassigned holds at **2** (the same two repositories). Doc-15 P1 SW-half.
+
+  2026-08-20 refresh (extension lookup-updated producer, next commit): 2201 → 2203 files, both in the
+  existing `sourceLanding` core domain — `lookupInterest.ts` (the Redis interested-set helpers + PII-free
+  payload builder the 30-day sweep uses to notify the extension) and its test. No new domain/warning;
+  unassigned holds at **2**. Doc-15 §13 option D, producer step.
 ```

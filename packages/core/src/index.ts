@@ -397,6 +397,13 @@ export {
   type FetchAndLandResult,
 } from "./sourceLanding/fetchAndLand.ts";
 export {
+  LOOKUP_INTEREST_TTL_S,
+  lookupInterestKey,
+  lookupInterestMember,
+  lookupUpdatedPayload,
+  parseLookupInterestMember,
+} from "./sourceLanding/lookupInterest.ts";
+export {
   LINKEDIN_API_SOURCE,
   LINKEDIN_API_PROVENANCE_SRC,
   LINKEDIN_API_CONFIDENCE,

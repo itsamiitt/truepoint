@@ -13,8 +13,22 @@
 // and the landing no-ops unless LINKEDIN_SOURCE_LANDING_ENABLED.
 
 import { env } from "@leadwolf/config";
-import { FRESHNESS_DAYS, fetchAndLandUrl, loadOrigins } from "@leadwolf/core";
-import { sourceFetchRegistryRepository, withPrivilegedTx } from "@leadwolf/db";
+import {
+  FRESHNESS_DAYS,
+  type FetchAndLandOutcome,
+  fetchAndLandUrl,
+  loadOrigins,
+  lookupInterestKey,
+  lookupUpdatedPayload,
+  parseLookupInterestMember,
+} from "@leadwolf/core";
+import {
+  eventOutboxRepository,
+  sourceFetchRegistryRepository,
+  withPrivilegedTx,
+  withTenantTx,
+} from "@leadwolf/db";
+import { EVENT_CONTACT_LOOKUP_UPDATED } from "@leadwolf/types";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -77,6 +91,9 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
             if (result.outcome === "landed" || result.outcome === "duplicate") landed += 1;
             else skipped += 1;
             if (result.outcome === "unavailable") unavailable += 1;
+            // Notify any workspace that viewed this URL in the extension and is waiting for the refresh
+            // (chrome-extension/15 §13). Dark until REALTIME_SSE_ENABLED; a no-op when no one is interested.
+            await notifyInterestedWorkspaces(redis, target.normalizedUrl, result.outcome);
           } catch (e) {
             // One URL's failure must not starve the tick; the registry clock was NOT advanced (fetchAndLand
             // stamps inside its own tx), so the next tick retries it.
@@ -105,4 +122,50 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
       log.info("linkedin link fetch tick", { landed, skipped, unavailable });
     });
   };
+}
+
+/** Emit `contact.lookup_updated` to every workspace that SADDed interest in this URL via `/lookup`, then clear
+ *  the set (chrome-extension/15 §13, option D). Best-effort per the §13 D7 boundary — this is a notification,
+ *  not a fact: it lives OUTSIDE the landing tx and a failure must never break the sweep (the extension's poll
+ *  re-check is the safety net). Only outcomes that leave current data present are worth a nudge; a
+ *  rejected/unavailable fetch changed nothing to re-read (the sweep retries; poll covers the gap). */
+async function notifyInterestedWorkspaces(
+  redis: IORedis,
+  normalizedUrl: string,
+  fetchOutcome: FetchAndLandOutcome,
+): Promise<void> {
+  if (!env.REALTIME_SSE_ENABLED) return;
+  if (fetchOutcome !== "landed" && fetchOutcome !== "duplicate" && fetchOutcome !== "fresh") return;
+
+  const key = lookupInterestKey(normalizedUrl);
+  const members = await redis.smembers(key);
+  if (members.length === 0) return;
+
+  const payload = lookupUpdatedPayload(
+    normalizedUrl,
+    fetchOutcome === "landed" ? "landed" : "refreshed",
+  );
+  // A company URL (or an unaddressable one) yields no person payload — drop the interest, nothing to send.
+  if (payload) {
+    for (const member of members) {
+      const scope = parseLookupInterestMember(member);
+      if (!scope) continue;
+      try {
+        await withTenantTx(scope, (tx) =>
+          eventOutboxRepository.append(tx, {
+            tenantId: scope.tenantId,
+            workspaceId: scope.workspaceId,
+            eventType: EVENT_CONTACT_LOOKUP_UPDATED,
+            payload: payload as unknown as Record<string, unknown>,
+          }),
+        );
+      } catch (e) {
+        log.error("linkedin link fetch: lookup-updated emit failed", {
+          url: normalizedUrl,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+  await redis.del(key);
 }
