@@ -2,49 +2,28 @@
 // typed response (03 §1.8). Unknown/invalid messages are dropped. Returns `true` to keep the channel
 // open for the async response.
 import { type RequestMessage, requestMessage } from "../../shared/messages.ts";
-import type { SubjectStatus } from "../../shared/types.ts";
 import { ApiError } from "../api/client.ts";
 import type { RuntimeContext } from "../context.ts";
-import { LookupCache } from "../lookup/cache.ts";
+import { lookupCache, lookupSubject } from "../lookup/resolver.ts";
 import type { JobScheduler } from "../queue/scheduler.ts";
 
 export function registerBus(ctx: RuntimeContext, scheduler: JobScheduler): void {
-  // One warm cache per registration. Lives in the service worker's memory and dies with it (a cold worker
-  // re-resolves), so it never disagrees with the server — see lookup/cache.ts. Held here, not on
-  // RuntimeContext, because only the router reads and clears it.
-  const lookupCache = new LookupCache();
   chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     const parsed = requestMessage.safeParse(raw);
     if (!parsed.success) {
       sendResponse({ error: "bad_message" });
       return false;
     }
-    handle(ctx, scheduler, lookupCache, parsed.data)
+    handle(ctx, scheduler, parsed.data)
       .then(sendResponse)
       .catch((error: unknown) => sendResponse({ error: String(error) }));
     return true;
   });
 }
 
-/** Resolve a subject to its non-PII status: the DB-first /contacts/lookup, then the older slug resolver as a
- *  fallback for an out-of-date server. Throws if BOTH fail so the caller degrades to "unknown" without the
- *  failure being cached. */
-async function resolveStatus(
-  ctx: RuntimeContext,
-  subjectKey: string,
-  sourceUrl: string,
-): Promise<SubjectStatus> {
-  try {
-    return await ctx.api.lookupByUrl(sourceUrl);
-  } catch {
-    return await ctx.api.resolveByLinkedin(subjectKey);
-  }
-}
-
 async function handle(
   ctx: RuntimeContext,
   scheduler: JobScheduler,
-  lookupCache: LookupCache,
   msg: RequestMessage,
 ): Promise<unknown> {
   switch (msg.type) {
@@ -72,9 +51,7 @@ async function handle(
       // (a freshly-mounted panel/hover card needs the status regardless of who paid for it). Total failure
       // degrades to "unknown" and is NOT cached, so an offline blip never sticks.
       try {
-        const status = await lookupCache.resolve(msg.subjectKey, () =>
-          resolveStatus(ctx, msg.subjectKey, msg.sourceUrl),
-        );
+        const status = await lookupSubject(ctx, msg.subjectKey, msg.sourceUrl);
         ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
         return { status };
       } catch {

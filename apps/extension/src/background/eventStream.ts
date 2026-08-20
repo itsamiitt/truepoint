@@ -1,8 +1,10 @@
 // EventStream — a single SW-held consumer of GET /events/stream, dark behind the realtimeSse flag
 // (02 §4/§10). MV3 service workers have no `EventSource`, so we stream the response body with fetch and
 // parse `text/event-stream` frames manually. Fanned to UI via broadcasts; falls back to alarm polling.
+import { EVENT_CONTACT_LOOKUP_UPDATED, realtimeEventSchema } from "@leadwolf/types";
 import { API_BASE } from "../shared/env.ts";
 import type { RuntimeContext } from "./context.ts";
+import { refreshSubjectFromEvent } from "./lookup/resolver.ts";
 
 export class EventStream {
   private controller: AbortController | null = null;
@@ -61,12 +63,28 @@ export class EventStream {
     if (!dataLine) {
       return;
     }
+    let raw: unknown;
     try {
-      JSON.parse(dataLine.slice("data:".length).trim());
-      // Any server event (reveal.completed / credits.changed / job progress) refreshes derived state.
-      this.ctx.broadcast({ type: "STATE_CHANGED", state: await this.ctx.getState() });
+      raw = JSON.parse(dataLine.slice("data:".length).trim());
     } catch {
-      // ignore malformed frame
+      return; // malformed frame
     }
+    const parsed = realtimeEventSchema.safeParse(raw);
+    if (parsed.success && parsed.data.type === EVENT_CONTACT_LOOKUP_UPDATED) {
+      // A profile the user viewed was refreshed by the background sweep (chrome-extension/15 P2): re-resolve
+      // just that subject and push the fresh status so the hover card / panel update without a page reload.
+      // A non-matching card ignores the broadcast; a missed push is covered by the next LOOKUP.
+      const result = await refreshSubjectFromEvent(this.ctx, parsed.data.payload);
+      if (result) {
+        this.ctx.broadcast({
+          type: "SUBJECT_STATUS",
+          subjectKey: result.subjectKey,
+          status: result.status,
+        });
+      }
+      return;
+    }
+    // Any other server event (reveal.completed / credits.changed / job progress) refreshes derived state.
+    this.ctx.broadcast({ type: "STATE_CHANGED", state: await this.ctx.getState() });
   }
 }

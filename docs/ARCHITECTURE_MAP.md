@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2203 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2205 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -1045,4 +1045,10 @@ flowchart TD
   existing `sourceLanding` core domain — `lookupInterest.ts` (the Redis interested-set helpers + PII-free
   payload builder the 30-day sweep uses to notify the extension) and its test. No new domain/warning;
   unassigned holds at **2**. Doc-15 §13 option D, producer step.
+
+  2026-08-20 refresh (extension lookup-updated consumer, next commit): 2203 → 2205 files, both in
+  `shared["apps/extension/background"]` — `lookup/resolver.ts` (the shared warm-cache singleton + DB-first
+  resolver + the SSE push handler that turns `contact.lookup_updated` into a fresh `SUBJECT_STATUS`) and its
+  test; the bus router now imports the singleton instead of holding its own. No new domain/warning;
+  unassigned holds at **2**. Doc-15 §13 option D, consumer step (P2 step 4).
 ```
