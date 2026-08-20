@@ -912,7 +912,8 @@ flowchart TD
   `…/ui` · `…/shared` · `…/i18n`) — **`background/`** the service-worker hub (Zod message bus, `ApiClient` over `/api/v1`
   with RFC-9457 + Idempotency-Key, PKCE `AuthModule` with in-memory token, IndexedDB capture queue + alarm-driven
   scheduler with backoff + a `recent`-store TTL reaper, `lookup/` single-flight LOOKUP warm cache (coalesces the
-  observer's nav+settle re-fires), `RemoteConfig` + kill switch, telemetry, fetch-stream SSE consumer); **`content/`**
+  observer's nav+settle re-fires), `RemoteConfig` local UX flags (no client kill switch — X09; the real kill
+  is server-side), telemetry, fetch-stream SSE consumer); **`content/`**
   isolated-world adapter registry + LinkedIn adapter (**visible-DOM only, no network patching**), debounced navigation
   observer, shadow-DOM hover-card; **`ui/`** React popup + four-state side panel; **`shared/`** Zod message contracts +
   typed `chrome.storage`/IndexedDB + env; **`i18n/`** message catalog; root `manifest.config.ts`/`vite.config.ts` +
