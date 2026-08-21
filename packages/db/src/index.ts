@@ -574,6 +574,7 @@ export {
 // lifecycle CRUD; tx-aware, composed inside withTenantTx (RLS workspace isolation; chunks inherit via parent).
 export {
   importJobRepository,
+  type ImportJobControlRow,
   type ImportJobRow,
   type ImportJobChunkRow,
   type ImportJobLedgerRow,

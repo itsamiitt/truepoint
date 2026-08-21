@@ -18,7 +18,7 @@ import type {
   ImportMergeMode,
   JobViewer,
 } from "@leadwolf/types";
-import { and, asc, desc, eq, gt, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, notInArray, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
 import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
@@ -27,6 +27,24 @@ import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
 
 /** The control row (one per uploaded file) — all non-PII; safe to serialize for the status surface. */
 export type ImportJobRow = typeof importJobs.$inferSelect;
+
+// PA-6 (perf-checklist): the LIST read carries every column EXCEPT the four TOAST-able jsonb blobs —
+// columnMapping, rejectHistogram, options, previewSummary. A 200-row page detoasted all four per row to
+// render a list whose mappers provably read only scalar control columns (rows* counters + timestamps +
+// status). Destructure-from-schema so a new column joins the projection automatically and removing a blob
+// breaks HERE, not silently. Full rows remain structurally assignable to the control type, so detail-path
+// mappers can share list mappers without widening this read.
+const {
+  columnMapping: _cm,
+  rejectHistogram: _rh,
+  options: _opts,
+  previewSummary: _ps,
+  ...IMPORT_JOB_CONTROL_COLUMNS
+} = getTableColumns(importJobs);
+export type ImportJobControlRow = Omit<
+  ImportJobRow,
+  "columnMapping" | "rejectHistogram" | "options" | "previewSummary"
+>;
 /** A unit of work a runner claims (a contiguous row band of a job). */
 export type ImportJobChunkRow = typeof importJobChunks.$inferSelect;
 /** One per input CSV line — the create/match/reject ledger entry (HIGH VOLUME). */
@@ -278,7 +296,7 @@ export const importJobRepository = {
        *  the wizard-resume opt-in (`GET /imports?state=draft`) listing a viewer's drafts exclusively. */
       drafts?: "exclude" | "only";
     } = {},
-  ): Promise<ImportJobRow[]> {
+  ): Promise<ImportJobControlRow[]> {
     const capped = Math.max(1, Math.min(200, Math.trunc(opts.limit ?? 50)));
     const predicate = jobVisibility(viewer, {
       createdByUserId: importJobs.createdByUserId,
@@ -294,7 +312,7 @@ export const importJobRepository = {
       ? sql`(${importJobs.createdAt}, ${importJobs.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
       : undefined;
     return tx
-      .select()
+      .select(IMPORT_JOB_CONTROL_COLUMNS)
       .from(importJobs)
       .where(and(predicate, draftTerm, keyset))
       .orderBy(desc(importJobs.createdAt), desc(importJobs.id))
