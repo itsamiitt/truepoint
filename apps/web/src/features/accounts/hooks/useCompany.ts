@@ -11,19 +11,23 @@ import {
   removeWatchlistMember,
 } from "@/features/signals/api";
 import type { TenantSignal } from "@leadwolf/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchAccount } from "../api";
 
 const WATCH_LIST_NAME = "Watched accounts";
 
 export function useCompany(accountId: string) {
+  // Navigating company → company is a NEW key per account — hold the previous record while the fresh one
+  // lands instead of strobing to a skeleton (perf-checklist PA-8).
   const account = useQuery({
     queryKey: ["companies", "account", accountId],
     queryFn: () => fetchAccount(accountId),
+    placeholderData: keepPreviousData,
   });
   const signals = useQuery<TenantSignal[]>({
     queryKey: ["companies", "signals", accountId],
     queryFn: () => fetchSignals({ accountId, limit: 25 }),
+    placeholderData: keepPreviousData,
   });
   return { account, signals };
 }

@@ -6,9 +6,15 @@
 // is passed for targeting, but the SERVER validates it against the workspace — the client id is never trusted.
 "use client";
 
-import { ImportWizard } from "@/features/import";
 import type { List } from "@leadwolf/types";
 import { Dialog, TpButton } from "@leadwolf/ui";
+import dynamic from "next/dynamic";
+
+// The wizard (~19.2kB gz incl. its progress surfaces) loads when the dialog opens, not on /lists' first
+// load — the ProspectPage BulkActionBar treatment (perf-checklist PA-3). ssr:false: dialogs never SSR.
+const ImportWizard = dynamic(() => import("@/features/import").then((m) => m.ImportWizard), {
+  ssr: false,
+});
 
 export function ImportIntoListDialog({
   open,

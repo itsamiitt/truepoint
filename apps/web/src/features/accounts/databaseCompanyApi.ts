@@ -1,4 +1,4 @@
-import { ApiError } from "@/features/prospect";
+import { ApiError } from "@/features/prospect/entries/accounts";
 // databaseCompanyApi.ts — typed, authenticated calls to the GLOBAL company search (search-consolidation
 // stage 2). Deliberately separate from the prospect slice's accountSearchApi.ts, which searches the
 // workspace's own `accounts`: these return companies the workspace does NOT own, addressed by their

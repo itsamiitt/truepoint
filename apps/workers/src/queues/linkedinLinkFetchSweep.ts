@@ -135,7 +135,11 @@ async function notifyInterestedWorkspaces(
   fetchOutcome: FetchAndLandOutcome,
 ): Promise<void> {
   if (!env.REALTIME_SSE_ENABLED) return;
-  if (fetchOutcome !== "landed" && fetchOutcome !== "duplicate" && fetchOutcome !== "fresh") return;
+  // NOT "fresh" (perf-checklist PA-11): fresh means "within the freshness window — no vendor call, nothing
+  // changed" (fetchAndLand), and pushing it as "refreshed" drove the extension through a guaranteed-no-op
+  // invalidate → full /lookup re-resolve returning byte-identical data. Only outcomes that changed what a
+  // re-read would see are worth a nudge.
+  if (fetchOutcome !== "landed" && fetchOutcome !== "duplicate") return;
 
   const key = lookupInterestKey(normalizedUrl);
   const members = await redis.smembers(key);
@@ -147,7 +151,20 @@ async function notifyInterestedWorkspaces(
   );
   // A company URL (or an unaddressable one) yields no person payload — drop the interest, nothing to send.
   if (payload) {
-    for (const member of members) {
+    // BOUNDED fan-out (perf-checklist PA-11): the interest set has no cardinality cap at SADD time, and this
+    // loop runs one sequential tenant transaction per member INSIDE the leader-locked sweep — a widely-viewed
+    // profile (a well-known exec worked by many tenants in one 5-min window) could stall the whole tick.
+    // Past the cap the push is skipped for the remainder and the extension's poll safety net covers them —
+    // refusing is honest, starving the sweep is not (the events route's stream cap makes the same call).
+    const MAX_PUSH_MEMBERS = 100;
+    if (members.length > MAX_PUSH_MEMBERS) {
+      log.warn("linkedin link fetch: interest set over push cap — remainder covered by poll", {
+        url: normalizedUrl,
+        members: members.length,
+        cap: MAX_PUSH_MEMBERS,
+      });
+    }
+    for (const member of members.slice(0, MAX_PUSH_MEMBERS)) {
       const scope = parseLookupInterestMember(member);
       if (!scope) continue;
       try {

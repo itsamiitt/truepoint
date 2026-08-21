@@ -23,7 +23,6 @@ import { getSessionProbe } from "@/lib/sessionProbe";
 import {
   AppShellFrame,
   Brandmark,
-  CommandPalette,
   DensityToggle,
   Logo,
   NavItem,
@@ -34,8 +33,17 @@ import {
   UserRow,
 } from "@leadwolf/app-shell";
 import { TpButton } from "@leadwolf/ui";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+
+// The Cmd-K palette (cmdk + its lucide set, ~17.3kB gz) is behind user intent — off the first load of every
+// authenticated route (perf-checklist PA-3). Imported via its own subpath: a dynamic() of the main barrel
+// (which this file also imports statically) would split nothing. ssr:false — it renders nothing until opened.
+const CommandPalette = dynamic(
+  () => import("@leadwolf/app-shell/palette").then((m) => m.CommandPalette),
+  { ssr: false },
+);
 import { CreditPill } from "./CreditPill";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationsBell } from "./NotificationsBell";

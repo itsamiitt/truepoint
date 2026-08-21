@@ -31,9 +31,17 @@ export function useApprovals() {
 
   const reload = useCallback(() => load(), [load]);
 
+  /** Drop one decided request locally (perf-checklist PA-12): working a queue of N used to refetch the whole
+   *  capped list after EVERY decision — O(N²) network for a review session. The server is the truth; the
+   *  removed row is exactly what the decision endpoint just settled, and the periodic/full reload paths
+   *  still exist for everything else. */
+  const removeLocal = useCallback((id: string) => {
+    setApprovals((prev) => (prev ? prev.filter((r) => r.id !== id) : prev));
+  }, []);
+
   useEffect(() => {
     void load({ initial: true });
   }, [load]);
 
-  return { approvals, error, loading, refreshing, reload };
+  return { approvals, error, loading, refreshing, reload, removeLocal };
 }

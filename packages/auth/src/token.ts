@@ -13,7 +13,7 @@ const privateKey = () => importPKCS8(env.JWT_PRIVATE_KEY_PEM, ALG);
 
 // verifyAccessToken (the apps/api path) verifies against the auth origin's PUBLISHED JWKS, selecting the key
 // by `kid` — so the api needs no local public PEM and key rotation works (publish the next key in JWKS, the
-// api picks it up; jose caches the set ~5 min). Lazy so importing this module opens no socket.
+// api picks it up). Lazy so importing this module opens no socket.
 // The auth app runs at basePath "/auth" (apps/auth/next.config.mjs), so ALL its routes — including the JWKS
 // endpoint — live under /auth/*. The URL MUST carry that prefix: in the multi-domain deployment Caddy proxies
 // auth.* → the auth container passing the path through unchanged, so a bare /.well-known/jwks.json 404s and
@@ -27,8 +27,20 @@ const privateKey = () => importPKCS8(env.JWT_PRIVATE_KEY_PEM, ALG);
 // AUTH_ORIGIN (dev/local/test unchanged). The "/auth" basePath prefix is required for the internal host too.
 const jwksUrl = new URL("/auth/.well-known/jwks.json", env.INTERNAL_AUTH_ORIGIN ?? env.AUTH_ORIGIN);
 let _jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
-// biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
-const remoteJwks = () => (_jwks ??= createRemoteJWKSet(jwksUrl));
+// CACHE FOREVER, RELOAD ONLY ON AN UNKNOWN `kid` (perf-checklist PA-1). jose's default cacheMaxAge (600s —
+// not the "~5 min" this file used to claim) hard-expires the set: the next request after every 10-minute
+// boundary BLOCKS on an HTTP refetch (≤5s timeout), and a reload failure THROWS even though a perfectly
+// valid cached set is still in hand — so a 2-second auth-origin blip landing on a boundary 401'd the whole
+// fleet and the clients' silent-refresh recovery then stampeded the origin that was already struggling.
+// This JWKS is kid-versioned with a dual-publish rotation window (getJwks below) designed for exactly this:
+// with cacheMaxAge Infinity the ONLY reload trigger left is JWKSNoMatchingKey — a token signed by a not-yet-
+// seen key — which is the rotation path, rate-limited by cooldownDuration to one refetch per 30s.
+const remoteJwks = () =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_jwks ??= createRemoteJWKSet(jwksUrl, {
+    cacheMaxAge: Number.POSITIVE_INFINITY,
+    cooldownDuration: 30_000,
+  }));
 
 export interface MintAccessTokenInput {
   userId: string;

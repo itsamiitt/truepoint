@@ -119,24 +119,6 @@ contactsResolveRoutes.post("/lookup", async (c) => {
     return c.json({ status: "not_supported", contactId: null, contact: null });
   }
 
-  // Register this workspace's interest so the background 30-day sweep can push contact.lookup_updated when it
-  // next (re)lands this URL (chrome-extension/15 §13, option D) — the receiver end shipped in the sweep + the
-  // extension SSE consumer. Best-effort and TTL-bounded: a Redis blip or an expired interest just means no
-  // push, and the extension's next LOOKUP re-reads the truth. multi() so the set never lingers without a TTL.
-  // Gated on REALTIME_SSE_ENABLED because nothing consumes the set otherwise.
-  if (env.REALTIME_SSE_ENABLED) {
-    try {
-      const interestKey = lookupInterestKey(key.normalizedUrl);
-      await cacheRedis()
-        .multi()
-        .sadd(interestKey, lookupInterestMember(claims.tid, workspaceId))
-        .expire(interestKey, LOOKUP_INTEREST_TTL_S)
-        .exec();
-    } catch {
-      // best-effort — the live push is a nice-to-have layered on the poll safety net
-    }
-  }
-
   const isSlugForm = key.normalizedUrl.includes("/in/");
   const slug = isSlugForm ? key.externalId?.toLowerCase() : undefined;
   const salesNavLeadId = isSlugForm ? undefined : (key.externalId ?? undefined);
@@ -159,6 +141,27 @@ contactsResolveRoutes.post("/lookup", async (c) => {
       contact: found,
       lastUpdatedAt: found.lastVerifiedAt ?? found.createdAt,
     });
+  }
+
+  // MISS ONLY (perf-checklist PA-11): register this workspace's interest so the background 30-day sweep can
+  // push contact.lookup_updated when it next (re)lands this URL (chrome-extension/15 §13, option D). This
+  // used to run at the TOP of the handler — but the extension's steady state is "already in this workspace",
+  // which returns above, and only a MISS can ever be landed by the sweep: the hit path was paying one Redis
+  // round-trip per lookup to write sets that were structurally guaranteed to expire unused. Best-effort and
+  // TTL-bounded: a Redis blip or an expired interest just means no push, and the extension's next LOOKUP
+  // re-reads the truth. multi() so the set never lingers without a TTL. Gated on REALTIME_SSE_ENABLED
+  // because nothing consumes the set otherwise.
+  if (env.REALTIME_SSE_ENABLED) {
+    try {
+      const interestKey = lookupInterestKey(key.normalizedUrl);
+      await cacheRedis()
+        .multi()
+        .sadd(interestKey, lookupInterestMember(claims.tid, workspaceId))
+        .expire(interestKey, LOOKUP_INTEREST_TTL_S)
+        .exec();
+    } catch {
+      // best-effort — the live push is a nice-to-have layered on the poll safety net
+    }
   }
 
   // Not in the workspace — is the person already in the platform DATABASE? (Layer-0-as-database slice 4:

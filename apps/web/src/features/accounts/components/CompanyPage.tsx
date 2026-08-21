@@ -14,7 +14,7 @@ import {
   contactsHrefForCompany,
   orgKindCopy,
   useAccountTechnologies,
-} from "@/features/prospect";
+} from "@/features/prospect/entries/accounts";
 import type { MaskedAccount, TenantSignal } from "@leadwolf/types";
 import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";

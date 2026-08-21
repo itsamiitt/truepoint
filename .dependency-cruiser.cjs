@@ -50,12 +50,16 @@ module.exports = {
     {
       name: "no-deep-import-from-app",
       comment:
-        "An app may import a package ONLY through its public index.ts — no deep imports (16 §6). CSS is exempt: stylesheets (packages/ui tokens.css) cannot ship through a TS barrel.",
+        "An app may import a package ONLY through its public index.ts or a named `src/entries/*` entry point declared in the package's exports map — no deep imports (16 §6; entries/* added by perf-checklist PA-2/PA-3 so an intent-deferred surface like the command palette can be its own module instead of welded into the barrel every consumer loads eagerly). CSS is exempt: stylesheets (packages/ui tokens.css) cannot ship through a TS barrel.",
       severity: "error",
       from: { path: "^apps/[^/]+/" },
       to: {
         path: "^packages/[^/]+/src/",
-        pathNot: ["^packages/[^/]+/src/index\\.(ts|tsx|js|mjs|cjs)$", "\\.css$"],
+        pathNot: [
+          "^packages/[^/]+/src/index\\.(ts|tsx|js|mjs|cjs)$",
+          "^packages/[^/]+/src/entries/[^/]+\\.(ts|tsx|js|mjs|cjs)$",
+          "\\.css$",
+        ],
       },
     },
     {
@@ -72,7 +76,7 @@ module.exports = {
     {
       name: "no-cross-feature-import",
       comment:
-        "Inside an app, a feature must not import another feature's internals; route via a public index or shared/ (16 §3.3).",
+        "Inside an app, a feature must not import another feature's internals; route via a public index, a named `entries/*` entry point, or shared/ (16 §3.3; entries/* added by perf-checklist PA-2 — a public contract that isn't one module with the whole slice, so a borrowing route stops shipping everything the owner route needs).",
       severity: "error",
       from: { path: "^apps/([^/]+)/src/features/([^/]+)/" },
       to: {
@@ -80,6 +84,7 @@ module.exports = {
         pathNot: [
           "^apps/$1/src/features/$2/",
           "^apps/[^/]+/src/features/[^/]+/index\\.(ts|tsx|js|jsx)$",
+          "^apps/[^/]+/src/features/[^/]+/entries/[^/]+\\.(ts|tsx|js|jsx)$",
         ],
       },
     },

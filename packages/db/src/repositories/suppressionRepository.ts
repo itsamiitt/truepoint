@@ -4,7 +4,7 @@
 // the match itself.
 
 import type { SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
-import { type SQL, and, desc, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
+import { type SQL, and, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { suppressionList } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -199,8 +199,24 @@ export const suppressionRepository = {
 
   /** List the GLOBAL suppression entries (the platform blocklist) — for the staff console (13a Area 8). Must
    *  run inside a withPlatformTx transaction (owner). Blind-index columns are omitted (HMACs of PII never
-   *  leave the DB); a domain entry is fully shown. Newest first, bounded. */
-  async listGlobal(tx: Tx, limit = 500): Promise<SuppressionListRow[]> {
+   *  leave the DB); a domain entry is fully shown. Newest first, keyset-paged + domain-searchable
+   *  (perf-checklist PA-12): the old hard 500-row cap silently truncated a compliance-critical, append-mostly
+   *  list — "is example.com blocked?" answered FALSE past 500 entries with no indication older rows existed. */
+  async listGlobal(
+    tx: Tx,
+    opts: {
+      limit?: number;
+      cursor?: { createdAt: Date; id: string } | null;
+      /** Case-insensitive contains-match on the domain column (the console's add flow is domain-only; email
+       *  rows are blind-indexed and not text-searchable by design). */
+      domainQuery?: string;
+    } = {},
+  ): Promise<SuppressionListRow[]> {
+    const capped = Math.max(1, Math.min(200, Math.trunc(opts.limit ?? 50)));
+    const q = opts.domainQuery?.trim();
+    const keyset = opts.cursor
+      ? sql`(${suppressionList.createdAt}, ${suppressionList.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
+      : undefined;
     return tx
       .select({
         id: suppressionList.id,
@@ -212,9 +228,15 @@ export const suppressionRepository = {
         createdAt: suppressionList.createdAt,
       })
       .from(suppressionList)
-      .where(eq(suppressionList.scope, "global"))
-      .orderBy(desc(suppressionList.createdAt))
-      .limit(limit);
+      .where(
+        and(
+          eq(suppressionList.scope, "global"),
+          q ? sql`${suppressionList.domain}::text ILIKE ${`%${q}%`}` : undefined,
+          keyset,
+        ),
+      )
+      .orderBy(desc(suppressionList.createdAt), desc(suppressionList.id))
+      .limit(capped);
   },
 
   /** Remove a GLOBAL entry by id (staff only — the predicate pins scope='global' so a tenant/workspace row

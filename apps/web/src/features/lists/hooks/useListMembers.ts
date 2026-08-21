@@ -9,7 +9,7 @@
 "use client";
 
 import type { MaskedContact } from "@leadwolf/types";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { fetchListMembers } from "../api";
 import { listKeys } from "../keys";
@@ -38,6 +38,12 @@ export function useListMembers(listId: string): ListMembersState {
   const query = useInfiniteQuery<MembersPage>({
     queryKey,
     initialPageParam: null,
+    // Switching lists is a NEW key — hold the previous list's rows while the fresh page lands instead of
+    // strobing the grid to a skeleton (the useProspectSearch treatment; perf-checklist PA-8).
+    placeholderData: keepPreviousData,
+    // Members pages are big and re-entered often (list → record → back): keep them for 10 minutes instead
+    // of the 5-minute default so back-navigation is instant rather than a refetch of a dropped cache.
+    gcTime: 10 * 60_000,
     queryFn: ({ pageParam }) =>
       fetchListMembers(listId, {
         limit: PAGE_SIZE,

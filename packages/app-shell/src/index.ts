@@ -14,7 +14,10 @@ export { Sidebar } from "./Sidebar.tsx";
 export { NavItem } from "./NavItem.tsx";
 export { UserRow } from "./UserRow.tsx";
 export { TopBar, DensityToggle, ShortcutsButton } from "./TopBar.tsx";
-export { CommandPalette, type PaletteAction } from "./CommandPalette.tsx";
+// The palette COMPONENT moved to the `@leadwolf/app-shell/palette` subpath (perf-checklist PA-3): exporting
+// it here welded cmdk (~17.3kB gz) into every route's first load via the shell's static import of this
+// barrel, and a next/dynamic of a statically-imported module splits nothing. The type stays — types erase.
+export type { PaletteAction } from "./CommandPalette.tsx";
 export { ShortcutsDialog } from "./ShortcutsDialog.tsx";
 export { Brandmark, Wordmark, Logo } from "./Logo.tsx";
 export { DensityProvider, useDensity } from "./DensityProvider.tsx";

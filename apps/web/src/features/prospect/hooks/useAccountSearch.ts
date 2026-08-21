@@ -104,6 +104,8 @@ export function useAccountSearch(options?: { enabled?: boolean }): AccountSearch
     // A filter edit is a NEW cache key; hold the previous rows while the fresh search lands instead of
     // unmounting the grid to a skeleton per edit (same treatment as the contacts grid + facet counts).
     placeholderData: keepPreviousData,
+    // 10-minute retention like the contact grid — accounts pages are re-entered just as often (PA-8).
+    gcTime: 10 * 60_000,
     // RQ owns the AbortSignal and keys results by the search, so a superseded request can neither cost the
     // backend a full search nor land its rows on the newer query's entry.
     queryFn: ({ pageParam, signal }) =>

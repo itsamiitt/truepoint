@@ -14,7 +14,11 @@
 
 import { SearchDrawer, SearchDrawerOpener, type SearchShell } from "@/components/search";
 import shellStyles from "@/components/search/search.module.css";
-import { AccountFilterPanel, AccountsTable, useAccountFacetCounts } from "@/features/prospect";
+import {
+  AccountFilterPanel,
+  AccountsTable,
+  useAccountFacetCounts,
+} from "@/features/prospect/entries/accounts";
 import type { AccountFacetKey, MaskedAccount } from "@leadwolf/types";
 import { EmptyState, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";

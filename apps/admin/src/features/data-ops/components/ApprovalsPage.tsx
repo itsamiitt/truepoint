@@ -28,7 +28,7 @@ import { useApprovals } from "../hooks/useApprovals";
 const MIN_REASON = 5;
 
 export function ApprovalsPage() {
-  const { approvals, loading, error, reload } = useApprovals();
+  const { approvals, loading, error, reload, removeLocal } = useApprovals();
   const toast = useToast();
   const { canMaybe } = useStaffMe();
   const canReview = canMaybe("data:review");
@@ -57,7 +57,8 @@ export function ApprovalsPage() {
       else await rejectRequest(target.id, r);
       toast.success(mode === "approve" ? "Request approved." : "Request rejected.");
       setTarget(null);
-      await reload();
+      // PA-12: the decided row leaves the queue locally — no full-list refetch per decision.
+      removeLocal(target.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Decision failed");
     } finally {

@@ -15,7 +15,12 @@ export function useCrmRuns(connectionId: string | null) {
     queryKey: crmSyncKeys.runs(connectionId ?? ""),
     queryFn: () => fetchCrmRuns(connectionId as string),
     enabled: Boolean(connectionId),
-    refetchInterval: 30_000,
+    // Status-conditional (perf-checklist PA-8, the useEnrichmentJobs template): 30s only while a run is
+    // actually `running`; 120s otherwise — the idle feed changes only when a schedule or a Sync-now fires
+    // (and Sync-now invalidates this key anyway), so the old unconditional 30s polled a terminal list
+    // forever once a connection was selected.
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some((run) => run.status === "running") ? 30_000 : 120_000,
   });
 
   return {

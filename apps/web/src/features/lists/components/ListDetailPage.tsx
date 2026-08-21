@@ -22,7 +22,7 @@ import {
   useBulkSelection,
   useBulkSelectionStore,
   useTags,
-} from "@/features/prospect";
+} from "@/features/prospect/entries/bulk";
 import type {
   BulkSpendEstimate,
   ContactDataHealth,

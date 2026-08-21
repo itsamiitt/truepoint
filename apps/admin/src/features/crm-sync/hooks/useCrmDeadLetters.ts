@@ -13,6 +13,8 @@ import type { StaffCrmDeadLetter } from "../types";
 
 export function useCrmDeadLetters() {
   const [rows, setRows] = useState<StaffCrmDeadLetter[] | null>(null);
+  // The TOTAL open count behind the capped page (PA-12) — what makes a 200-row view honest during a spike.
+  const [total, setTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // Refreshes (the post-triage reload) report here — re-raising `loading` would blank the populated queue
@@ -25,7 +27,9 @@ export function useCrmDeadLetters() {
     else setRefreshing(true);
     setError(null);
     try {
-      setRows(await fetchCrmDeadLetters());
+      const page = await fetchCrmDeadLetters();
+      setRows(page.deadLetters);
+      setTotal(page.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load the dead-letter queue");
     } finally {
@@ -56,5 +60,5 @@ export function useCrmDeadLetters() {
     [reload],
   );
 
-  return { rows, error, loading, refreshing, busy, reload, triage };
+  return { rows, total, error, loading, refreshing, busy, reload, triage };
 }

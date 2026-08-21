@@ -21,10 +21,20 @@ export interface DrainedOutboxRow {
   payload: Record<string, unknown>;
 }
 
-/** Drain up to `limit` pending, due outbox rows FOR UPDATE SKIP LOCKED (11 §2). */
+/** Drain up to `limit` pending, due outbox rows FOR UPDATE SKIP LOCKED (11 §2). Projects exactly the seven
+ *  fields the mapper below emits (perf-checklist PA-6) — the drain holds row locks in a hot worker loop, so
+ *  it should not also carry lastError/attempts/timestamps it never reads. */
 export async function drainSyncOutbox(tx: Tx, limit: number): Promise<DrainedOutboxRow[]> {
   const rows = await tx
-    .select()
+    .select({
+      id: syncOutbox.id,
+      eventType: syncOutbox.eventType,
+      aggregateKind: syncOutbox.aggregateKind,
+      forgeId: syncOutbox.forgeId,
+      version: syncOutbox.version,
+      contentHash: syncOutbox.contentHash,
+      payload: syncOutbox.payload,
+    })
     .from(syncOutbox)
     .where(and(eq(syncOutbox.status, "pending"), lte(syncOutbox.availableAt, sql`now()`)))
     .limit(limit)

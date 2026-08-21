@@ -30,6 +30,7 @@ import {
   writeAudit,
 } from "@leadwolf/core";
 import {
+  type ImportJobControlRow,
   type ImportJobRow,
   importJobRepository,
   importPolicyRepository,
@@ -174,7 +175,9 @@ function toLegacyResponseV2(job: ImportJobRow): ImportJobStatusResponse {
 // The durable list/detail read model. Non-PII: counts + statuses + histogram labels only, never a row value.
 
 /** The 7-bucket accounting view straight off the atomic `rows_*` counters (09 §4 identity). */
-function toImportJobCounts(job: ImportJobRow): ImportJobListItem["counts"] {
+// Control-row param (PA-6): the LIST read no longer carries the four jsonb blobs; full detail rows remain
+// structurally assignable, so the detail path shares these mappers unchanged.
+function toImportJobCounts(job: ImportJobControlRow): ImportJobListItem["counts"] {
   return {
     total: job.rowsTotal,
     created: job.rowsCreated,
@@ -188,7 +191,7 @@ function toImportJobCounts(job: ImportJobRow): ImportJobListItem["counts"] {
 }
 
 /** One durable job → a `GET /imports` list item (the real 12-state vocabulary; progress via the ONE derivation fn). */
-function toImportJobListItem(job: ImportJobRow): ImportJobListItem {
+function toImportJobListItem(job: ImportJobControlRow): ImportJobListItem {
   const { percent, stage } = deriveImportProgress(job);
   return {
     jobId: String(job.id),
@@ -232,7 +235,7 @@ function toImportJobDetailV2(job: ImportJobRow): ImportJobDetailV2 {
 }
 
 /** Opaque keyset cursor over `(created_at, id)` — the exact order of `idx_import_jobs_ws_created`. base64url. */
-function encodeJobCursor(job: ImportJobRow): string {
+function encodeJobCursor(job: Pick<ImportJobRow, "createdAt" | "id">): string {
   return Buffer.from(`${job.createdAt.toISOString()}|${job.id}`, "utf8").toString("base64url");
 }
 function decodeJobCursor(raw: string): { createdAt: Date; id: string } | null {

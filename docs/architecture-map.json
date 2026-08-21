@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2225,
-  "fileSetHash": "sha256:b5b730b6ef34446aa04a13061618937351010b90db11f98e77d912a44f798689",
+  "fileCount": 2228,
+  "fileSetHash": "sha256:d68c398e4f09b2668f2315aa17eacaf24deeed30c3a178807ea7bccbd9fa3d51",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1524,6 +1524,8 @@
         "apps/web/src/features/prospect/databaseRows.ts",
         "apps/web/src/features/prospect/databaseSearchApi.ts",
         "apps/web/src/features/prospect/enrichApi.ts",
+        "apps/web/src/features/prospect/entries/accounts.ts",
+        "apps/web/src/features/prospect/entries/bulk.ts",
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
@@ -2858,6 +2860,7 @@
       "packages/app-shell/src/Sidebar.tsx",
       "packages/app-shell/src/TopBar.tsx",
       "packages/app-shell/src/UserRow.tsx",
+      "packages/app-shell/src/entries/palette.ts",
       "packages/app-shell/src/index.ts",
       "packages/app-shell/src/nav.ts",
       "packages/app-shell/src/useSidebarPin.ts"

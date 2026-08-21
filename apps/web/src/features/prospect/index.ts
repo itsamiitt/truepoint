@@ -91,8 +91,3 @@ export { contactsHrefForCompany } from "./searchUrlState";
 // for a school instead of calling everything a company (the retired drawer's nicety, kept alive).
 export { orgKindCopy, isNotableOrgKind } from "./orgKindCopy";
 export { useAccountTechnologies } from "./hooks/useAccountTechnologies";
-// The slice's typed API error. Exported so features/accounts can throw the SAME error type its sibling
-// surface does rather than minting a fourth copy of the class (there are already three in apps/web —
-// prospect, lists, sequences). FOLLOW-UP: collapse all of them into apps/web/src/lib/, the way
-// `problemMessage` was consolidated by audit 32 · F4; this export is the interim, not the destination.
-export { ApiError } from "./api";

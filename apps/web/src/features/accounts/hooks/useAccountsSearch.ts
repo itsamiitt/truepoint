@@ -9,7 +9,7 @@
 // state of its own beyond the derived database query.
 "use client";
 
-import { useAccountSearch } from "@/features/prospect";
+import { useAccountSearch } from "@/features/prospect/entries/accounts";
 import type { AccountQuery, DatabaseCompanyQuery } from "@leadwolf/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";

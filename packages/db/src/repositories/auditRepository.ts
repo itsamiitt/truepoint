@@ -97,17 +97,11 @@ export const auditRepository = {
     );
   },
 
-  /** Tenant-scoped recent entries (Settings ▸ Compliance audit viewer, M5). */
-  async listByTenant(scope: TenantScope, limit = 100) {
-    return withTenantTx(scope, (tx) =>
-      tx
-        .select()
-        .from(auditLog)
-        .where(eq(auditLog.tenantId, scope.tenantId))
-        .orderBy(desc(auditLog.occurredAt))
-        .limit(limit),
-    );
-  },
+  // listByTenant (the "Settings ▸ Compliance audit viewer, M5" seam) was DELETED here (perf-checklist
+  // PA-6): it had zero callers and was the one remaining bare select() on audit_log — metadata jsonb, inet
+  // and user-agent included — waiting for someone to wire it to a viewer and ship a PII-bearing read by
+  // accident. When the compliance viewer lands, build its read the way listByWorkspace below does: a
+  // deliberate, minimized projection.
 
   /**
    * Workspace activity feed for the Home dashboard — this workspace's rows PLUS tenant-level rows

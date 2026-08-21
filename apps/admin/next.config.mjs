@@ -5,6 +5,8 @@
 // a standalone host, not proxied under another app's domain.
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Edge (Caddy) owns compression — see apps/web/next.config.mjs for the full PA-7 reasoning.
+  compress: false,
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: [
