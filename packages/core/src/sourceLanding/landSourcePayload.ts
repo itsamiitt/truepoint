@@ -525,7 +525,8 @@ async function landCompany(
     const rawIndustry = mapped.fields.industry;
     if (typeof rawIndustry === "string" && rawIndustry) {
       const industryId = await masterIndustryRepository.resolveIdForLabel(tx, rawIndustry);
-      if (industryId) await masterIndustryRepository.setCompanyIndustry(tx, masterCompanyId, industryId);
+      if (industryId)
+        await masterIndustryRepository.setCompanyIndustry(tx, masterCompanyId, industryId);
     }
 
     // 4b. Domain fill for a company minted domainless (from a position's numeric id): the company document

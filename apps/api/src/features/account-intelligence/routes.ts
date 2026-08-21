@@ -658,7 +658,9 @@ accountIntelligenceRoutes.get("/:accountId/postings", async (c) => {
     c.req.param("accountId"),
   );
   if (!masterCompanyId) {
-    return c.json(accountPostingsResponse.parse({ resolved: false, postings: [], by_department: [] }));
+    return c.json(
+      accountPostingsResponse.parse({ resolved: false, postings: [], by_department: [] }),
+    );
   }
 
   const [postings, byDepartment] = await withErTx(async (tx: Tx) =>

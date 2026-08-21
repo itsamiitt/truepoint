@@ -135,7 +135,11 @@ export const masterProfileRepository = {
       fieldProvenance: r.field_provenance ?? {},
       currentCompanyId: r.current_company_id,
       primaryEmployment: r.primary_employment_id
-        ? { id: r.primary_employment_id, masterCompanyId: r.primary_company_id, title: r.primary_title }
+        ? {
+            id: r.primary_employment_id,
+            masterCompanyId: r.primary_company_id,
+            title: r.primary_title,
+          }
         : null,
     };
   },

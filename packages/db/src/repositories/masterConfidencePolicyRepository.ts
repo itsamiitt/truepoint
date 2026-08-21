@@ -32,7 +32,8 @@ export const masterConfidencePolicyRepository = {
     const fieldHalfLifeDays: Record<string, number | null> = {};
     let defaultHalfLifeDays = FALLBACK_DEFAULT_HALF_LIFE_DAYS;
     for (const r of rows) {
-      if (r.field === "*") defaultHalfLifeDays = r.half_life_days ?? FALLBACK_DEFAULT_HALF_LIFE_DAYS;
+      if (r.field === "*")
+        defaultHalfLifeDays = r.half_life_days ?? FALLBACK_DEFAULT_HALF_LIFE_DAYS;
       else fieldHalfLifeDays[r.field] = r.half_life_days;
     }
     return { fieldHalfLifeDays, defaultHalfLifeDays };

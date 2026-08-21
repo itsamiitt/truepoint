@@ -60,11 +60,7 @@ function SignalRow({ signal }: { signal: TenantSignal }) {
     <li className={styles.item}>
       <StatusBadge tone={FAMILY_TONE[signal.family]}>{FAMILY_LABEL[signal.family]}</StatusBadge>
       <span className={styles.headline}>
-        {signal.accountId ? (
-          <Link href={`/companies/${signal.accountId}`}>{title}</Link>
-        ) : (
-          title
-        )}
+        {signal.accountId ? <Link href={`/companies/${signal.accountId}`}>{title}</Link> : title}
       </span>
       <span className={styles.time}>{relTime(signal.observedAt)}</span>
     </li>
