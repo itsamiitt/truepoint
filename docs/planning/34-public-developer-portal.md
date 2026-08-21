@@ -128,7 +128,7 @@ blocker, not a schedule.
 | # | Phase | State | Blocker |
 |---|---|---|---|
 | A | Portal ships: routes, content, chrome, infra wiring | **done** | — |
-| B | Verify it renders: all routes, chrome present, a11y skeleton, no forbidden copy in delivered HTML | **done** — `bun run --filter @leadwolf/doc verify` | — |
+| B | Verify it renders: all routes, chrome present, a11y skeleton, no forbidden copy in delivered HTML | **done** — `bun run --filter @leadwolf/doc verify`, and it runs in CI on every push | — |
 | C | WCAG 2.2 AA contrast | **done** — three failures found and fixed; `contrast.test.ts` now gates the palette | — |
 | D | Content-Security-Policy | **done** — shipped enforced, with `script-src` honestly documented as the weak directive | — |
 | E | Waitlist / lead capture | **blocked** | Rule 3: a collection path needs lawful basis, consent surface, suppression point, erasure path. Belongs on `apps/api`. |
@@ -183,6 +183,7 @@ pair the app paints and bans `--tp-ink-4` as a text colour outright.
 | Search indexing | `robots.ts` + a generated `sitemap.ts`; the site is meant to be crawled. |
 | Notifications / webhooks / export | Not applicable — no data, no events. |
 | Analytics | **Not wired.** Listed as a follow-up above rather than stubbed. |
+| CI | `bun run build` picks the app up from the workspace glob; a dedicated step then starts the portal on the runner and runs `verify` — the compliance guarantee is about delivered HTML, so it needs a real server, and this app is the one in the fleet that can start on a bare runner with no env, database or Redis. |
 
 ## What this pass did NOT do
 

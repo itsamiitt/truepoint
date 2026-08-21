@@ -131,6 +131,31 @@ jobs:
           REDIS_URL: redis://localhost:6379
           BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
         run: bun run build
+      # The developer portal's compliance guarantees are about DELIVERED HTML, and no unit test can assert
+      # those: content.test.ts proves the content MODULES carry no rule-4/rule-7 copy, but an edit that
+      # hardcoded a claim straight into JSX would sail past it. So the portal is started and probed here.
+      #
+      # This is cheap and safe to put in the gates job precisely because of what apps/doc is: it needs no
+      # env, no database, no Redis and no API (the doc-app-holds-no-data-path boundary rule is what
+      # guarantees that), so `next start` comes up on a bare runner in seconds. NODE_ENV=production so the
+      # security headers, which are production-gated, are actually present to assert.
+      #
+      # The trap cleans up even when verify fails, so a failing gate cannot leave the job hanging on a live
+      # server. `wait-for` bounds startup at 30s rather than trusting a fixed sleep.
+      - name: Developer portal — rendered-HTML + a11y + CSP checks
+        env:
+          NODE_ENV: production
+        run: |
+          set -uo pipefail
+          bun run --filter @leadwolf/doc start &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:3007/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:3007/ >/dev/null || { echo "portal did not start within 30s"; exit 1; }
+          bun run --filter @leadwolf/doc verify
       # Each *.test.ts runs in its OWN bun process, mirroring the itests step below and for the same reason:
       # module singletons (mock.module patches, the auth metrics registry, env snapshots) bleed across files
       # in one shared process — the suites were authored under per-file isolation.

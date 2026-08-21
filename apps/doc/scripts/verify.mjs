@@ -10,8 +10,9 @@
 //   bun run --filter @leadwolf/doc start   # in one shell
 //   bun run --filter @leadwolf/doc verify  # in another
 //
-// Not wired into CI: the gates job builds but starts no servers. It is a local pre-push check and the basis
-// of the post-deploy probe in deploy/deploy.sh.
+// Runs in CI (the "Developer portal — rendered-HTML + a11y + CSP checks" step in .github/workflows/ci.yml,
+// which starts the portal on the runner first), locally against `next start`, and against the live origin
+// via DOC_BASE_URL. deploy/deploy.sh runs a lighter probe of the same idea post-deploy.
 const BASE = process.env.DOC_BASE_URL ?? "http://localhost:3007";
 
 const PAGES = [
