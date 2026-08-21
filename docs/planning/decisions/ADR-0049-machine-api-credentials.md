@@ -89,10 +89,38 @@ access are separable. `owner` passes implicitly.
   useful on its own (a customer can provision and rotate before integrating), and shipping it separately keeps
   the security review of *issuance* apart from the review of *egress*.
 
-## Open — the data endpoints these keys will authenticate
+## D6 — The first endpoints: companies only, and the reason is compliance, not effort
 
-The credential is Accepted; what it unlocks is still Proposed, and one problem must be solved before any of it
-ships. **Recorded here rather than discovered later:**
+`/api/v1/public/company/match` (free) and `/api/v1/public/company/enrich` (billable) ship behind
+`PUBLIC_DATA_API_ENABLED`. **Person and search endpoints do not**, and the line between them is not scope
+management — it is the suppression precondition described below. Company records carry organization facts
+only: no person, no contact channel, nothing a data subject can be suppressed on. They therefore have no
+`suppression_list` reconciliation to do, which is exactly what the person half cannot say.
+
+Three properties of the money path are worth stating because getting any of them wrong is expensive:
+
+- **The graph read happens outside the tenant transaction.** It is the slow part; holding a `FOR UPDATE` on
+  the tenant row across it would serialize every concurrent call from one customer behind a single query.
+  Same reasoning `revealContact` gives for keeping verification out of its lock window.
+- **No match, no charge — and the miss is still counted.** `calls − billed_calls` in the usage rollup is what
+  makes that promise checkable by the customer rather than a slogan. Dropping the misses would quietly
+  flatter our own hit rate.
+- **Charge, ledger and meter commit in one transaction.** There is no state in which the balance moved
+  without a ledger row explaining it.
+- **Matching is free on purpose.** An integration calls it on every inbound record to decide whether
+  enriching is worth a credit. Metering it would tax the step that keeps a customer's spend efficient, earn
+  almost nothing, and make our unit economics look worse in every buyer's spreadsheet. It is rate-limited
+  instead — the right control for a cheap read.
+
+Usage is recorded in `api_key_usage_daily`, a per-(key, day, endpoint) rollup upserted at write time rather
+than a per-call event log: a public API's call volume makes "show me this month" an aggregate over millions
+of rows otherwise. It is a **counter, not a billing record** — the ledger is the money's source of truth and
+nothing reconciles against the rollup, deliberately, because a second money source is how ledgers rot.
+
+## Open — the endpoints still blocked
+
+The credential and the company surface are Accepted; the person and search surface is not, and one problem
+must be solved before it can be. **Recorded here rather than discovered later:**
 
 **A public data API over the master graph is an egress with no `suppression_list` coverage.** Every Layer-0
 read checks only `master_persons.is_suppressed` (via `MASTER_PERSON_VISIBLE`), and `is_suppressed` mirrors

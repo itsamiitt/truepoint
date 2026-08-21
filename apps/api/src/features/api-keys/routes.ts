@@ -25,7 +25,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type OrgRoleVariables, requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
-import { mintKey } from "./mintKey.ts";
+import { mintKey } from "../../lib/apiKeySecret.ts";
 
 export const apiKeyRoutes = new Hono<{ Variables: OrgRoleVariables }>();
 

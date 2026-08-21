@@ -25,6 +25,7 @@ let _apiLimiter: RateLimiterRedis | undefined;
 let _captureLimiter: RateLimiterRedis | undefined;
 let _revealLimiter: RateLimiterRedis | undefined;
 let _profileLimiter: RateLimiterRedis | undefined;
+let _apiKeyLimiter: RateLimiterRedis | undefined;
 const ipLimiter = (): RateLimiterRedis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_ipLimiter ??= new RateLimiterRedis({
@@ -107,6 +108,20 @@ const profileLimiter = (): RateLimiterRedis =>
     duration: 60,
   }));
 
+// Per-KEY budget for the public data API (ADR-0049). Keyed by the resolved api_keys row id — not by IP and
+// not by tenant — so a customer running many keys gets a per-integration budget, one leaked key cannot spend
+// another's, and revoking a key retires its bucket with it. The default is deliberately generous relative to
+// rl:api: this is a server-to-server integration whose whole purpose is sustained call volume, and the
+// per-call credit charge is the real economic bound. Tiering per plan is the 09 §8 follow-up.
+const apiKeyLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_apiKeyLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:apikey",
+    points: env.API_KEY_RATE_PER_MIN,
+    duration: 60,
+  }));
+
 // Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
 // outage (shared helper).
 async function consume(
@@ -176,6 +191,23 @@ export async function checkRevealRate(key: string): Promise<void> {
  */
 export async function checkDatabaseProfileRate(key: string): Promise<void> {
   await consume(profileLimiter(), key, 1, "rate-limit");
+}
+
+/**
+ * Per-KEY throttle for the public data API (`key` = the resolved api_keys row id, so the budget belongs to
+ * the credential and one customer's burst cannot starve another's).
+ *
+ * This bucket has to exist, and its absence would have been silent. The app-root `/api/*` limiter SKIPS any
+ * request carrying an `Authorization` header, on the assumption that `authn` will then charge it per verified
+ * subject — but an API-key request carries that header and never reaches `authn`, so without this it would be
+ * throttled by NEITHER limiter. Keyed separately from `rl:api` and `rl:api:sub` so it neither weakens nor
+ * duplicates them.
+ *
+ * Fails OPEN on a Redis outage, like every other limiter here. That is the right trade even for a monetized
+ * surface: the credit balance is the hard cap on spend, so a cache blip costs velocity control, not money.
+ */
+export async function checkApiKeyRate(key: string): Promise<void> {
+  await consume(apiKeyLimiter(), key, 1, "api-key-rate-limit");
 }
 
 // ── Email-OTP send throttle (AUTH-025) ─────────────────────────────────────────────────────────────────

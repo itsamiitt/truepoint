@@ -18,7 +18,15 @@
 // Kept pure — no env, no Redis, no PII, no I/O — so it is unit-testable and safe to call from a catch block.
 
 /** The guards that deliberately fail open. `revocation` is listed for completeness; it has its own marker. */
-export type OpenGuard = "rate-limit" | "reveal-rate-limit" | "entitlement";
+export type OpenGuard =
+  | "rate-limit"
+  | "reveal-rate-limit"
+  // The public data API's per-key bucket (ADR-0049). Named distinctly rather than folded into "rate-limit"
+  // because when THIS one opens, an authenticated machine caller is unthrottled against a metered surface —
+  // the credit balance becomes the only remaining bound on its velocity, exactly as with reveal-rate-limit.
+  // An operator reading the page needs to know which of those two it is without opening the code.
+  | "api-key-rate-limit"
+  | "entitlement";
 
 /**
  * Format the DEGRADED marker for a guard that just admitted a request it could not check.

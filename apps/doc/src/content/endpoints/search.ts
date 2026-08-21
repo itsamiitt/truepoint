@@ -6,13 +6,13 @@ import { COMMON_ERRORS, SUPPRESSION_NOTE } from "./shared.ts";
 export const SEARCH: Endpoint = {
   slug: "search",
   method: "POST",
-  path: "/v1/search",
+  path: "/api/v1/public/search",
   title: "Search people and companies",
   summary:
     "Filter the graph and page through matches. The endpoint behind list building inside your product.",
   availability: "planned",
   credits: 1,
-  billing: `One credit per result actually returned. A query that matches nothing is free, and so is a page you never request. ${SUPPRESSION_NOTE}`,
+  billing: `One credit per result actually returned. A query that matches nothing is free, and so is a page you never request. ${SUPPRESSION_NOTE} NOT CALLABLE YET, for the same reason as person enrichment: a public read of the person graph has no suppression-list coverage today.`,
   params: [
     {
       name: "entity",
@@ -61,7 +61,7 @@ export const SEARCH: Endpoint = {
   ],
   errors: COMMON_ERRORS,
   example: {
-    request: `curl -X POST https://api.truepoint.in/v1/search \\
+    request: `curl -X POST https://api.truepoint.in/api/v1/public/search \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{

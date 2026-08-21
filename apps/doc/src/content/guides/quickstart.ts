@@ -38,7 +38,7 @@ export const QUICKSTART: Guide = {
     {
       kind: "code",
       language: "bash",
-      source: `curl "https://api.truepoint.in/v1/company/match?domain=acme.com" \\
+      source: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=acme.com" \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY"`,
     },
     {
@@ -49,7 +49,7 @@ export const QUICKSTART: Guide = {
     {
       kind: "code",
       language: "bash",
-      source: `curl -X POST https://api.truepoint.in/v1/company/enrich \\
+      source: `curl -X POST https://api.truepoint.in/api/v1/public/company/enrich \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"id":"cmp_2b81"}'`,

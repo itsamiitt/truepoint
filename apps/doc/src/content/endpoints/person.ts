@@ -6,13 +6,13 @@ import { COMMON_ERRORS, SUPPRESSION_NOTE } from "./shared.ts";
 export const PERSON_ENRICH: Endpoint = {
   slug: "person-enrich",
   method: "POST",
-  path: "/v1/person/enrich",
+  path: "/api/v1/public/person/enrich",
   title: "Enrich a person",
   summary:
     "Resolve a partial identifier — a work email, a profile URL, or a name plus a company — to a full person record with per-field provenance.",
   availability: "planned",
   credits: 3,
-  billing: `Three credits on a successful match; two more if a verified business email is requested. A no-match costs nothing. ${SUPPRESSION_NOTE}`,
+  billing: `Three credits on a successful match; two more if a verified business email is requested. A no-match costs nothing. ${SUPPRESSION_NOTE} NOT CALLABLE YET, and the blocker is compliance rather than effort: a public read of the person graph has no suppression-list coverage today, so serving people before that is reconciled would risk serving someone who has opted out. The company endpoints ship first because organization facts carry no such obligation.`,
   params: [
     {
       name: "email",
@@ -81,7 +81,7 @@ export const PERSON_ENRICH: Endpoint = {
   ],
   errors: COMMON_ERRORS,
   example: {
-    request: `curl -X POST https://api.truepoint.in/v1/person/enrich \\
+    request: `curl -X POST https://api.truepoint.in/api/v1/public/person/enrich \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"name":"Priya Nair","company_domain":"acme.com","verify_email":true}'`,

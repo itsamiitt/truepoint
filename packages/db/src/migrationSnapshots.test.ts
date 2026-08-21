@@ -185,8 +185,12 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  snapshot chain that stopped at 0107, because it diffs the schema against that stale baseline and emits a
  *  migration re-creating everything added since. The table is in schema/index.ts, so the rlsCoverage guard
  *  still holds it to having a policy — which is the property that actually matters here. Absorbed by the
- *  next rebaseline. */
-const EXPECTED_DEFICIT = 96;
+ *  next rebaseline.
+ *
+ *  96 → 97 for 0138_api_key_usage_daily (ADR-0049) — the public API's usage rollup, hand-authored for the
+ *  same reason 0137 was: generate diffs against a baseline that stopped at 0107. Also in schema/index.ts, so
+ *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 97;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

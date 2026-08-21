@@ -52,7 +52,8 @@ import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { publicPricingRoutes } from "./features/pricing/index.ts";
 import { reportsRoutes } from "./features/reports/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
-import { apiKeyRoutes } from "./features/api-keys/index.ts";
+import { apiKeyRoutes, apiUsageRoutes } from "./features/api-keys/index.ts";
+import { publicCompanyRoutes } from "./features/public-api/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
 import { scimUserRoutes } from "./features/scim/index.ts";
@@ -282,6 +283,23 @@ app.route("/api/v1/webhooks", webhooksRoutes);
 // browser with a user access JWT, so it wants the ordinary authn + CORS + per-IP chain. The keys it mints are
 // presented to a different, server-to-server surface that will carry its own auth.
 app.route("/api/v1/tenants/me/api-keys", apiKeyRoutes);
+// The tenant's own API usage rollup, for the dashboard panel. Any workspace role may read it — spend
+// visibility is not a security_admin duty (ADR-0049).
+app.route("/api/v1/tenants/me/api-usage", apiUsageRoutes);
+// The machine-authenticated public data API (ADR-0049). Dark by default: while PUBLIC_DATA_API_ENABLED is
+// off the router is NOT MOUNTED and the paths 404 — the MASTER_SYNC_INGRESS_ENABLED posture, and the right
+// one for a surface that authenticates a long-lived credential and spends a tenant's credits.
+//
+// Mounted UNDER /api/* deliberately, despite doc.truepoint.in publishing bare /v1 paths (a collision recorded
+// in ADR-0049 §Open). Under /api/* it inherits the body-size cap; outside it, it would inherit neither that
+// nor any limiter. Its own per-key bucket in apiKeyAuth is what actually throttles it, because the /api/*
+// limiter skips anything carrying an Authorization header.
+//
+// It carries its OWN auth (apiKeyAuth) and never touches authn/tenancy: a caller here is a customer's server
+// holding an api_keys bearer credential, not a logged-in user.
+if (env.PUBLIC_DATA_API_ENABLED) {
+  app.route("/api/v1/public/company", publicCompanyRoutes);
+}
 // Public DSAR intake must register BEFORE the authenticated compliance router, whose `*` middleware
 // would otherwise 401 the session-less form (08 §4).
 app.route("/api/v1/compliance/dsar", dsarPublicRoutes);

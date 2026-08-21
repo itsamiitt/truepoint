@@ -1,4 +1,4 @@
-// mintKey.test.ts — the credential's security properties, asserted rather than assumed.
+// apiKeySecret.test.ts — the credential's security properties, asserted rather than assumed.
 //
 // Every one of these would pass code review if it were broken. A prefix that happened to be the whole secret,
 // a hash that was the identity function, a "random" key that repeated — all of them look like working code
@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { API_KEY_DISPLAY_PREFIX_LENGTH, API_KEY_LIVE_PREFIX } from "@leadwolf/types";
-import { mintKey, sha256Hex } from "./mintKey.ts";
+import { mintKey, sha256Hex } from "./apiKeySecret.ts";
 
 describe("mintKey", () => {
   test("the secret carries the live band and real entropy", () => {

@@ -25,3 +25,20 @@ CREATE POLICY api_keys_tenant_isolation ON api_keys
   WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON api_keys TO leadwolf_app;
+
+-- ── api_key_usage_daily ─────────────────────────────────────────────────────────────────────────────────
+-- Same tenant posture, and FORCE for the same reason: the usage dashboard reads it through leadwolf_app on
+-- the customer's behalf, and the metering upsert writes it on the API path under the key's resolved tenant.
+-- Both sides are the app role, so a missing predicate must return nothing rather than another org's spend.
+--
+-- No DELETE grant. Usage is a record a customer reconciles an invoice against; nothing in the product has a
+-- reason to remove a row, and the absence of the grant is what makes that true rather than merely intended.
+-- (Tenant deletion still cascades via the FK, which runs as the owner.)
+ALTER TABLE api_key_usage_daily ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_key_usage_daily FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS api_key_usage_daily_tenant_isolation ON api_key_usage_daily;
+CREATE POLICY api_key_usage_daily_tenant_isolation ON api_key_usage_daily
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
+
+GRANT SELECT, INSERT, UPDATE ON api_key_usage_daily TO leadwolf_app;

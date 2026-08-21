@@ -64,6 +64,39 @@ export const apiKeySecretResponseSchema = z.object({
 });
 export type ApiKeySecretResponse = z.infer<typeof apiKeySecretResponseSchema>;
 
+// ── Usage (the dashboard read) ───────────────────────────────────────────────────────────────────────────
+
+/** One (key, day, endpoint) bucket. The rollup grain, returned raw so a client can fold it either way. */
+export const apiUsageBucketSchema = z.object({
+  day: z.string(),
+  endpoint: z.string(),
+  apiKeyId: z.string().uuid(),
+  calls: z.number().int().nonnegative(),
+  /** The subset that returned data and therefore cost credits. */
+  billedCalls: z.number().int().nonnegative(),
+  creditsSpent: z.number().int().nonnegative(),
+});
+export type ApiUsageBucket = z.infer<typeof apiUsageBucketSchema>;
+
+export const apiUsageTotalsSchema = z.object({
+  calls: z.number().int().nonnegative(),
+  billedCalls: z.number().int().nonnegative(),
+  creditsSpent: z.number().int().nonnegative(),
+});
+export type ApiUsageTotalsWire = z.infer<typeof apiUsageTotalsSchema>;
+
+export const apiUsageResponseSchema = z.object({
+  windowDays: z.number().int().positive(),
+  totals: apiUsageTotalsSchema,
+  days: z.array(apiUsageBucketSchema),
+});
+export type ApiUsageResponse = z.infer<typeof apiUsageResponseSchema>;
+
+/** Windows the usage endpoint accepts. An allow-list, not a range: an arbitrary `days` lets a caller ask for
+ *  a decade and turn a bounded read into a scan. */
+export const API_USAGE_WINDOWS = [7, 30, 90] as const;
+export type ApiUsageWindow = (typeof API_USAGE_WINDOWS)[number];
+
 /** The prefix shown in the management list and safe to echo in a customer's own logs. */
 export const API_KEY_DISPLAY_PREFIX_LENGTH = 16;
 

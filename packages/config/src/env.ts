@@ -535,6 +535,23 @@ export const appEnvSchema = z
     // ENUMERATION surface; this bounds the velocity of a walk. Generous for a human clicking rows (a fast
     // session is single digits per minute), tight for a script.
     DATABASE_PROFILE_RATE_PER_MIN: z.coerce.number().int().positive().default(120),
+    // Per-KEY budget for the public data API (ADR-0049), keyed by the api_keys row id. Generous relative to
+    // the human-facing limits on purpose: this is a server-to-server integration whose whole point is
+    // sustained volume, and the per-call credit charge is the real economic bound. Per-plan tiering is the
+    // 09 §8 follow-up; until then one number keeps the failure mode legible.
+    API_KEY_RATE_PER_MIN: z.coerce.number().int().positive().default(600),
+    // Credits charged for one successful company enrichment through the public API. Config rather than a
+    // constant for the same reason REVEAL_COST_* is: a price is an operational lever, and changing one must
+    // not require a deploy. Company MATCHING is free and has no knob — see the route for why.
+    API_COST_COMPANY_ENRICH: z.coerce.number().int().nonnegative().default(1),
+    // Master switch for the public data API surface (ADR-0049). While off the router is NOT MOUNTED and the
+    // paths 404 — the MASTER_SYNC_INGRESS_ENABLED posture, which is the right one for a surface that
+    // authenticates a machine credential and spends a tenant's credits. Explicit "true" only, so
+    // "false"/"0"/""/unset can never read truthy.
+    PUBLIC_DATA_API_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // How far BACK a delta poll reads from the stored watermark (crm-sync 00 §6.4). CRM modstamps are not
     // ordered against our clock, so a record written during the previous poll can carry a timestamp just
     // under the mark; re-reading a record is free (the link table + content hash make it a no-op) while

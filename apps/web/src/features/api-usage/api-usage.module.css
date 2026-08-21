@@ -1,0 +1,23 @@
+/* api-usage.module.css — styles for THIS slice's own component, the sparkline. Nothing else belongs here:
+ * the cockpit card that renders it lives in features/home and uses that slice's stylesheet, because a
+ * cross-feature stylesheet import trips the same boundary rule a cross-feature component import does. */
+
+.sparkSvg {
+  display: block;
+  width: 100%;
+  height: 48px;
+  overflow: visible;
+}
+
+/* Ink-on-tint, matching the credit-burn sparkline: the wash carries the volume, the stroke the shape. */
+.sparkArea {
+  fill: var(--tp-cobalt-50);
+}
+
+.sparkLine {
+  fill: none;
+  stroke: var(--tp-cobalt);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}

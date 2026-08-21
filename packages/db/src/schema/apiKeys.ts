@@ -29,7 +29,17 @@
 //   • Revocation is a soft flip (revoked_at) so the audit trail survives; it takes effect on the next call.
 
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  date,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { tenants, workspaces } from "./auth.ts";
 
 // Shared column idioms (kept local per the self-contained-schema convention used across this folder).
@@ -84,5 +94,55 @@ export const apiKeys = pgTable(
   (table) => [
     // tenant_id leads, per tenancy.md — the management list reads (tenant_id, created_at desc).
     index("api_keys_tenant_created_idx").on(table.tenantId, table.createdAt),
+  ],
+);
+
+// ── api_key_usage_daily — the usage dashboard's read model ───────────────────────────────────────────────
+//
+// One row per (key, day, endpoint), UPSERTED on each call — deliberately NOT one row per call.
+//
+// WHY A ROLLUP AND NOT AN EVENT LOG. A per-call table on a public API grows without bound, and turns "show me
+// this month's usage" into an aggregate over millions of rows — the exact query shape the platform skill says
+// will not scale. Rolling up at write time gives the dashboard a bounded, index-supported read: a tenant with
+// five keys hitting four endpoints produces at most twenty rows a day, forever. The cost is one extra upsert
+// per request, which is a fixed cost paid at the cheap end.
+//
+// WHY NOT usage_event. That table exists and is the Phase-1 metering spine, but it is the wrong instrument
+// here: it has no api_key_id (so per-key attribution — the thing a customer actually wants — is impossible),
+// its `action` column is a closed CHECK in three places that would have to move together, and its
+// entitlement-cap reader counts ROWS rather than summing quantity. Widening it to carry this would make it
+// worse at its own job. The two coexist; usage_event stays the entitlement spine.
+//
+// THIS IS A COUNTER, NOT A BILLING RECORD. The money's source of truth is the credit ledger (ADR-0029);
+// `credits_spent` here is a denormalized copy for display. If the two ever disagree the ledger is right, and
+// nothing reconciles against this table — deliberately, because a second money source is how ledgers rot.
+export const apiKeyUsageDaily = pgTable(
+  "api_key_usage_daily",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    // No FK to api_keys, on purpose: usage OUTLIVES the key. Deleting a credential must not erase the spend
+    // history a customer is reconciling an invoice against, and a revoked key's usage stays visible.
+    apiKeyId: uuid("api_key_id").notNull(),
+    day: date("day").notNull(),
+    endpoint: varchar("endpoint", { length: 64 }).notNull(),
+    // Every call that got past auth and rate limiting, including the ones that matched nothing.
+    calls: integer("calls").notNull().default(0),
+    // The subset that returned data and therefore cost credits. calls − billed_calls is the caller's no-match
+    // rate, which is what makes "no match, no charge" checkable by the customer rather than a slogan.
+    billedCalls: integer("billed_calls").notNull().default(0),
+    creditsSpent: integer("credits_spent").notNull().default(0),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.tenantId, table.apiKeyId, table.day, table.endpoint],
+      name: "api_key_usage_daily_pk",
+    }),
+    // The dashboard's read: one tenant, a date window, newest first.
+    index("api_key_usage_daily_tenant_day_idx").on(table.tenantId, table.day),
   ],
 );

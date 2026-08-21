@@ -803,6 +803,11 @@ export {
   type ApiKeyRow,
   type ApiKeyAuth,
 } from "./repositories/apiKeyRepository.ts";
+export {
+  apiUsageRepository,
+  type ApiUsageDayRow,
+  type ApiUsageTotals,
+} from "./repositories/apiUsageRepository.ts";
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,

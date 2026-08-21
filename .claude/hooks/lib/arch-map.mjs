@@ -306,6 +306,10 @@ export const REPO_DOMAIN = {
   workspace: "workspaces",
   api_key: "api-public",
   apiKey: "api-public",
+  // The public API's per-key/day/endpoint usage rollup (ADR-0049). Filed under api-public, not billing:
+  // it is a usage COUNTER for the customer dashboard, and the credit ledger remains the money's source of
+  // truth. Filing it under billing would encode in the map the exact conflation the code refuses to make.
+  apiUsage: "api-public",
   purchase: "billing",
   notification: "notifications",
   aiRequest: "ai",

@@ -18,13 +18,13 @@ export const PAGINATION: Guide = {
       kind: "code",
       language: "bash",
       source: `# page 1
-curl -X POST https://api.truepoint.in/v1/search \\
+curl -X POST https://api.truepoint.in/api/v1/public/search \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"entity":"company","filters":{"country":"IN"},"limit":25}'
 
 # page 2 — same filters, plus the cursor from page 1
-curl -X POST https://api.truepoint.in/v1/search \\
+curl -X POST https://api.truepoint.in/api/v1/public/search \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"entity":"company","filters":{"country":"IN"},"limit":25,"cursor":"c2Vhcm5jaDo0Mg"}'`,

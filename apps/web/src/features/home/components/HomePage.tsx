@@ -12,6 +12,7 @@ import { useDataQuality } from "../hooks/useDataQuality";
 import { useDataQualityTrend } from "../hooks/useDataQualityTrend";
 import { useHomeSummary } from "../hooks/useHomeSummary";
 import { ActivityFeedCard } from "./ActivityFeedCard";
+import { ApiUsageCard } from "./ApiUsageCard";
 import { BurnSparkline } from "./BurnSparkline";
 import { DataHealthCard } from "./DataHealthCard";
 import { DataHealthTrendCard } from "./DataHealthTrendCard";
@@ -165,6 +166,10 @@ export function HomePage() {
             error={error}
             onRetry={reload}
           />
+          {/* Public-API consumption (ADR-0049). Owns its own query rather than riding the cockpit summary:
+              it reads a different endpoint on a different cadence, and folding it into /home/summary would
+              make every dashboard load pay for a panel most tenants have no data for yet. */}
+          <ApiUsageCard />
           <div className={styles.spanFull}>
             <ActivityFeedCard
               items={summary?.activityFeed ?? []}
