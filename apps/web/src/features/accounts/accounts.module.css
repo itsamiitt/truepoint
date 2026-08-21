@@ -215,3 +215,11 @@
 .marketsLink:hover {
   color: var(--tp-text);
 }
+
+/* Results header count line — "N in your workspace · M more in the database" (stage 2). Mirrors the
+   People pane's header so the two tabs read the same way. */
+.resultCount {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+  padding-bottom: 8px;
+}

@@ -1519,3 +1519,12 @@ export {
   toMaskedDatabasePerson,
   type DatabaseSearchScope,
 } from "./prospect/searchDatabase.ts";
+// The GLOBAL company search (search-consolidation stage 2) — the company twin of the block above.
+export {
+  searchDatabaseCompanies,
+  countDatabaseCompanies,
+  databaseCompanyFacets,
+  toMaskedDatabaseCompany,
+  bandFor,
+  type DatabaseCompanyScope,
+} from "./prospect/searchDatabaseCompanies.ts";

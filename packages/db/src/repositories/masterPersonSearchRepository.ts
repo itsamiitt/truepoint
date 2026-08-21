@@ -1,4 +1,4 @@
-import type { DatabaseQuery } from "@leadwolf/types";
+import { DATABASE_COUNT_CAP, type DatabaseQuery } from "@leadwolf/types";
 // masterPersonSearchRepository.ts — the GLOBAL database search over Layer-0 persons (Layer-0-as-database
 // plan, slice 2 [S-09][S-13][S-10]). A SIBLING of searchRepository, not a second SearchPort implementation:
 // the overlay port is typed to workspace-owned contacts, and this returns people the workspace does NOT
@@ -111,11 +111,23 @@ export const masterPersonSearchRepository = {
     return { rows: page.map(toMasterPersonRow), nextCursor };
   },
 
-  /** Exact total for the same predicate (the grid header + "select all N"). */
-  async countPersonsTx(tx: Tx, query: DatabaseQuery): Promise<number> {
+  /**
+   * Total for the same predicate, CAPPED (the grid header).
+   *
+   * Counting through a LIMIT subquery is what actually bounds the work — capping the number in JS after an
+   * uncapped `count(*)` would report a smaller figure while still paying to scan every matching row. An
+   * exact count over a trgm-filtered population has unbounded cost as the graph grows and nothing bills off
+   * it, so the ceiling is real and the client renders the floor as "10,000+".
+   */
+  async countPersonsTx(tx: Tx, query: DatabaseQuery): Promise<{ total: number; capped: boolean }> {
     const rows = (await tx.execute(sql`
-      SELECT count(*)::int AS n ${PERSON_FROM} WHERE ${buildWhere(query)}
+      SELECT count(*)::int AS n FROM (
+        SELECT 1 ${PERSON_FROM} WHERE ${buildWhere(query)} LIMIT ${DATABASE_COUNT_CAP + 1}
+      ) t
     `)) as unknown as Array<{ n: number }>;
-    return rows[0]?.n ?? 0;
+    const n = rows[0]?.n ?? 0;
+    return n > DATABASE_COUNT_CAP
+      ? { total: DATABASE_COUNT_CAP, capped: true }
+      : { total: n, capped: false };
   },
 };

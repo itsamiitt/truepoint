@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2216,
-  "fileSetHash": "sha256:4bc93b848cc2e6a2eabff578f3c2e01059976424efbcbb725e51d3c3708a4053",
+  "fileCount": 2225,
+  "fileSetHash": "sha256:b5b730b6ef34446aa04a13061618937351010b90db11f98e77d912a44f798689",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -139,11 +139,15 @@
     },
     "accounts": {
       "web": [
+        "apps/web/src/features/accounts/accountRows.test.ts",
+        "apps/web/src/features/accounts/accountRows.ts",
         "apps/web/src/features/accounts/api.ts",
         "apps/web/src/features/accounts/components/AccountsPane.tsx",
         "apps/web/src/features/accounts/components/CompanyPage.tsx",
         "apps/web/src/features/accounts/components/MarketsBoard.tsx",
         "apps/web/src/features/accounts/components/PostingsSection.tsx",
+        "apps/web/src/features/accounts/databaseCompanyApi.ts",
+        "apps/web/src/features/accounts/hooks/useAccountsSearch.ts",
         "apps/web/src/features/accounts/hooks/useCompany.ts",
         "apps/web/src/features/accounts/index.ts"
       ],
@@ -1331,6 +1335,8 @@
       "db": [
         "packages/db/src/repositories/masterChannelReadRepository.ts",
         "packages/db/src/repositories/masterCompanyDetailRepository.ts",
+        "packages/db/src/repositories/masterCompanyReadRepository.ts",
+        "packages/db/src/repositories/masterCompanySearchRepository.ts",
         "packages/db/src/repositories/masterConfidencePolicyRepository.ts",
         "packages/db/src/repositories/masterEducationRepository.ts",
         "packages/db/src/repositories/masterEmploymentReadRepository.ts",
@@ -1590,6 +1596,7 @@
         "packages/core/src/prospect/mergeContact.ts",
         "packages/core/src/prospect/mergePreview.ts",
         "packages/core/src/prospect/searchDatabase.ts",
+        "packages/core/src/prospect/searchDatabaseCompanies.ts",
         "packages/core/src/prospect/tags.ts"
       ],
       "db": [],
@@ -3135,6 +3142,7 @@
       "packages/db/test/marketRollups.itest.ts",
       "packages/db/test/masterBackfill.itest.ts",
       "packages/db/test/masterBackfillSweep.itest.ts",
+      "packages/db/test/masterCompanySearch.itest.ts",
       "packages/db/test/masterEducationAndProducts.itest.ts",
       "packages/db/test/masterGraphIsolation.itest.ts",
       "packages/db/test/masterGraphResolve.itest.ts",
@@ -3299,6 +3307,7 @@
       "packages/types/src/dataApproval.ts",
       "packages/types/src/dataHealth.test.ts",
       "packages/types/src/dataHealth.ts",
+      "packages/types/src/databaseCompanySearch.ts",
       "packages/types/src/databaseSearch.ts",
       "packages/types/src/dedupReview.ts",
       "packages/types/src/email.ts",

@@ -6,27 +6,24 @@
 // codec, which is deliberately separate from the People codec — that is what lets both tabs keep their
 // filters in one URL while only one is showing.
 //
-// SCOPE, STAGE 1: this pane currently searches the WORKSPACE's own `accounts` (what the retired /companies
-// index searched). The operator decision is that the Accounts tab searches the GLOBAL company graph
-// (`master_companies`) with workspace accounts appearing inside it as a row state — that is stage 2, gated
-// behind DATABASE_COMPANY_SEARCH_ENABLED. See docs/planning/search-consolidation/02-backend-spec.md.
+// SCOPE, STAGE 2: the pane searches the workspace's own `accounts` AND the GLOBAL company graph
+// (`master_companies`) in one list, with "already in my workspace" as a STATE of a row — the same shape the
+// People tab has had since Layer-0-as-database. The global half is behind DATABASE_COMPANY_SEARCH_ENABLED
+// and degrades to workspace-only, honestly labelled, while the gate is off.
 "use client";
 
 import { SearchDrawer, SearchDrawerOpener, type SearchShell } from "@/components/search";
 import shellStyles from "@/components/search/search.module.css";
-import {
-  AccountFilterPanel,
-  AccountsTable,
-  useAccountFacetCounts,
-  useAccountSearch,
-} from "@/features/prospect";
-import type { AccountFacetKey } from "@leadwolf/types";
+import { AccountFilterPanel, AccountsTable, useAccountFacetCounts } from "@/features/prospect";
+import type { AccountFacetKey, MaskedAccount } from "@leadwolf/types";
 import { EmptyState, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { AccountRow } from "../accountRows";
 import styles from "../accounts.module.css";
+import { useAccountsSearch } from "../hooks/useAccountsSearch";
 
 /** The fixed-option firmographic facets that get live counts in the rail (POST /account-search/facets). */
 const COUNT_FIELDS: AccountFacetKey[] = [
@@ -39,7 +36,7 @@ const COUNT_FIELDS: AccountFacetKey[] = [
 
 export function AccountsPane({ shell }: { shell: SearchShell }) {
   const router = useRouter();
-  const search = useAccountSearch();
+  const search = useAccountsSearch();
   const counts = useAccountFacetCounts(search.query, COUNT_FIELDS);
 
   // The same debounce-commit free-text pattern the People pane uses: a local mirror committed to the query
@@ -82,26 +79,45 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
           </Link>
         </div>
 
+        <div className={styles.resultCount}>
+          {search.loading
+            ? "Loading…"
+            : `${(search.rows.length - search.databaseCount).toLocaleString()} in your workspace${
+                search.databaseTotal !== undefined && search.databaseTotal > 0
+                  ? ` · ${search.databaseTotal.toLocaleString()}${
+                      search.databaseCapped ? "+" : ""
+                    } more in the database`
+                  : ""
+              }`}
+        </div>
+
         <StateSwitch
           loading={search.loading}
           error={search.error}
-          empty={!search.loading && search.accounts.length === 0}
+          empty={!search.loading && search.rows.length === 0}
           onRetry={search.reload}
           emptyState={
             <EmptyState
               icon={<Building2 size={28} />}
               title="No companies"
-              description="No accounts match this search. Adjust your firmographic filters or import more from the Import surface."
+              description={
+                search.databaseDisabled
+                  ? "No accounts in your workspace match this search. Company database search is not enabled yet, so only your own accounts are searched."
+                  : "No companies match this search. Adjust your firmographic filters or import more from the Import surface."
+              }
             />
           }
         >
           <AccountsTable
-            accounts={search.accounts}
+            accounts={search.rows}
             loading={search.loading}
-            // STAGE 1: the owned-account profile is still its own route. Stage 3 turns it into a drawer
-            // addressed by `?account=<uuid>` on this surface, at which point /companies/:id becomes a
-            // redirect like the rest of the retired destination.
-            onOpen={(account) => router.push(`/companies/${account.id}`)}
+            isDatabaseRow={(a) => (a as AccountRow).databaseDomain !== undefined}
+            // A database row has no workspace record to open — stage 3 gives it a profile drawer. Until
+            // then it is inert rather than routing to a /companies/:id that does not exist.
+            onOpen={(account: MaskedAccount) => {
+              if ((account as AccountRow).databaseDomain !== undefined) return;
+              router.push(`/companies/${account.id}`);
+            }}
             density="comfortable"
           />
           {search.hasMore && (

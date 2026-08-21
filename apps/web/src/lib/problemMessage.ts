@@ -24,5 +24,21 @@ interface ProblemBody {
  */
 export async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as ProblemBody | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
+  return problemMessageFromBody(body, fallback, res.status);
+}
+
+/**
+ * The same precedence, for callers that have ALREADY read the body.
+ *
+ * A slice that throws a typed `ApiError` needs `code` and the extension fields off the same body, and a
+ * Response can only be read once — so those callers were each re-deriving detail→title→fallback by hand,
+ * which is exactly the drift this module exists to stop. They call this instead; `problemMessage` above is
+ * now a thin wrapper over it, so there is still ONE implementation of the precedence.
+ */
+export function problemMessageFromBody(
+  body: ProblemBody | null,
+  fallback: string,
+  status: number,
+): string {
+  return body?.detail ?? body?.title ?? `${fallback} (${status})`;
 }

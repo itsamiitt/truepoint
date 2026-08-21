@@ -233,6 +233,11 @@ export const REPO_DOMAIN = {
   masterPersonRead: "master-sync",
   masterPersonSearch: "master-sync",
   masterChannelRead: "master-sync",
+  // The COMPANY twins of the two person seams above (search-consolidation stage 2). Same rule that put
+  // masterEducation here: every Layer-0 repository belongs to the one system-owned graph, whichever
+  // direction it reads or writes in.
+  masterCompanyRead: "master-sync",
+  masterCompanySearch: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",

@@ -67,7 +67,18 @@ export async function searchDatabase(
   };
 }
 
-export async function countDatabase(query: DatabaseQuery): Promise<{ total: number }> {
-  const total = await withErTx((tx) => masterPersonSearchRepository.countPersonsTx(tx, query));
-  return { total };
+/**
+ * The total for the same predicate, CAPPED at DATABASE_COUNT_CAP.
+ *
+ * This used to be exact and uncapped. An exact count over a trgm-filtered population has unbounded cost as
+ * the graph grows, and nothing bills or gates off this number — it is a grid header. The workspace contact
+ * count made the same trade at the same ceiling (CONTACT_COUNT_CAP). `capped` tells the client to render
+ * the value as a floor ("10,000+") rather than as an exact number.
+ */
+export async function countDatabase(
+  query: DatabaseQuery,
+): Promise<{ total: number; capped: boolean }> {
+  // The cap is applied in SQL (a LIMIT subquery inside countPersonsTx), not here — capping the number after
+  // an uncapped count would report a smaller figure while still paying to scan every matching row.
+  return withErTx((tx) => masterPersonSearchRepository.countPersonsTx(tx, query));
 }

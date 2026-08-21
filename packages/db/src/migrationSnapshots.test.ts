@@ -162,8 +162,14 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  91 → 92 for 0133_title_trgm_index — the 0132 category once more: the job_title trgm GIN that batch
  *  missed (launch-scale Phase 2 finding F3; CONCURRENTLY, migration-only per the 0109 rationale).
- *  Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 92;
+ *  Absorbed by the next rebaseline.
+ *
+ *  92 → 93 for 0134_database_company_search — the same category a fourth time: the PARTIAL + expression +
+ *  trgm/array GIN index set for the global company search (search-consolidation stage 2). Migration-only
+ *  per the 0109 rationale — every index is CONCURRENTLY (drizzle-kit emits blocking CREATEs), several are
+ *  partial on MASTER_COMPANY_VISIBLE, and one is an expression index on coalesce(employee_count, -1),
+ *  none of which the schema DSL can express without drift. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 93;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

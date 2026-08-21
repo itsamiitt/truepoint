@@ -158,6 +158,21 @@ export {
   masterPersonSearchRepository,
   type DatabaseSearchRows,
 } from "./repositories/masterPersonSearchRepository.ts";
+// The Layer-0 COMPANY read seam + its global search (search-consolidation stage 2) — the company twins of
+// the two person modules above. MASTER_COMPANY_VISIBLE is the policy every global company read inherits.
+export {
+  masterCompanyReadRepository,
+  MASTER_COMPANY_VISIBLE,
+  toMasterCompanyRow,
+  COMPANY_FROM,
+  COMPANY_SELECT,
+  type MasterCompanyRow,
+  type RawCompanyRow,
+} from "./repositories/masterCompanyReadRepository.ts";
+export {
+  masterCompanySearchRepository,
+  type DatabaseCompanySearchRows,
+} from "./repositories/masterCompanySearchRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,

@@ -2,7 +2,7 @@
 // contact's company by its per-workspace dedup key (domain), so a contact links to one shared account row.
 // Methods take the caller's transaction (Tx) so the whole per-row import runs in one withTenantTx (03 §9).
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { accounts } from "../schema/contacts.ts";
 
@@ -216,6 +216,48 @@ export const accountRepository = {
       .where(and(eq(accounts.workspaceId, workspaceId), eq(accounts.domain, domain)))
       .limit(1);
     return rows[0]?.id ?? null;
+  },
+
+  /**
+   * The overlay probe for the GLOBAL company search (search-consolidation stage 2): which of these Layer-0
+   * domains does THIS workspace already hold, and how many contacts sit on each.
+   *
+   * Batched by design — the per-hit alternative is N queries per page. Runs under withTenantTx, so RLS is
+   * what confines it to the caller's workspace; the explicit workspace_id predicate is defence in depth.
+   * Soft-deleted accounts are excluded: a tombstoned row must read as "not in your workspace", or the grid
+   * would offer no way to add the company back.
+   */
+  async findByDomains(
+    tx: Tx,
+    workspaceId: string,
+    domains: readonly string[],
+  ): Promise<Map<string, { accountId: string; contactCount: number }>> {
+    const out = new Map<string, { accountId: string; contactCount: number }>();
+    if (domains.length === 0) return out;
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        domain: accounts.domain,
+        contactCount: sql<number>`(
+          SELECT count(*)::int FROM contacts cc
+           WHERE cc.account_id = ${accounts}."id" AND cc.deleted_at IS NULL
+        )`,
+      })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.workspaceId, workspaceId),
+          inArray(accounts.domain, [...domains]),
+          isNull(accounts.deletedAt),
+        ),
+      );
+    for (const r of rows) {
+      // `domain` is citext, so the DB matched case-insensitively; key the map on the LAYER-0 spelling the
+      // caller passed in, not the overlay's, or a case difference would lose the join client-side.
+      if (r.domain)
+        out.set(r.domain.toLowerCase(), { accountId: r.id, contactCount: r.contactCount });
+    }
+    return out;
   },
 
   /**

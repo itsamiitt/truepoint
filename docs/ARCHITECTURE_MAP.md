@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2216 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2225 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -1130,4 +1130,35 @@ flowchart TD
     the server-search rewrite: exported from the barrel, rendered nowhere.
 
   No new unassigned entries and no new warnings; unassigned holds at **2** (the same two repositories).
+
+  2026-08-21 refresh (search consolidation, stage 2 — the GLOBAL company search): 2216 → 2225 files, no
+  new domain. The Accounts tab now searches `master_companies` as well as the workspace's own `accounts`,
+  merged into one list where "already in my workspace" is a state of a row — the shape the People tab has
+  had since Layer-0-as-database. Gated behind `DATABASE_COMPANY_SEARCH_ENABLED` (default off).
+
+  New Layer-0 seams, both bucketed to **`features.master-sync.db`**:
+  - `masterCompanyReadRepository.ts` — `MASTER_COMPANY_VISIBLE` + the masked company projection. The
+    predicate is `org_kind = 'company' AND primary_domain IS NOT NULL AND field_provenance <> '{}'`, and
+    the third clause is the load-bearing one: `fillCompanyPrimaryDomain` back-fills domains onto
+    position-minted stubs, so measured against production 3,747 rows pass the first two clauses and only
+    **231** carry any firmographics.
+  - `masterCompanySearchRepository.ts` — keyset search across four sorts + the capped count + facet counts.
+
+  `REPO_DOMAIN` in `.claude/hooks/lib/arch-map.mjs` gained `masterCompanyRead`/`masterCompanySearch` →
+  `master-sync`, following the rule that put `masterEducation` there: every Layer-0 repository belongs to
+  the one system-owned graph regardless of direction. Without it both showed as **unassigned**, i.e. as
+  placement violations, which they are not. Unassigned is back to **2** — the same two metering
+  repositories that have no settled domain.
+
+  Also new: `packages/types/src/databaseCompanySearch.ts` (the contract, including the shared
+  `DATABASE_COUNT_CAP` both global counts now stop at), `packages/core/src/prospect/searchDatabaseCompanies.ts`
+  (the two-transaction orchestration — the `leadwolf_app` REVOKE wall makes a single join impossible), the
+  four `/search/database/companies*` routes, migration **0134** (partial indexes on the visibility
+  predicate), and in `apps/web` the `features/accounts` half: `accountRows.ts` (+ test),
+  `databaseCompanyApi.ts`, `hooks/useAccountsSearch.ts`.
+
+  One shared-code change worth noting: `lib/problemMessage.ts` grew a body-taking sibling,
+  `problemMessageFromBody`. Slices that throw a typed `ApiError` need `code` off the same body and a
+  Response can only be read once, so they were each re-deriving the detail→title→fallback precedence by
+  hand — the exact drift that module exists to prevent. `problemMessage` is now a thin wrapper over it.
 ```

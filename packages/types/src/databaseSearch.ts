@@ -68,5 +68,25 @@ export const databaseSearchPage = z.object({
 });
 export type DatabaseSearchPage = z.infer<typeof databaseSearchPage>;
 
-export const databaseCountResult = z.object({ total: z.number().int().nonnegative() });
+/**
+ * The ceiling both global counts stop at. It lives in the CONTRACT rather than in a repository because it
+ * is what `capped: true` means: the server counted to here and stopped, so the number is a floor. The two
+ * repositories and the web client all read this one value, and the grid's "10,000+" is derived from it
+ * rather than hard-coded next to it.
+ */
+export const DATABASE_COUNT_CAP = 10_000;
+
+/**
+ * `capped` true means the server stopped counting at DATABASE_COUNT_CAP and the total is a FLOOR — render it
+ * as "10,000+", never as an exact number. ADDITIVE (defaults false), so an older client that ignores the
+ * field behaves exactly as before.
+ *
+ * WHY CAP AT ALL. This count used to be exact and uncapped. An exact count over a trgm-filtered population
+ * has unbounded cost as the graph grows, and nothing bills or gates off this number — it is a grid header.
+ * The workspace contact count made the same trade at the same 10k ceiling (CONTACT_COUNT_CAP).
+ */
+export const databaseCountResult = z.object({
+  total: z.number().int().nonnegative(),
+  capped: z.boolean().default(false),
+});
 export type DatabaseCountResult = z.infer<typeof databaseCountResult>;

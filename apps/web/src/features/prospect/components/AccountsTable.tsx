@@ -36,12 +36,19 @@ export function AccountsTable({
   loading,
   onOpen,
   density,
+  isDatabaseRow,
 }: {
   accounts: MaskedAccount[];
   loading: boolean;
   onOpen: (a: MaskedAccount) => void;
   /** Reserved for symmetry with the Contacts grid; DataTable reads [data-density] from an ancestor. */
   density?: string;
+  /**
+   * Marks a row as coming from the platform DATABASE rather than the workspace (search-consolidation stage
+   * 2). Optional, so the workspace-only callers are unchanged. Without it a database row is visually
+   * identical to an owned one, and the grid would silently claim the workspace holds companies it does not.
+   */
+  isDatabaseRow?: (a: MaskedAccount) => boolean;
 }) {
   const columns: Column<MaskedAccount>[] = [
     {
@@ -52,7 +59,17 @@ export function AccountsTable({
         <span className={styles.nameCell}>
           <Avatar name={a.name} size={28} />
           <span className={styles.nameMeta}>
-            <span className={styles.name}>{a.name}</span>
+            <span className={styles.name}>
+              {a.name}
+              {isDatabaseRow?.(a) ? (
+                // Not colour alone: the chip carries the word, so the distinction survives for anyone who
+                // cannot tell the two tones apart (WCAG 2.2 AA).
+                <>
+                  {" "}
+                  <TpChip>In database</TpChip>
+                </>
+              ) : null}
+            </span>
             <span className={styles.mono}>{a.domain ?? "—"}</span>
           </span>
         </span>

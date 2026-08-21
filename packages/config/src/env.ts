@@ -516,6 +516,14 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // The GLOBAL company search — the Accounts tab's Layer-0 half (search-consolidation stage 2). While off,
+    // `/search/database/companies*` 404s and the Accounts tab shows the workspace's own accounts only, which
+    // is exactly what it showed before the cutover: an honest degradation, not a broken surface. Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    DATABASE_COMPANY_SEARCH_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // How far BACK a delta poll reads from the stored watermark (crm-sync 00 §6.4). CRM modstamps are not
     // ordered against our clock, so a record written during the previous poll can carry a timestamp just
     // under the mark; re-reading a record is free (the link table + content hash make it a no-op) while

@@ -2,10 +2,23 @@
 // the verified token (never the body), validation is Zod at the edge, and all search logic lives behind the
 // SearchPort (packages/search). POST is used for contacts/facets (structured query bodies); suggest is GET.
 
-import { countDatabase, searchCount, searchDatabase } from "@leadwolf/core";
+import { env } from "@leadwolf/config";
 import {
+  countDatabase,
+  countDatabaseCompanies,
+  databaseCompanyFacets,
+  searchCount,
+  searchDatabase,
+  searchDatabaseCompanies,
+} from "@leadwolf/core";
+import {
+  NotFoundError,
   ValidationError,
   contactQuery,
+  databaseCompanyCountResult,
+  databaseCompanyFacetsRequest,
+  databaseCompanyQuery,
+  databaseCompanySearchPage,
   databaseCountResult,
   databaseQuery,
   databaseSearchPage,
@@ -13,6 +26,7 @@ import {
   suggestQuery,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+
 import { authn } from "../../middleware/authn.ts";
 import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { buildWorkspaceSearchPort } from "./searchPortProvider.ts";
@@ -73,12 +87,63 @@ searchRoutes.post("/database", async (c) => {
   return c.json(databaseSearchPage.parse(page));
 });
 
-/** POST /search/database/count — the exact total for the same query (the grid header). */
+/** POST /search/database/count — the capped total for the same query (the grid header). */
 searchRoutes.post("/database/count", async (c) => {
   requireWorkspace(c, "Select a workspace to search the database.");
   const parsed = databaseQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid database query.");
   return c.json(databaseCountResult.parse(await countDatabase(parsed.data)));
+});
+
+/**
+ * POST /search/database/companies — the GLOBAL company search (search-consolidation stage 2): every company
+ * the PLATFORM holds, the firmographic twin of /search/database. Workspace scope is still required, but only
+ * to flag which hits the caller already owns; the visibility policy (MASTER_COMPANY_VISIBLE — a real company,
+ * with an addressable domain, whose firmographics actually landed) is applied inside the repository.
+ *
+ * `excludeOwned` moves the "not already in my workspace" filter SERVER-side. It cannot be a join: leadwolf_app
+ * is REVOKEd from every master_* table and leadwolf_er cannot see `accounts`, so the two halves are two
+ * transactions by construction and the core layer over-fetches candidates and derives the cursor from the last
+ * one EXAMINED. A short page with a non-null cursor is correct.
+ *
+ * The egress parse is load-bearing — it is what guarantees no Layer-0 identifier can leave in a response.
+ */
+searchRoutes.post("/database/companies", async (c) => {
+  if (!env.DATABASE_COMPANY_SEARCH_ENABLED) throw new NotFoundError("Not enabled.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search the database.");
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const parsed = databaseCompanyQuery.safeParse(body);
+  if (!parsed.success) throw new ValidationError("Invalid company query.");
+  const page = await searchDatabaseCompanies(
+    { tenantId: c.get("tenantId"), workspaceId },
+    parsed.data,
+    { excludeOwned: body?.excludeOwned === true },
+  );
+  return c.json(databaseCompanySearchPage.parse(page));
+});
+
+/** POST /search/database/companies/count — the capped total for the same query. */
+searchRoutes.post("/database/companies/count", async (c) => {
+  if (!env.DATABASE_COMPANY_SEARCH_ENABLED) throw new NotFoundError("Not enabled.");
+  requireWorkspace(c, "Select a workspace to search the database.");
+  const parsed = databaseCompanyQuery.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Invalid company query.");
+  return c.json(databaseCompanyCountResult.parse(await countDatabaseCompanies(parsed.data)));
+});
+
+/** POST /search/database/companies/facets — live counts for the low-cardinality company facets. */
+searchRoutes.post("/database/companies/facets", async (c) => {
+  if (!env.DATABASE_COMPANY_SEARCH_ENABLED) throw new NotFoundError("Not enabled.");
+  requireWorkspace(c, "Select a workspace to search the database.");
+  const parsed = databaseCompanyFacetsRequest.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Invalid facet request (need query + fields).");
+  // `employee_band` is in the facet vocabulary but is DERIVED from employee_count rather than being a
+  // column, so it has no GROUP BY of its own — the rail renders its counts from the band chips instead.
+  const fields = parsed.data.fields.filter(
+    (f): f is "industry" | "hq_country" | "ownership_type" => f !== "employee_band",
+  );
+  const facets = fields.length === 0 ? [] : await databaseCompanyFacets(parsed.data.query, fields);
+  return c.json({ facets });
 });
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */
