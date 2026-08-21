@@ -22,11 +22,34 @@ import type { ApiVariables } from "./authn.ts";
  */
 export type StaffRoleVariables = ApiVariables & { staffRole: StaffRole };
 
+// 5-SECOND in-process memo (perf-checklist PA-9), deliberately NOT the 30-60s two-layer cache the tenant
+// role memo uses: this file's contract is "a revoked/changed grant takes effect immediately", and the
+// measured waste was never steady-state — it was the SAME page load fanning out 4-8 parallel /admin calls,
+// each paying an identical platform_staff SELECT within milliseconds of the others. Five seconds collapses
+// that fan-out to one query while keeping revocation effectively immediate (≤5s, on a surface where grant
+// writes don't even exist yet — they land with the Phase-4 admin path, which should call resetStaffRoleMemo).
+const STAFF_ROLE_MEMO_TTL_MS = 5_000;
+const staffRoleMemo = new Map<string, { role: StaffRole | null; expiresAt: number }>();
+
+/** Test seam + the invalidation hook for the future grant/revoke write path. */
+export function resetStaffRoleMemo(): void {
+  staffRoleMemo.clear();
+}
+
+async function activeRoleMemoized(userId: string): Promise<StaffRole | null> {
+  const hit = staffRoleMemo.get(userId);
+  const now = Date.now();
+  if (hit && hit.expiresAt > now) return hit.role;
+  const role = await platformStaffRepository.getActiveRole(userId);
+  staffRoleMemo.set(userId, { role, expiresAt: now + STAFF_ROLE_MEMO_TTL_MS });
+  return role;
+}
+
 /** Guard a platform-admin route to callers whose staff role grants ALL of the given capabilities. */
 export function requireCapability(...required: StaffCapability[]): MiddlewareHandler {
   return async (c, next) => {
     const claims = c.get("claims");
-    const role = await platformStaffRepository.getActiveRole(claims.sub);
+    const role = await activeRoleMemoized(claims.sub);
     if (!role || !required.every((cap) => roleHasCapability(role, cap))) {
       throw new ForbiddenError(
         "insufficient_capability",

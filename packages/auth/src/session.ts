@@ -106,7 +106,7 @@ async function enforceConcurrentSessionCap(ctx: SessionContext, keepId: string):
     });
     const cap = resolveMaxConcurrentSessions(rows, ctx.workspaceId);
     if (cap == null || cap <= 0) return; // unset / unlimited
-    const evict = sessionsToEvict(await sessionRepository.listForUser(ctx.userId), cap, keepId);
+    const evict = sessionsToEvict(await sessionRepository.listLiveForUser(ctx.userId), cap, keepId);
     if (evict.length === 0) return;
     await Promise.all(evict.map((id) => sessionRepository.revoke(id)));
     await markManyRevoked(evict); // deny-list so the evicted access tokens stop within seconds, not ≤15 min

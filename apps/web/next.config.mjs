@@ -2,6 +2,11 @@
 // the Hono API (port 3001) are proxied through Next.js rewrites so the browser sees a single origin.
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Compression happens at the edge (deploy/Caddyfile `encode zstd gzip`) — the exact reasoning that removed
+  // hono's compress() from apps/api (its app.ts:106 comment): Next's default gzip makes Caddy SKIP the body
+  // (already Content-Encoded), so we'd never get zstd (~10-15% smaller on HTML/JSON) AND we'd burn gzip CPU
+  // on the same event loop that renders. Perf-checklist PA-7.
+  compress: false,
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: [

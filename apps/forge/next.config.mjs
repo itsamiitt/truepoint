@@ -4,6 +4,8 @@
 // ship TS source. No basePath: standalone host on its own subdomain.
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Edge (Caddy) owns compression — see apps/web/next.config.mjs for the full PA-7 reasoning.
+  compress: false,
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: [

@@ -412,13 +412,33 @@ export const sessionRepository = {
     });
   },
 
-  async listForUser(userId: string): Promise<SessionRecord[]> {
-    const rows = await db
-      .select()
+  /** The user's LIVE sessions, projected to exactly what the concurrent-session cap decides on
+   *  (perf-checklist PA-4). The old shape was a bare select() of ALL columns — every refresh-token hash and
+   *  500-char user agent in the user's entire session HISTORY — on every login, unbounded: rotation adds a
+   *  row every ~15min and only >30d-dead rows are pruned, so it grew ~950 rows/device/month. Live rows
+   *  (revoked_at IS NULL AND unexpired) are naturally bounded by real concurrent devices — rotation revokes
+   *  its predecessor — so the live filter IS the limit, and sessionsToEvict's own active-filter becomes a
+   *  no-op re-check rather than the workhorse. The self-service sessions page uses
+   *  listOwnSessionsDetailed (limited) — not this. */
+  async listLiveForUser(
+    userId: string,
+  ): Promise<Array<{ id: string; createdAt: Date; expiresAt: Date; revokedAt: Date | null }>> {
+    return db
+      .select({
+        id: userSessions.id,
+        createdAt: userSessions.createdAt,
+        expiresAt: userSessions.expiresAt,
+        revokedAt: userSessions.revokedAt,
+      })
       .from(userSessions)
-      .where(eq(userSessions.userId, userId))
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          gt(userSessions.expiresAt, new Date()),
+        ),
+      )
       .orderBy(desc(userSessions.createdAt));
-    return rows.map(toSession);
   },
 
   // P1-02 self-service "my sessions / login history" read: the user's OWN sessions enriched with the device

@@ -42,7 +42,9 @@ mock.module("@leadwolf/db", () => ({
 // Import the guards AFTER the mock is registered so their static @leadwolf/db imports bind to the stub.
 const { requireRole, getWorkspaceRole } = await import("./requireRole.ts");
 const { requireOrgRole, getOrgRole } = await import("./requireOrgRole.ts");
-const { requireCapability, getStaffRole } = await import("./requireCapability.ts");
+const { requireCapability, getStaffRole, resetStaffRoleMemo } = await import(
+  "./requireCapability.ts"
+);
 
 /** A throwaway Hono-ish context exposing only the get/set surface the guards read/write. */
 function makeContext(vars: Record<string, unknown>) {
@@ -62,6 +64,9 @@ beforeEach(() => {
   next.org = "security_admin";
   next.staff = "support";
   next.wsCalls = 0;
+  // The PA-9 staff-role memo caches per-sub for 5s; these cases mutate the mocked role between its reads,
+  // so each starts cold.
+  resetStaffRoleMemo();
 });
 
 describe("requireRole (workspace tier)", () => {

@@ -6,6 +6,8 @@ const nextConfig = {
   // /_next/ asset chunks at /auth/_next/… so they never collide with the web app's own
   // /_next/ assets when both are proxied through the Next.js rewrites on port 5000.
   basePath: "/auth",
+  // Edge (Caddy) owns compression — see apps/web/next.config.mjs for the full PA-7 reasoning.
+  compress: false,
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: [
