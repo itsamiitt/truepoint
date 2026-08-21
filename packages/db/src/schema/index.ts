@@ -60,3 +60,6 @@ export * from "./notifications.ts";
 export * from "./aiRequests.ts";
 export * from "./subscriptions.ts";
 export * from "./teams.ts";
+// Machine API credentials (ADR-0049). In the barrel on purpose — a plain tenant-scoped table, so the
+// rlsCoverage guard can see its pgTable and hold it to having a policy.
+export * from "./apiKeys.ts";

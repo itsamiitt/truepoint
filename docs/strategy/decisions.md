@@ -422,3 +422,48 @@ Bounding facts: no endpoint on api.truepoint.in answers the documented paths (th
 so nothing on the site is callable today; doc.truepoint.in is deliberately NOT added to APP_ORIGINS, so it
 receives no auth cookie and widens no CORS or token-audience surface; and the app builds with zero environment,
 so it cannot fail on a secret it never holds.
+
+## 2026-08-21 — The API market is ratified; machine credentials built (user directive; ADR-0049)
+
+The user directed "build api on web application and keep its usage dashboard inside the default web
+dashboard". This is the operator decision ADR-0048 §C4 asked for and did not have: the developer/API consumer
+is a FOURTH market, absent from 03-outcomes' three (SELLER, CONTRIBUTOR, ADMIN/REVOPS), and rule 1 therefore
+required it to be flagged rather than built. It is now ratified. The commercial pages on doc.truepoint.in stop
+being dated intent and become the published contract of a business this pack endorses.
+
+WHAT THIS DOES NOT RATIFY. A decision to sell data by API is not a decision about where the data comes from.
+ADR-0048 §C1 (contributor-earned credits — rule 7, and already reversed once by the MONETIZATION PIVOT above)
+and §C2 (the Sales Navigator extraction path — rule 4) are untouched and remain unbuilt. Non-goals X-01/X-02
+untouched.
+
+BUILT (ADR-0049, credential layer only): `api_keys` — tenant- and workspace-bound, scoped, SHA-256-hashed
+bearer credentials, managed at /api/v1/tenants/me/api-keys behind the `security_admin` org role (ADR-0030).
+This closes recorded conflict C11 (intelligence-platform/09 §2: "the one real gap: there are no API keys") and
+turns on apps/web's Settings ▸ Developer panel, which shipped in M10 and has been showing "API keys connect
+once the developer API ships" ever since — the frontend was never the missing part. 09 §11 open question 4 is
+resolved in favour of key→workspace binding: scope comes from the credential, never from an X-Workspace-Id
+header the caller controls.
+
+NOT BUILT, and one of the reasons is a compliance precondition rather than a scheduling one:
+
+(a) THE DATA ENDPOINTS. A public API over the master graph is a NEW EGRESS WITH NO suppression_list COVERAGE.
+    Every Layer-0 read checks only master_persons.is_suppressed, which mirrors the DSAR fan-out alone — not
+    tenant/workspace-scoped suppression_list rows, and with no domain rung. The two cannot be joined in one
+    query: leadwolf_er has no grant on suppression_list, leadwolf_app none on master_*. The overlay path
+    reconciles them in a SECOND transaction (revealContact, after the er tx); a public surface must do the
+    same or it will serve suppressed people. Invariant 3 of 09-compliance — suppression at EVERY egress — is
+    a precondition for those endpoints, not a follow-up.
+(b) Per-key rate limiting. middleware/rateLimit.ts SKIPS any request carrying an Authorization header (it
+    assumes authn will charge per-subject), so an API-key call under /api/* would be throttled by NEITHER
+    limiter. A per-key bucket must land with the endpoints.
+(c) Two published-contract collisions to resolve before the endpoints ship: doc.truepoint.in publishes
+    /v1/* paths, snake_case fields and kebab-case error codes; the shipped platform serves /api/v1/*,
+    camelCase fields and snake_case codes. Both are published; one has to change, and the platform is the one
+    with users.
+
+CORRECTION TO THE 2026-08-18 ENTRY ABOVE (item (d), now stale): it states that invariant 3 is unsatisfied
+because "searchRepository's own header says suppression is NOT yet covered and assertNotSuppressed is called
+from three sites only". The searchRepository half is FIXED — buildWhere now carries a NOT EXISTS anti-join
+over all three suppression rungs, covering results, facet counts and typeahead. assertNotSuppressed has four
+call sites, not three. The REMAINING half of that invariant is (a) above: the Layer-0 plane, which is exactly
+where the new API would read.

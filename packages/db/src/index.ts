@@ -797,6 +797,12 @@ export {
   type ScimTokenRecord,
   type ScimTokenAuth,
 } from "./repositories/scimTokenRepository.ts";
+// Machine API credentials (ADR-0049) — tenant-scoped + audited management, plus the pre-tenant auth lookup.
+export {
+  apiKeyRepository,
+  type ApiKeyRow,
+  type ApiKeyAuth,
+} from "./repositories/apiKeyRepository.ts";
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,

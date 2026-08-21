@@ -178,8 +178,15 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  94 → 95 for 0136_person_derived_facets — three ADDITIVE nullable columns plus their partial indexes and
  *  a one-time backfill UPDATE. Migration-only for the usual reason (CONCURRENTLY partial indexes) and for
  *  one more: the backfill's correctness is the '-infinity' sentinel exclusion, which is a data statement
- *  the schema DSL has no way to carry. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 95;
+ *  the schema DSL has no way to carry. Absorbed by the next rebaseline.
+ *
+ *  95 → 96 for 0137_api_keys (ADR-0049) — a plain CREATE TABLE that drizzle-kit COULD have generated, so
+ *  this one widens the gap for a different reason than its predecessors: generate is unsafe against a
+ *  snapshot chain that stopped at 0107, because it diffs the schema against that stale baseline and emits a
+ *  migration re-creating everything added since. The table is in schema/index.ts, so the rlsCoverage guard
+ *  still holds it to having a policy — which is the property that actually matters here. Absorbed by the
+ *  next rebaseline. */
+const EXPECTED_DEFICIT = 96;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

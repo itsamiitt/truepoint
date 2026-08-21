@@ -52,6 +52,7 @@ import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { publicPricingRoutes } from "./features/pricing/index.ts";
 import { reportsRoutes } from "./features/reports/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
+import { apiKeyRoutes } from "./features/api-keys/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
 import { scimUserRoutes } from "./features/scim/index.ts";
@@ -276,6 +277,11 @@ app.route("/api/v1/enrichment", enrichmentRoutes);
 app.route("/api/v1/settings", settingsRoutes); // workspace settings (auto-enrich policy, G-ENR-1)
 // Outbound webhooks (developer settings, 09 §10, 12 §5): CRUD subscriptions + delivery log + replay/self-test.
 app.route("/api/v1/webhooks", webhooksRoutes);
+// Machine API credentials (09 §4, ADR-0049) — the backend for the Settings ▸ Developer ▸ API keys panel that
+// has shipped dark since M10. Inside /api/v1 deliberately: this is the MANAGEMENT surface, called from the
+// browser with a user access JWT, so it wants the ordinary authn + CORS + per-IP chain. The keys it mints are
+// presented to a different, server-to-server surface that will carry its own auth.
+app.route("/api/v1/tenants/me/api-keys", apiKeyRoutes);
 // Public DSAR intake must register BEFORE the authenticated compliance router, whose `*` middleware
 // would otherwise 401 the session-less form (08 §4).
 app.route("/api/v1/compliance/dsar", dsarPublicRoutes);
