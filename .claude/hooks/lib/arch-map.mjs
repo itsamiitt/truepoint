@@ -550,6 +550,14 @@ export function classify(p) {
     return { kind: "shared", area: "apps/forge/features" };
   if (/^apps\/forge\//.test(p)) return { kind: "shared", area: "apps/forge" };
 
+  // The public developer portal (apps/doc, ADR-0048) — a documentation and pricing surface, not part of the
+  // product graph. Registered here for the same reason apps/forge and apps/extension are: its slices are its
+  // own, and minting domains named `pricing`, `datasets`, `trust` and `changelog` to hold marketing pages
+  // would put page names into the vocabulary the rest of the map navigates the PRODUCT by. Its `src/app` and
+  // `src/components` fall through to the generic app rule below, exactly like apps/web's.
+  if (/^apps\/doc\/src\/features\//.test(p)) return { kind: "shared", area: "apps/doc/features" };
+  if (/^apps\/doc\/src\/content\//.test(p)) return { kind: "shared", area: "apps/doc/content" };
+
   // App routing/shared/lib/middleware.
   if ((m = p.match(/^apps\/api\/src\/middleware\//)))
     return { kind: "shared", area: "apps/api/middleware" };

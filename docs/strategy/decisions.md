@@ -372,3 +372,53 @@ are `private`/workspace-minted and correctly unsellable), 231 visible `master_co
 2026-08-18, growing ~100 rows/day, single `linkedin_api` origin throttled at `http 429` but landing between
 throttles. The Accounts tab is therefore architecturally correct and commercially thin until ingestion
 catches up; that is an ingestion-throughput problem, not a surface problem.
+## 2026-08-21 — Public developer portal built at doc.truepoint.in (user directive; ADR-0048)
+
+The user directed "plan and create a new nested application which will be on doc.truepoint.in as per this
+detailed plan", supplying `DocappPlan/` — a ten-file business plan for selling company/people data through a
+credit-priced API to software companies and AI-agent builders. What was built is the portal that plan puts
+first (published pricing in weeks 1-2, dataset pages in weeks 3-4, a docs site in Phase 2): `apps/doc`
+(`@leadwolf/doc`), a fifth Next app that is anonymous, fully prerendered, and holds no personal data, no
+database client, no auth and no `@leadwolf/config` — enforced by the `doc-app-holds-no-data-path`
+dependency-cruiser rule, verified to fire. Design: ADR-0048 + docs/planning/34-public-developer-portal.md.
+
+FOUR CONFLICTS between the brief and this pack are surfaced per rule 6 and NOT silently reinterpreted. None
+is resolved here; each needs a human decision before any code implements it.
+
+(a) CONTRIBUTOR-EARNED CREDITS — blocking, rule 7. DocappPlan/02 §6, 04 §Source B, 05 §3 and 06 §4 all price
+    contribution in earned credits ("1 verified new contact contributed = N lookup credits"). 07 §Access model
+    says the opposite in one line — "no credit, points, or bounty currency anywhere in the system" — and the
+    MONETIZATION PIVOT entry above records this exact mechanic being deleted, because a farmable currency
+    turns A-03 from data-quality fraud into economic fraud and creates the C-06 clawback problem. The brief
+    revives a decision already taken and reversed. The portal therefore publishes PURCHASED credits only and
+    carries no earn-rate anywhere; a unit test (apps/doc/src/content/content.test.ts) fails the build if that
+    copy ever appears. The brief's supply thesis is NOT thereby endorsed.
+
+(b) SALES NAVIGATOR FALLBACK — blocking, rule 4. DocappPlan/04 §Source A lists a Sales Navigator extraction
+    service as waterfall stage 3; 08 §Risk 2 concedes it violates LinkedIn's User Agreement and proposes to
+    run it as an "internal stopgap with a written retirement date". Rule 4 forbids it outright and the framing
+    does not change that. The published sourcing statement enumerates the supply classes this product stands
+    behind and leaves no room for logged-in-platform extraction. No retirement date is recorded here: a
+    hard-constraint breach is not something a marketing page schedules.
+
+(c) PUBLIC REAL-DATA SAMPLES — rule 3. DocappPlan/10 asks for a 25-row sample of the real dataset on each
+    public page. That is an anonymous egress nobody can suppress and nobody can erase once cached, against
+    09-compliance's requirement of suppression at EVERY egress and ≤72h erasure propagation. The pages publish
+    the FIELD LIST (what a buyer actually evaluates) with fabricated rows on RFC 2606 reserved domains,
+    labelled as illustrative and asserted by test. A real sample needs an authenticated, suppression-checked,
+    logged delivery path — not built.
+
+(d) A FOURTH MARKET WITH NO OUTCOME IDS — rule 1. 03-outcomes names three markets (SELLER, CONTRIBUTOR,
+    ADMIN/REVOPS). The brief's buyer — a developer or agent consuming data by API — is a fourth, and the
+    API-as-product business is adjacent to non-goal S-05 (raw database-size expansion). Rule 1 says such work
+    is flagged, not built. What WAS built is the subset serving shipped outcomes: A-01 (a public, specific
+    sourcing-and-lawful-basis statement), S-10 (publishing what a confidence score and verification recency
+    mean, so the shipped badge is legible from outside the app) and A-02/S-11 (a findable route to opt out).
+    The commercial pages — plan pricing, credit costs, dataset catalogue — describe a business this pack has
+    not ratified; they ship as dated published INTENT, every item badged "planned", and the operator owes a
+    ratification entry here before any metering, billing or public-API code is written against them.
+
+Bounding facts: no endpoint on api.truepoint.in answers the documented paths (there is no api-public feature),
+so nothing on the site is callable today; doc.truepoint.in is deliberately NOT added to APP_ORIGINS, so it
+receives no auth cookie and widens no CORS or token-audience surface; and the app builds with zero environment,
+so it cannot fail on a secret it never holds.

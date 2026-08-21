@@ -974,6 +974,20 @@ flowchart TD
   dependency-cruiser rule); depends only on `@leadwolf/types` (+ `@leadwolf/ui` tokens). Design:
   [`docs/planning/chrome-extension/`](./planning/chrome-extension/) + ADR-0043.
 
+- **`apps/doc`** (`@leadwolf/doc`, `doc.truepoint.in`, port 3007; areas `apps/doc/app` · `…/components` ·
+  `…/content` · `…/features`) — the **public developer portal**: landing, `/pricing`, `/datasets`,
+  `/docs` (quickstart + guides + a generated endpoint reference), `/trust`, `/changelog`. Anonymous and
+  fully prerendered — 21 static routes, no session, no route handlers. Its substance lives in typed content
+  modules under `src/content/` (endpoint specs, plan and credit tables, dataset field lists, the trust
+  statement) which `src/features/*` render; there is no MDX and no `dangerouslySetInnerHTML` anywhere in the
+  app. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
+  and nothing else from `packages/*`, enforced by the `doc-app-holds-no-data-path` dependency-cruiser rule,
+  which is what lets it build with **zero environment** while every other Next app needs one. Deliberately
+  absent from `APP_ORIGINS`: it has no session, so adding it would widen the CORS/token-audience surface for
+  nothing. Its compliance invariants (no earned-credit copy, fabricated sample rows only) are asserted in
+  `src/content/content.test.ts`. Design: ADR-0048 +
+  [`docs/planning/34-public-developer-portal.md`](./planning/34-public-developer-portal.md).
+
 ## Notes / unbucketed & warnings
 
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`

@@ -1,0 +1,66 @@
+/* pricing.module.css — the published price list. */
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--tp-space-4);
+}
+
+.planName {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.planPrice {
+  margin: var(--tp-space-3) 0 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.planCadence {
+  margin: var(--tp-space-1) 0 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.planCredits {
+  margin: var(--tp-space-4) 0 0;
+  padding-top: var(--tp-space-3);
+  border-top: 1px solid var(--tp-hairline);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-2);
+}
+
+.planAudience {
+  margin: var(--tp-space-3) 0 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.planIncludes {
+  margin: var(--tp-space-4) 0 0;
+  padding-left: var(--tp-space-5);
+  display: grid;
+  gap: var(--tp-space-2);
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.planBadge {
+  margin-top: var(--tp-space-4);
+}
+
+.reviewed {
+  margin: 0 0 var(--tp-space-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-3);
+}

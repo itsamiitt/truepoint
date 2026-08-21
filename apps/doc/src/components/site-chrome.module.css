@@ -1,0 +1,146 @@
+/* site-chrome.module.css — the public header and footer.
+ *
+ * This is chrome for an anonymous reader, so it is deliberately not the app shell: no rail, no user row, no
+ * command palette. Every value is a --tp-* token; the only raw numbers are the 1px borders and the one
+ * breakpoint, which the design tokens do not cover. */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--tp-z-sticky);
+  background: var(--tp-surface);
+  border-bottom: 1px solid var(--tp-hairline-2);
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-6);
+  height: 60px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+  text-decoration: none;
+  color: var(--tp-ink);
+}
+
+/* The portal name sits beside the wordmark so a reader can tell this surface from the product app.
+   Weight and size carry the hierarchy — never colour (the wordmark owns the only brand accent here). */
+.brandSuffix {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  padding-left: var(--tp-space-2);
+  border-left: 1px solid var(--tp-hairline-2);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-1);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--tp-space-3);
+  border-radius: var(--tp-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+  text-decoration: none;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.navLink:hover {
+  background: var(--nav-hover-fill);
+  color: var(--tp-ink);
+}
+.navLink[aria-current="page"] {
+  background: var(--tp-cobalt-50);
+  color: var(--tp-cobalt-700);
+  font-weight: 600;
+}
+
+.main {
+  display: block;
+  padding-block: var(--tp-space-8);
+  min-height: 60vh;
+}
+
+.footer {
+  margin-top: var(--tp-space-8);
+  border-top: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface-2);
+  padding-block: var(--tp-space-8);
+}
+
+.footerGrid {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: var(--tp-space-8);
+}
+
+.footerHeading {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tp-ink-3);
+  margin: 0 0 var(--tp-space-3);
+}
+
+.footerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--tp-space-2);
+}
+
+.footerLink {
+  font-size: 14px;
+  color: var(--tp-ink-2);
+  text-decoration: none;
+}
+.footerLink:hover {
+  color: var(--tp-ink);
+  text-decoration: underline;
+}
+
+.footerNote {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  margin: var(--tp-space-3) 0 0;
+  max-width: 40ch;
+}
+
+.footerLegal {
+  margin-top: var(--tp-space-8);
+  padding-top: var(--tp-space-5);
+  border-top: 1px solid var(--tp-hairline-2);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+@media (max-width: 860px) {
+  .headerInner {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--tp-space-3);
+    padding-block: var(--tp-space-3);
+  }
+  .nav {
+    margin-left: 0;
+  }
+  .footerGrid {
+    grid-template-columns: 1fr;
+    gap: var(--tp-space-6);
+  }
+}

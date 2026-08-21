@@ -1,0 +1,118 @@
+/* prose.module.css — reading surfaces: documentation body copy, code samples and callouts.
+ *
+ * Sizes here are larger than app chrome on purpose. The design tokens set a 13-14px scale for dense grids a
+ * user scans; this is text a developer reads for minutes at a time, so the body is 15px with a 65ch measure.
+ * Colour, spacing, radius and timing all still come from tokens — only the reading scale is local. */
+
+.prose {
+  max-width: 68ch;
+}
+
+.prose > * + * {
+  margin-top: var(--tp-space-5);
+}
+
+.h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tp-ink);
+  margin: var(--tp-space-8) 0 0;
+  scroll-margin-top: 80px;
+}
+
+.p {
+  margin: 0;
+  color: var(--tp-ink-2);
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--tp-space-5);
+  color: var(--tp-ink-2);
+  display: grid;
+  gap: var(--tp-space-2);
+}
+
+/* ── Code ─────────────────────────────────────────────────────────────────────────────────────────────── */
+/* The wrapper scrolls, not the page. A curl example with a long bearer header is wider than a phone, and a
+   page that scrolls sideways as a whole is unusable — so the overflow is bound to this box. */
+.codeWrap {
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface-3);
+  overflow: hidden;
+}
+
+.codeLang {
+  display: block;
+  padding: var(--tp-space-2) var(--tp-space-4);
+  border-bottom: 1px solid var(--tp-hairline-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+
+.code {
+  display: block;
+  margin: 0;
+  padding: var(--tp-space-4);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--tp-ink);
+  tab-size: 2;
+}
+
+.inlineCode {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 1px var(--tp-space-1);
+  border-radius: var(--tp-radius-sm);
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}
+
+/* ── Callouts ─────────────────────────────────────────────────────────────────────────────────────────── */
+/* The label ("Note" / "Heads up") is not decoration: it is what carries the meaning for anyone who cannot
+   distinguish the left border's colour. Colour alone never conveys state here. */
+.note {
+  display: flex;
+  gap: var(--tp-space-3);
+  padding: var(--tp-space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--tp-hairline-2);
+  border-left-width: 3px;
+  background: var(--tp-surface-2);
+}
+
+.noteInfo {
+  border-left-color: var(--tp-cobalt);
+}
+
+.noteWarning {
+  border-left-color: var(--warning);
+}
+
+.noteLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  white-space: nowrap;
+}
+
+.noteBody {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+}
+
+@media (max-width: 640px) {
+  .note {
+    flex-direction: column;
+    gap: var(--tp-space-2);
+  }
+}

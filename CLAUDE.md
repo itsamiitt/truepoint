@@ -4,7 +4,7 @@
 **Product brand:** TruePoint — everything a user sees. **Code identity:** the npm root is
 `leadwolf` and every workspace package is `@leadwolf/*`. The brand and the scope deliberately
 differ — never "fix" one to match the other. Real domains: `app.` / `auth.` / `api.` /
-`forge.truepoint.in`.
+`forge.` / `doc.truepoint.in`.
 
 ## Product strategy (the contract — read before proposing any feature work)
 
@@ -67,9 +67,9 @@ news/social feeds. See 04-opportunity-scores.md.
 - **Stack:** one Bun monorepo — Bun 1.3.14 + Turbo 2.3.3 + Biome 1.9.4 (not pnpm/ESLint),
   TypeScript 5.7.2. Postgres 16 via Drizzle + postgres.js (RLS enforced, hand-written policies
   in `packages/db/src/rls/*.sql`); Redis 7 + BullMQ; Hono on Bun for APIs; Next.js 15 App
-  Router + React 19 for the four web apps; S3-compatible object storage; search is
+  Router + React 19 for the five web apps; S3-compatible object storage; search is
   Postgres-backed behind a `SearchPort` seam.
-- **Layout:** `apps/{web,admin,auth,api,workers,extension,forge,forge-api,forge-worker}` +
+- **Layout:** `apps/{web,admin,auth,api,workers,extension,forge,forge-api,forge-worker,doc}` +
   `packages/{app-shell,auth,auth-client,config,core,db,forge-capture-sdk,forge-core,identity,
   integrations,search,types,ui}`.
 - **Gates:** `bun run lint` · `bun run typecheck` (runs `typecheck` AND `typecheck:tests` — test files
@@ -112,7 +112,7 @@ The doc's `services/*` are **modules, not directories**. Do not create a `servic
 | fraud | not built (Phase 3) |
 | compliance | `suppression_list`, `consent_records`, `dsar_requests`, `retention_*`, the `dsar` queue |
 | connectors | `packages/db/src/schema/crm.ts` (9 tables, dark behind `CRM_SYNC_ENABLED`) |
-| apps | `apps/web` (customer), `apps/admin` (staff), `apps/forge` (operator), `apps/extension` (MV3, dark behind `CHROME_EXTENSION_ENABLED` + `EXTENSION_ORIGINS`) |
+| apps | `apps/web` (customer), `apps/admin` (staff), `apps/forge` (operator), `apps/doc` (public docs/pricing at `doc.truepoint.in` — no auth, no data client, zero-env build; ADR-0048), `apps/extension` (MV3, dark behind `CHROME_EXTENSION_ENABLED` + `EXTENSION_ORIGINS`) |
 
 ## Skills — read before writing code in that area
 

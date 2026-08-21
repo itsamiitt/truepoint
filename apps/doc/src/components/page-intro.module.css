@@ -1,0 +1,67 @@
+/* page-intro.module.css — the block at the top of every page: eyebrow, title, lede.
+ *
+ * One intro treatment for the whole site so pages cannot drift into five different heading scales. The
+ * display sizes here are local to this reading surface; every colour and space is a token. */
+
+.intro {
+  max-width: 68ch;
+}
+
+.eyebrow {
+  margin: 0 0 var(--tp-space-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--tp-ink);
+}
+
+.lede {
+  margin: var(--tp-space-4) 0 0;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--tp-ink-2);
+}
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+  margin-top: var(--tp-space-4);
+  flex-wrap: wrap;
+}
+
+/* Section heading used by the composed pages (pricing tiers, dataset lists) — distinct from prose h2 because
+   these sit above cards and grids rather than inside a reading column. */
+.sectionTitle {
+  margin: var(--tp-space-8) 0 var(--tp-space-4);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  scroll-margin-top: 80px;
+}
+
+.sectionNote {
+  margin: 0 0 var(--tp-space-4);
+  font-size: 14px;
+  color: var(--tp-ink-3);
+  max-width: 70ch;
+}
+
+@media (max-width: 640px) {
+  .title {
+    font-size: 26px;
+  }
+  .lede {
+    font-size: 16px;
+  }
+}

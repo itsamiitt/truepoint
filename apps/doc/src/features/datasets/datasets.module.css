@@ -1,0 +1,50 @@
+/* datasets.module.css — the packaged flat-file catalogue and one dataset's detail page. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--tp-space-4);
+}
+
+.cardTitle {
+  margin: 0 0 var(--tp-space-2);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.cardSummary {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+}
+
+.meta {
+  margin: var(--tp-space-4) 0 0;
+  padding-top: var(--tp-space-3);
+  border-top: 1px solid var(--tp-hairline);
+  display: grid;
+  gap: var(--tp-space-1);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tp-space-3);
+  margin-top: var(--tp-space-4);
+  flex-wrap: wrap;
+}
+
+.section {
+  margin-top: var(--tp-space-8);
+}
+
+.sectionHeading {
+  margin: 0 0 var(--tp-space-3);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}

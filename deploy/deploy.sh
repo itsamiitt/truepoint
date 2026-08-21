@@ -143,8 +143,8 @@ if [ "$caddy_ok" = "0" ]; then
   echo "    (validator could not run; continuing — see the note above)" >&2
 fi
 
-echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, caddy)…"
-"${COMPOSE[@]}" up -d api auth workers web admin forge-api forge-worker forge caddy
+echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, forge, doc, caddy)…"
+"${COMPOSE[@]}" up -d api auth workers web admin forge-api forge-worker forge doc caddy
 
 # ── 5. Post-deploy smoke gate: prove sign-in can actually MINT, or fail the deploy loudly ───────────────
 # The slim oven/bun image has no curl/wget — use bun -e. `up -d` already waited on healthchecks (Caddy

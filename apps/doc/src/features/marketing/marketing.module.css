@@ -1,0 +1,102 @@
+/* marketing.module.css — the landing page.
+ *
+ * Restrained on purpose. This page's job is to state what the thing is and route a developer into the docs
+ * in one click; it is not a scroll-driven brochure. No animation beyond the token hover transitions, because
+ * the audience is someone deciding whether to read the reference, and motion does not help them decide. */
+
+.hero {
+  padding-block: var(--tp-space-8);
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--tp-space-3);
+  margin-top: var(--tp-space-6);
+  flex-wrap: wrap;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--tp-space-4);
+}
+
+.cardTitle {
+  margin: 0 0 var(--tp-space-2);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.cardBody {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+}
+
+/* Endpoint teaser rows — a compact index, not a table. Each row is a whole-row link target. */
+.endpointList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.endpointRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tp-space-3);
+  padding: var(--tp-space-3) var(--tp-space-4);
+  min-height: var(--tp-row-h);
+  border-bottom: 1px solid var(--tp-hairline);
+  text-decoration: none;
+  color: var(--tp-ink);
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.endpointList li:last-child .endpointRow {
+  border-bottom: 0;
+}
+.endpointRow:hover {
+  background: var(--nav-hover-fill);
+}
+
+.method {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+  min-width: 42px;
+}
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--tp-ink);
+}
+
+.endpointSummary {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  text-align: right;
+}
+
+.cost {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-3);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+  .endpointSummary {
+    display: none;
+  }
+}

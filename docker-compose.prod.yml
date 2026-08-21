@@ -1,10 +1,10 @@
 # docker-compose.prod.yml — single-host PREVIEW deployment of TruePoint on Ubuntu.
-# All four app services share one locally-built image (leadwolf:latest, from deploy/deploy.sh).
+# Every app service shares one locally-built image (leadwolf:latest, from deploy/deploy.sh).
 # Caddy fronts them with HTTPS + subdomain routing; Postgres is external (Neon/RDS).
 # This is NOT production-hardened — see DEPLOY.md "Caveats".
 name: leadwolf
 
-# Shared definition for the four app services. They differ only by `command` (+ web's depends_on).
+# Shared definition for the app services. They differ only by `command` (+ their depends_on).
 x-app: &app
   image: leadwolf:latest
   # ALL env — including the base64 EdDSA signing keys (JWT_*_PEM_B64), which deploy.sh persists into
@@ -249,6 +249,22 @@ services:
       retries: 6
       start_period: 40s
 
+  # The public developer portal (doc.truepoint.in; ADR-0048). Note the absent depends_on: this is the one
+  # service in the fleet with no runtime dependency on anything — no database, no Redis, no API. Its pages are
+  # prerendered at build time, so it can start (and stay up) while everything else is down. Overriding
+  # depends_on to empty is deliberate rather than an omission — the `*app` anchor's redis dependency would
+  # otherwise make a static marketing site wait on a cache it never calls.
+  doc:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/doc", "start"]
+    depends_on: []
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3007/',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
   # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
   caddy:
     image: caddy:2
@@ -268,6 +284,7 @@ services:
       admin: { condition: service_healthy }
       forge: { condition: service_healthy }
       forge-api: { condition: service_healthy }
+      doc: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

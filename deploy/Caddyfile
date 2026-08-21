@@ -104,3 +104,9 @@ forge.truepoint.in {
 forge-api.truepoint.in {
 	import site_proxy forge-api:3005
 }
+
+# The public developer portal (ADR-0048). Anonymous and fully prerendered — no session, no API path, no
+# CORS surface, and deliberately NOT in APP_ORIGINS. It is the only origin here meant to be crawled.
+doc.truepoint.in {
+	import site_proxy doc:3007
+}

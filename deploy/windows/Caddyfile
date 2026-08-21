@@ -1,6 +1,6 @@
 # Caddy — TLS termination + subdomain routing for the TruePoint preview (native Windows host).
 # Same topology as deploy/Caddyfile, but upstreams are localhost ports instead of compose service names:
-#   auth 3000 · api 3001 · web 3002 · admin 3003 · forge 3004 · forge-api 3005
+#   auth 3000 · api 3001 · web 3002 · admin 3003 · forge 3004 · forge-api 3005 · doc 3007
 # Certificates: Let's Encrypt, which requires the subdomain DNS A records to point at THIS server
 # and ports 80+443 reachable from the internet. Caddy retries ACME until DNS/firewall are right.
 
@@ -55,4 +55,9 @@ forge.truepoint.in {
 
 forge-api.truepoint.in {
 	import site_proxy localhost:3005
+}
+
+# The public developer portal (ADR-0048). Anonymous, fully prerendered, no session and no API path.
+doc.truepoint.in {
+	import site_proxy localhost:3007
 }

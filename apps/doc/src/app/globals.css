@@ -1,0 +1,90 @@
+/* globals.css — the public developer portal's base layer (doc.truepoint.in; ADR-0048).
+ *
+ * Tokens and component styling come from @leadwolf/ui, exactly as in apps/web, apps/admin and apps/forge, so
+ * this surface cannot drift from the brand. What is deliberately NOT imported is
+ * `@leadwolf/app-shell/shell.css`: that stylesheet is signed-in chrome (rail, top bar, nav, user row, command
+ * palette) and this site has none of it. apps/auth — the other anonymous surface in the fleet — omits it for
+ * the same reason.
+ *
+ * Because shell.css is out, the base layer it normally provides (box-sizing, the body rule, the visible thin
+ * scrollbars) has to live here. It is copied in intent, not by accident: the scrollbar rule in particular is
+ * a WCAG 2.2 affordance, not decoration — a scroll region with no visible bar reads as content that was cut
+ * off. Light theme only; there is no dark variant anywhere in TruePoint. */
+@import "@leadwolf/ui/tokens.css";
+@import "@leadwolf/ui/primitives.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font-family: var(--font-sans);
+  /* Documentation is read, not scanned in a grid. 15px/1.65 is the one place this app departs from the
+     14px app-chrome body size — a reading measure, applied at the root so every prose surface inherits it. */
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tp-hairline-2) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--tp-hairline-2);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+/* One focus treatment for the whole site. Links here are the primary interaction, and the DS focus ring is
+   defined for controls, so it is bound to :focus-visible at the root rather than restyled per component. */
+:focus-visible {
+  outline: 2px solid var(--tp-cobalt);
+  outline-offset: 2px;
+  border-radius: var(--tp-radius-sm);
+}
+
+a {
+  color: var(--tp-cobalt-700);
+  text-decoration-color: var(--tp-hairline-2);
+  text-underline-offset: 2px;
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* An anchor wearing the design system's button classes is a navigation, not a control — see ButtonLink.tsx
+   for why it has to be an anchor. It should not also carry the underline every other link gets. The variant
+   classes are more specific than the bare `a` rule above, so they keep their own colours. */
+a.tp-ui-btn {
+  text-decoration: none;
+}
+
+/* Skip link — the first tab stop on every page (WCAG 2.2 AA bypass-blocks). Visually hidden until focused. */
+.tp-skip-link {
+  position: absolute;
+  left: var(--tp-space-4);
+  top: var(--tp-space-4);
+  z-index: var(--tp-z-toast);
+  padding: var(--tp-space-2) var(--tp-space-3);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  box-shadow: var(--tp-shadow-popover);
+  font-size: 14px;
+  font-weight: 500;
+  transform: translateY(-200%);
+}
+.tp-skip-link:focus-visible {
+  transform: translateY(0);
+}

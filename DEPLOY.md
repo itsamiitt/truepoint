@@ -1,7 +1,7 @@
 # Deploying TruePoint — Ubuntu preview runbook
 
 This deploys the full app as a **Docker Compose stack on a single Ubuntu host**: the
-TruePoint services (`web`, `auth`, `api`, `admin`, `workers`), the nested Forge services
+TruePoint services (`web`, `auth`, `api`, `admin`, `workers`, `doc`), the nested Forge services
 (`forge`, `forge-api`, `forge-worker`), local Redis/Typesense/MailHog, and a **Caddy**
 reverse proxy that terminates HTTPS and routes the subdomains. Postgres is
 **external** (managed — Neon/RDS). It is a **working preview**, not the production AWS target
@@ -25,6 +25,7 @@ see [Caveats](#caveats) before exposing it to real users.
 | forge     | `https://forge.truepoint.in` | Next.js (`start`) | Staff data-refinery console (Forge) |
 | forge-api | `https://forge-api.truepoint.in` | Bun + Hono   | Capture ingest + operator BFF; `/ready` for checks. Also answers `forge.truepoint.in/bff/*` and `/v1/*` via Caddy |
 | forge-worker | — (internal)             | Bun + BullMQ      | Forge parse/extract/verify pipeline |
+| doc       | `https://doc.truepoint.in`  | Next.js (`start`) | Public developer portal — docs, pricing, trust. Anonymous and fully prerendered; depends on nothing, so it stays up when the rest is down (ADR-0048) |
 | redis     | — (internal)                | redis:7           | cache / queues / pub-sub           |
 | typesense | — (internal)                | typesense:27.1    | search                             |
 | mailhog   | :8025 (localhost)           | mailhog           | captures outgoing email            |
@@ -39,7 +40,7 @@ publishes ports to the internet (80/443); the app services are reached internall
 
 - Ubuntu **22.04 or 24.04**, **≥ 4 GB RAM** (8 GB comfortable — the Next build is memory-hungry), ≥ 10 GB disk.
 - A managed **Postgres** (Neon/RDS) connection string.
-- **DNS**: `A` records for `app`, `auth`, `api`, `admin`, `forge`, and `forge-api` (`.truepoint.in`) all pointing at this server's public IP.
+- **DNS**: `A` records for `app`, `auth`, `api`, `admin`, `forge`, `forge-api`, and `doc` (`.truepoint.in`) all pointing at this server's public IP.
 - **Ports 80 + 443** reachable from the internet (open them in the cloud firewall / EC2 Security Group). Caddy needs port 80 for the Let's Encrypt challenge.
 - `sudo` access.
 
@@ -107,7 +108,7 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 ```
 
-> DNS for `app`/`auth`/`api`/`admin`/`forge`/`forge-api.truepoint.in` must resolve to this server
+> DNS for `app`/`auth`/`api`/`admin`/`forge`/`forge-api`/`doc.truepoint.in` must resolve to this server
 > **before** you deploy, or Caddy can't obtain TLS certificates.
 
 ## Step 6 — Deploy

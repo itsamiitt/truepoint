@@ -1,0 +1,127 @@
+/* api-reference.module.css — the /docs shell: a persistent sidebar next to a reading column. */
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--tp-space-8);
+  align-items: start;
+}
+
+/* Sticky so the reference index stays reachable while reading a long endpoint page. Its own scroll region,
+   bounded by the viewport minus the masthead, so a long index cannot push the page height around. */
+.sidebar {
+  position: sticky;
+  top: 76px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+
+.sidebarGroup {
+  margin-bottom: var(--tp-space-5);
+}
+
+.sidebarHeading {
+  margin: 0 0 var(--tp-space-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+
+.sidebarList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.sidebarLink {
+  display: block;
+  padding: var(--tp-space-2) var(--tp-space-3);
+  border-radius: var(--tp-radius-sm);
+  font-size: 14px;
+  color: var(--tp-ink-2);
+  text-decoration: none;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.sidebarLink:hover {
+  background: var(--nav-hover-fill);
+  color: var(--tp-ink);
+}
+.sidebarLink[aria-current="page"] {
+  background: var(--tp-cobalt-50);
+  color: var(--tp-cobalt-700);
+  font-weight: 600;
+}
+
+/* ── Endpoint page ────────────────────────────────────────────────────────────────────────────────────── */
+
+.signature {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-3);
+  margin-top: var(--tp-space-5);
+  padding: var(--tp-space-3) var(--tp-space-4);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface-3);
+  overflow-x: auto;
+}
+
+.method {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink);
+  padding: var(--tp-space-1) var(--tp-space-2);
+  border-radius: var(--tp-radius-sm);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+}
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--tp-ink);
+  white-space: nowrap;
+}
+
+.billing {
+  margin: var(--tp-space-5) 0 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+  max-width: 70ch;
+}
+
+.section {
+  margin-top: var(--tp-space-8);
+}
+
+.sectionHeading {
+  margin: 0 0 var(--tp-space-3);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  scroll-margin-top: 80px;
+}
+
+.exampleGrid {
+  display: grid;
+  gap: var(--tp-space-4);
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+    gap: var(--tp-space-6);
+  }
+  .sidebar {
+    position: static;
+    max-height: none;
+    padding-bottom: var(--tp-space-4);
+    border-bottom: 1px solid var(--tp-hairline-2);
+  }
+}

@@ -119,6 +119,14 @@ module.exports = {
       to: { path: "^packages/(db|integrations)/" },
     },
     {
+      name: "doc-app-holds-no-data-path",
+      comment:
+        "apps/doc (doc.truepoint.in) is an anonymous, statically-rendered marketing/documentation site: it may consume @leadwolf/ui and @leadwolf/app-shell (design system + brand lockup) and NOTHING else from packages/*. No config (which validates env at import and would give a public site a database-shaped build dependency), no db, no auth, no core, no integrations. This is what lets it build with zero environment and makes it structurally incapable of causing a data incident — ADR-0048 §D2. Any page that needs live data belongs on apps/web, behind a session.",
+      severity: "error",
+      from: { path: "^apps/doc/" },
+      to: { path: "^packages/(?!ui/|app-shell/)[^/]+/" },
+    },
+    {
       name: "forge-capture-sdk-stays-thin",
       comment:
         "@leadwolf/forge-capture-sdk ships into the untrusted MV3 extension process — it imports ONLY @leadwolf/types, never db/integrations/core (docs/planning/forge/04, ADR-0046).",

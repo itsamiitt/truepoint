@@ -1,0 +1,45 @@
+/* changelog.module.css — a dated list. Date column left, entry right; stacks on narrow screens. */
+
+.list {
+  list-style: none;
+  margin: var(--tp-space-8) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--tp-space-6);
+  max-width: 80ch;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--tp-space-5);
+  padding-top: var(--tp-space-5);
+  border-top: 1px solid var(--tp-hairline-2);
+}
+
+.date {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-3);
+}
+
+.title {
+  margin: 0 0 var(--tp-space-2);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.body {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+}
+
+@media (max-width: 640px) {
+  .entry {
+    grid-template-columns: 1fr;
+    gap: var(--tp-space-2);
+  }
+}

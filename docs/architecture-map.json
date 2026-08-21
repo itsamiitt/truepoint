@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2245,
-  "fileSetHash": "sha256:980f847fc2b55fe020f3a22efa9e1b759fe659d757fd57d97fc4b9b38dc8ddaa",
+  "fileCount": 2306,
+  "fileSetHash": "sha256:1fdcb993732a3d6278a65b9086200f55948dba4d9aa716e386094e3f4e401d8c",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2576,6 +2576,77 @@
       "apps/auth/src/shared/OtpInput.tsx",
       "apps/auth/src/shared/SubmitButton.tsx",
       "apps/auth/src/shared/TurnstileWidget.tsx"
+    ],
+    "apps/doc": [
+      "apps/doc/next.config.mjs"
+    ],
+    "apps/doc/app": [
+      "apps/doc/src/app/changelog/page.tsx",
+      "apps/doc/src/app/datasets/[slug]/page.tsx",
+      "apps/doc/src/app/datasets/page.tsx",
+      "apps/doc/src/app/docs/[slug]/page.tsx",
+      "apps/doc/src/app/docs/api/[endpoint]/page.tsx",
+      "apps/doc/src/app/docs/layout.tsx",
+      "apps/doc/src/app/docs/page.tsx",
+      "apps/doc/src/app/layout.tsx",
+      "apps/doc/src/app/not-found.tsx",
+      "apps/doc/src/app/page.tsx",
+      "apps/doc/src/app/pricing/page.tsx",
+      "apps/doc/src/app/robots.ts",
+      "apps/doc/src/app/sitemap.ts",
+      "apps/doc/src/app/trust/page.tsx"
+    ],
+    "apps/doc/components": [
+      "apps/doc/src/components/AvailabilityBadge.tsx",
+      "apps/doc/src/components/ButtonLink.tsx",
+      "apps/doc/src/components/CodeBlock.tsx",
+      "apps/doc/src/components/Note.tsx",
+      "apps/doc/src/components/PageIntro.tsx",
+      "apps/doc/src/components/Prose.tsx",
+      "apps/doc/src/components/ReferenceTable.tsx",
+      "apps/doc/src/components/SiteChrome.tsx",
+      "apps/doc/src/components/SiteFooter.tsx",
+      "apps/doc/src/components/SiteHeader.tsx"
+    ],
+    "apps/doc/content": [
+      "apps/doc/src/content/changelog.ts",
+      "apps/doc/src/content/content.test.ts",
+      "apps/doc/src/content/datasets.ts",
+      "apps/doc/src/content/endpoints/company.ts",
+      "apps/doc/src/content/endpoints/index.ts",
+      "apps/doc/src/content/endpoints/person.ts",
+      "apps/doc/src/content/endpoints/search.ts",
+      "apps/doc/src/content/endpoints/shared.ts",
+      "apps/doc/src/content/guides/authentication.ts",
+      "apps/doc/src/content/guides/confidence.ts",
+      "apps/doc/src/content/guides/errors.ts",
+      "apps/doc/src/content/guides/index.ts",
+      "apps/doc/src/content/guides/pagination.ts",
+      "apps/doc/src/content/guides/quickstart.ts",
+      "apps/doc/src/content/pricing.ts",
+      "apps/doc/src/content/site.ts",
+      "apps/doc/src/content/trust.ts",
+      "apps/doc/src/content/types.ts"
+    ],
+    "apps/doc/features": [
+      "apps/doc/src/features/api-reference/components/DocsShell.tsx",
+      "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
+      "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
+      "apps/doc/src/features/api-reference/components/GuidePage.tsx",
+      "apps/doc/src/features/api-reference/index.ts",
+      "apps/doc/src/features/changelog/components/ChangelogPage.tsx",
+      "apps/doc/src/features/changelog/index.ts",
+      "apps/doc/src/features/datasets/components/DatasetPage.tsx",
+      "apps/doc/src/features/datasets/components/DatasetsPage.tsx",
+      "apps/doc/src/features/datasets/index.ts",
+      "apps/doc/src/features/marketing/components/EndpointIndex.tsx",
+      "apps/doc/src/features/marketing/components/HomePage.tsx",
+      "apps/doc/src/features/marketing/index.ts",
+      "apps/doc/src/features/pricing/components/PlanCard.tsx",
+      "apps/doc/src/features/pricing/components/PricingPage.tsx",
+      "apps/doc/src/features/pricing/index.ts",
+      "apps/doc/src/features/trust/components/TrustPage.tsx",
+      "apps/doc/src/features/trust/index.ts"
     ],
     "apps/extension": [
       "apps/extension/manifest.config.ts",
