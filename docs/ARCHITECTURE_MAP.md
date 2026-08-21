@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2205 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2208 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -354,7 +354,9 @@ apps/                           # deployable processes (thin transport adapters)
   real seeded 0107 policy rows: switching engines is a **redistribution**, provider-sourced records +0.20 to
   +0.26 and crawl-sourced −0.10, not a uniform lift. **Read that test before proposing to unify them**;
   `fieldProvenance.ts` (the pure provenance fold)
-- **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog`; **bulk
+- **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog` (`entries/bulk.ts` +
+  `entries/accounts.ts` are the slice's NAMED public entry points — perf-checklist PA-2: borrowers (/lists, /companies) import
+  through them instead of the 39-export main barrel, sanctioned by depcruise's `entries/*` allowance); **bulk
   reveal** (`useBulkSelection` — an external useSyncExternalStore store so a checkbox toggle re-renders 1-2
   subscribing checkboxes (`SelectionControls.tsx`) instead of the page, `BulkActionBar` (mounted via a
   subscribing host), `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);

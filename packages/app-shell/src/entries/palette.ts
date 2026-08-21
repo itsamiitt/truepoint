@@ -4,5 +4,5 @@
 // statically splits nothing — the split needs a module the static graph doesn't reach. This subpath is that
 // module; the shell dynamics `@leadwolf/app-shell/palette` and everything else keeps using the barrel.
 
-export { CommandPalette } from "./CommandPalette.tsx";
-export type { PaletteAction } from "./CommandPalette.tsx";
+export { CommandPalette } from "../CommandPalette.tsx";
+export type { PaletteAction } from "../CommandPalette.tsx";

@@ -11,7 +11,7 @@ import {
   AccountsTable,
   useAccountFacetCounts,
   useAccountSearch,
-} from "@/features/prospect";
+} from "@/features/prospect/entries/accounts";
 import type { AccountFacetKey } from "@leadwolf/types";
 import { EmptyState, StateSwitch, TpButton } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
