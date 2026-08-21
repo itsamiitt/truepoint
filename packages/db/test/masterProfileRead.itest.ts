@@ -66,7 +66,7 @@ beforeAll(async () => {
     VALUES (${visibleId}, 'Kubernetes', 5), (${visibleId}, 'Go', 2)`;
   await admin`
     INSERT INTO master_person_languages (master_person_id, name, proficiency, source_count)
-    VALUES (${visibleId}, 'English', 'native', 3)`;
+    VALUES (${visibleId}, 'English', 'NATIVE_OR_BILINGUAL', 3)`;
 
   // The PRIVATE person gets a full history too — that is the point of test 5.
   await admin`
@@ -127,7 +127,7 @@ describe("profile collections", () => {
       ]),
     );
     expect(skills).toEqual(["Kubernetes", "Go"]);
-    expect(languages).toEqual([{ name: "English", proficiency: "native" }]);
+    expect(languages).toEqual([{ name: "English", proficiency: "NATIVE_OR_BILINGUAL" }]);
   });
 
   test("4. every collection honours its LIMIT", async () => {

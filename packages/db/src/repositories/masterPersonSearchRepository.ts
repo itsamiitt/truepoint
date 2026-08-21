@@ -92,27 +92,39 @@ export interface DatabaseSearchRows {
 }
 
 export const masterPersonSearchRepository = {
-  /** Keyset page over the visible population, newest first. */
+  /**
+   * Keyset page over the visible population, newest first.
+   *
+   * The cursor key is `created_at::text` — the FULL-PRECISION string — and not
+   * `new Date(created_at).toISOString()`. That distinction is a correctness bug, not a style choice: a
+   * timestamptz carries MICROSECONDS and a JS Date carries milliseconds, so the round trip truncates the
+   * key DOWNWARD. The seek `(created_at, slug) < (k, s)` then excludes every row whose timestamp lies in
+   * the microseconds between the truncated key and the real value — and because the walk is descending,
+   * that interval is exactly where the next rows are.
+   *
+   * Two shapes it produced: rows written by one statement share a created_at, so the walk STALLED after a
+   * single page; rows spread over real time were silently SKIPPED instead, which is the worse of the two
+   * because nothing looks wrong. Caught by the company twin's full-cursor-walk itest, which failed on
+   * `relevance` and `recently_updated` (the timestamp-keyed sorts) while the text- and int-keyed sorts
+   * passed — this repository had the same defect and no test.
+   */
   async searchPersonsTx(tx: Tx, query: DatabaseQuery): Promise<DatabaseSearchRows> {
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     const seek = cursor
       ? sql` AND (p.created_at, p.linkedin_public_id) < (${cursor.k}::timestamptz, ${cursor.s})`
       : sql``;
     const raw = (await tx.execute(sql`
-      SELECT ${PERSON_SELECT}, p.created_at ${PERSON_FROM}
+      SELECT ${PERSON_SELECT}, p.created_at::text AS cursor_created_at ${PERSON_FROM}
        WHERE ${buildWhere(query)}${seek}
        ORDER BY p.created_at DESC, p.linkedin_public_id DESC
        LIMIT ${query.limit + 1}
-    `)) as unknown as Array<RawPersonRow & { created_at: string | Date }>;
+    `)) as unknown as Array<RawPersonRow & { cursor_created_at: string }>;
 
     const page = raw.slice(0, query.limit);
     const last = page.at(-1);
     const nextCursor =
       raw.length > query.limit && last
-        ? encodeCursor({
-            k: new Date(last.created_at).toISOString(),
-            s: last.linkedin_public_id,
-          })
+        ? encodeCursor({ k: last.cursor_created_at, s: last.linkedin_public_id })
         : null;
     return { rows: page.map(toMasterPersonRow), nextCursor };
   },

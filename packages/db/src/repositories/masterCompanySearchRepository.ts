@@ -158,6 +158,22 @@ export function decodeCursor(cursor: string): { k: string; d: string } | null {
 
 type Sort = DatabaseCompanyQuery["sort"];
 
+/**
+ * The raw, FULL-PRECISION timestamp strings the cursor is built from.
+ *
+ * They are selected as `::text` rather than read off the mapped row, and that is load-bearing. A
+ * timestamptz carries MICROSECONDS; a JS Date carries milliseconds. Round-tripping the key through
+ * `new Date(...).toISOString()` truncates it DOWNWARD, and the seek `(created_at, domain) < (k, d)` then
+ * excludes every row whose timestamp falls in the microseconds between the truncated key and the real
+ * value — which, since rows are walked in descending order, is exactly the next row.
+ *
+ * Concretely: three companies inserted by one statement share a created_at of `…:40.123456`. The cursor
+ * becomes `…:40.123`, and `…:40.123456 < …:40.123` is false, so page 2 comes back EMPTY and the walk
+ * stalls after one row. With timestamps spread over real time it is subtler and worse: instead of
+ * stalling, the walk silently SKIPS the rows inside the truncated interval.
+ */
+type CursorRow = RawCompanyRow & { cursor_created_at: string; cursor_updated_at: string };
+
 /** ORDER BY + the matching seek predicate + how to read the cursor key off a row — kept in ONE place so a
  *  sort can never be added with a mismatched seek (which silently skips or repeats rows). */
 const SORTS: Record<
@@ -165,18 +181,18 @@ const SORTS: Record<
   {
     order: SQL;
     seek: (c: { k: string; d: string }) => SQL;
-    key: (r: RawCompanyRow & { created_at: string | Date }) => string;
+    key: (r: CursorRow) => string;
   }
 > = {
   relevance: {
     order: sql`c.created_at DESC, c.primary_domain DESC`,
     seek: (c) => sql`(c.created_at, c.primary_domain) < (${c.k}::timestamptz, ${c.d})`,
-    key: (r) => new Date(r.created_at).toISOString(),
+    key: (r) => r.cursor_created_at,
   },
   recently_updated: {
     order: sql`c.updated_at DESC, c.primary_domain DESC`,
     seek: (c) => sql`(c.updated_at, c.primary_domain) < (${c.k}::timestamptz, ${c.d})`,
-    key: (r) => new Date(r.updated_at).toISOString(),
+    key: (r) => r.cursor_updated_at,
   },
   name_asc: {
     order: sql`c.name ASC, c.primary_domain ASC`,
@@ -220,11 +236,14 @@ export const masterCompanySearchRepository = {
     const want = Math.min(query.limit * Math.max(1, overfetch), 300);
 
     const raw = (await tx.execute(sql`
-      SELECT ${COMPANY_SELECT}, c.created_at ${COMPANY_FROM}
+      SELECT ${COMPANY_SELECT},
+             c.created_at::text AS cursor_created_at,
+             c.updated_at::text AS cursor_updated_at
+        ${COMPANY_FROM}
        WHERE ${buildWhere(query)}${seek}
        ORDER BY ${spec.order}
        LIMIT ${want + 1}
-    `)) as unknown as Array<RawCompanyRow & { created_at: string | Date }>;
+    `)) as unknown as CursorRow[];
 
     const page = raw.slice(0, want);
     const last = page.at(-1);
