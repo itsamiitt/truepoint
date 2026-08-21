@@ -77,10 +77,14 @@
   color: var(--tp-ink);
 }
 
+/* Both of these are ink-2 rather than ink-3 because of the row's HOVER state. On white, ink-3 clears AA at
+   4.83:1 — but --nav-hover-fill (#f3f4f6) drops it to 4.39:1, under the 4.5:1 floor, and the row does not
+   restore a darker colour on hover the way the nav links do. A contrast ratio that only holds until the
+   pointer arrives is not a passing one. ink-2 is 9.36:1 against the hover fill. */
 .endpointSummary {
   margin-left: auto;
   font-size: 13px;
-  color: var(--tp-ink-3);
+  color: var(--tp-ink-2);
   text-align: right;
 }
 
@@ -88,7 +92,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--tp-ink-3);
+  color: var(--tp-ink-2);
   white-space: nowrap;
 }
 

@@ -163,6 +163,19 @@ else
   exit 1
 fi
 
+# The developer portal is fully prerendered and depends on nothing, so "did it come up" is the whole check —
+# but it is also the one origin the public and search crawlers see, so a silent failure there is invisible
+# until someone reports a dead docs link. Non-fatal: the portal being down must never block a deploy that
+# fixed the actual product. Run apps/doc's own verify script against the live origin for the deeper pass:
+#   DOC_BASE_URL=https://doc.truepoint.in bun run --filter @leadwolf/doc verify
+echo "==> Checking the developer portal answers…"
+if "${COMPOSE[@]}" exec -T doc bun -e "fetch('http://localhost:3007/').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"; then
+  echo "==> Developer portal OK."
+else
+  echo "WARNING: doc.truepoint.in did not answer 200. Deploy continues — the portal serves no product traffic."
+  "${COMPOSE[@]}" logs --tail=20 doc || true
+fi
+
 echo
 echo "Containers:"
 "${COMPOSE[@]}" ps
@@ -173,6 +186,7 @@ echo "  Auth  : $(grep '^NEXT_PUBLIC_AUTH_ORIGIN=' "$ENV_FILE" | cut -d= -f2-)"
 # /ready, not /health: it additionally proves Postgres is reachable, which is what an operator actually wants
 # to confirm after a deploy. /health answers 200 with a dead database.
 echo "  API   : $(grep '^NEXT_PUBLIC_API_BASE='    "$ENV_FILE" | cut -d= -f2-)/ready"
+echo "  Docs  : https://doc.truepoint.in  (public developer portal — no auth)"
 echo "  Mail  : http://127.0.0.1:8025  (MailHog — view via SSH tunnel)"
 echo
 echo "Tail logs with:  docker compose -f docker-compose.prod.yml logs -f api auth web workers"

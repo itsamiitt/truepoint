@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2306,
-  "fileSetHash": "sha256:1fdcb993732a3d6278a65b9086200f55948dba4d9aa716e386094e3f4e401d8c",
+  "fileCount": 2308,
+  "fileSetHash": "sha256:7026eda24be97c7855117b7dc2ee94e1ce3a065ab72a1a356f2b0d978802619a",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2578,7 +2578,8 @@
       "apps/auth/src/shared/TurnstileWidget.tsx"
     ],
     "apps/doc": [
-      "apps/doc/next.config.mjs"
+      "apps/doc/next.config.mjs",
+      "apps/doc/scripts/verify.mjs"
     ],
     "apps/doc/app": [
       "apps/doc/src/app/changelog/page.tsx",
@@ -2606,7 +2607,8 @@
       "apps/doc/src/components/ReferenceTable.tsx",
       "apps/doc/src/components/SiteChrome.tsx",
       "apps/doc/src/components/SiteFooter.tsx",
-      "apps/doc/src/components/SiteHeader.tsx"
+      "apps/doc/src/components/SiteHeader.tsx",
+      "apps/doc/src/components/contrast.test.ts"
     ],
     "apps/doc/content": [
       "apps/doc/src/content/changelog.ts",

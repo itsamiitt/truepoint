@@ -120,6 +120,33 @@ element for a navigation.
 
 ---
 
+## Phase board
+
+What is left, split by whether it is mine to build or yours to decide. The second column is the honest
+blocker, not a schedule.
+
+| # | Phase | State | Blocker |
+|---|---|---|---|
+| A | Portal ships: routes, content, chrome, infra wiring | **done** | — |
+| B | Verify it renders: all routes, chrome present, a11y skeleton, no forbidden copy in delivered HTML | **done** — `bun run --filter @leadwolf/doc verify` | — |
+| C | WCAG 2.2 AA contrast | **done** — three failures found and fixed; `contrast.test.ts` now gates the palette | — |
+| D | Content-Security-Policy | **buildable** | Needs report-only rollout against a live origin before enforcing |
+| E | Waitlist / lead capture | **blocked** | Rule 3: a collection path needs lawful basis, consent surface, suppression point, erasure path. Belongs on `apps/api`. |
+| F | API keys + usage dashboard | **blocked** | Metering and billing; belongs on `app.`, and on operator ratification of the fourth market (ADR-0048 §C4) |
+| G | MCP server + its docs page | **blocked** | The MCP server does not exist; it would wrap endpoints that do not exist |
+| H | Status page | **blocked** | No uptime source of truth. A hand-written "all normal" is worse than nothing |
+| I | Real dataset samples | **blocked** | Needs an authenticated, suppression-checked, logged delivery path |
+| J | Analytics | **blocked** | Tracking anonymous readers is a privacy decision, not a plumbing one |
+| K | The brief's supply plan (contributor rewards, vendor waterfall, crawlers) | **will not build** | ADR-0048 §C1 (rule 7) and §C2 (rule 4) are hard constraints. Operator decision required, recorded in `decisions.md`. |
+
+**What phase C found, and why it matters beyond three CSS lines.** The muted-text token `--tp-ink-3` clears
+AA on white (4.83:1) and on `--tp-surface-2` (4.63:1), and fails on `--tp-surface-3` (4.43:1) and on
+`--nav-hover-fill` (4.39:1). Three surfaces shipped in the failing pairings — the code-block language label,
+and two cells of the endpoint index whose row tints on hover. Every one of them read as correct token usage
+in review, because ink-3 *is* the muted-text token. The design system has no automated token lint (its own
+implementation-status note says so), so nothing was going to catch this. `contrast.test.ts` now asserts every
+pair the app paints and bans `--tp-ink-4` as a text colour outright.
+
 ## Risk flags
 
 1. **The four strategy conflicts** in ADR-0048 §C1–C4 are open and belong to the operator: contributor-earned
@@ -130,7 +157,9 @@ element for a navigation.
    the date on the page. This is a deliberate trade against dragging a data client into a public site.
 3. **No CSP.** This app is the best candidate in the fleet for one — no inline handlers, no third-party
    origins, no user content — but Next emits inline bootstrap scripts, so a real policy needs a nonce plumbed
-   through the layout and a report-only rollout against a live deployment.
+   through the layout and a report-only rollout against a live deployment. A nonce is the awkward part: it
+   must be per-request, and every route here is prerendered, so adding one would trade the app's whole static
+   posture for a header. Phase D should ship `Content-Security-Policy-Report-Only` first and read the reports.
 4. **No analytics**, so there is currently no way to tell whether the documentation is doing the job the plan
    assigns it.
 5. **A build-time BOM in an app's `package.json` silently breaks module resolution** for the whole workspace —

@@ -44,6 +44,9 @@
   overflow: hidden;
 }
 
+/* ink-2, not ink-3. This label sits on --tp-surface-3, where --tp-ink-3 measures 4.43:1 — under the 4.5:1
+   WCAG 2.2 AA floor for normal text, and 11px is emphatically normal text. ink-3 is only safe here on white
+   (4.83:1) and on --tp-surface-2 (4.63:1); against the tinted surface it is not. ink-2 gives 9.45:1. */
 .codeLang {
   display: block;
   padding: var(--tp-space-2) var(--tp-space-4);
@@ -52,7 +55,7 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--tp-ink-3);
+  color: var(--tp-ink-2);
 }
 
 .code {

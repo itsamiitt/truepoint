@@ -557,6 +557,9 @@ export function classify(p) {
   // `src/components` fall through to the generic app rule below, exactly like apps/web's.
   if (/^apps\/doc\/src\/features\//.test(p)) return { kind: "shared", area: "apps/doc/features" };
   if (/^apps\/doc\/src\/content\//.test(p)) return { kind: "shared", area: "apps/doc/content" };
+  // Its post-build smoke script, same treatment apps/extension's scripts/ gets: tooling for the app, not
+  // domain code, and a permanent entry in `unassigned` trains readers to ignore that list.
+  if (/^apps\/doc\/scripts\//.test(p)) return { kind: "shared", area: "apps/doc" };
 
   // App routing/shared/lib/middleware.
   if ((m = p.match(/^apps\/api\/src\/middleware\//)))
