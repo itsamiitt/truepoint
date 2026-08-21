@@ -67,6 +67,15 @@ eventsRoutes.get("/stream", (c) => {
     let notify: (() => void) | null = null;
     let closed = false;
 
+    // BOUNDED per-connection buffer (perf-checklist PA-11): a stalled consumer — an MV3 service worker
+    // suspended mid-stream holding a half-open socket — used to accumulate every workspace event in this
+    // array with no cap and no drop policy, i.e. unbounded API-process memory tied to the slowest client.
+    // Past the cap the stream CLOSES instead of buffering: the client's reconnect re-syncs from a fresh
+    // read (every consumer treats the stream as invalidation hints over a poll safety net, never as a
+    // gap-free ledger). Refusing is honest, starving is not — the MAX_STREAMS_PER_USER cap above makes the
+    // same call for connections.
+    const MAX_BUFFERED_MESSAGES = 100;
+
     const wake = () => {
       const n = notify;
       notify = null;
@@ -74,6 +83,11 @@ eventsRoutes.get("/stream", (c) => {
     };
 
     const detach = await realtimeHub().subscribe(channel, (message) => {
+      if (messages.length >= MAX_BUFFERED_MESSAGES) {
+        closed = true;
+        wake();
+        return;
+      }
       messages.push(message);
       wake();
     });
