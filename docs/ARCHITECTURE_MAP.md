@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2228 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2239 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -1163,4 +1163,33 @@ flowchart TD
   `problemMessageFromBody`. Slices that throw a typed `ApiError` need `code` off the same body and a
   Response can only be read once, so they were each re-deriving the detail→title→fallback precedence by
   hand — the exact drift that module exists to prevent. `problemMessage` is now a thin wrapper over it.
+
+  2026-08-21 refresh (search consolidation, stage 3 — profiles un-gated, + the bundle budget): 2225 → 2239
+  files, no new domain. A search row now opens the FULL masked Layer-0 profile of a person or a company
+  without the record first being materialized into a workspace. Behind `DATABASE_PROFILE_ENABLED`.
+
+  This is **net-new read surface, not a relaxed check** — there has never been a `GET /contacts/:id`, and
+  the old "add it first" behaviour was three lines of frontend with nothing to open. Two invariants hold
+  structurally rather than by convention: no channel VALUE is in a profile response (presence bits only —
+  `hasEmail`/`hasPhone`/`hasMobile`), and no workspace-overlay fact is either, because Layer 0 has no
+  workspace column. Reveal is untouched: credit-gated, workspace-scoped.
+
+  - `masterProfileReadRepository.ts` (→ `features.master-sync.db`, `REPO_DOMAIN` extended again) — the
+    composed collection reads, each BOUNDED at the source. It also owns the `'-infinity'` sentinel
+    translation: `master_employment.started_on` defaults to that sentinel meaning "start unknown", and
+    rendering it as a date reads as ~2000 years of tenure. Mapped to NULL in SQL so no caller can forget.
+  - `core/prospect/databaseProfile.ts` — the same two-transaction shape the searches use, with the Layer-0
+    collection reads run CONCURRENTLY inside one `withErTx` (five independent SELECTs keyed by one slug).
+  - `packages/types/src/databaseProfile.ts`, the two `GET /search/database/{people,companies}/:key` routes,
+    and `rl:dbprofile` in `packages/auth/src/rateLimit.ts` — a slug and a domain are guessable, so the
+    routes are an enumeration surface and carry their own per-caller cap.
+  - `apps/web`: `components/search/useProfileParam.ts` (+ test) puts the open profile in a URL param, so a
+    drawer is shareable without navigating away from the list; `features/accounts/components/
+    DatabaseProfileDrawer.tsx` + `databaseProfileApi.ts`; `features/search/components/SearchProfileHost.tsx`.
+
+  **Bundle budget.** `/search` hosts two panes and measured 214kB against the perf-checklist's 200kB
+  target. Now **197kB**: People stays eager (it is the page, not an intent — deferring it buys 80kB with a
+  round trip before the first search can be issued), Accounts and both profile drawers are `next/dynamic`.
+  New `entries/pane.ts` in both feature slices, because a dynamic import of a MAIN barrel splits nothing —
+  the PA-2 lesson applied to PA-3's mechanism. Every web route is now under target.
 ```

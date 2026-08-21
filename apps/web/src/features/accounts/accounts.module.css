@@ -223,3 +223,56 @@
   color: var(--tp-ink-3);
   padding-bottom: 8px;
 }
+
+/* ── Global profile drawers (stage 3) ─────────────────────────────────────────────────────────────────── */
+.profileBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.profileHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.profileName {
+  font-size: 16px;
+  font-weight: 650;
+}
+.profileSub {
+  font-size: 13px;
+  color: var(--tp-text-muted);
+}
+/* The presence chips: "email on file" is a FACT about the record, not the value — the value is a reveal. */
+.presenceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.profileActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.profileSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--tp-hairline);
+  padding-top: 14px;
+}
+.profileSectionTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tp-text-muted);
+}
+.timelineRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

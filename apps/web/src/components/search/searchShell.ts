@@ -6,8 +6,15 @@
 // there is exactly one, and it is the composer's.
 import type { ReactNode } from "react";
 import type { DrawerState } from "./useDrawerCollapsed";
+import type { ProfileKind } from "./useProfileParam";
 
 export interface SearchShell extends DrawerState {
   /** The People/Accounts switch, rendered by the composer so both panes show an identical control. */
   tabs: ReactNode;
+  /**
+   * Open a profile drawer for one row. The panes call this instead of routing, because the design system
+   * forbids navigating away from a list to show a detail — and because the composer, not the pane, owns
+   * which drawer is mounted (it is a URL param, so the open profile is shareable).
+   */
+  openProfile: (kind: ProfileKind, key: string) => void;
 }

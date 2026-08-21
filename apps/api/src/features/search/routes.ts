@@ -2,11 +2,14 @@
 // the verified token (never the body), validation is Zod at the edge, and all search logic lives behind the
 // SearchPort (packages/search). POST is used for contacts/facets (structured query bodies); suggest is GET.
 
+import { checkDatabaseProfileRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import {
   countDatabase,
   countDatabaseCompanies,
   databaseCompanyFacets,
+  readDatabaseCompanyProfile,
+  readDatabasePersonProfile,
   searchCount,
   searchDatabase,
   searchDatabaseCompanies,
@@ -17,9 +20,11 @@ import {
   contactQuery,
   databaseCompanyCountResult,
   databaseCompanyFacetsRequest,
+  databaseCompanyProfile,
   databaseCompanyQuery,
   databaseCompanySearchPage,
   databaseCountResult,
+  databasePersonProfile,
   databaseQuery,
   databaseSearchPage,
   facetCountsRequest,
@@ -144,6 +149,46 @@ searchRoutes.post("/database/companies/facets", async (c) => {
   );
   const facets = fields.length === 0 ? [] : await databaseCompanyFacets(parsed.data.query, fields);
   return c.json({ facets });
+});
+
+/**
+ * GET /search/database/people/:slug — the full masked profile of one Layer-0 person (stage 3).
+ *
+ * This is NET-NEW read surface, not a relaxed check: there has never been a GET /contacts/:id, and the
+ * "add to workspace first" behaviour was a frontend row that had nothing to open. Two invariants hold, both
+ * structurally rather than by convention:
+ *   • no channel VALUE is in the response (presence bits only) — reveal stays credit-gated and
+ *     workspace-scoped, so A-01/A-03 are untouched;
+ *   • no workspace-overlay fact is in it either — Layer 0 has no workspace column, so there is nothing
+ *     workspace-scoped to leak. The one workspace-derived field is `inWorkspace`, produced under RLS from
+ *     the CALLER's own workspace.
+ *
+ * Absent and not-visible both return 404, byte-identical, so the response shape is not an enumeration
+ * oracle. The rate limit is the other half of that guard — a slug is guessable.
+ */
+searchRoutes.get("/database/people/:slug", async (c) => {
+  if (!env.DATABASE_PROFILE_ENABLED) throw new NotFoundError("Not enabled.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view this profile.");
+  await checkDatabaseProfileRate(c.get("claims").sub);
+  const profile = await readDatabasePersonProfile(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("slug"),
+  );
+  if (!profile) throw new NotFoundError("Profile not found.");
+  return c.json(databasePersonProfile.parse(profile));
+});
+
+/** GET /search/database/companies/:domain — the company twin of the route above. Same invariants. */
+searchRoutes.get("/database/companies/:domain", async (c) => {
+  if (!env.DATABASE_PROFILE_ENABLED) throw new NotFoundError("Not enabled.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view this profile.");
+  await checkDatabaseProfileRate(c.get("claims").sub);
+  const profile = await readDatabaseCompanyProfile(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("domain"),
+  );
+  if (!profile) throw new NotFoundError("Profile not found.");
+  return c.json(databaseCompanyProfile.parse(profile));
 });
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */

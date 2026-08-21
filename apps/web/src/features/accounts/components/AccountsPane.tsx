@@ -116,11 +116,13 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             accounts={search.rows}
             loading={search.loading}
             isDatabaseRow={(a) => (a as AccountRow).databaseDomain !== undefined}
-            // A database row has no workspace record to open — stage 3 gives it a profile drawer. Until
-            // then it is inert rather than routing to a /companies/:id that does not exist.
+            // STAGE 3 — the un-gate. A database row now opens its full masked profile in a drawer instead
+            // of being inert; adding it to the workspace is one action ON that profile, not the price of
+            // admission to it. An owned account still routes to its own page until that becomes a drawer.
             onOpen={(account: MaskedAccount) => {
-              if ((account as AccountRow).databaseDomain !== undefined) return;
-              router.push(`/companies/${account.id}`);
+              const domain = (account as AccountRow).databaseDomain;
+              if (domain !== undefined) shell.openProfile("company", domain);
+              else router.push(`/companies/${account.id}`);
             }}
             density="comfortable"
           />

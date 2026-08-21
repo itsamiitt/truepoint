@@ -106,6 +106,31 @@ data side, independently of the "no production writer" finding from the code sid
 **Growth**: first landing 2026-08-18. Companies landed per day 25 / 91 / 126 / 9;
 licensed persons per day 20 / 26 / 130. The graph is four days old.
 
+## Bundle budget — measured, not assumed
+
+The perf-checklist target is **200kB First Load JS** per route (PA-2 brought `/lists` and `/companies`
+under it). `/search` hosts two panes, so it needed the same discipline.
+
+| Shape | `/search` First Load JS |
+|---|---|
+| Both panes statically imported | 214kB — **over target** |
+| **People eager, Accounts `next/dynamic`** | **197kB** ← shipped |
+| Both panes `next/dynamic` | 117kB |
+
+The third row is tempting and wrong. PA-3 defers things behind an **intent** — the Cmd-K palette, a wizard
+dialog, the bulk bar. The People pane is not an intent, it is the page: it renders on essentially every
+visit, so deferring it buys 80kB with a round trip on the critical path *before the first search can even be
+issued*. Accounts is a real intent (a tab the visitor chooses), so its grid, filter panel and the two
+profile drawers stay out of the default load.
+
+Two supporting moves, both PA-2/PA-3 shapes:
+- `features/{prospect,accounts}/entries/pane.ts` — a dynamic import of a feature's MAIN barrel splits
+  nothing, so the pane needs a one-symbol entry or the whole 86-file slice rides along.
+- `SearchProfileHost` loads both profile drawers via `next/dynamic`; they are only reachable on a row click.
+
+Query hygiene follows PA-8: profile reads are `staleTime` 5min / `gcTime` 10min, so reopening a row the rep
+just looked at is instant rather than a round trip.
+
 ## Feature gates
 
 House posture, matching `BULK_IMPORT_ENABLED`: explicit-`"true"`-only, so
@@ -133,7 +158,7 @@ once the cohort is at 100% and the honest-empty path has been exercised).
 |---|---|---|
 | **1 — DONE 2026-08-21** | Rename `/prospect` → `/search`; redirect pages; `navConfig` + palette + `sectionTitleFor`; the collapsible drawer (toggle, persistence, responsive overlay); the People/Accounts `SegmentedControl` wired to `?tab`; `SearchSurface`/`PeoplePane`/`AccountsPane` split; `features/companies` → `features/accounts`; delete dead `FilterRail`. **No new filters, no new endpoints.** | ungated |
 | **2 — DONE 2026-08-21** | Global company search end-to-end: `MASTER_COMPANY_VISIBLE`, the two repositories, `0134`, contracts, `N3`/`N4`, `AccountsPane` merging owned + database rows, counts, sorting, pagination. R1 resolved first (census). Deviations: the facets route ships alongside search/count; both global counts are now capped (`DATABASE_COUNT_CAP` lives in the contract); `lib/problemMessage` gained `problemMessageFromBody` so the typed-`ApiError` callers stop re-deriving the precedence. | `DATABASE_COMPANY_SEARCH_ENABLED` |
-| **3** | Un-gate profiles: `N1`/`N2`, the two new drawers, `SearchProfileHost` + URL params, rate limits, add-to-workspace demoted to one action among several. | `DATABASE_PROFILE_ENABLED` |
+| **3 — DONE 2026-08-21** | Un-gate profiles: `N1`/`N2`, the two drawers, `SearchProfileHost` + the `?person=`/`?company=` params, the `rl:dbprofile` enumeration limiter, add-to-workspace demoted to one action on the profile. Deviations: the profile DTOs gained `hasMobile` (an EXISTS, serving **S-04** without giving the number away); the drawers derive headcount growth client-side from the series rather than adding a stored field (the 0114 posture); the Accounts pane is now `next/dynamic` — see the perf note below. | `DATABASE_PROFILE_ENABLED` |
 | **4** | Remaining Build-now filters + include/exclude on the global contracts, applied-filter chip row, Clear all, workspace-status control, `0135`. Retire `/companies` for real — the removal-cleanup grep sweep. | — |
 | **5** | Derivable filters: `0136` + the landing writer + the backfill worker (department/function, years of experience, years in role, recent job change). CSV export for the Accounts tab. `EXPLAIN ANALYZE` pass against the index plan. | — |
 

@@ -1528,3 +1528,10 @@ export {
   bandFor,
   type DatabaseCompanyScope,
 } from "./prospect/searchDatabaseCompanies.ts";
+// The GLOBAL profile reads (search-consolidation stage 3) — full masked Layer-0 detail without first
+// materializing the record into a workspace. No channel value, no workspace-overlay fact.
+export {
+  readDatabasePersonProfile,
+  readDatabaseCompanyProfile,
+  type DatabaseProfileScope,
+} from "./prospect/databaseProfile.ts";

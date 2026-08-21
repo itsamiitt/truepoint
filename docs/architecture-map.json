@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2228,
-  "fileSetHash": "sha256:d68c398e4f09b2668f2315aa17eacaf24deeed30c3a178807ea7bccbd9fa3d51",
+  "fileCount": 2239,
+  "fileSetHash": "sha256:4b5208577f493f3105e170f4f016db7b9e6789dfa29c53b592bfc9049208aceb",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -144,9 +144,12 @@
         "apps/web/src/features/accounts/api.ts",
         "apps/web/src/features/accounts/components/AccountsPane.tsx",
         "apps/web/src/features/accounts/components/CompanyPage.tsx",
+        "apps/web/src/features/accounts/components/DatabaseProfileDrawer.tsx",
         "apps/web/src/features/accounts/components/MarketsBoard.tsx",
         "apps/web/src/features/accounts/components/PostingsSection.tsx",
         "apps/web/src/features/accounts/databaseCompanyApi.ts",
+        "apps/web/src/features/accounts/databaseProfileApi.ts",
+        "apps/web/src/features/accounts/entries/pane.ts",
         "apps/web/src/features/accounts/hooks/useAccountsSearch.ts",
         "apps/web/src/features/accounts/hooks/useCompany.ts",
         "apps/web/src/features/accounts/index.ts"
@@ -1345,6 +1348,7 @@
         "packages/db/src/repositories/masterJobPostingsRepository.ts",
         "packages/db/src/repositories/masterPersonReadRepository.ts",
         "packages/db/src/repositories/masterPersonSearchRepository.ts",
+        "packages/db/src/repositories/masterProfileReadRepository.ts",
         "packages/db/src/repositories/masterProfileRepository.ts",
         "packages/db/src/repositories/masterSignalsRepository.ts",
         "packages/db/src/repositories/masterTechnologyRepository.ts",
@@ -1526,6 +1530,7 @@
         "apps/web/src/features/prospect/enrichApi.ts",
         "apps/web/src/features/prospect/entries/accounts.ts",
         "apps/web/src/features/prospect/entries/bulk.ts",
+        "apps/web/src/features/prospect/entries/pane.ts",
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
@@ -1586,6 +1591,7 @@
         "packages/core/src/prospect/contactMergePlan.ts",
         "packages/core/src/prospect/contributionGate.test.ts",
         "packages/core/src/prospect/contributionGate.ts",
+        "packages/core/src/prospect/databaseProfile.ts",
         "packages/core/src/prospect/dedup.test.ts",
         "packages/core/src/prospect/dedup.ts",
         "packages/core/src/prospect/dedupReview.ts",
@@ -1844,6 +1850,7 @@
     },
     "search": {
       "web": [
+        "apps/web/src/features/search/components/SearchProfileHost.tsx",
         "apps/web/src/features/search/components/SearchSurface.tsx",
         "apps/web/src/features/search/index.ts"
       ],
@@ -2786,6 +2793,8 @@
       "apps/web/src/components/search/searchTabUrlState.test.ts",
       "apps/web/src/components/search/searchTabUrlState.ts",
       "apps/web/src/components/search/useDrawerCollapsed.ts",
+      "apps/web/src/components/search/useProfileParam.test.ts",
+      "apps/web/src/components/search/useProfileParam.ts",
       "apps/web/src/components/search/useSearchTab.ts",
       "apps/web/src/components/shell/AppShell.tsx",
       "apps/web/src/components/shell/CreditPill.tsx",
@@ -3151,6 +3160,7 @@
       "packages/db/test/masterGraphResolve.itest.ts",
       "packages/db/test/masterHeadcount.itest.ts",
       "packages/db/test/masterJobPostings.itest.ts",
+      "packages/db/test/masterProfileRead.itest.ts",
       "packages/db/test/members.itest.ts",
       "packages/db/test/meteringAccess.itest.ts",
       "packages/db/test/migrationSeedLengths.test.ts",
@@ -3311,6 +3321,7 @@
       "packages/types/src/dataHealth.test.ts",
       "packages/types/src/dataHealth.ts",
       "packages/types/src/databaseCompanySearch.ts",
+      "packages/types/src/databaseProfile.ts",
       "packages/types/src/databaseSearch.ts",
       "packages/types/src/dedupReview.ts",
       "packages/types/src/email.ts",

@@ -11,6 +11,13 @@ export { SearchTabs } from "./SearchTabs";
 export { useSearchTab, type UseSearchTab } from "./useSearchTab";
 export { useDrawerCollapsed, type DrawerState } from "./useDrawerCollapsed";
 export {
+  useProfileParam,
+  PROFILE_PARAMS,
+  type OpenProfile,
+  type ProfileKind,
+  type UseProfileParam,
+} from "./useProfileParam";
+export {
   DEFAULT_SEARCH_TAB,
   SEARCH_TABS,
   type SearchTab,

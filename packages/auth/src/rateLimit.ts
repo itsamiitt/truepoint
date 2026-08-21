@@ -24,6 +24,7 @@ let _idLimiter: RateLimiterRedis | undefined;
 let _apiLimiter: RateLimiterRedis | undefined;
 let _captureLimiter: RateLimiterRedis | undefined;
 let _revealLimiter: RateLimiterRedis | undefined;
+let _profileLimiter: RateLimiterRedis | undefined;
 const ipLimiter = (): RateLimiterRedis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_ipLimiter ??= new RateLimiterRedis({
@@ -91,6 +92,21 @@ const revealLimiter = (): RateLimiterRedis =>
     duration: 60,
   }));
 
+// Per-caller cap for the GLOBAL PROFILE reads (search-consolidation stage 3). These endpoints take a public
+// slug or a registrable domain, so they are an ENUMERATION surface in a way the rest of search is not: a
+// determined caller could walk the database one profile at a time. What they would get is the browsable half
+// — name, title, employer, history — never an email or a phone, so a full walk yields no contactable record
+// and the monetized asset is untouched. This bounds the velocity anyway. Keyed by the verified subject;
+// separate keyspace so it never weakens the coarse rl:api limit.
+const profileLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_profileLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:dbprofile",
+    points: env.DATABASE_PROFILE_RATE_PER_MIN,
+    duration: 60,
+  }));
+
 // Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
 // outage (shared helper).
 async function consume(
@@ -150,6 +166,16 @@ export async function checkRevealRate(key: string): Promise<void> {
   // Named distinctly in the DEGRADED marker: this is the guard whose opening matters most (C11). When it and
   // the entitlement gate open together, credit balance is the only remaining control on reveal spend.
   await consume(revealLimiter(), key, 1, "reveal-rate-limit");
+}
+
+/**
+ * Per-caller cap for a GLOBAL PROFILE read (`key` = the verified subject). See profileLimiter above for the
+ * enumeration reasoning. Throws RateLimitedError (→ 429 + Retry-After) on exhaustion; fails OPEN on a Redis
+ * outage, which is the right trade here — the thing being protected is browsable, non-monetized data, so a
+ * cache blip must not break the Search surface.
+ */
+export async function checkDatabaseProfileRate(key: string): Promise<void> {
+  await consume(profileLimiter(), key, 1, "rate-limit");
 }
 
 // ── Email-OTP send throttle (AUTH-025) ─────────────────────────────────────────────────────────────────

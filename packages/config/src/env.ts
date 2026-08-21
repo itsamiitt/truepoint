@@ -524,6 +524,17 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // The GLOBAL profile reads — opening a full masked Layer-0 person/company profile WITHOUT first adding
+    // the record to a workspace (search-consolidation stage 3). While off, the two profile routes 404 and a
+    // database row in the grid is inert, exactly as before the cutover. Same explicit-"true"-only posture.
+    DATABASE_PROFILE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Per-caller cap on those profile reads. They take a public slug / registrable domain, so they are an
+    // ENUMERATION surface; this bounds the velocity of a walk. Generous for a human clicking rows (a fast
+    // session is single digits per minute), tight for a script.
+    DATABASE_PROFILE_RATE_PER_MIN: z.coerce.number().int().positive().default(120),
     // How far BACK a delta poll reads from the stored watermark (crm-sync 00 §6.4). CRM modstamps are not
     // ordered against our clock, so a record written during the previous poll can carry a timestamp just
     // under the mark; re-reading a record is free (the link table + content hash make it a no-op) while

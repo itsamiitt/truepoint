@@ -173,6 +173,15 @@ export {
   masterCompanySearchRepository,
   type DatabaseCompanySearchRows,
 } from "./repositories/masterCompanySearchRepository.ts";
+// The composed PROFILE reads behind the two global profile routes (stage 3). Every collection is bounded at
+// the source, and no channel VALUE crosses this seam — only the hasMobile presence bit.
+export {
+  masterProfileReadRepository,
+  type CompanyLocationRead,
+  type EducationRead,
+  type EmploymentStintRead,
+  type HeadcountPointRead,
+} from "./repositories/masterProfileReadRepository.ts";
 export {
   masterProfileRepository,
   type PersonLandingRow,

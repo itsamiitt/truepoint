@@ -238,6 +238,8 @@ export const REPO_DOMAIN = {
   // direction it reads or writes in.
   masterCompanyRead: "master-sync",
   masterCompanySearch: "master-sync",
+  // The composed profile reads behind the two global profile routes (stage 3) — Layer-0 again, same rule.
+  masterProfileRead: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",

@@ -407,8 +407,13 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               columns={columns}
               rows={hits}
               rowKey={(c) => c.id}
-              // A database row has no workspace record to open — add it first, then it behaves like any contact.
-              onRowClick={(c) => (c.databaseSlug ? undefined : setPreviewId(c.id))}
+              // STAGE 3 — the un-gate. A database row used to be inert here ("add it first, then it behaves
+              // like any contact"); it now opens its full masked Layer-0 profile in a drawer, with
+              // add-to-workspace as one action ON that profile rather than the price of admission to it.
+              // An owned row still opens the lightweight QuickView, which hands off to RecordDetail.
+              onRowClick={(c) =>
+                c.databaseSlug ? shell.openProfile("person", c.databaseSlug) : setPreviewId(c.id)
+              }
               isSelected={(c) => c.id === previewId}
             />
             {hasMore && (

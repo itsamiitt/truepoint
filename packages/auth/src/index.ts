@@ -88,6 +88,7 @@ export {
   checkRequestRate,
   checkAuthedRequestRate,
   checkCaptureRate,
+  checkDatabaseProfileRate,
   checkRevealRate,
   checkEmailOtpSendRate,
   assertCredentialNotLocked,
