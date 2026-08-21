@@ -21,11 +21,16 @@ export async function fetchCrmSyncHealth(): Promise<StaffCrmConnection[]> {
   return ((await res.json()) as { connections: StaffCrmConnection[] }).connections;
 }
 
-/** GET /admin/crm/dead-letters — fleet-wide open poison jobs. Audited cross-tenant read. */
-export async function fetchCrmDeadLetters(): Promise<StaffCrmDeadLetter[]> {
+/** GET /admin/crm/dead-letters — fleet-wide open poison jobs (capped page + the TOTAL open count, PA-12).
+ *  Audited cross-tenant read. */
+export async function fetchCrmDeadLetters(): Promise<{
+  deadLetters: StaffCrmDeadLetter[];
+  total: number;
+}> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/crm/dead-letters`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the dead-letter queue"));
-  return ((await res.json()) as { deadLetters: StaffCrmDeadLetter[] }).deadLetters;
+  const body = (await res.json()) as { deadLetters: StaffCrmDeadLetter[]; total?: number };
+  return { deadLetters: body.deadLetters, total: body.total ?? body.deadLetters.length };
 }
 
 /**

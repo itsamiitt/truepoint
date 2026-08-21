@@ -28,19 +28,26 @@ export function GlobalSuppression() {
   const canManage = canMaybe("compliance:manage");
 
   const [entries, setEntries] = useState<GlobalSuppressionEntry[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState("");
   const [domain, setDomain] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<GlobalSuppressionEntry | null>(null);
 
-  const reload = useCallback(async () => {
+  // First page for the current search (PA-12): the list is keyset-paged now, so "is example.com blocked?"
+  // is answered by SEARCHING, not by hoping it is in the newest page.
+  const reload = useCallback(async (q: string) => {
     setLoading(true);
     setError(null);
     try {
-      setEntries(await fetchGlobalSuppression());
+      const page = await fetchGlobalSuppression({ q: q || undefined });
+      setEntries(page.entries);
+      setNextCursor(page.nextCursor);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load the blocklist");
     } finally {
@@ -48,9 +55,28 @@ export function GlobalSuppression() {
     }
   }, []);
 
+  // Debounced search → first page. 300ms keeps a typing staff member from firing a request per keystroke.
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    const t = setTimeout(() => void reload(search.trim()), search ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [search, reload]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchGlobalSuppression({
+        q: search.trim() || undefined,
+        cursor: nextCursor,
+      });
+      setEntries((prev) => [...(prev ?? []), ...page.entries]);
+      setNextCursor(page.nextCursor);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, search]);
 
   async function onAdd() {
     const d = domain.trim().toLowerCase();
@@ -64,7 +90,7 @@ export function GlobalSuppression() {
       toast.success("Domain blocked globally.");
       setDomain("");
       setReason("");
-      await reload();
+      await reload(search.trim());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add the block");
     } finally {
@@ -77,7 +103,7 @@ export function GlobalSuppression() {
     try {
       await removeGlobalSuppression(entry.id);
       toast.success("Block removed.");
-      await reload();
+      await reload(search.trim());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove the block");
     } finally {
@@ -175,18 +201,37 @@ export function GlobalSuppression() {
         </form>
       ) : null}
 
+      <div style={{ marginBottom: 12, maxWidth: 320 }}>
+        <label htmlFor="block-search" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Search blocked domains</span>
+          <TpInput
+            id="block-search"
+            value={search}
+            placeholder="example.com"
+            onChange={(e) => setSearch(e.currentTarget.value)}
+          />
+        </label>
+      </div>
+
       <StateSwitch
         loading={loading}
         error={error}
         empty={!!entries && entries.length === 0}
-        onRetry={() => void reload()}
+        onRetry={() => void reload(search.trim())}
         emptyState={
           <p className="app-muted" style={{ padding: 16 }}>
-            No global blocks.
+            {search.trim() ? "No blocks match this search." : "No global blocks."}
           </p>
         }
       >
         <DataTable columns={columns} rows={entries ?? []} rowKey={(e) => e.id} />
+        {nextCursor ? (
+          <div style={{ marginTop: 12 }}>
+            <TpButton variant="secondary" disabled={loadingMore} onClick={() => void loadMore()}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </TpButton>
+          </div>
+        ) : null}
       </StateSwitch>
 
       <Dialog

@@ -12,7 +12,7 @@
 // customer data with its own retention story. So the detail is truncated AND scrubbed of the shapes that
 // most often smuggle PII into an error string.
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { crmSyncDeadLetter } from "../schema/crm.ts";
 
@@ -182,6 +182,18 @@ export const crmDeadLetterRepository = {
       .where(eq(crmSyncDeadLetter.status, "open"))
       .orderBy(desc(crmSyncDeadLetter.createdAt))
       .limit(limit);
+  },
+
+  /** The TOTAL open count behind the capped staff list (perf-checklist PA-12): DLQ depth is exactly the
+   *  metric that spikes during an incident, and a list truncated at its cap with no total left staff unable
+   *  to tell a backlog of 201 from 200,000. count(*) server-side, not rows.length — the whole point is that
+   *  the set may be far larger than anything worth materializing. withPlatformTx caller. */
+  async countOpenForStaff(tx: Tx): Promise<number> {
+    const rows = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(crmSyncDeadLetter)
+      .where(eq(crmSyncDeadLetter.status, "open"));
+    return Number(rows[0]?.n ?? 0);
   },
 
   /**

@@ -38,12 +38,18 @@ export async function transitionDsar(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not update the DSAR"));
 }
 
-/** GET /admin/compliance/suppression — the global blocklist. */
-export async function fetchGlobalSuppression(): Promise<GlobalSuppression[]> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/suppression`);
+/** GET /admin/compliance/suppression — the global blocklist, keyset-paged + domain-searchable (PA-12). */
+export async function fetchGlobalSuppression(opts?: {
+  q?: string;
+  cursor?: string | null;
+}): Promise<{ entries: GlobalSuppression[]; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+  const qs = params.size > 0 ? `?${params.toString()}` : "";
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/suppression${qs}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the blocklist"));
-  const body = (await res.json()) as { entries: GlobalSuppression[] };
-  return body.entries;
+  return (await res.json()) as { entries: GlobalSuppression[]; nextCursor: string | null };
 }
 
 /** POST /admin/compliance/suppression — block a domain globally (compliance:manage). */

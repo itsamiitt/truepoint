@@ -239,10 +239,35 @@ function toSuppression(r: {
 }
 
 complianceRoutes.get("/suppression", async (c) => {
-  const entries = await withPlatformTx(actorOf(c), "admin.list_suppression", async (tx) =>
-    (await suppressionRepository.listGlobal(tx)).map(toSuppression),
+  // PA-12: keyset-paged + domain-searchable (ADDITIVE — `entries` stays; `nextCursor` joins). The old
+  // uncursored read truncated at the repo cap with no signal, which made the blocklist console return
+  // false negatives past it. Cursor is the house base64url `iso|id`; malformed → first page, never a 500.
+  const limit = Math.max(1, Math.min(200, Number(c.req.query("limit") ?? 50) || 50));
+  const q = c.req.query("q") ?? undefined;
+  const rawCursor = c.req.query("cursor");
+  let cursor: { createdAt: Date; id: string } | null = null;
+  if (rawCursor) {
+    try {
+      const [iso, id] = Buffer.from(rawCursor, "base64url").toString("utf8").split("|");
+      const createdAt = iso ? new Date(iso) : null;
+      if (createdAt && !Number.isNaN(createdAt.getTime()) && id) cursor = { createdAt, id };
+    } catch {
+      /* malformed cursor → first page */
+    }
+  }
+  const rows = await withPlatformTx(actorOf(c), "admin.list_suppression", (tx) =>
+    suppressionRepository.listGlobal(tx, { limit: limit + 1, cursor, domainQuery: q }),
   );
-  return c.json({ entries });
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return c.json({
+    entries: page.map(toSuppression),
+    nextCursor:
+      hasMore && last
+        ? Buffer.from(`${last.createdAt.toISOString()}|${last.id}`, "utf8").toString("base64url")
+        : null,
+  });
 });
 
 complianceRoutes.post("/suppression", requireCapability("compliance:manage"), async (c) => {

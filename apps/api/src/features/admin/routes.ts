@@ -142,10 +142,13 @@ adminRoutes.get("/me", async (c) => {
 // The staff DLQ replay console (crm-sync §4.8 / §9). crm_sync_dead_letter is APPEND-ONLY for the app role,
 // so status transitions happen HERE, on the owner path, which the app-role policy wall does not gate.
 adminRoutes.get("/crm/dead-letters", async (c) => {
-  const rows = await withPlatformTx(actorOf(c), "crm.read_sync_health", (tx) =>
-    crmDeadLetterRepository.listOpenForStaff(tx, 200),
-  );
-  return c.json({ deadLetters: rows });
+  // PA-12: `total` joins the capped page (ADDITIVE) so the console can say "showing 200 of N" during the
+  // incidents this surface exists for, instead of silently truncating at the cap.
+  const { rows, total } = await withPlatformTx(actorOf(c), "crm.read_sync_health", async (tx) => ({
+    rows: await crmDeadLetterRepository.listOpenForStaff(tx, 200),
+    total: await crmDeadLetterRepository.countOpenForStaff(tx),
+  }));
+  return c.json({ deadLetters: rows, total });
 });
 
 /**

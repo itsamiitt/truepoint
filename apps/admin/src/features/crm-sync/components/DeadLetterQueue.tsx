@@ -41,8 +41,11 @@ const CLASS_TONE: Record<string, StatusTone> = {
 };
 
 export function DeadLetterQueue() {
-  const { rows, error, loading, busy, reload, triage } = useCrmDeadLetters();
+  const { rows, total, error, loading, busy, reload, triage } = useCrmDeadLetters();
   const list = rows ?? [];
+  // PA-12: past the 200-row cap, say so — during an incident the difference between 201 and 200,000 open
+  // poison jobs is the whole point of this console.
+  const truncated = total !== null && total > list.length;
 
   const columns: Column<StaffCrmDeadLetter>[] = [
     {
@@ -135,6 +138,11 @@ export function DeadLetterQueue() {
           />
         }
       >
+        {truncated ? (
+          <p className="app-muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+            Showing the newest {list.length} of {total} open dead letters.
+          </p>
+        ) : null}
         <DataTable columns={columns} rows={list} rowKey={(r) => r.id} />
       </StateSwitch>
     </Card>
