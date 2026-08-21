@@ -14,6 +14,13 @@ export type DatabaseFacetKey = z.infer<typeof databaseFacetKey>;
 export const databaseTermFilter = z.object({
   kind: z.literal("term"),
   field: databaseFacetKey,
+  /**
+   * ADDITIVE (defaults "include"), and it closes a real gap: before this the global contract had no exclude,
+   * so `toDatabaseQuery` had to return null for ANY excluding query — one "not in Recruiting" clause and the
+   * whole database half of the People grid silently vanished. Bailing out was the honest behaviour given the
+   * contract; the fix is the contract.
+   */
+  op: z.enum(["include", "exclude"]).default("include"),
   values: z.array(z.string().min(1)).min(1),
 });
 export type DatabaseTermFilter = z.infer<typeof databaseTermFilter>;

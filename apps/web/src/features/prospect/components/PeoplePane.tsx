@@ -16,7 +16,13 @@
 // is gone; the legacy param is now translated to `?tab=accounts` in useSearchTab instead.
 "use client";
 
-import { SearchDrawer, SearchDrawerOpener, type SearchShell } from "@/components/search";
+import {
+  AppliedFilterChips,
+  SearchDrawer,
+  SearchDrawerOpener,
+  type SearchShell,
+  WorkspaceScopeControl,
+} from "@/components/search";
 import shellStyles from "@/components/search/search.module.css";
 import type { ContactQuery, FacetKey, Tag } from "@leadwolf/types";
 import {
@@ -36,6 +42,7 @@ import dynamic from "next/dynamic";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
+import { activeChips, clearAllFilters } from "../filterGroups";
 import {
   type BulkSelectionStore,
   useBulkSelection,
@@ -96,7 +103,10 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   // running for a grid nobody is looking at. That replaces the old both-scopes-mounted arrangement, where
   // React's no-conditional-hooks rule forced an `enabled` flag through every hook to stop the inactive
   // scope firing four wasted round-trips on every visit to the app's busiest surface.
-  const search = useProspectSearch();
+  const search = useProspectSearch({
+    includeDatabase: shell.workspace.includeDatabase,
+    excludeOwned: !shell.workspace.includeOwned,
+  });
   const {
     query,
     setQuery,
@@ -386,7 +396,19 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             aria-label="Search prospects"
           />
           <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
+          <WorkspaceScopeControl
+            scope={shell.workspace.scope}
+            onChange={shell.workspace.setScope}
+          />
         </div>
+
+        {/* Renders nothing when no filter is active — never a "no filters applied" line. */}
+        <AppliedFilterChips
+          chips={activeChips(query)}
+          query={query}
+          onChange={setQuery}
+          onClearAll={() => setQuery(clearAllFilters(query))}
+        />
 
         {
           <StateSwitch

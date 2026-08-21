@@ -135,3 +135,15 @@
     display: inline-flex;
   }
 }
+
+/* ── Applied-filter chip row (stage 4) ────────────────────────────────────────────────────────────────── */
+/* Rendered ONLY when a filter is active — never an empty "no filters" line (design hard rule). */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tp-space-2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+  margin-bottom: 8px;
+}

@@ -50,15 +50,22 @@ export interface ProspectSearch {
 }
 
 export interface UseProspectSearchOptions {
-  /** When false the query is still derived from the URL, but NO request is issued. The Prospect page renders one
-   *  scope at a time (contacts vs accounts) while both engines are mounted — React forbids conditional hooks —
-   *  so without this the inactive scope's search AND facet-count POSTs fired on every visit to the app's busiest
-   *  surface, for a grid that was never shown. Defaults to true so every other caller is unaffected. */
+  /** When false the query is still derived from the URL, but NO request is issued. Defaults to true.
+   *  (Historically this existed because the Prospect page mounted both scopes at once — React forbids
+   *  conditional hooks — and the inactive scope's search AND facet POSTs fired on every visit for a grid
+   *  nobody saw. The Search composer mounts ONE pane, so that reason is gone; the option stays for callers
+   *  that genuinely want a URL-derived query without a request.) */
   enabled?: boolean;
+  /** From the shell's workspace-scope control: "In workspace" turns the GLOBAL half off entirely. */
+  includeDatabase?: boolean;
+  /** "New to me": drop the OWNED half so only people the workspace does not hold are listed. */
+  excludeOwned?: boolean;
 }
 
 export function useProspectSearch(options?: UseProspectSearchOptions): ProspectSearch {
   const enabled = options?.enabled ?? true;
+  const includeDatabase = options?.includeDatabase ?? true;
+  const excludeOwned = options?.excludeOwned ?? false;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -71,8 +78,10 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   );
 
   // Write a new query to the URL. replace (not push) so per-edit changes don't flood history; the URL still
-  // fully captures the search for refresh/share. pathname-relative so it stays on the prospect route. The
-  // scope param (?scope=accounts) is preserved by writing only the contacts keys.
+  // fully captures the search for refresh/share. pathname-relative so it stays on the Search route. Only the
+  // contacts keys (q/sort/f) are written, so the Accounts codec (aq/asort/af), the ?tab switch, the ?ws
+  // scope and any open ?person/?company profile all survive untouched — that is what lets one URL carry the
+  // whole surface.
   const setQuery = useCallback(
     (next: ContactQuery) => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -87,7 +96,9 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   const queryKey = useMemo(() => prospectKeys.contactSearch(query), [query]);
   const search = useInfiniteQuery<SearchPage<ContactHit>>({
     queryKey,
-    enabled,
+    // "New to me" turns the owned half OFF at the source rather than filtering its rows out afterwards:
+    // paying for a search whose every row is about to be discarded is the wrong kind of thorough.
+    enabled: enabled && !excludeOwned,
     initialPageParam: null,
     // A filter edit is a NEW cache key; without this the grid unmounted to a skeleton on every edit and
     // repopulated ("strobing"). Holding the previous key's rows while the fresh search lands is the same
@@ -106,7 +117,13 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
-  const owned = useMemo(() => search.data?.pages.flatMap((page) => page.hits) ?? [], [search.data]);
+  // In "New to me" the owned engine is disabled above, so its cache may still hold a previous page — read
+  // through excludeOwned rather than off search.data, or stale owned rows would linger in a mode whose whole
+  // point is that there are none.
+  const owned = useMemo(
+    () => (excludeOwned ? [] : (search.data?.pages.flatMap((page) => page.hits) ?? [])),
+    [search.data, excludeOwned],
+  );
 
   // THE PLATFORM DATABASE, in the SAME list (Layer-0-as-database). A sales-intelligence search is one
   // filtered list of people; whether a row is already in the workspace is a property of the row, not a
@@ -116,7 +133,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   const databaseSearch = useQuery({
     queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
     // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…).
-    enabled: enabled && databaseQuery !== null,
+    enabled: enabled && includeDatabase && databaseQuery !== null,
     // Same no-blank treatment as the owned half above: a filter edit keeps the previous database rows on
     // screen while the fresh search lands, instead of the merged grid losing its bottom half per edit.
     placeholderData: keepPreviousData,

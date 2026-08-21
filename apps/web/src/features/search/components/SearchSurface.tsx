@@ -18,7 +18,13 @@
 // data does not shift the layout (design interaction rules).
 "use client";
 
-import { SearchTabs, useDrawerCollapsed, useProfileParam, useSearchTab } from "@/components/search";
+import {
+  SearchTabs,
+  useDrawerCollapsed,
+  useProfileParam,
+  useSearchTab,
+  useWorkspaceScope,
+} from "@/components/search";
 import type { SearchShell } from "@/components/search";
 import { Skeleton, TableSkeleton } from "@leadwolf/ui";
 import dynamic from "next/dynamic";
@@ -59,14 +65,16 @@ export function SearchSurface() {
   const { tab, setTab } = useSearchTab();
   const drawer = useDrawerCollapsed();
   const { profile, open, close } = useProfileParam();
+  const workspace = useWorkspaceScope();
 
   const shell: SearchShell = useMemo(
     () => ({
       ...drawer,
       tabs: <SearchTabs tab={tab} onChange={setTab} />,
       openProfile: open,
+      workspace,
     }),
-    [drawer, tab, setTab, open],
+    [drawer, tab, setTab, open, workspace],
   );
 
   // Adding from a profile drawer closes it: the record is now an ordinary workspace row, and leaving the

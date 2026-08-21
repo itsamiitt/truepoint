@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import type { DrawerState } from "./useDrawerCollapsed";
 import type { ProfileKind } from "./useProfileParam";
+import type { UseWorkspaceScope } from "./useWorkspaceScope";
 
 export interface SearchShell extends DrawerState {
   /** The People/Accounts switch, rendered by the composer so both panes show an identical control. */
@@ -17,4 +18,10 @@ export interface SearchShell extends DrawerState {
    * which drawer is mounted (it is a URL param, so the open profile is shareable).
    */
   openProfile: (kind: ProfileKind, key: string) => void;
+  /**
+   * All / In-workspace / New-to-me. Owned by the composer because it is shared by both tabs (a rep's "only
+   * show me what I don't already have" is a habit that carries across People and Accounts) and because it
+   * resolves into WHICH ENGINE RUNS rather than into a filter clause — see WorkspaceScopeControl.
+   */
+  workspace: UseWorkspaceScope;
 }

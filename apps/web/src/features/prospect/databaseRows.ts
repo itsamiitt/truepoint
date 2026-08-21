@@ -38,13 +38,15 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
   const filters: DatabaseQuery["filters"] = [];
   for (const clause of query.filters) {
     if (clause.kind === "term") {
-      // An EXCLUDE cannot be expressed against the graph's facets; treat its presence as workspace-only
-      // rather than returning results the user explicitly asked to exclude.
-      if (clause.op === "exclude") return null;
       if (!SHARED_TERM_FIELDS.has(clause.field)) return null;
+      // EXCLUDE now crosses (the global contract gained `op` in stage 4). Before that it did not, and this
+      // returned null for ANY excluding query — one "not in Recruiting" clause and the database half of the
+      // grid silently disappeared. Passing the sense through is the fix; dropping it would show the user
+      // exactly the people they asked to hide.
       filters.push({
         kind: "term",
         field: clause.field as "title" | "company" | "location" | "seniority" | "industry",
+        op: clause.op,
         values: clause.values,
       });
       continue;

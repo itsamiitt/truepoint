@@ -150,16 +150,30 @@ export interface TpChipProps {
   onClick?: () => void;
   /** When set, renders a trailing × that calls this without triggering onClick. */
   onRemove?: () => void;
+  /**
+   * Accessible name for the remove control. Defaults to "Remove", which is fine for a lone chip and wrong
+   * for a ROW of them: an applied-filter row announces eight identical "Remove" buttons, so a screen-reader
+   * user cannot tell which filter they are about to drop. Callers rendering a set should name each one
+   * ("Remove filter Industry: Software").
+   */
+  removeLabel?: string;
   className?: string;
 }
-export function TpChip({ children, active, onClick, onRemove, className }: TpChipProps) {
+export function TpChip({
+  children,
+  active,
+  onClick,
+  onRemove,
+  removeLabel,
+  className,
+}: TpChipProps) {
   const remove =
     onRemove != null ? (
       <span
         className="tp-ui-chip-x"
         // biome-ignore lint/a11y/useSemanticElements: renders inside the chip's <button>; a nested <button> is invalid HTML
         role="button"
-        aria-label="Remove"
+        aria-label={removeLabel ?? "Remove"}
         tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();

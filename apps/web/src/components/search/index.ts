@@ -8,6 +8,15 @@
 export { SearchDrawer, SearchDrawerOpener } from "./SearchDrawer";
 export type { SearchShell } from "./searchShell";
 export { SearchTabs } from "./SearchTabs";
+export { AppliedFilterChips, type AppliedChip } from "./AppliedFilterChips";
+export {
+  WorkspaceScopeControl,
+  WORKSPACE_SCOPES,
+  DEFAULT_WORKSPACE_SCOPE,
+  parseWorkspaceScope,
+  type WorkspaceScope,
+} from "./WorkspaceScopeControl";
+export { useWorkspaceScope, type UseWorkspaceScope } from "./useWorkspaceScope";
 export { useSearchTab, type UseSearchTab } from "./useSearchTab";
 export { useDrawerCollapsed, type DrawerState } from "./useDrawerCollapsed";
 export {

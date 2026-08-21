@@ -168,8 +168,13 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  trgm/array GIN index set for the global company search (search-consolidation stage 2). Migration-only
  *  per the 0109 rationale — every index is CONCURRENTLY (drizzle-kit emits blocking CREATEs), several are
  *  partial on MASTER_COMPANY_VISIBLE, and one is an expression index on coalesce(employee_count, -1),
- *  none of which the schema DSL can express without drift. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 93;
+ *  none of which the schema DSL can express without drift. Absorbed by the next rebaseline.
+ *
+ *  93 → 94 for 0135_database_people_filters — the same category once more: the People-side global filter
+ *  indexes (employer join, phone line_type, the attribute EXISTS tables, the primary-stint start date).
+ *  CONCURRENTLY + partial on MASTER_PERSON_VISIBLE, migration-only per the 0109 rationale. Absorbed by the
+ *  next rebaseline. */
+const EXPECTED_DEFICIT = 94;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

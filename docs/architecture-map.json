@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2239,
-  "fileSetHash": "sha256:4b5208577f493f3105e170f4f016db7b9e6789dfa29c53b592bfc9049208aceb",
+  "fileCount": 2242,
+  "fileSetHash": "sha256:a7d27d45ac4ab3881b69b602cfd597c0431f71b23d01b9a1b7bc4ba80e4e0e93",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2786,8 +2786,10 @@
       "apps/web/src/app/providers.tsx"
     ],
     "apps/web/components": [
+      "apps/web/src/components/search/AppliedFilterChips.tsx",
       "apps/web/src/components/search/SearchDrawer.tsx",
       "apps/web/src/components/search/SearchTabs.tsx",
+      "apps/web/src/components/search/WorkspaceScopeControl.tsx",
       "apps/web/src/components/search/index.ts",
       "apps/web/src/components/search/searchShell.ts",
       "apps/web/src/components/search/searchTabUrlState.test.ts",
@@ -2796,6 +2798,7 @@
       "apps/web/src/components/search/useProfileParam.test.ts",
       "apps/web/src/components/search/useProfileParam.ts",
       "apps/web/src/components/search/useSearchTab.ts",
+      "apps/web/src/components/search/useWorkspaceScope.ts",
       "apps/web/src/components/shell/AppShell.tsx",
       "apps/web/src/components/shell/CreditPill.tsx",
       "apps/web/src/components/shell/GlobalSearch.tsx",

@@ -12,11 +12,19 @@
 // and degrades to workspace-only, honestly labelled, while the gate is off.
 "use client";
 
-import { SearchDrawer, SearchDrawerOpener, type SearchShell } from "@/components/search";
+import {
+  AppliedFilterChips,
+  SearchDrawer,
+  SearchDrawerOpener,
+  type SearchShell,
+  WorkspaceScopeControl,
+} from "@/components/search";
 import shellStyles from "@/components/search/search.module.css";
 import {
   AccountFilterPanel,
   AccountsTable,
+  activeChips,
+  clearAllFilters,
   useAccountFacetCounts,
 } from "@/features/prospect/entries/accounts";
 import type { AccountFacetKey, MaskedAccount } from "@leadwolf/types";
@@ -40,7 +48,10 @@ const COUNT_FIELDS: AccountFacetKey[] = [
 
 export function AccountsPane({ shell }: { shell: SearchShell }) {
   const router = useRouter();
-  const search = useAccountsSearch();
+  const search = useAccountsSearch({
+    includeDatabase: shell.workspace.includeDatabase,
+    excludeOwned: !shell.workspace.includeOwned,
+  });
   const counts = useAccountFacetCounts(search.query, COUNT_FIELDS);
 
   // The same debounce-commit free-text pattern the People pane uses: a local mirror committed to the query
@@ -78,10 +89,21 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             placeholder="Search companies by name or domain…"
             aria-label="Search companies"
           />
+          <WorkspaceScopeControl
+            scope={shell.workspace.scope}
+            onChange={shell.workspace.setScope}
+          />
           <Link href="/search/markets" className={styles.marketsLink}>
             Markets →
           </Link>
         </div>
+
+        <AppliedFilterChips
+          chips={activeChips(search.query)}
+          query={search.query}
+          onChange={search.setQuery}
+          onClearAll={() => search.setQuery(clearAllFilters(search.query))}
+        />
 
         <div className={styles.resultCount}>
           {search.loading

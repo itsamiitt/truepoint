@@ -1,6 +1,6 @@
 // entries/bulk.ts — the prospect slice's BULK + MASKING public entry (perf-checklist PA-2). The lists
 // feature composes the bulk bar, the masked quick-view, the selection model and the masking helpers — and
-// importing them through the MAIN barrel welded the entire 86-file slice (FilterRail, AiSearch,
+// importing them through the MAIN barrel welded the entire 86-file slice (AiSearch, RecordDetail,
 // StageManagement, ProspectPage…) into /lists' first load: 46.6kB gz of it, making /lists heavier than
 // /prospect itself. A named entry is a public contract exactly like the barrel (the depcruise
 // no-cross-feature-import rule sanctions `entries/*` alongside `index.*`) — it just isn't one module with

@@ -50,8 +50,14 @@ export function buildWhere(query: DatabaseQuery): SQL {
   ];
   for (const f of query.filters) {
     if (f.kind === "term") {
-      if (f.field === "seniority") conds.push(inList(COL.seniority, f.values));
-      else conds.push(ilikeAny(COL[f.field], f.values));
+      const cond =
+        f.field === "seniority"
+          ? inList(COL.seniority, f.values)
+          : ilikeAny(COL[f.field], f.values);
+      // An exclude must not also drop rows where the column is NULL — "not a Recruiter" includes people
+      // with no title recorded. A bare NOT (…) evaluates to NULL for those and filters them out, which
+      // reads as the exclude being far more aggressive than the user asked for.
+      conds.push(f.op === "exclude" ? sql`NOT COALESCE(${cond}, false)` : cond);
     } else {
       const column = f.field === "has_email" ? sql`p.has_email` : sql`p.has_phone`;
       conds.push(sql`${column} = ${f.value}`);

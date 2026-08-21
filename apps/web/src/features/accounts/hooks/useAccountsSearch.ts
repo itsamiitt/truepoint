@@ -10,7 +10,7 @@
 "use client";
 
 import { useAccountSearch } from "@/features/prospect/entries/accounts";
-import type { AccountQuery, DatabaseCompanyQuery } from "@leadwolf/types";
+import type { AccountQuery, DatabaseCompanyQuery, MaskedAccount } from "@leadwolf/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { type AccountRow, mergeAccountRows, toDatabaseCompanyQuery } from "../accountRows";
@@ -21,6 +21,9 @@ import {
 } from "../databaseCompanyApi";
 
 const PAGE_SIZE = 50;
+
+/** Stable identity so the merge memo does not re-run every render in "New to me" mode. */
+const EMPTY_ACCOUNTS: MaskedAccount[] = [];
 
 export interface AccountsSearch {
   query: AccountQuery;
@@ -41,7 +44,16 @@ export interface AccountsSearch {
   reload: () => void;
 }
 
-export function useAccountsSearch(): AccountsSearch {
+export interface UseAccountsSearchOptions {
+  /** From the shell's workspace-scope control. "In workspace" turns the global half off entirely. */
+  includeDatabase?: boolean;
+  /** "New to me" turns the OWNED half off and asks the server to drop rows the workspace already holds. */
+  excludeOwned?: boolean;
+}
+
+export function useAccountsSearch(options: UseAccountsSearchOptions = {}): AccountsSearch {
+  const includeDatabase = options.includeDatabase ?? true;
+  const excludeOwned = options.excludeOwned ?? false;
   const owned = useAccountSearch();
 
   // Skipped entirely when the query is inherently workspace-only (ICP score, technology, funding…).
@@ -51,13 +63,18 @@ export function useAccountsSearch(): AccountsSearch {
   );
 
   const databaseSearch = useQuery({
-    queryKey: ["search", "database", "companies", "results", databaseQuery],
-    enabled: databaseQuery !== null,
+    // excludeOwned is part of the KEY, not just the body: it changes which rows come back, so sharing a
+    // cache entry between the two modes would serve one mode's page to the other.
+    queryKey: ["search", "database", "companies", "results", databaseQuery, excludeOwned],
+    enabled: includeDatabase && databaseQuery !== null,
     // Same no-blank treatment as the owned half: a filter edit keeps the previous database rows on screen
     // while the fresh search lands, instead of the merged grid losing its bottom half on every edit.
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      searchDatabaseCompanies(databaseQuery as NonNullable<typeof databaseQuery>, signal),
+      searchDatabaseCompanies(
+        { ...(databaseQuery as NonNullable<typeof databaseQuery>), excludeOwned },
+        signal,
+      ),
     staleTime: 30_000,
     // The gate being off is a 404, which is an ANSWER, not a failure — retrying it is pure waste.
     retry: (count, err) => !isCompanyDatabaseDisabled(err) && count < 2,
@@ -65,23 +82,28 @@ export function useAccountsSearch(): AccountsSearch {
 
   const databaseCountQuery = useQuery({
     queryKey: ["search", "database", "companies", "count", databaseQuery],
-    enabled: databaseQuery !== null && !databaseSearch.isError,
+    enabled: includeDatabase && databaseQuery !== null && !databaseSearch.isError,
     queryFn: ({ signal }) =>
       countDatabaseCompanies(databaseQuery as NonNullable<typeof databaseQuery>, signal),
     staleTime: 120_000,
     retry: (count, err) => !isCompanyDatabaseDisabled(err) && count < 2,
   });
 
+  // "New to me" drops the owned half entirely rather than filtering it out client-side: the server already
+  // excluded owned rows from the global half, so keeping the owned engine running would contradict the
+  // control the user just used AND pay for a search whose every row is about to be discarded.
+  const ownedRows = excludeOwned ? EMPTY_ACCOUNTS : owned.accounts;
+
   const rows = useMemo(
-    () => mergeAccountRows(owned.accounts, databaseSearch.data?.hits ?? []),
-    [owned.accounts, databaseSearch.data],
+    () => mergeAccountRows(ownedRows, databaseSearch.data?.hits ?? []),
+    [ownedRows, databaseSearch.data],
   );
 
   return {
     query: owned.query,
     setQuery: owned.setQuery,
     rows,
-    databaseCount: rows.length - owned.accounts.length,
+    databaseCount: rows.length - ownedRows.length,
     databaseTotal: databaseCountQuery.data?.total,
     databaseCapped: databaseCountQuery.data?.capped ?? false,
     databaseDisabled: isCompanyDatabaseDisabled(databaseSearch.error),
