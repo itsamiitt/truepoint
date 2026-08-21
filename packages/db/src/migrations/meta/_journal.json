@@ -946,6 +946,13 @@
       "when": 1787706000000,
       "tag": "0135_database_people_filters",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1787709600000,
+      "tag": "0136_person_derived_facets",
+      "breakpoints": true
     }
   ]
 }

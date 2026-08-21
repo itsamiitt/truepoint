@@ -173,8 +173,13 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  93 → 94 for 0135_database_people_filters — the same category once more: the People-side global filter
  *  indexes (employer join, phone line_type, the attribute EXISTS tables, the primary-stint start date).
  *  CONCURRENTLY + partial on MASTER_PERSON_VISIBLE, migration-only per the 0109 rationale. Absorbed by the
- *  next rebaseline. */
-const EXPECTED_DEFICIT = 94;
+ *  next rebaseline.
+ *
+ *  94 → 95 for 0136_person_derived_facets — three ADDITIVE nullable columns plus their partial indexes and
+ *  a one-time backfill UPDATE. Migration-only for the usual reason (CONCURRENTLY partial indexes) and for
+ *  one more: the backfill's correctness is the '-infinity' sentinel exclusion, which is a data statement
+ *  the schema DSL has no way to carry. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 95;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

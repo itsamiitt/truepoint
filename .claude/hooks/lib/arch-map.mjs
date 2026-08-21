@@ -237,6 +237,7 @@ export const REPO_DOMAIN = {
   // masterEducation here: every Layer-0 repository belongs to the one system-owned graph, whichever
   // direction it reads or writes in.
   masterCompanyRead: "master-sync",
+  masterPersonDerived: "master-sync",
   masterCompanySearch: "master-sync",
   // The composed profile reads behind the two global profile routes (stage 3) — Layer-0 again, same rule.
   masterProfileRead: "master-sync",

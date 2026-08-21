@@ -35,6 +35,7 @@ import {
   masterEducationRepository,
   masterGraphRepository,
   masterIndustryRepository,
+  masterPersonDerivedRepository,
   masterProfileRepository,
   masterSignalsRepository,
   withErTx,
@@ -51,6 +52,7 @@ import { encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { acceptanceFor, resolveLawfulBasis } from "../provenance/lawfulBasis.ts";
 import { planProvenanceEvents } from "../provenance/planEvents.ts";
+import { canonicalizeTitle } from "../search/canonicalizeTitle.ts";
 import { inferSeniorityFromTitle } from "../search/inferSeniority.ts";
 import {
   HEADCOUNT_SIGNAL_MIN_PCT,
@@ -331,6 +333,22 @@ async function landPerson(
         demotedEndedOn: primaryIdx != null ? mapped.positions[primaryIdx]?.start.isoDate : null,
       });
     }
+
+    // 6c′. DERIVED facets (0136, search-consolidation stage 5). Recomputed HERE, in the same transaction
+    // that just wrote the stints and settled the primary, so career_started_on / primary_started_on can
+    // never describe an employment shape that no longer exists. The repository re-reads the rows rather
+    // than trusting what we think we wrote, and excludes the '-infinity' unknown-start sentinel — treating
+    // that sentinel as a date is what makes someone read as having 2,000 years of experience.
+    await masterPersonDerivedRepository.recomputeEmploymentDatesTx(tx, masterPersonId);
+    // The job function is a TAXONOMY lookup, not an aggregate, so it is derived from the title the fold
+    // just settled. Null when the title does not resolve — a legitimate gap, not an error, and the filter
+    // simply never matches those rows.
+    const derivedTitle = typeof mapped.fields.jobTitle === "string" ? mapped.fields.jobTitle : null;
+    await masterPersonDerivedRepository.setTitleFunctionTx(
+      tx,
+      masterPersonId,
+      derivedTitle ? (canonicalizeTitle(derivedTitle)?.jobFunction ?? null) : null,
+    );
 
     // 6d. Education — school LINK-or-MINT by the legacy school-id namespace, then the stint upsert.
     for (const e of mapped.educations) {

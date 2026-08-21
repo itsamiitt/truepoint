@@ -210,6 +210,18 @@ export const masterPersons = pgTable(
       },
     ),
     mergedAt: timestamp("merged_at", { withTimezone: true }),
+    // ── DERIVED search facets (0136, search-consolidation stage 5). Materialized because each is an
+    // aggregate or a taxonomy lookup: computed per row at query time none of them is indexable, so a filter
+    // on them would scan the whole visible population. NULL always means "not derived / unknown", never
+    // zero. Kept fresh by landSourcePayload inside the same transaction that writes the stints they derive
+    // from; NOT part of the provenance fold, because they are a normalization of what won rather than a
+    // claim any source made (the current_company_id / industry_id posture).
+    titleFunction: varchar("title_function", { length: 30 }),
+    // Earliest stint start, EXCLUDING master_employment's '-infinity' unknown-start sentinel — treating that
+    // sentinel as a date yields ~2000 years of experience, which is why this is not a plain min().
+    careerStartedOn: date("career_started_on"),
+    // The PRIMARY stint's start; powers years-in-role and "changed job in the last N days" (S-13).
+    primaryStartedOn: date("primary_started_on"),
     fieldProvenance: jsonb("field_provenance").notNull().default({}), // [C6 seam — PLAN_03 §3.2]
     provHwm: timestamp("prov_hwm", { withTimezone: true }),
     createdAt: createdAt(),

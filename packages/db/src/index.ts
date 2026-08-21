@@ -173,6 +173,10 @@ export {
   masterCompanySearchRepository,
   type DatabaseCompanySearchRows,
 } from "./repositories/masterCompanySearchRepository.ts";
+// Writers for the three DERIVED person facets (0136): title_function + the two employment dates. The
+// landing calls recomputeEmploymentDatesTx in the SAME tx that writes the stints they derive from, so the
+// derived values can never lag the rows behind them.
+export { masterPersonDerivedRepository } from "./repositories/masterPersonDerivedRepository.ts";
 // The composed PROFILE reads behind the two global profile routes (stage 3). Every collection is bounded at
 // the source, and no channel VALUE crosses this seam — only the hasMobile presence bit.
 export {

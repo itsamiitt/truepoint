@@ -108,8 +108,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2242,
-  "fileSetHash": "sha256:a7d27d45ac4ab3881b69b602cfd597c0431f71b23d01b9a1b7bc4ba80e4e0e93",
+  "fileCount": 2245,
+  "fileSetHash": "sha256:980f847fc2b55fe020f3a22efa9e1b759fe659d757fd57d97fc4b9b38dc8ddaa",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -150,6 +150,8 @@
         "apps/web/src/features/accounts/databaseCompanyApi.ts",
         "apps/web/src/features/accounts/databaseProfileApi.ts",
         "apps/web/src/features/accounts/entries/pane.ts",
+        "apps/web/src/features/accounts/export.test.ts",
+        "apps/web/src/features/accounts/export.ts",
         "apps/web/src/features/accounts/hooks/useAccountsSearch.ts",
         "apps/web/src/features/accounts/hooks/useCompany.ts",
         "apps/web/src/features/accounts/index.ts"
@@ -1346,6 +1348,7 @@
         "packages/db/src/repositories/masterGraphRepository.ts",
         "packages/db/src/repositories/masterIndustryRepository.ts",
         "packages/db/src/repositories/masterJobPostingsRepository.ts",
+        "packages/db/src/repositories/masterPersonDerivedRepository.ts",
         "packages/db/src/repositories/masterPersonReadRepository.ts",
         "packages/db/src/repositories/masterPersonSearchRepository.ts",
         "packages/db/src/repositories/masterProfileReadRepository.ts",

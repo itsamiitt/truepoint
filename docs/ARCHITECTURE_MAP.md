@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2242 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2245 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -1188,8 +1188,36 @@ flowchart TD
     DatabaseProfileDrawer.tsx` + `databaseProfileApi.ts`; `features/search/components/SearchProfileHost.tsx`.
 
   **Bundle budget.** `/search` hosts two panes and measured 214kB against the perf-checklist's 200kB
-  target. Now **197kB**: People stays eager (it is the page, not an intent — deferring it buys 80kB with a
+  target. Now **197-198kB**: People stays eager (it is the page, not an intent — deferring it buys 80kB with a
   round trip before the first search can be issued), Accounts and both profile drawers are `next/dynamic`.
   New `entries/pane.ts` in both feature slices, because a dynamic import of a MAIN barrel splits nothing —
   the PA-2 lesson applied to PA-3's mechanism. Every web route is now under target.
+
+  2026-08-21 refresh (search consolidation, stages 4 + 5 — the surface is complete): 2239 → 2245 files, no
+  new domain. Stage 4 added the applied-filter chip row and Clear all (`components/search/
+  AppliedFilterChips.tsx`), the All / In-workspace / New-to-me scope (`WorkspaceScopeControl.tsx` +
+  `useWorkspaceScope.ts`), include/exclude on the GLOBAL people contract, migration `0135`, and the
+  `/companies` removal sweep. Stage 5 added the Accounts CSV export and migration `0136`.
+
+  Three notes a later reader will want:
+
+  - **`databaseQuery` gained `op`.** It had none, so `toDatabaseQuery` returned null for ANY excluding
+    query — one "not in Recruiting" clause and the database half of the People grid silently vanished.
+    Both global repositories now apply an exclude as `NOT COALESCE(cond, false)`, so it keeps rows whose
+    column is NULL; a bare `NOT (…)` evaluates to NULL for those and drops them, which reads as the filter
+    being far more aggressive than the user asked for.
+  - **The workspace scope resolves into WHICH ENGINE RUNS**, not into a filter clause, so its two
+    non-default modes query exactly one population and their sort and count are exact. It is deliberately
+    not a field on the global contract: "is this in MY workspace" is a fact about the caller, and the
+    global population has no workspace column to hang it on.
+  - **`0136` materializes three DERIVED person facets** — `title_function`, `career_started_on`,
+    `primary_started_on` (`masterPersonDerivedRepository.ts` → `features.master-sync.db`). Computed per row
+    at query time none of them is indexable, so a filter on them would scan the visible population. The
+    landing recomputes them in the SAME transaction that writes the stints they derive from. Their shared
+    correctness is the `'-infinity'` sentinel exclusion: `master_employment.started_on` defaults to it
+    meaning "start unknown", and a naive `min()` turns one undated stint into ~2,000 years of experience.
+
+  One design-system change: `TpChip` gained an optional `removeLabel`. Its remove control had a hardcoded
+  `aria-label="Remove"`, so an applied-filter row announced eight identical buttons and a screen-reader user
+  could not tell which filter they were about to drop. Default unchanged.
 ```

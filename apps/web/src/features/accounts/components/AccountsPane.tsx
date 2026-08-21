@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AccountRow } from "../accountRows";
 import styles from "../accounts.module.css";
+import { exportAccountsCsv } from "../export";
 import { useAccountsSearch } from "../hooks/useAccountsSearch";
 
 /** The fixed-option firmographic facets that get live counts in the rail (POST /account-search/facets). */
@@ -93,6 +94,14 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
           />
+          <TpButton
+            variant="ghost"
+            size="sm"
+            disabled={search.rows.length === 0}
+            onClick={() => exportAccountsCsv(search.rows)}
+          >
+            Export CSV
+          </TpButton>
           <Link href="/search/markets" className={styles.marketsLink}>
             Markets →
           </Link>
