@@ -126,6 +126,104 @@ for (const route of [...PAGES, ...FILES]) {
   else report.push(`ok   ${route} (${res.status}, ${body.length}b)`);
 }
 
+// Security headers. These are set in next.config.mjs and are invisible in the HTML, so nothing else would
+// notice them silently disappearing. The CSP directives listed are the ones that carry the real mitigation
+// (see the reasoning in next.config.mjs) — script-src is deliberately permissive and is not asserted strict.
+// Only checked against a production server: the whole set is NODE_ENV-gated, so `next dev` legitimately
+// sends none of it.
+{
+  const res = await fetch(BASE + "/");
+  const csp = res.headers.get("content-security-policy") ?? "";
+  const problems = [];
+
+  for (const [header, expected] of [
+    ["x-content-type-options", "nosniff"],
+    ["referrer-policy", "strict-origin-when-cross-origin"],
+    ["x-frame-options", "DENY"],
+  ]) {
+    const got = res.headers.get(header);
+    if (got !== expected)
+      problems.push(`${header}: expected "${expected}", got "${got ?? "(absent)"}"`);
+  }
+
+  if (!csp) {
+    problems.push(
+      "no Content-Security-Policy (expected on a production server; absent under next dev)",
+    );
+  } else {
+    for (const directive of [
+      "default-src 'self'",
+      "base-uri 'none'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'none'",
+      "connect-src 'self'",
+    ]) {
+      if (!csp.includes(directive)) problems.push(`CSP missing: ${directive}`);
+    }
+  }
+
+  if (problems.length) fail("security headers", problems);
+  else report.push("ok   security headers (CSP, XCTO, Referrer-Policy, XFO)");
+}
+
+// Does the CSP actually break anything? Header presence does not answer that — a policy is only safe if
+// every sub-resource the page loads is one it permits. So enumerate them: every <script src>, every
+// stylesheet, and every url() inside those stylesheets, and assert each is same-origin or a data: URI.
+// If that holds, `default-src 'self'` + `img-src 'self' data:` cannot block a single request, which is a
+// stronger and more durable statement than one manual look at a browser console.
+//
+// Not covered here: an inline script the CSP would block. It cannot — script-src carries 'unsafe-inline',
+// deliberately and documented in next.config.mjs.
+{
+  const problems = [];
+  const pageUrl = new URL(BASE);
+  const html = await (await fetch(BASE + "/")).text();
+
+  /** Same-origin, root-relative, or a data: URI — anything else needs a CSP allowance we do not grant. */
+  function permitted(url) {
+    if (url.startsWith("data:")) return true;
+    if (url.startsWith("/") && !url.startsWith("//")) return true;
+    try {
+      return new URL(url, BASE).origin === pageUrl.origin;
+    } catch {
+      return false;
+    }
+  }
+
+  const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+  const sheets = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]*href="([^"]+)"/g)].map(
+    (m) => m[1],
+  );
+  const preloads = [...html.matchAll(/<link[^>]+rel="preload"[^>]*href="([^"]+)"/g)].map(
+    (m) => m[1],
+  );
+
+  for (const url of [...scripts, ...sheets, ...preloads]) {
+    if (!permitted(url)) problems.push(`off-origin sub-resource the CSP would block: ${url}`);
+  }
+
+  // Follow the stylesheets and check what THEY pull in — fonts and background images live here, not in the
+  // HTML, and a webfont blocked by font-src is exactly the kind of thing nobody notices until it ships.
+  for (const sheet of sheets) {
+    const css = await (await fetch(new URL(sheet, BASE))).text();
+    for (const m of css.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)) {
+      const url = (m[1] ?? "").trim();
+      if (!permitted(url)) problems.push(`off-origin url() in ${sheet}: ${url}`);
+    }
+  }
+
+  if (!scripts.length) problems.push("no <script src> found — the HTML parse is probably wrong");
+  if (!sheets.length) problems.push("no stylesheet found — the HTML parse is probably wrong");
+
+  if (problems.length) fail("CSP sub-resource audit", problems);
+  else {
+    report.push(
+      `ok   CSP sub-resource audit (${scripts.length} scripts, ${sheets.length} sheets, ${preloads.length} preloads — all same-origin or data:)`,
+    );
+  }
+}
+
 // A 404 must render this app's own not-found, with a way onward — someone mistyping a URL while trying to
 // reach the opt-out route should not hit a dead end.
 try {

@@ -130,7 +130,7 @@ blocker, not a schedule.
 | A | Portal ships: routes, content, chrome, infra wiring | **done** | — |
 | B | Verify it renders: all routes, chrome present, a11y skeleton, no forbidden copy in delivered HTML | **done** — `bun run --filter @leadwolf/doc verify` | — |
 | C | WCAG 2.2 AA contrast | **done** — three failures found and fixed; `contrast.test.ts` now gates the palette | — |
-| D | Content-Security-Policy | **buildable** | Needs report-only rollout against a live origin before enforcing |
+| D | Content-Security-Policy | **done** — shipped enforced, with `script-src` honestly documented as the weak directive | — |
 | E | Waitlist / lead capture | **blocked** | Rule 3: a collection path needs lawful basis, consent surface, suppression point, erasure path. Belongs on `apps/api`. |
 | F | API keys + usage dashboard | **blocked** | Metering and billing; belongs on `app.`, and on operator ratification of the fourth market (ADR-0048 §C4) |
 | G | MCP server + its docs page | **blocked** | The MCP server does not exist; it would wrap endpoints that do not exist |
@@ -155,11 +155,18 @@ pair the app paints and bans `--tp-ink-4` as a text colour outright.
    (rule 1). Nothing here implements any of them; the portal's copy is written to the shipped strategy.
 2. **The prices are published and duplicated.** They will drift from `plan_templates` unless someone re-reads
    the date on the page. This is a deliberate trade against dragging a data client into a public site.
-3. **No CSP.** This app is the best candidate in the fleet for one — no inline handlers, no third-party
-   origins, no user content — but Next emits inline bootstrap scripts, so a real policy needs a nonce plumbed
-   through the layout and a report-only rollout against a live deployment. A nonce is the awkward part: it
-   must be per-request, and every route here is prerendered, so adding one would trade the app's whole static
-   posture for a header. Phase D should ship `Content-Security-Policy-Report-Only` first and read the reports.
+3. ~~No CSP.~~ **Shipped enforced** (phase D), with one weak directive stated rather than hidden.
+   `script-src` carries `'unsafe-inline'` because Next emits inline bootstrap and RSC-flight scripts whose
+   contents differ per page: static hashes cannot cover per-page payloads, and a nonce must be minted per
+   request, which would force all 21 prerendered routes to render dynamically — trading the app's entire
+   static posture for one directive. Everything else is tight, and `form-action 'none'` is the one that
+   matters most given that concession, because it is *true* here: the site has no forms, so an injected one
+   has nowhere to post. Report-only was considered and skipped — there is no collector to send violations to,
+   and a `report-uri` pointing nowhere is decoration. Wire one when there is somewhere for it to land.
+   The remaining risk is what a report-only phase would have caught: a sub-resource the policy blocks. That
+   is now checked structurally instead — `verify.mjs` enumerates every `<script src>`, stylesheet, preload
+   and `url()` inside those stylesheets and asserts each is same-origin or `data:`. All 11 are, so the policy
+   cannot block a request. That assertion survives future edits; one look at a browser console would not.
 4. **No analytics**, so there is currently no way to tell whether the documentation is doing the job the plan
    assigns it.
 5. **A build-time BOM in an app's `package.json` silently breaks module resolution** for the whole workspace —
