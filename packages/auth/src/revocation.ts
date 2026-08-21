@@ -28,8 +28,18 @@ const key = (sid: string): string => `revoked-sid:${sid}`;
 let _lastCheckDegradedLogMs = 0;
 const DEGRADED_LOG_INTERVAL_MS = 10_000;
 
+// 1-second NEGATIVE memo (perf-checklist PA-14): "not revoked" — ~100% of real traffic — is re-answered
+// from memory for 1s per sid, removing one Redis round-trip from most authenticated requests. Strictly
+// within the deny-list's existing posture: it already fails OPEN on a Redis outage (an unbounded
+// "not revoked" window), so a bounded ≤1s window is a tightening of nothing. Positive (revoked) answers are
+// NEVER cached, and markRevoked below drops the sid's memo entry so a same-process revoke is immediate;
+// cross-instance the ≤1s window applies.
+const NOT_REVOKED_MEMO_TTL_MS = 1_000;
+const notRevokedMemo = new Map<string, number>(); // sid → expiresAt
+
 /** Add a session id to the deny-list for the access-token lifetime (beyond that, any such token is expired). */
 export async function markRevoked(sessionId: string): Promise<void> {
+  notRevokedMemo.delete(sessionId);
   try {
     await redis().set(key(sessionId), "1", "EX", env.ACCESS_TOKEN_TTL_SECONDS);
   } catch (err) {
@@ -51,8 +61,14 @@ export async function markManyRevoked(sessionIds: readonly string[]): Promise<vo
  * as "not revoked" is the safe-availability choice (mirrors the rate-limiter's fail-open posture).
  */
 export async function isRevoked(sessionId: string): Promise<boolean> {
+  const memoUntil = notRevokedMemo.get(sessionId);
+  if (memoUntil !== undefined && memoUntil > Date.now()) {
+    recordAuthMetric("auth_revocation_check_total", { result: "allowed" });
+    return false;
+  }
   try {
     const revoked = (await redis().exists(key(sessionId))) === 1;
+    if (!revoked) notRevokedMemo.set(sessionId, Date.now() + NOT_REVOKED_MEMO_TTL_MS);
     recordAuthMetric("auth_revocation_check_total", { result: revoked ? "revoked" : "allowed" });
     return revoked;
   } catch (err) {

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./palette": "./src/palette.ts",
     "./shell.css": "./src/shell.css"
   },
   "scripts": {

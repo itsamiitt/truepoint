@@ -93,6 +93,9 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     // repopulated ("strobing"). Holding the previous key's rows while the fresh search lands is the same
     // treatment the facet sidebar already had — the grid, the thing the user is looking at, deserves it most.
     placeholderData: keepPreviousData,
+    // Search pages are big and re-entered constantly (grid → drawer → back, route away → back): keep them
+    // 10 minutes instead of the 5-minute default so re-entry is instant, not a refetch (perf-checklist PA-8).
+    gcTime: 10 * 60_000,
     // RQ owns the AbortSignal: it aborts on unmount and on cancellation, so an abandoned keystroke stops
     // costing the backend a full search without this hook tracking a controller itself.
     queryFn: ({ pageParam, signal }) =>
