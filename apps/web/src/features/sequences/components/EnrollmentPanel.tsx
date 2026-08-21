@@ -88,7 +88,7 @@ export function EnrollmentPanel({
         {noContacts && (
           <p className={styles.muted}>
             No revealed contacts yet — reveal one in{" "}
-            <Link className={styles.inlineLink} href="/prospect">
+            <Link className={styles.inlineLink} href="/search">
               Prospect
             </Link>{" "}
             first.

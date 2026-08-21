@@ -1,7 +1,7 @@
 // filterGroups.ts — the declarative model for the Apollo/ZoomInfo-style filter sidebar (24): the collapsible
 // groups + their facets, and the pure, immutable helpers that read/update a server `ContactQuery` from UI
 // interactions (multi-select within a facet = OR; across facets = AND, enforced server-side). The rebuilt
-// FilterRail renders from FILTER_GROUPS and calls these helpers; the removable pills + clear-all read
+// FilterPanel renders from FILTER_GROUPS and calls these helpers; the removable pills + clear-all read
 // `activeChips`. Pure module — no React/DOM — so it is fully unit-tested. Only contract-backed facets appear
 // here (search.ts FacetKey/boolFilter/range); tags/lists, last-contacted channel, and job-change/hiring
 // signals need contract/data extensions and are intentionally deferred (documented follow-ups).

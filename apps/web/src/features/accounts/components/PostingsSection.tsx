@@ -7,7 +7,7 @@ import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { AccountPostingsResponse } from "@leadwolf/types";
 import { useQuery } from "@tanstack/react-query";
-import styles from "../companies.module.css";
+import styles from "../accounts.module.css";
 
 async function fetchPostings(accountId: string): Promise<AccountPostingsResponse> {
   const res = await fetchWithAuth(

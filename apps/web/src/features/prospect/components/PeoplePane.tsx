@@ -1,14 +1,23 @@
-// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): the faceted sidebar (hosting
-// Saved/Recent searches; the old Accounts scope moved to /companies — the MI-1 cutover, redirects below)
-// driving a server ContactQuery, a top search
-// box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (list only —
-// sortable, density-aware, masked glyphs, row-select, per-row overflow menu) with keyset "Load more", a
-// lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky bulk-action bar
-// (the full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch → searchUrlState),
-// so a view is shareable and restored on refresh/back. Composition only; data + masking + mutations come from
+// PeoplePane.tsx — the People half of the Search surface (04 §5, 11 §4.2, 24; search-consolidation 01): the
+// faceted sidebar (hosting Saved/Recent searches) driving a server ContactQuery, a top search box + AI NL
+// box, a results header with a sort + column-chooser toolbar, the results table (list only — sortable,
+// density-aware, masked glyphs, row-select, per-row overflow menu) with keyset "Load more", a lightweight
+// QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky bulk-action bar (the
+// full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch → searchUrlState), so
+// a view is shareable and restored on refresh/back. Composition only; data + masking + mutations come from
 // the slice (api/bulkActionsApi).
+//
+// It renders the SHELL GRID itself (drawer column + results column) rather than being placed inside one, so
+// the drawer wraps this pane's own filter panel. The Accounts pane does the same with its panel — one
+// drawer implementation, two panes, no shared mutable state between them.
+//
+// HISTORY: this was ProspectPage, and it carried a `?scope=accounts` → /companies redirect from the MI-1
+// cutover. The search-consolidation decision (2026-08-21) folds Accounts back in as a TAB, so the redirect
+// is gone; the legacy param is now translated to `?tab=accounts` in useSearchTab instead.
 "use client";
 
+import { SearchDrawer, SearchDrawerOpener, type SearchShell } from "@/components/search";
+import shellStyles from "@/components/search/search.module.css";
 import type { ContactQuery, FacetKey, Tag } from "@leadwolf/types";
 import {
   type Column,
@@ -24,7 +33,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
 import {
@@ -82,27 +91,12 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
 ];
 const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
-function ProspectPageInner() {
-  // Scope is resolved FIRST, because it gates the two search engines below. React forbids conditional hooks, so
-  // both engines are always mounted — but only the active one may issue requests. Previously scope was read
-  // *after* all four hooks, so every visit to this page fired the inactive scope's search AND facet-count POSTs
-  // for a grid that was never rendered: four wasted round-trips on the app's busiest surface.
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  // CUTOVER (market-intelligence MI-1, D-9 regroup): the Accounts scope moved to the /companies
-  // destination. Old ?scope=accounts deep-links redirect there WITH their query string — the aq/asort/af
-  // account codec is shared, so a shared account view keeps working at its new home.
-  const legacyAccountsScope = searchParams?.get("scope") === "accounts";
-  useEffect(() => {
-    if (!legacyAccountsScope) return;
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    params.delete("scope");
-    const qs = params.toString();
-    router.replace(qs ? `/companies?${qs}` : "/companies");
-  }, [legacyAccountsScope, router, searchParams]);
-  const contactsActive = !legacyAccountsScope;
-
-  const search = useProspectSearch({ enabled: contactsActive });
+function PeoplePaneInner({ shell }: { shell: SearchShell }) {
+  // Only ONE pane is mounted at a time (the composer picks by tab), so this pane's engines are never
+  // running for a grid nobody is looking at. That replaces the old both-scopes-mounted arrangement, where
+  // React's no-conditional-hooks rule forced an `enabled` flag through every hook to stop the inactive
+  // scope firing four wasted round-trips on every visit to the app's busiest surface.
+  const search = useProspectSearch();
   const {
     query,
     setQuery,
@@ -118,13 +112,12 @@ function ProspectPageInner() {
     removeRows,
   } = search;
   const queryClient = useQueryClient();
-  const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
+  const counts = useFacetCounts(query, COUNT_FIELDS);
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
   const countResult = useQuery({
     queryKey: prospectKeys.contactCount(query),
     queryFn: () => searchCount(query),
-    enabled: contactsActive,
     staleTime: 30_000,
   }).data;
   const totalCount = countResult?.total;
@@ -328,22 +321,33 @@ function ProspectPageInner() {
   );
 
   return (
-    <div className={styles.page} data-density={density}>
-      <FilterPanel
-        query={query}
-        onChange={setQuery}
-        counts={counts}
-        header={
-          <>
-            <SaveSearchPanel currentQuery={query} onApply={setQuery} />
-            <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
-          </>
-        }
-      />
+    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density={density}>
+      <SearchDrawer
+        collapsed={shell.collapsed}
+        isOverlay={shell.isOverlay}
+        onToggle={shell.toggle}
+        onClose={shell.close}
+        tabs={shell.tabs}
+      >
+        <FilterPanel
+          query={query}
+          onChange={setQuery}
+          counts={counts}
+          header={
+            <>
+              <SaveSearchPanel currentQuery={query} onApply={setQuery} />
+              <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
+            </>
+          }
+        />
+      </SearchDrawer>
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
           <div className={styles.headLeft}>
+            {/* Visible only while the rail is off-canvas (≤768px, collapsed) — otherwise the toggle in the
+                rail itself is the way back, and two openers would be one too many. */}
+            <SearchDrawerOpener onOpen={shell.toggle} />
             <span className={styles.count}>
               {loading
                 ? "Loading…"
@@ -560,10 +564,10 @@ function ProspectBulkBar({
 }
 
 /** Public entry: wraps the surface in the RevealStore so the grid + detail derive reveal state from one source. */
-export function ProspectPage() {
+export function PeoplePane({ shell }: { shell: SearchShell }) {
   return (
     <RevealStoreProvider>
-      <ProspectPageInner />
+      <PeoplePaneInner shell={shell} />
     </RevealStoreProvider>
   );
 }

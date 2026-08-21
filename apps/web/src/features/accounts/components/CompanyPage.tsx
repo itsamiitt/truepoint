@@ -18,7 +18,7 @@ import {
 import type { MaskedAccount, TenantSignal } from "@leadwolf/types";
 import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";
-import styles from "../companies.module.css";
+import styles from "../accounts.module.css";
 import { useCompany, useWatchAccount } from "../hooks/useCompany";
 import { PostingsSection } from "./PostingsSection";
 

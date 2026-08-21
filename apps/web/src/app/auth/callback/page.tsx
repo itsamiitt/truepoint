@@ -2,7 +2,7 @@
 // the round-tripped state, exchanges the code for an in-memory access token (ADR-0016), then goes straight to
 // the work surface via a CLIENT-SIDE router navigation (not window.location.replace). A full-document reload
 // would tear down the JS context and DISCARD the just-minted in-memory token, forcing the shell into a second,
-// redundant silent refresh — and would still need the extra "/" → "/prospect" hop. A client nav keeps the
+// redundant silent refresh — and would still need the extra "/" → "/search" hop. A client nav keeps the
 // token alive and lands directly on the destination, so the shell renders signed-in with zero extra round-trips.
 // A `ran` ref guards the effect against React StrictMode's double-invoke, which would otherwise consume the
 // single-use state/code twice and self-inflict `invalid_state`. On a recoverable failure (stale/expired/
@@ -16,8 +16,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // The default signed-in destination (Prospect, 04 §3). Navigating here directly from the callback collapses
-// the old callback → "/" → "/prospect" chain into a single hop.
-const POST_LOGIN_DESTINATION = "/prospect";
+// the old callback → "/" → "/search" chain into a single hop.
+const POST_LOGIN_DESTINATION = "/search";
 
 /** Map the exchange failure reason to a user-facing message. The raw reason is logged for DevTools. */
 function messageFor(reason: string): string {

@@ -5,7 +5,6 @@ import { type NavDestination, type PaletteEntry, isActive } from "@leadwolf/app-
 import {
   Activity,
   BarChart2,
-  Building2,
   HeartPulse,
   Home,
   Inbox,
@@ -38,10 +37,12 @@ export const IMPORTS_DESTINATION: NavDestination = {
 
 export const DESTINATIONS: NavDestination[] = [
   { label: "Home", href: "/home", match: "/home", icon: Home },
-  { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
-  // Companies (market-intelligence MI-1, D-9 regroup): the account-search destination + routed company
-  // pages. The Prospect page's Accounts toggle remains until the cutover step retires it with redirects.
-  { label: "Companies", href: "/companies", match: "/companies", icon: Building2 },
+  // Search (search-consolidation, 2026-08-21): ONE prospecting destination over the platform database, with
+  // People and Accounts as tabs inside its filter drawer. This replaces the old `Prospect` entry and
+  // ABSORBS the `Companies` destination that the MI-1 / D-9 regroup had split out — /prospect and
+  // /companies are redirect pages for one release. Reversing a ratified decision is recorded in
+  // docs/strategy/decisions.md; the spec is docs/planning/search-consolidation/.
+  { label: "Search", href: "/search", match: "/search", icon: Search },
   // Signals (market-intelligence MI-P2, D-9): the tenant signal feed + watchlists. Ungated in nav per the
   // imports precedent above — apps/web has no per-tenant flag reader; the page degrades to an honest
   // empty state while the fan-out pipeline is dark.
@@ -135,6 +136,10 @@ export function sectionTitleFor(pathname: string): string {
   // /import route itself is now a redirect into the section).
   if (isActive(pathname, IMPORTS_DESTINATION.match)) return IMPORTS_DESTINATION.label;
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
+  // The retired /companies destination: its index and markets board are redirects, but /companies/:id is
+  // still the owned-account profile route until stage 3 turns it into a drawer. Title it as part of Search
+  // so the top bar does not fall through to the generic product name mid-flow. REMOVE with the route.
+  if (pathname.startsWith("/companies")) return "Search";
   if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
   return "TruePoint";
 }
@@ -154,7 +159,20 @@ export const PALETTE_NAVIGATE: PaletteEntry[] = [
 ];
 
 export const PALETTE_QUICK: PaletteEntry[] = [
-  { id: "act-search", label: "New search", href: "/prospect", keywords: ["prospect", "find"] },
+  {
+    id: "act-search",
+    label: "Search people",
+    href: "/search",
+    keywords: ["prospect", "find", "people", "contacts"],
+  },
+  // The Accounts tab keeps its own palette entry: retiring the /companies destination must not retire the
+  // way people got to company search.
+  {
+    id: "act-search-accounts",
+    label: "Search companies",
+    href: "/search?tab=accounts",
+    keywords: ["company", "companies", "accounts", "firmographic"],
+  },
   {
     id: "act-lists",
     label: "View lists",

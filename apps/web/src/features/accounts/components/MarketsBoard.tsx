@@ -11,7 +11,7 @@ import { API_BASE } from "@/lib/publicConfig";
 import type { MarketSegment } from "@leadwolf/types";
 import { EmptyState, StateSwitch } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
-import styles from "../companies.module.css";
+import styles from "../accounts.module.css";
 
 interface SegmentsResponse {
   enabled: boolean;

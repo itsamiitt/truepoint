@@ -1,6 +1,7 @@
 /*
- * companies.module.css — the /companies/:id page (MI-1). Two-column sections under a firmographic
- * header; hairline discipline, --tp-* tokens only.
+ * accounts.module.css — the Accounts pane (search-consolidation) + the owned-account profile page. The shell
+ * grid (rail column + results column) lives in components/search/search.module.css; this file is the
+ * pane-local + profile-page styles (firmographic header, field grid, section layout).
  */
 
 .page {

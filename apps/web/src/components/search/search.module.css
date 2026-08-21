@@ -1,0 +1,137 @@
+/* search.module.css — the shell layout for the Search surface: the collapsible filter rail column and the
+ * results column beside it. Structure only; every value is a --tp-* token. Both panes (People, Accounts)
+ * render this same shell, so the drawer behaves identically whichever tab is showing. */
+
+.page {
+  display: grid;
+  /* Collapsed is a 40px STRIP, not 0 — the toggle has to stay visible and stay put, or reopening the rail
+     becomes a hunt. Same posture as an editor's activity bar. */
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 24px;
+  padding: var(--tp-page-pad-y) var(--tp-page-pad-x) 96px;
+  align-items: start;
+}
+.page[data-collapsed="true"] {
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .page {
+    transition: grid-template-columns 200ms ease;
+  }
+}
+
+/* ── The rail column ──────────────────────────────────────────────────────────────────────────────────── */
+.railCol {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-height: calc(100vh - 32px);
+}
+
+.railTop {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+}
+/* Collapsed, the toggle is the only thing left, so centre it in the strip. */
+.railCol[data-collapsed="true"] .railTop {
+  justify-content: center;
+}
+
+.railBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.railCol[data-collapsed="true"] .railBody {
+  /* visibility (not display:none) so the width transition has something to animate against, and so focus
+     cannot land inside — paired with `inert` on the same element for assistive tech. */
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .railBody {
+    transition: opacity 160ms ease;
+  }
+}
+
+.tabs {
+  width: 100%;
+}
+
+/* ── Overlay mode (≤768px): the rail leaves the grid and slides over the results ───────────────────────── */
+@media (max-width: 768px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page[data-collapsed="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .railCol {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--tp-z-drawer);
+    width: min(320px, 88vw);
+    max-height: none;
+    background: var(--tp-surface);
+    border-right: 1px solid var(--tp-hairline);
+    box-shadow: var(--tp-shadow-rail);
+    padding: 12px;
+    transform: translateX(0);
+  }
+  .railCol[data-collapsed="true"] {
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .railCol {
+      transition: transform 200ms ease;
+    }
+  }
+  /* Collapsed on mobile the rail is off-canvas, so the toggle inside it goes with it — the results header
+     carries its own opener (.overlayOpener below). */
+  .railCol[data-collapsed="true"] .railTop {
+    justify-content: flex-end;
+  }
+  .railCol[data-collapsed="true"] .railBody {
+    /* Off-canvas, not zero-height: the panel must keep its layout so the slide reads as a drawer. */
+    visibility: hidden;
+    opacity: 0;
+    height: auto;
+    pointer-events: none;
+  }
+}
+
+/* The scrim behind the overlay drawer. A real <button> (never a div with onClick) so it is reachable and
+   announced; its accessible name is supplied by the component. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--tp-z-drawer) - 1);
+  border: 0;
+  padding: 0;
+  background: var(--tp-scrim);
+  cursor: pointer;
+}
+
+/* The opener shown in the results header while the rail is off-canvas (overlay + collapsed only). */
+.overlayOpener {
+  display: none;
+}
+@media (max-width: 768px) {
+  .page[data-collapsed="true"] .overlayOpener {
+    display: inline-flex;
+  }
+}

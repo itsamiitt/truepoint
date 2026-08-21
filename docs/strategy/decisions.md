@@ -326,3 +326,49 @@ person-referencing signals = anonymize to company event), D-9 (IA regroup per 07
 Still open — commercial/procurement, no code may assume them: D-4 funding/registry feed, D-5 technographics
 feed + C4 GPL clearance, D-6 postings feed, D-3 final tier packaging (build flag-gated behind
 plan_templates.features keys pending pricing sign-off). Everything ships dark behind default-off gates.
+
+## 2026-08-21 — Search consolidation; Accounts searches the global graph (operator decision; plan: docs/planning/search-consolidation/)
+
+The operator directed that `/companies` be retired and both prospecting surfaces fold into one **Search**
+destination (`/prospect` → `/search`), with People and Accounts as tabs inside a collapsible filter drawer,
+and that the Accounts tab search the **global** company graph (`master_companies`) rather than the
+workspace-scoped `accounts` table ("not the companies which are part of someone's uploaded list").
+Workspace accounts remain visible on the same tab as a *state of a row*, mirroring how the People tab
+already merges owned contacts with database people.
+
+This **partially reverses D-9** (the market-intelligence IA regroup ratified 2026-08-19), which split
+account search out to its own `/companies` destination. D-9's other provisions — the signal feed,
+watchlists, the markets board — are unaffected; only the account-search destination is folded back, and the
+markets board moves with it to `/search/markets`. Recorded per rule 6.
+
+Three consequences recorded with it:
+
+(a) **A company visibility policy now exists.** `MASTER_COMPANY_VISIBLE` is the company twin of
+    `MASTER_PERSON_VISIBLE`, applied inside every Layer-0 company read, with the 0134 partial indexes built
+    on the same predicate: `org_kind = 'company' AND primary_domain IS NOT NULL AND field_provenance <> '{}'`.
+    The provenance clause is load-bearing and was NOT in the first draft. Measured against production:
+    `fillCompanyPrimaryDomain` back-fills domains onto position-minted stubs, so a domain-only predicate
+    admits 3,747 rows of which only 231 carry any firmographics — 94% would render as blank rows.
+    `field_provenance <> '{}'` is the CAUSE (a company document landed) rather than a symptom, and selects
+    exactly the same 231. `prov_hwm` was considered and rejected: never written, 0 rows. `primary_domain`
+    additionally becomes the URL-shaped addressing key — the D4 posture (2026-08-18) extended to companies.
+
+(b) **Add-to-workspace is no longer a prerequisite for viewing a profile.** Any authenticated user may read
+    the masked Layer-0 profile of any visible person or company. This is net-new read surface, not a relaxed
+    check — there was never a `GET /contacts/:id`, and the "gate" was three lines of frontend that had
+    nothing to open. Channel values remain paid; reveal remains workspace-scoped and credit-gated; no
+    workspace-overlay fact (owner, stage, tags, activities, reveal state) is served on a global profile,
+    structurally — Layer 0 has no workspace column. A-01/A-03 and the co-op boundary are unchanged.
+
+(c) **Profile views are rate-limited, NOT metered per plan.** The new profile routes are an enumeration
+    surface, so they carry per-user and per-tenant limits. They deliberately do NOT get an `entitlement`
+    key: production has 0 `entitlement` rows, 0 `subscriptions`, and `plan_templates.features` is `{}` on
+    both rows, so `resolveEntitlement` fails open and a new key would be inert config — the fourth instance
+    of the "configuration that configures nothing" pattern audit 32 §9C/§9D/§9E already records three of.
+    Reversible: one `requireEntitlement` line per route if pricing later wants the cap.
+
+Population at decision time (read-only census, 2026-08-21): 176 visible `master_persons` (9,591 of 9,767
+are `private`/workspace-minted and correctly unsellable), 231 visible `master_companies`, first landing
+2026-08-18, growing ~100 rows/day, single `linkedin_api` origin throttled at `http 429` but landing between
+throttles. The Accounts tab is therefore architecturally correct and commercially thin until ingestion
+catches up; that is an ingestion-throughput problem, not a surface problem.

@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2205 source files · 90 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2216 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -134,10 +134,17 @@ apps/                           # deployable processes (thin transport adapters)
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS + account self-service security  [LIVE]
     app/{login,password,magic,mfa(+enroll),signup,verify,sso,org,workspace,forgot,reset,account/security,token,logout}  shared/*  lib/*
   web/   src/                   # app.truepoint.in (Next 15) — AppShell over a (shell) route group  [LIVE]
-    app/(shell)/{home,prospect,sequences,inbox,reports,lists,enrichment/jobs,sales-navigator,settings/*}  app/{import,auth/callback}
-    components/{shell/*}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
-                                              enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig,
-                                              problemMessage,maybeList,queryKeys}
+    app/(shell)/{home,search(+markets),signals,sequences,inbox,reports,lists,imports,data-health,crm-sync,
+                 enrichment/jobs,sales-navigator,companies/[accountId],settings/*}  app/{import,prospect,auth/callback}
+                                  #   prospect + companies(+markets) are one-release redirect pages — the
+                                  #   search-consolidation cutover renamed the destination to /search
+    components/{shell/*,search/*} features/{import,prospect,accounts,search,home,sequences,inbox,reports,
+                                              lists,signals,notifications,announcements,crm-sync,data-health,
+                                              sales-navigator,enrichment-jobs,settings-*}/
+                                              lib/{authClient,pkce,publicConfig,problemMessage,maybeList,queryKeys}
+                                  #   components/search = the Search shell (drawer · People/Accounts tabs ·
+                                  #   ?tab codec). It lives outside features/ so both panes and the composer
+                                  #   can import it without closing a cycle (lint:boundaries no-circular).
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,EntityPicker,TenantPicker,UserPicker}  lib/{adminGate,authClient,pkce}
     app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,extension,system-health}  features/*
@@ -154,7 +161,7 @@ apps/                           # deployable processes (thin transport adapters)
 
 ## FEATURE → FILES index (live)
 
-> The JSON currently buckets **86** code-bearing domains; this prose curates **37** subsections over them,
+> The JSON currently buckets **89** code-bearing domains; this prose curates **39** subsections over them,
 > grouping the small/adjacent ones under the section they serve. The JSON is the complete enumeration — if a
 > domain is not written up here, look it up there rather than assuming it does not exist. Paths are authoritative in
 > [`architecture-map.json`](./architecture-map.json); the purposes are here. Web slices are
@@ -340,7 +347,11 @@ apps/                           # deployable processes (thin transport adapters)
 
 ### B. Prospect & account data surface
 
-#### prospect — *the find-anyone destination (contacts + accounts)* ([05](./planning/05-features-modules.md), ADR-0035)
+#### prospect — *the People pane of the Search destination* ([05](./planning/05-features-modules.md), ADR-0035)
+> **Renamed surface, same slice.** The destination is now **`/search`** ([search-consolidation](./planning/search-consolidation/README.md),
+> operator decision 2026-08-21): `ProspectPage` became `PeoplePane` and the folder keeps its `prospect`
+> name because the JSON buckets by path and the slice's contents did not move. `/prospect` is a one-release
+> redirect page.
 - **core:** `prospect/` — `dedup.ts` (per-workspace soft-pointer dedup: canonicalName + registrableDomain grouping),
   `accountSearch.ts` (workspace-visible account result count), `firmographics.ts` (roll intent_signals → account facets:
   technologies from tech_install slugs, fundingStage from latest funding_round), `bulkActions.ts` (batch apply to
@@ -358,7 +369,9 @@ apps/                           # deployable processes (thin transport adapters)
   reveal** (`useBulkSelection` — an external useSyncExternalStore store so a checkbox toggle re-renders 1-2
   subscribing checkboxes (`SelectionControls.tsx`) instead of the page, `BulkActionBar` (mounted via a
   subscribing host), `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
-  **filter rail** (`FilterRail` + `FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, with
+  **filter rail** (`FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts` — the
+  MVP-era client-side `FilterRail` was deleted by the search-consolidation cutover, dead since the
+  server-search rewrite; both panels now render inside the shared `components/search` drawer, with
   `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the shared progressive-exclude pattern
   `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
   `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
@@ -366,7 +379,29 @@ apps/                           # deployable processes (thin transport adapters)
   **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
-  `searchUrlState.ts` (shareable/bookmarkable query); `savedSearchApi.ts` + `RecentSearches`/`SaveSearchPanel`; routed at `(shell)/prospect`
+  `searchUrlState.ts` (shareable/bookmarkable query, `q`/`sort`/`f`); `savedSearchApi.ts` +
+  `RecentSearches`/`SaveSearchPanel`; mounted by `features/search` at `(shell)/search`
+
+#### search (web) — *the Search destination's composer* ([search-consolidation](./planning/search-consolidation/README.md))
+- **web:** `features/search/` — `SearchSurface.tsx` only. It owns the active tab (URL) + the drawer's
+  collapsed state (localStorage) and mounts **one** pane: `PeoplePane` (`features/prospect`) or
+  `AccountsPane` (`features/accounts`). Mounting one rather than both is the point — the retired
+  two-scopes-mounted arrangement needed an `enabled` flag threaded through every hook to stop the hidden
+  scope firing four wasted round-trips per visit.
+- **shared:** `components/search/` — `SearchDrawer` (collapsible rail; 40px strip collapsed, off-canvas
+  overlay ≤768px with scrim + focus return + `inert`), `SearchTabs`, `useDrawerCollapsed`
+  (localStorage `tp.search.drawer`, read in an effect — reading at render is a hydration mismatch),
+  `useSearchTab` + `searchTabUrlState` (the `?tab` codec, which writes without touching either pane's
+  query params — the property `searchTabUrlState.test.ts` asserts). It sits outside `features/` so both
+  panes and the composer can import it without closing an import cycle.
+
+#### accounts — *the Accounts pane + the routed company profile* (was `features/companies`, MI-1)
+- **web:** `features/accounts/` — `AccountsPane.tsx` (the Accounts tab: firmographic filter panel in the
+  shared drawer + results grid, over the `aq`/`asort`/`af` codec), `CompanyPage.tsx` (`/companies/:accountId`,
+  still a route until the profile drawer lands), `MarketsBoard.tsx` (`/search/markets`), `PostingsSection.tsx`,
+  `hooks/useCompany.ts`, `api.ts`. **STAGE 1 SCOPE:** the pane searches the WORKSPACE's `accounts`; searching
+  the global `master_companies` graph is stage 2, behind `DATABASE_COMPANY_SEARCH_ENABLED`.
+- **core:** `accounts/` — `accountBackfill.ts`, `accountDualWrite.ts`, `accountRead.ts`, `countryToIso.ts`
 
 #### account-search — *company-side search/facets API* (ADR-0035)
 - **api:** `features/account-search/*` — `GET` account search / facets / typeahead (firmographic facets: industry,
@@ -573,16 +608,18 @@ apps/                           # deployable processes (thin transport adapters)
 - **web (destination-keyed siblings):** `features/signals/` — the `/signals` rail destination:
   family-filtered feed + watchlists panel (create/delete, per-user family subscription chips hydrated
   from `myFamilies`); honest empty states while the pipeline is dark; `account_signal` notifications
-  deep-link here · `features/companies/` — the routed `/companies/:accountId` page (MI-1): the account
-  drawer's content on a canonical URL — firmographic header + Watch toggle (auto-created "Watched
-  accounts" list) + the SAME prospect-slice sections (headcount, technologies, displacement, alumni,
-  re-exported via the prospect barrel) + the account signal timeline. `GET /api/v1/accounts/:accountId`
-  (account-intelligence routes, `accountSearchRepository.getMaskedById` — search's own SELECTION, so
-  page and grid never disagree) is its base read. `/companies` INDEX (`CompaniesIndexPage`) hosts the
-  account-search surface as its own rail destination (reusing the URL-driven `useAccountSearch` engine +
-  filter rail + grid; a row opens the routed page); the Prospect Accounts toggle remains until the
-  cutover retires it with redirects. `contactsHrefForCompany` (prospect `searchUrlState`) is the
-  cross-surface "view contacts" deep-link builder
+  deep-link here · `features/accounts/` (was `features/companies` — renamed by the search-consolidation
+  cutover) — the routed `/companies/:accountId` page (MI-1): the account drawer's content on a canonical
+  URL — firmographic header + Watch toggle (auto-created "Watched accounts" list) + the SAME prospect-slice
+  sections (headcount, technologies, displacement, alumni, re-exported via the prospect barrel) + the
+  account signal timeline. `GET /api/v1/accounts/:accountId` (account-intelligence routes,
+  `accountSearchRepository.getMaskedById` — search's own SELECTION, so page and grid never disagree) is its
+  base read. **The `/companies` rail destination is RETIRED** (operator decision 2026-08-21,
+  [search-consolidation](./planning/search-consolidation/README.md)): its index became the **Accounts tab**
+  on `/search` (`AccountsPane`), its markets board moved to `/search/markets`, and `/companies` +
+  `/companies/markets` are one-release redirect pages. `/companies/:accountId` survives as a route until
+  the profile drawer lands. `contactsHrefForCompany` (prospect `searchUrlState`) is the cross-surface
+  "view contacts" deep-link builder, now pointing at `/search`
 - **core:** `alerts/fanoutSignals.ts` (`fanoutSignalsToWorkspace` — the per-workspace delivery half: one
   `withTenantTx`, RLS ENFORCING, redeliveries collapse on the `(workspace, master_signal_id)` unique wall)
 - **db:** `signalFanoutRepository.ts` (owner-conn census — new company-subject `master_signals` since a
@@ -736,11 +773,19 @@ The `(shell)/settings/*` routes mount a two-column `SettingsScopeLayout` (scope 
 > `features.account-intelligence.api`, while its UI — `accountIntelligenceApi.ts`, `useAccountTechnologies.ts`,
 > `AccountTechnologySections.tsx` — lives in `features.prospect.web`, because the drawer it renders into is a
 > Prospect surface. One file, one home; the cross-link lives here rather than in the index.
+>
+> **`Prospect` and `Companies` are gone as destinations** (operator decision 2026-08-21,
+> [search-consolidation](./planning/search-consolidation/README.md)). One **Search** destination now hosts
+> both as tabs, so the two rows below are two *tabs of one route*, not two routes. `/prospect`,
+> `/companies` and `/companies/markets` are one-release redirect pages. Note the folder names deliberately
+> did **not** all follow: the People slice stays `features/prospect` (the JSON buckets by path and nothing
+> in it moved), while `features/companies` → `features/accounts` because its contents genuinely changed.
 
 | Destination | Surfaces domains | Route |
 |---|---|---|
 | **Home** | home, notifications | `(shell)/home` |
-| **Prospect** | reveal, import, search, account-search, ai, lists, tags, pipeline-stages, custom-fields, saved-searches, enrichment, scoring, contacts-bulk, **account-intelligence** | `(shell)/prospect` |
+| **Search** — People tab | reveal, import, search, ai, lists, tags, pipeline-stages, custom-fields, saved-searches, enrichment, scoring, contacts-bulk | `(shell)/search` |
+| **Search** — Accounts tab | account-search, **account-intelligence**, alerts (watchlists), market rollups | `(shell)/search?tab=accounts` · board at `(shell)/search/markets` |
 | **Sequences** | outreach, email, templates | `(shell)/sequences` |
 | **Inbox** | inbox | `(shell)/inbox` |
 | **Reports** | reports, data-health | `(shell)/reports` |
@@ -892,9 +937,15 @@ flowchart TD
 - **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
-- **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `auth/callback`); `components/shell/*`
+- **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `prospect`, `companies`,
+  `auth/callback` — the last three are one-release redirect pages from the search-consolidation cutover);
+  `components/shell/*`
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
-  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`,
+  WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); **`components/search/*`** — the Search
+  destination's shell (`SearchDrawer`, `SearchTabs`, `useDrawerCollapsed`, `useSearchTab` +
+  `searchTabUrlState`). It is deliberately *not* a feature: both panes (`features/prospect`,
+  `features/accounts`) and the composer (`features/search`) import it, and a feature-resident drawer would
+  close an import cycle that `bun run lint:boundaries` rejects (`no-circular`); `lib/` (`authClient`, `pkce`, `publicConfig`,
   `queryKeys`, plus the two seams every slice's `api.ts` uses: **`problemMessage`** — the single RFC 9457
   problem-body→sentence reader, and **`maybeList`** — the `{items, available}` envelope with the
   `isUnavailable` 404/501 predicate that tells a dark backend apart from a real failure. Both were private
@@ -1051,4 +1102,32 @@ flowchart TD
   resolver + the SSE push handler that turns `contact.lookup_updated` into a fresh `SUBJECT_STATUS`) and its
   test; the bus router now imports the singleton instead of holding its own. No new domain/warning;
   unassigned holds at **2**. Doc-15 §13 option D, consumer step (P2 step 4).
+
+  2026-08-21 refresh (search consolidation, stage 1 — [`docs/planning/search-consolidation/`](./planning/search-consolidation/README.md)):
+  2205 → 2216 files, 90 → **89** code-bearing domains. The operator retired the `Companies` destination and
+  renamed `Prospect` to **Search**, one surface with People and Accounts as tabs. This partially reverses
+  **D-9** (the MI-1 IA regroup ratified 2026-08-19) and is recorded in `docs/strategy/decisions.md` per
+  rule 6 — a ratified decision is never reversed silently.
+
+  What moved, and the one thing that did not:
+  - `features/companies` → **`features/accounts`** (`CompaniesIndexPage` → `AccountsPane`,
+    `companies.module.css` → `accounts.module.css`). The domain count DROPS by one because `accounts`
+    already existed as a core-only domain (`packages/core/src/accounts/*`) and the web slice merged into
+    it rather than minting a new one — `companies` disappeared entirely.
+  - `features/prospect` **kept its name** (`ProspectPage` → `PeoplePane` inside it). The JSON buckets by
+    path, nothing in the slice moved, and renaming a 95-file folder to match a destination label is churn
+    in correctness-bearing code for a cosmetic gain — the same reasoning that aliased `ingestion → ingest`
+    instead of renaming the folder.
+  - New `features/search` (composer, one file) and new **`shared["apps/web/components"]/search/*`** (the
+    drawer, tabs, `?tab` codec, drawer-preference hook). The shell sits in `components/` rather than a
+    feature **because `lint:boundaries` enforces `no-circular`**: both panes and the composer import it, and
+    a feature-resident drawer closes a cycle through the barrels. Boundary run after the change: **0 errors.**
+  - Routes: `(shell)/search` + `(shell)/search/markets` are real; `(shell)/prospect`, `(shell)/companies`
+    and `(shell)/companies/markets` are `redirect()` pages carrying their query strings forward (both URL
+    codecs survive the move). `(shell)/companies/[accountId]` is still a real route until the profile
+    drawer lands. All four are `REMOVE AFTER` one release.
+  - **Deleted:** `features/prospect/components/FilterRail.tsx` — the MVP client-side-filter rail, dead since
+    the server-search rewrite: exported from the barrel, rendered nowhere.
+
+  No new unassigned entries and no new warnings; unassigned holds at **2** (the same two repositories).
 ```

@@ -40,13 +40,13 @@ const TYPE_HREF: Record<NotificationType, string> = {
   import_complete: "/imports",
   dsar_update: "/settings",
   // Safety net only — job_change always carries a contact entity, so hrefFor deep-links to the record.
-  job_change: "/prospect",
+  job_change: "/search",
   account_signal: "/signals",
   system: "/home",
 };
 
 function hrefFor(n: Notification): string {
-  if (n.entityType === "contact" && n.entityId) return `/prospect?contact=${n.entityId}`;
+  if (n.entityType === "contact" && n.entityId) return `/search?contact=${n.entityId}`;
   // An import notification carries entity ('import_job', jobId) — link to that durable job page (S-U5).
   if (n.entityType === "import_job" && n.entityId) return `/imports/${n.entityId}`;
   return TYPE_HREF[n.type] ?? "/home";

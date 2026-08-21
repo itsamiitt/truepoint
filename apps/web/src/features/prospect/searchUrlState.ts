@@ -80,7 +80,7 @@ function fromBase64Url(s: string): Uint8Array {
   return out;
 }
 
-/** Deep-link: /prospect pre-filtered to ONE company (the account drawer / company page "View contacts").
+/** Deep-link: /search pre-filtered to ONE company (the account drawer / company page "View contacts").
  *  `pin` is the account's domain when known (the precise key) else its name — the backend ilike-matches the
  *  `company` term against accounts.domain / accounts.name / contacts.emailDomain. */
 export function contactsHrefForCompany(pin: string): string {
@@ -89,5 +89,5 @@ export function contactsHrefForCompany(pin: string): string {
     ...base,
     filters: [{ kind: "term", field: "company", op: "include", values: [pin] }],
   });
-  return `/prospect?${params.toString()}`;
+  return `/search?${params.toString()}`;
 }

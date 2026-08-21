@@ -51,7 +51,7 @@ const TYPE_HREF: Record<NotificationType, string> = {
   dsar_update: "/settings",
   // Falls back only when the row carries no entity; job_change always does, so hrefFor deep-links to the
   // contact and this is the safety net.
-  job_change: "/prospect",
+  job_change: "/search",
   account_signal: "/signals",
   system: "/home",
 };
@@ -59,7 +59,7 @@ const TYPE_HREF: Record<NotificationType, string> = {
 /** Deep-link: prefer the entity link when the row carries one; else the type's default destination. An import
  *  notification carries entity ('import_job', jobId) — link straight to that durable job page (11 §5, S-U5). */
 function hrefFor(n: Notification): string {
-  if (n.entityType === "contact" && n.entityId) return `/prospect?contact=${n.entityId}`;
+  if (n.entityType === "contact" && n.entityId) return `/search?contact=${n.entityId}`;
   if (n.entityType === "import_job" && n.entityId) return `/imports/${n.entityId}`;
   return TYPE_HREF[n.type] ?? "/home";
 }

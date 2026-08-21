@@ -1,8 +1,9 @@
-// Public surface of the prospect feature slice — the page component the (shell)/prospect route renders.
-export { ProspectPage } from "./components/ProspectPage";
+// Public surface of the prospect feature slice — the People pane the /search route mounts, plus the
+// shared masked-grid/bulk/typeahead surface other features reuse through this barrel.
+export { PeoplePane } from "./components/PeoplePane";
 
 // Prospect-search redesign (24): the results toolbar (sort + column chooser), the lightweight QuickView
-// preview Drawer, the per-row overflow menu, and the per-browser Recent-searches row. ProspectPage composes
+// preview Drawer, the per-row overflow menu, and the per-browser Recent-searches row. PeoplePane composes
 // these; they're exported for reuse/testing and to keep the slice surface explicit.
 export { ProspectToolbar } from "./components/ProspectToolbar";
 export { QuickViewDrawer } from "./components/QuickViewDrawer";
@@ -29,8 +30,8 @@ export { displayName, emailGlyphFor, maskedEmail } from "./types";
 export { bulkEnrich, bulkEstimate } from "./bulkActionsApi";
 
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
-// Wire <FilterRail onChange={setFilters}/> + useProspectSearch() into ProspectPage's left rail + grid.
-export { FilterRail } from "./components/FilterRail";
+// Wire useProspectSearch() into PeoplePane's grid; FilterPanel renders FILTER_GROUPS inside the shell drawer.
+
 export { FacetTypeahead } from "./components/FacetTypeahead";
 export { useTypeahead } from "./hooks/useTypeahead";
 
@@ -42,7 +43,7 @@ export { useStages } from "./hooks/useStages";
 export { fetchStages, createStage, updateStage, assignStage } from "./stagesApi";
 // Saved searches / segments (M8, 24 §8): "Save search" + the apply/rename/delete list for the rail. Wire
 // <SaveSearchPanel currentQuery={…} onApply={(f) => { setText(f.text ?? ""); setFilters(f.filters); }}/>
-// into ProspectPage's left rail; the panel re-runs the search via useProspectSearch on apply.
+// into PeoplePane's filter rail; the panel re-runs the search via useProspectSearch on apply.
 export { SaveSearchPanel } from "./components/SaveSearchPanel";
 export { useSavedSearches } from "./hooks/useSavedSearches";
 export {
@@ -53,7 +54,7 @@ export {
 } from "./savedSearchApi";
 export { searchContacts, suggestField, fetchFacetCounts, aiSearch } from "./searchApi";
 
-// Company-level (accounts) search (24, ADR-0035): the firmographic sibling of the Contacts surface. ProspectPage
+// Company-level (accounts) search (24, ADR-0035): the firmographic sibling of the Contacts surface. AccountsPane
 // renders these under the "Accounts" scope (filter rail + results grid + read-only detail drawer), driven by
 // useAccountSearch + useAccountFacetCounts against the real /account-search API. Exported for reuse/testing.
 export { AccountFilterPanel } from "./components/AccountFilterPanel";

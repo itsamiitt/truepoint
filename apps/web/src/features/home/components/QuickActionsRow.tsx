@@ -10,7 +10,7 @@ import Link from "next/link";
 import styles from "./HomePage.module.css";
 
 const ACTIONS: { label: string; href: string; icon: IconComponent }[] = [
-  { label: "New search", href: "/prospect", icon: Search },
+  { label: "New search", href: "/search", icon: Search },
   { label: "Import contacts", href: "/import", icon: Download },
   { label: "Start sequence", href: "/sequences", icon: Send },
 ];
