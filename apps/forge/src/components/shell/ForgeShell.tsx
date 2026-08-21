@@ -17,7 +17,6 @@ import { StaffMeProvider, useStaffMe } from "@/lib/staffMe";
 import {
   AppShellFrame,
   Brandmark,
-  CommandPalette,
   DensityToggle,
   ShortcutsButton,
   ShortcutsDialog,
@@ -28,6 +27,13 @@ import {
 } from "@leadwolf/app-shell";
 import { Icon, TpButton } from "@leadwolf/ui";
 import { Globe } from "lucide-react";
+import dynamic from "next/dynamic";
+
+// Cmd-K palette off the first load, via its own subpath (perf-checklist PA-3 — see apps/web AppShell).
+const CommandPalette = dynamic(
+  () => import("@leadwolf/app-shell/palette").then((m) => m.CommandPalette),
+  { ssr: false },
+);
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { DESTINATIONS, sectionTitleFor } from "./navConfig";
