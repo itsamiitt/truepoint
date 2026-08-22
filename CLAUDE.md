@@ -101,8 +101,13 @@ news/social feeds. See 04-opportunity-scores.md.
   var: `withTenantTx` → role-identity proofs fail with `session_user` = `postgres`; a WRONG app password fails
   `28P01` (invalid password), which looks like the RLS wall is broken; `withForgeTx` with no forge password →
   `forgeSchemaIsolation.itest.ts` reports `postgres` where it expects `leadwolf_forge`, which looks like the
-  ADR-0047 forge↔tenant firewall has failed. All three are the environment, not the code. A few files need
-  Redis (session revocation) and are unrunnable without it.
+  ADR-0047 forge↔tenant firewall has failed. All three are the environment, not the code. **The suites that
+  need more than Postgres, named** (a full sweep on 2026-08-22 ran 121 of the 122 `packages/db` files):
+  `workspaceSwitch` needs Redis (session revocation) and fails with repeated `[ioredis] Unhandled error
+  event`; `apps/workers/test/imports.{queue,conflict,resilience}` and `importFairness` need a container
+  runtime and fail with `Could not find a working container runtime strategy`; `importSoak.nightly` and
+  `importSoak.fairness.nightly` are nightly by name and not part of a normal run. Everything else runs against
+  a plain external Postgres.
 - **Never assert a rejected DB call with `expect(...).rejects`.** A promise holding a pooled connection can be
   left unsettled, and the symptom is a HANG — of that assertion AND of every later query in the file, since
   the itest pools are `max: 1`. Use an explicit try/catch that returns the error. This has bitten
