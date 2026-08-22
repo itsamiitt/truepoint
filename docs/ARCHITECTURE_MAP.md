@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2381 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2382 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,17 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (title-taxonomy integrity, 091e9e44): 2381 → 2382 files —
+  `packages/core/src/search/titleTaxonomy.test.ts`, into the existing `features["search"].core` slice.
+
+  `titleTaxonomy.ts` is marked "Data only — no logic" and had no test of any kind. The data still has
+  invariants and every way of breaking them is silent: `canonicalizeTitle`'s `buildLookup()` states that
+  "first writer wins on collisions", so two titles sharing a normalized surface form do not error — the
+  earlier one takes the key and the other becomes unreachable through that spelling. Worth knowing before
+  extending the list (its header says the production taxonomy is backfilled from O*NET-SOC/ESCO): compare
+  aliases **normalized**, never raw. `normalizeTitle` expands tokens, so "chief exec" and "chief executive"
+  are different strings and the same key — a raw-duplicate check reports clean over exactly that collision.
 
   Two guards on the tenancy wall landed together and are worth knowing about before touching
   `packages/db`. `rlsCoverage.test.ts` no longer reads only `pgTable` — it reads the MIGRATIONS too, so a

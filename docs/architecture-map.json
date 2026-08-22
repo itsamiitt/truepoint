@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2381,
-  "fileSetHash": "sha256:0793a833236ef79afb2c4dff038b7b4a68e6790c6e364fb6a128b140532197be",
+  "fileCount": 2382,
+  "fileSetHash": "sha256:13bec04bf6603ab6cfc4ea2482ff7a72d2c30ed86b7651851d7f8e091fbc3c81",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1936,6 +1936,7 @@
         "packages/core/src/search/normalizeTitle.ts",
         "packages/core/src/search/planTitleFilter.test.ts",
         "packages/core/src/search/planTitleFilter.ts",
+        "packages/core/src/search/titleTaxonomy.test.ts",
         "packages/core/src/search/titleTaxonomy.ts"
       ],
       "db": [
