@@ -95,6 +95,20 @@ news/social feeds. See 04-opportunity-scores.md.
   the content is already correct, and a 2,500-file rewrite collides with every other session. To read the
   ~17 real findings before renormalising, scope the check (`bunx biome check apps/doc/src`) — a
   freshly-written LF file passes cleanly, which is how the split was measured.
+  **To see exactly what CI sees, materialise the INDEX (which is LF) and check that:**
+  ```sh
+  rm -rf /tmp/lfview && mkdir -p /tmp/lfview && git archive HEAD | tar -x -C /tmp/lfview
+  cd /tmp/lfview && bunx --bun @biomejs/biome@1.9.4 check .
+  ```
+  Same 2,536 files and the same error count as the runner, with no writes to your working copy. This is the
+  only way to tell the ~20 real findings from the 1,582 line-ending ones — `bunx biome lint .` skips the
+  FORMATTER, so it reports zero while CI fails. Two classes hide there and nothing local will show you them:
+  genuine format drift in a file you edited after its last `--write`, and formatter-adjacent lint rules.
+  **Biome suppression placement, learned twice:** `// biome-ignore lint/x/Rule:` binds to the node the
+  diagnostic is REPORTED on and must be the **last line before it** — a11y rules often report on the
+  `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
+  directive last; a wrapped comment between them makes it bind to nothing and biome says `suppressions/unused`
+  while the rule keeps firing.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
