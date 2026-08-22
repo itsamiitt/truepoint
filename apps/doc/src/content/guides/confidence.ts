@@ -16,7 +16,12 @@ export const CONFIDENCE: Guide = {
   blocks: [
     {
       kind: "p",
-      text: "Every field the API returns is accompanied by an entry in field_provenance describing where the value came from, when it was last seen, and how many independent sources agree. A record without that context is a guess presented as a fact, and this API will not hand you one.",
+      text: "Person and company profile fields are returned with an entry in field_provenance describing where the value came from, when it was last seen, and how many independent sources agree. A record without that context is a guess presented as a fact, and this API will not hand you one.",
+    },
+    {
+      kind: "note",
+      tone: "warning",
+      text: "No callable endpoint returns field_provenance yet. Both endpoints that carry it — person enrichment and search — are planned, not built, and their pages say so. What follows is the published model you can design against, not a description of bytes you can fetch today. The one freshness signal a live endpoint does return is company.last_updated on enrichment.",
     },
     {
       kind: "code",
@@ -53,6 +58,20 @@ export const CONFIDENCE: Guide = {
           "A hypothesis. Never present it to a person as a verified fact.",
         ],
       ],
+    },
+    { kind: "h2", text: "What the store holds, and why this is a projection of it" },
+    {
+      kind: "p",
+      text: "Internally a field carries a source label, a confidence between 0 and 1, an observed-at and a last-verified-at timestamp, and a flag marking a human correction that no later import may overwrite. The class above is a projection of that, computed at the point the API answers — not a value sitting in a column.",
+    },
+    {
+      kind: "p",
+      text: "The projection exists for a reason rather than as a convenience. The stored source label names the specific upstream a value came from, and publishing that per field would disclose our supplier arrangements one record at a time; it is also the same category of leak that stops us naming the contributing workspace behind any value. So what leaves the system is the property you can act on — how strongly a value is attested — and not the identity of who attested it.",
+    },
+    {
+      kind: "note",
+      tone: "info",
+      text: "The exact shape of that projection is an open decision, recorded as C5 in ADR-0048 rather than settled quietly here. If it changes before person enrichment ships, it changes on this page and in the changelog on the same day.",
     },
     { kind: "h2", text: "Recency matters more than the class for some fields" },
     {

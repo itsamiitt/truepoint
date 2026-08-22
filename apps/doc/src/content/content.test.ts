@@ -204,6 +204,29 @@ describe("the site does not describe headers the API never sends", () => {
   });
 });
 
+describe("no callable endpoint promises a provenance block that does not exist yet", () => {
+  // ADR-0048 C5. The site publishes a field_provenance descriptor of { sources, class, last_seen }; the
+  // shipped store (packages/types/src/fieldProvenance.ts) holds { src, mth, conf, obs, ver, pin, … } — a
+  // source label and a 0–1 confidence, with no agreement count and no class. The published shape is a
+  // PROJECTION nobody has built or specified yet, so it may only appear on endpoints marked planned. The day
+  // one of them becomes callable, this test fails and forces the projection to be real first.
+  for (const endpoint of ENDPOINTS) {
+    if (endpoint.availability === "planned") continue;
+    test(`${endpoint.slug} (callable) declares no field_provenance return`, () => {
+      const names = endpoint.returns.map((field) => field.name);
+      expect(names.some((name) => name.includes("field_provenance"))).toBe(false);
+      expect(endpoint.example.response).not.toContain("field_provenance");
+    });
+  }
+
+  test("the guide says plainly that nothing callable emits it", () => {
+    const confidence = GUIDES.find((guide) => guide.slug === "confidence");
+    expect(confidence).toBeDefined();
+    const copy = blockText((confidence as { blocks: readonly Block[] }).blocks).join(" ");
+    expect(copy).toContain("No callable endpoint returns field_provenance yet");
+  });
+});
+
 describe("nothing claims to be live before it is", () => {
   test("every endpoint, dataset and plan declares its availability", () => {
     const declared = [

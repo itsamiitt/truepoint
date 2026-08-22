@@ -88,7 +88,7 @@ See Conflict C1.
 
 ## Conflicts surfaced (rule 6 — recorded, NOT silently reinterpreted)
 
-The brief and the shipped strategy disagree in four places. None is resolved by this ADR; each is
+The brief and the shipped strategy disagree in five places. None is resolved by this ADR; each is
 carried as an open decision for the operator.
 
 **C1 — Contributor-earned credits (BLOCKING; `CLAUDE.md` Rule 7).**
@@ -129,6 +129,30 @@ pages — plan pricing, credit costs, dataset catalogue — describe a business 
 not ratified. They ship as *published intent*, clearly dated, and the operator owes a `decisions.md`
 entry ratifying the fourth market before any metering, billing, or public API code is written
 against it.
+
+**C5 — The published provenance shape is not the stored one (surfaced 2026-08-22).**
+`/docs/confidence` publishes a per-field descriptor of `{ sources, class, last_seen }` with a four-value
+class vocabulary (`verified` | `corroborated` | `single-source` | `inferred`), and the planned
+`POST /person/enrich` example returns it. The SHIPPED substrate stores something different:
+`packages/types/src/fieldProvenance.ts` defines the descriptor as
+`{ src, mth, conf, obs, ver, pin, by, at, cf }` — a platform source LABEL, a match method, a confidence in
+[0,1], observed-at and last-verified-at timestamps, and the human-correction pin. There is no stored count
+of agreeing sources and no stored class.
+
+Neither side is simply wrong, which is why this is a conflict rather than a bug. The stored keys are
+deliberately short and internal (billions of rows x ~15 fields), and `src` carries values like
+`provider:zoominfo` — publishing that verbatim would name a commercial supplier per field, a disclosure
+decision nobody has taken, and the same class of leak `PLAN_03 §C2` forbids for contributing workspaces.
+A public egress shape therefore has to be a DERIVED projection, and what it derives — how a confidence
+number and a source label become a class word, and whether an agreement count is even computable from a
+store that keeps only the winning descriptor — is an unmade product decision.
+
+**Resolution taken here:** nothing is silently reinterpreted. The guide keeps the class vocabulary, because
+it is the model the product intends and the one that makes the in-app badge legible (outcome S-10), but it
+now states plainly that no callable endpoint emits `field_provenance` today — both endpoints that carry it
+are `planned` — and it describes what the store actually records. A test forbids any `available`/`beta`
+endpoint from declaring a `field_provenance` return until the projection exists. The operator owes a
+`decisions.md` entry defining the public projection before `POST /person/enrich` ships.
 
 ## Consequences
 
