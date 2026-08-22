@@ -86,6 +86,14 @@ news/social feeds. See 04-opportunity-scores.md.
   `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
   **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
   were listed here but never actually enforced. All of them are steps in the gates job now.
+  **`bun run lint` on a pre-2026-08-22 Windows checkout reports ~1,599 errors, and 1,582 of them are the
+  line endings, not the code.** Biome formats to LF; `core.autocrlf=true` wrote CRLF to disk; every tracked
+  source file therefore "needs to be formatted" while CI (Linux, LF) sees none of it. `.gitattributes` now
+  pins `eol=lf`, so a fresh checkout matches CI — an existing working copy keeps its CRLF until the files
+  are checked out again or `git add --renormalize .` is run. Do NOT "fix" this by reformatting the tree:
+  the content is already correct, and a 2,500-file rewrite collides with every other session. To read the
+  ~17 real findings before renormalising, scope the check (`bunx biome check apps/doc/src`) — a
+  freshly-written LF file passes cleanly, which is how the split was measured.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
