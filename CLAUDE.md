@@ -74,7 +74,18 @@ news/social feeds. See 04-opportunity-scores.md.
   integrations,search,types,ui}`.
 - **Gates:** `bun run lint` · `bun run typecheck` (runs `typecheck` AND `typecheck:tests` — test files
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
-  `bun run lint:lockfile` · `bun run db:migrate`.
+  `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
+  `bun run lint:secrets` · `bun run db:migrate`.
+  The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
+  its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
+  shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
+  `deploy/env.production.template` without a recorded reason — load-bearing since migration 0119 turned the
+  per-tenant half of most flags globally on, leaving the env half as the only thing keeping dark work dark;
+  `secrets` scans tracked files for credential shapes and for this product's PII formats
+  (`.csv`/`.xlsx`/`.xls`/`.rdb`). The last two carry a declared escape hatch (`lint-secrets-ok:`,
+  `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
+  **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
+  were listed here but never actually enforced. All of them are steps in the gates job now.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
