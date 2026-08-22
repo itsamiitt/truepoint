@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2368,
-  "fileSetHash": "sha256:ef0434a49f69de12d879bb311166ab828a66ccf13eb2746ab7c62f33b40ddb5d",
+  "fileCount": 2369,
+  "fileSetHash": "sha256:4181392236d740022923e98cff01a5a0d2a05e4d6414dee515bdde035e046ce1",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2694,6 +2694,7 @@
       "apps/doc/src/content/guides/index.ts",
       "apps/doc/src/content/guides/pagination.ts",
       "apps/doc/src/content/guides/quickstart.ts",
+      "apps/doc/src/content/guides/versioning.ts",
       "apps/doc/src/content/machineReference.test.ts",
       "apps/doc/src/content/machineReference.ts",
       "apps/doc/src/content/openapi.test.ts",

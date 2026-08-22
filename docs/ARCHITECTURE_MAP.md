@@ -1322,4 +1322,19 @@ flowchart TD
   The same commit closed a third documentation defect the audit surfaced: the pagination guide told readers
   to back off by a `Retry-After` HEADER, which `apps/api/src/middleware/error.ts` does not send — the
   interval is a `retryAfterSeconds` body member. A client written from that sentence waits zero seconds.
+  2026-08-22 refresh (versioning guide, 53e3c14c): 2368 → 2369 files — one new content module,
+  `content/guides/versioning.ts`, into the existing `shared["apps/doc/content"]` area. No new domain, no
+  new warning, unassigned holds at **2**.
+
+  The guide closes a gap the site had been implying rather than stating: four mechanisms (`/v1` in every
+  path, the availability badge, the changelog, `x-availability` in the OpenAPI document) all pointed at a
+  change policy that existed nowhere — not in the strategy pack, not in an ADR. It publishes the technical
+  half (what is additive, what is breaking, how a change is announced) and deliberately withholds the
+  commercial half: no notice period is quantified, because that belongs in an agreement and a number
+  invented on a documentation page reads as decided. A test forbids one from appearing anywhere on the site.
+
+  The same commit corrected two documentation defects the audit surfaced on `/trust` — the per-field
+  provenance promise (ADR-0048 C5) — and recorded a third it could not fix: the sourcing statement describes
+  a crawler this repository does not contain (ADR-0048 C6), left untouched because rule 3 forbids an agent
+  quietly narrowing a lawful-basis claim.
 ```
