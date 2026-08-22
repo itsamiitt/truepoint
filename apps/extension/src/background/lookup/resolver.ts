@@ -5,6 +5,7 @@
 import type { SubjectStatus } from "../../shared/types.ts";
 import type { RuntimeContext } from "../context.ts";
 import { LookupCache } from "./cache.ts";
+import { intelCache } from "./intel.ts";
 
 /** The single warm cache for LOOKUP resolution. Memory-only (dies with the worker → a cold worker
  *  re-resolves), shared across the bus and the SSE consumer so a pushed update invalidates the same entry the
@@ -65,7 +66,11 @@ export async function refreshSubjectFromEvent(
 ): Promise<{ subjectKey: string; status: SubjectStatus } | null> {
   const target = subjectFromLookupEvent(payload);
   if (!target) return null;
+  // BOTH caches, or the push only half-lands: the hover card would show the fresh status while the panel
+  // kept serving its five-minute-old intel for the same person. The panel is the surface actually reading
+  // the landed data, so it is the one that most needs the invalidation.
   lookupCache.invalidate(target.subjectKey);
+  intelCache.invalidate(target.subjectKey);
   try {
     const status = await lookupCache.resolve(target.subjectKey, () =>
       resolveSubjectStatus(ctx, target.subjectKey, target.sourceUrl),

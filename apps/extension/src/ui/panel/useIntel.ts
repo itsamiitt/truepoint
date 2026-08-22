@@ -99,6 +99,22 @@ export function useIntel(subject: ViewedSubject | null): UseIntel {
     read(subject);
   }, [subject, read]);
 
+  // A landing that happens WHILE the panel is open (the SSE `contact.lookup_updated` push, or a capture
+  // draining in the background) reaches the surfaces as SUBJECT_STATUS / STATE_CHANGED. Without this the
+  // panel showed whatever it fetched on open until the user navigated away and back — which is exactly the
+  // "reopen to see it" behaviour the realtime pipeline exists to remove.
+  //
+  // Silent: the payload on screen stays up while the re-read runs, so a background refresh never blanks a
+  // card the user is reading.
+  useEffect(() => {
+    if (!subject) return;
+    return onBroadcast((msg) => {
+      if (msg.type === "SUBJECT_STATUS" && msg.subjectKey !== subject.subjectKey) return;
+      if (msg.type === "SUBJECT_VIEWED") return; // handled by usePanelSubject, which re-keys this hook
+      read(subject, { silent: true });
+    });
+  }, [subject, read]);
+
   return {
     state,
     recapture: () => read(subject, { force: true }),
