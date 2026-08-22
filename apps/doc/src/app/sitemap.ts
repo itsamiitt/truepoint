@@ -18,6 +18,7 @@ const STATIC_PATHS = [
   "/datasets",
   "/docs",
   "/docs/playground",
+  "/docs/machine-reference",
   "/trust",
   "/changelog",
 ];
