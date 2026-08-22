@@ -13,7 +13,8 @@
 .input {
   width: 100%;
   height: 32px;
-  padding: 0 var(--tp-space-3);
+  /* Right padding reserves the "/" affordance's lane so the placeholder never runs under it. */
+  padding: 0 var(--tp-space-6) 0 var(--tp-space-3);
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--tp-radius-sm);
   background: var(--tp-surface-2);
@@ -25,6 +26,31 @@
 }
 .input::placeholder {
   color: var(--tp-ink-3);
+}
+
+/* The "/" affordance. Absolutely positioned so it cannot reflow the input, and the input reserves room for it
+   on the right so a long placeholder never runs underneath. ink-3 on surface-2 is 4.63:1 — a pair
+   contrast.test.ts already asserts. It is removed from the DOM on focus rather than faded, so it can never
+   sit behind what someone is typing. */
+.shortcut {
+  position: absolute;
+  top: 50%;
+  right: var(--tp-space-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 4px;
+  background: var(--tp-surface);
+  color: var(--tp-ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
 }
 .input:hover {
   background: var(--tp-surface);

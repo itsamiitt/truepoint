@@ -172,6 +172,16 @@ export function DocsSearch() {
         onKeyDown={onKeyDown}
       />
 
+      {/* The "/" shortcut is worth having precisely because a reader tries it without being told — but only
+          if they know it is there. Shown while the box is idle and hidden the moment it is focused or has a
+          value, so it never sits behind typed text. Decorative and aria-hidden: the input already has an
+          accessible name, and a screen-reader user reaching this control has not used the shortcut. */}
+      {!open && query === "" ? (
+        <kbd className={styles.shortcut} aria-hidden="true">
+          /
+        </kbd>
+      ) : null}
+
       {/* The result count, for a reader who cannot see the list appear. Assertive would interrupt their own
           typing, so this is polite and deliberately terse. aria-live rather than role="status" — the role is
           only sugar for exactly this pair of attributes, and spelling it out keeps the element a plain span
