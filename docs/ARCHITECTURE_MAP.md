@@ -991,6 +991,16 @@ flowchart TD
 
 ## Notes / unbucketed & warnings
 
+- **`cascade/` is TRACKED but deliberately OUTSIDE this map (34 files).** The generator’s roots are `apps`
+  and `packages`, so a reader of this index would not learn it exists. It is a self-contained sub-project —
+  its own workspace, its own Postgres schema, no imports from `apps/*` or `packages/*`, prefixed ULIDs and
+  no tenancy where TruePoint uses uuid-v7 + RLS — documented in [`cascade/README.md`](../cascade/README.md)
+  and built by its own CI job (`cascade:`, `working-directory: cascade`, its own `bun install` then
+  `bun test`). Fusing it with TruePoint’s Layer-0 is an open decision recorded there, not an oversight.
+  Practical consequence: a bare `bun test` AT THE REPO ROOT fails with `Cannot find module
+  @electric-sql/pglite`, because cascade’s dependencies install under `cascade/`. That is the separation
+  working, not a broken gate — run its suite with `cd cascade && bun install && bun test`. The monorepo’s
+  own CI unit step globs `find packages apps`, so the two never collide there.
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
   — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
   constraint, not a placement error.
