@@ -56,6 +56,7 @@ export const FOOTER_NAV: readonly { heading: string; links: readonly NavLink[] }
       { href: "/docs/authentication", label: "Authentication" },
       { href: "/docs/errors", label: "Errors" },
       { href: "/docs/confidence", label: "Confidence and provenance" },
+      { href: "/docs/versioning", label: "Versioning and change policy" },
       { href: "/docs/machine-reference", label: "Machine reference" },
     ],
   },

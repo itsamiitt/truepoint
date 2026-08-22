@@ -28,6 +28,7 @@ const PAGES = [
   "/docs/errors",
   "/docs/pagination",
   "/docs/confidence",
+  "/docs/versioning",
   "/docs/api/company-match",
   "/docs/api/company-enrich",
   "/docs/api/search",

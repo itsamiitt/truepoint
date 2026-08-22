@@ -235,6 +235,36 @@ describe("no callable endpoint promises a provenance block that does not exist y
   });
 });
 
+describe("the change policy publishes a mechanism, not an invented commitment", () => {
+  // The versioning guide is where a "we give you 90 days' notice" sentence would look most natural and be
+  // least backed. A notice period is a commercial commitment that belongs in an agreement and needs an
+  // operator decision (rule 1); a documentation page asserting one makes it look decided. The guide states
+  // the mechanism instead, and says plainly that the period is not published here.
+  const versioning = GUIDES.find((guide) => guide.slug === "versioning");
+
+  test("the guide exists — the four mechanisms pointing at it need somewhere to point", () => {
+    expect(versioning).toBeDefined();
+  });
+
+  test("no notice period is quantified anywhere on the site", () => {
+    const NOTICE = /\b\d+\s*(?:days?|weeks?|months?)['’]?\s*(?:of\s+)?(?:advance\s+)?notice/i;
+    expect(ALL_COPY.filter((line) => NOTICE.test(line))).toEqual([]);
+  });
+
+  test("beta is described as a contract that can still change", () => {
+    const copy = blockText((versioning as { blocks: readonly Block[] }).blocks).join(" ");
+    expect(copy).toMatch(/beta[^.]*contract can still change/i);
+  });
+
+  test("every channel the guide names is one the site actually serves", () => {
+    const copy = blockText((versioning as { blocks: readonly Block[] }).blocks).join(" ");
+    // Each of these is a real artifact with its own test file; naming one that did not exist would be the
+    // same class of defect this guide is trying to close.
+    expect(copy).toContain("/changelog.xml");
+    expect(copy).toContain("x-availability");
+  });
+});
+
 describe("nothing claims to be live before it is", () => {
   test("every endpoint, dataset and plan declares its availability", () => {
     const declared = [

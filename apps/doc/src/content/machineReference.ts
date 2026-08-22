@@ -19,6 +19,7 @@
 
 import { ENDPOINTS } from "./endpoints/index.ts";
 import { ERROR_TYPE_BASE } from "./endpoints/shared.ts";
+import { GUIDES } from "./guides/index.ts";
 import { OPENAPI_PATH, withheldEndpoints } from "./openapi.ts";
 import {
   CREDIT_ACTIONS,
@@ -90,6 +91,40 @@ const INTEGRATION_RULES: readonly string[] = [
 ];
 
 /**
+ * Render one prose guide as plain text.
+ *
+ * Only the change policy is included below, not every guide: this file is pasted into a context window, and
+ * the rules that stop an integration breaking are worth their bytes where a full prose dump is not. It is
+ * GENERATED from the guide rather than restated, so the two cannot disagree.
+ */
+function guideText(slug: string): string[] {
+  const guide = GUIDES.find((candidate) => candidate.slug === slug);
+  if (!guide) return [];
+  const lines: string[] = [];
+  for (const block of guide.blocks) {
+    switch (block.kind) {
+      case "h2":
+        lines.push("", block.text, "");
+        break;
+      case "p":
+      case "note":
+        lines.push(block.text, "");
+        break;
+      case "list":
+        lines.push(...block.items.map((item) => `- ${item}`), "");
+        break;
+      case "code":
+        lines.push(block.source, "");
+        break;
+      case "table":
+        lines.push(...block.rows.map((row) => `- ${row.join(" — ")}`), "");
+        break;
+    }
+  }
+  return lines;
+}
+
+/**
  * Build the full machine reference.
  *
  * Pure and deterministic — same content in, byte-identical text out — so the route that serves it can be
@@ -158,6 +193,8 @@ export function buildMachineReference(): string {
         `- ${plan.name} (${plan.availability}): ${plan.price} ${plan.cadence}, ${plan.credits}. ${plan.audience}`,
     ),
     "",
+    "## Change policy",
+    ...guideText("versioning"),
     "## Data subject requests",
     "",
     "To ask what we hold about a person, correct it, or have it removed, write to privacy@truepoint.in.",

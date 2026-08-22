@@ -8,6 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { ENDPOINTS } from "./endpoints/index.ts";
+import { GUIDES } from "./guides/index.ts";
 import { buildMachineReference } from "./machineReference.ts";
 import { PLANS } from "./pricing.ts";
 
@@ -77,6 +78,26 @@ describe("compliance rules the whole site carries (CLAUDE.md rule 7, ADR-0048)",
 
   test("it says plainly that keys do not belong in a browser", () => {
     expect(DOC).toContain("Never ship one to a browser");
+  });
+});
+
+describe("the change policy travels with the contract", () => {
+  // An assistant handed this file will answer "is it safe to depend on this field" from whatever is in it.
+  // The additive/breaking rules are exactly that answer, so they ride along rather than living only on a page
+  // the assistant did not fetch.
+  test("the additive and breaking rules are present", () => {
+    expect(DOC).toContain("## Change policy");
+    expect(DOC).toMatch(/Adding a new field to a response/);
+    expect(DOC).toMatch(/Removing or renaming a response field/);
+  });
+
+  test("it is generated from the guide, not restated", () => {
+    // Every line of the section must appear in the guide's own blocks; a hand-written copy here would drift.
+    const guide = GUIDES.find((candidate) => candidate.slug === "versioning");
+    expect(guide).toBeDefined();
+    const guideCopy = JSON.stringify(guide);
+    expect(guideCopy).toContain("Adding a new field to a response");
+    expect(guideCopy).toContain("Removing or renaming a response field");
   });
 });
 
