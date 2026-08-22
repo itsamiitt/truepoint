@@ -88,7 +88,7 @@ See Conflict C1.
 
 ## Conflicts surfaced (rule 6 — recorded, NOT silently reinterpreted)
 
-The brief and the shipped strategy disagree in five places. None is resolved by this ADR; each is
+The brief and the shipped strategy disagree in five places, and reading the published pages against the shipped code has surfaced one more. None is resolved by this ADR; each is
 carried as an open decision for the operator.
 
 **C1 — Contributor-earned credits (BLOCKING; `CLAUDE.md` Rule 7).**
@@ -153,6 +153,30 @@ now states plainly that no callable endpoint emits `field_provenance` today — 
 are `planned` — and it describes what the store actually records. A test forbids any `available`/`beta`
 endpoint from declaring a `field_provenance` return until the projection exists. The operator owes a
 `decisions.md` entry defining the public projection before `POST /person/enrich` ships.
+
+**C6 — The sourcing statement describes a crawler this repository does not contain (surfaced 2026-08-22; NOT
+edited, deliberately).**
+`/trust` opens its source list with *"Public web pages: company sites, career pages and public job postings,
+crawled directly, respecting robots.txt and rate-limited to be a polite visitor."* A repository-wide search
+finds no robots.txt parsing, no crawl scheduler, and no politeness/rate-limit layer for outbound page
+fetches anywhere outside `apps/doc`'s own `robots.ts` route. `master_job_postings` exists as a Layer-0 table
+with a repository and a read route, but nothing in this repo writes to it from a crawl.
+
+Two readings are possible and this ADR cannot choose between them: the claim is aspirational and currently
+unbacked, or the crawling runs in a system outside this repository. Both matter, differently — the first is
+a compliance statement we cannot evidence, the second is a supply path whose politeness behaviour nobody
+here can verify.
+
+**Why this was recorded rather than fixed.** `CLAUDE.md` rule 3 requires any change touching personal-data
+collection to state its compliance impact and pass the checklist, and to stop and ask when uncertain. The
+sourcing statement is the lawful-basis claim itself: softening it without knowing whether the crawler exists
+would risk making the page wrong in the opposite direction, and an agent is the wrong actor to quietly
+narrow a published data-ethics commitment. So the wording is untouched.
+
+**What the operator owes:** confirmation of whether a crawler exists and where. If it does, a pointer to it
+belongs in this ADR and its robots.txt/rate-limit behaviour should be evidenced by a test. If it does not,
+the bullet has to change, and that change is a `decisions.md` entry because it narrows what the public page
+claims about how data is sourced.
 
 ## Consequences
 

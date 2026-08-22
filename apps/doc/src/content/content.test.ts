@@ -225,6 +225,14 @@ describe("no callable endpoint promises a provenance block that does not exist y
     const copy = blockText((confidence as { blocks: readonly Block[] }).blocks).join(" ");
     expect(copy).toContain("No callable endpoint returns field_provenance yet");
   });
+
+  test("the trust page does not promise per-field provenance in the response today", () => {
+    // Same defect, second page. "What customers get in writing" listed per-field provenance in the API
+    // response as a present-tense fact, which is the strongest form the claim takes anywhere on the site —
+    // it is the page an enterprise buyer's reviewer reads.
+    const copy = TRUST_SECTIONS.flatMap((section) => blockText(section.blocks)).join(" ");
+    expect(copy).not.toMatch(/per-field provenance in the API response itself/i);
+  });
 });
 
 describe("nothing claims to be live before it is", () => {
