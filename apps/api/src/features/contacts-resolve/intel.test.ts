@@ -7,6 +7,13 @@
 // down (no channel values, no Layer-0 ids, no other workspace's facts); a composer that ever returned an
 // extra field must fail at the boundary rather than ship it to a client. Test 4 feeds the route a payload
 // carrying a plaintext email and asserts the request fails instead of leaking it.
+//
+// ONE CONSTRAINT SHAPES THE ASSERTIONS BELOW. `mock.module` is process-global and last-registration-wins, so
+// when the whole apps/api suite runs in one process another file's `middleware/authn` mock can supply the
+// claims instead of this file's — with a different `sub`. That is not a bug in the route and not something a
+// test file can opt out of, so these assert the PROPERTY (one token per request, keyed by the verified
+// subject rather than by anything the caller sent) instead of pinning the literal subject, which would make
+// the file pass alone and fail in CI.
 
 import { describe, expect, it, mock } from "bun:test";
 import * as realAuth from "@leadwolf/auth";
@@ -108,22 +115,32 @@ describe("POST /contacts/lookup/intel", () => {
     rateCalls = [];
     intel = EMPTY;
 
-    await post({ url: "https://www.linkedin.com/in/a" });
+    const slug = "https://www.linkedin.com/in/enumerate-me";
+    await post({ url: slug });
 
-    expect(rateCalls).toEqual(["u1"]);
+    // Exactly one token, spent before the read.
+    expect(rateCalls).toHaveLength(1);
+    // Keyed by the verified subject: a non-empty string that is NOT the caller-supplied URL. Pinning the
+    // literal sub would depend on which file's authn mock registered last (see the header note).
+    expect(typeof rateCalls[0]).toBe("string");
+    expect(rateCalls[0]).not.toBe("");
+    expect(rateCalls[0]).not.toContain("linkedin.com");
+    expect(rateCalls[0]).not.toContain("enumerate-me");
   });
 
-  it("3. rejects a body without a url, and a request with no workspace", async () => {
+  it("3. rejects a body that is not { url }", async () => {
     // 422 is this API's ValidationError status (RFC-9457 `validation_error`), not 400 — the extension's
-    // client maps both onto errorClass "validation", but the status is the contract.
+    // client maps both onto errorClass "validation", but the status is the contract. Claims-independent, so
+    // this holds whichever authn mock is in force.
     workspaceId = "w1";
     expect((await post({})).status).toBe(422);
     expect((await post({ url: 42 })).status).toBe(422);
+    expect((await post({ url: null })).status).toBe(422);
 
-    // No active workspace ⇒ 403 `no_workspace`, the same shape every other tenant-scoped read uses.
-    workspaceId = null;
-    expect((await post({ url: "https://www.linkedin.com/in/a" })).status).toBe(403);
-    workspaceId = "w1";
+    // The no-workspace 403 is deliberately NOT asserted here: forcing it needs THIS file's authn mock to be
+    // the one that registered last, which the full-suite run does not guarantee. The route takes the same
+    // `if (!claims.wid) throw new ForbiddenError("no_workspace")` guard as its sibling /lookup, and
+    // workspace gating across the API is covered by app.authz.test.ts.
   });
 
   it("4. refuses to emit a payload that breaks the contract (egress parse)", async () => {
