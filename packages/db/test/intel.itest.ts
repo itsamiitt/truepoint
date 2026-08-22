@@ -170,6 +170,7 @@ describe("M4 enrichment, verification & scoring DoD", () => {
         fields: ["jobTitle"],
         providers: [fixtureProvider()],
       }),
+      // itest-rejects-ok: awaits a core intel call whose AppError is thrown after its tx settles (suite verified 6 pass, no stall)
     ).rejects.toMatchObject({ code: "enrichment_budget_exhausted" });
     await admin`DELETE FROM provider_calls WHERE cost_micros = 50000000`;
   });

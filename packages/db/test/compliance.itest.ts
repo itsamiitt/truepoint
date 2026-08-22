@@ -207,6 +207,7 @@ describe("M5 compliance hardening DoD", () => {
         contactId: (tomb as { id: string }).id,
         revealType: "email",
       }),
+      // itest-rejects-ok: awaits a core compliance call whose AppError is thrown after its tx settles (suite verified 7 pass, no stall)
     ).rejects.toMatchObject({ code: "not_found" });
   });
 
@@ -225,6 +226,7 @@ describe("M5 compliance hardening DoD", () => {
         contactId: reimported,
         revealType: "email",
       }),
+      // itest-rejects-ok: awaits a core compliance call whose AppError is thrown after its tx settles (suite verified 7 pass, no stall)
     ).rejects.toMatchObject({ code: "suppressed" });
     const [aud] = await admin`
       SELECT count(*)::int AS n FROM audit_log
@@ -258,6 +260,7 @@ describe("M5 compliance hardening DoD", () => {
         contactId: lenaB,
         revealType: "email",
       }),
+      // itest-rejects-ok: awaits a core compliance call whose AppError is thrown after its tx settles (suite verified 7 pass, no stall)
     ).rejects.toMatchObject({ code: "suppressed" });
   });
 

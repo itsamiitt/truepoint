@@ -84,6 +84,19 @@ jobs:
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)
         run: bun run lint:boundaries
+      # The three script-based gates CLAUDE.md lists alongside biome and dependency-cruiser. They were NOT
+      # running here — `bun run lint` is `biome check .` and nothing else — so two documented gates existed
+      # only as a habit, and the third (itest-rejects) would have arrived stillborn. All three are pure
+      # filesystem scans: no services, no env, seconds to run.
+      - name: Import-path PII-in-log tripwire
+        run: bun run lint:import-pii
+      - name: Lockfile hygiene
+        run: bun run lint:lockfile
+      # Bans expect(...).rejects on a DB call in an *.itest.ts. The failure mode it guards is a HANG, not a
+      # red — four suites were each eating their whole timeout before this landed (retention 540s,
+      # scheduledImports 240s, enrichmentPolicy 240s, bulkImport.pipeline 120s).
+      - name: Integration-test rejection shape
+        run: bun run lint:itest-rejects
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:

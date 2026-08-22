@@ -167,6 +167,7 @@ describe("Unit-16 outbound webhooks DoD", () => {
           events: ["reveal.completed"],
           createdByUserId: ownerA,
         }),
+        // itest-rejects-ok: the rejection is an SsrfError raised before any DB work (suite verified 6 pass, no stall)
       ).rejects.toBeInstanceOf(core.SsrfError);
     }
     // A public host passes the guard.
