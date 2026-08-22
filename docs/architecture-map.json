@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2378,
-  "fileSetHash": "sha256:f9dc260af0ff32d4d375e951ce5911895f00e840e88c362c83a4da646231e32b",
+  "fileCount": 2379,
+  "fileSetHash": "sha256:2ae098475c322884ecd33c4dbcc1593790a5a918bdd32c3a85a817da12741b84",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2418,7 +2418,8 @@
   },
   "shared": {
     "apps/admin": [
-      "apps/admin/next.config.mjs"
+      "apps/admin/next.config.mjs",
+      "apps/admin/src/contrast.test.ts"
     ],
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/ai-usage/page.tsx",

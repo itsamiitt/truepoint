@@ -95,8 +95,10 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
       header: "Delta",
       align: "right",
       sortValue: (e) => e.delta,
+      // --success-700, not --success: the delta is text, and the base tone is 3.30:1 on white — under the
+      // 4.5:1 AA floor. The leading "+" already carries the meaning without colour (1.4.1).
       cell: (e) => (
-        <span style={e.delta > 0 ? { color: "var(--success)" } : undefined}>
+        <span style={e.delta > 0 ? { color: "var(--success-700)" } : undefined}>
           {e.delta > 0 ? `+${e.delta.toLocaleString()}` : e.delta.toLocaleString()}
         </span>
       ),

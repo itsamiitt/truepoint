@@ -293,10 +293,16 @@ is superseded — trust only its header banner, never its legacy body.)
 > - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
 >   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
 >   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
-> - **contrast — CHECKED for `apps/doc` and `apps/web`; `apps/admin` and `apps/forge` still
->   have no pair assertions.** Each app asserts the token pairs it actually paints
->   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`); enumerating
->   those pairs is the work, and it is per-app by design.
+> - **contrast — CHECKED for `apps/doc`, `apps/web` and `apps/admin`; `apps/forge` has no pair
+>   assertions yet.** Each app asserts the token pairs it actually paints
+>   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`,
+>   `apps/admin/src/contrast.test.ts`); enumerating those pairs is the work, and it is per-app
+>   by design.
+> - **`--success` / `--warning` are FILL tones, not text tones.** 3.30:1 and 3.19:1 on white —
+>   fine behind a status dot or a check icon (WCAG 1.4.11 asks 3:1 of a meaningful graphic),
+>   under the 4.5:1 floor for a number or a label. Use **`--success-700`** / **`--warning-700`**
+>   (added 2026-08-22, 5.02:1) whenever the status colour IS the text, exactly as
+>   `--danger-700` has always been the text-safe half of `--danger`.
 > - **`--tp-ink-4` is NOT a text colour — ratcheted repo-wide.** It is 2.54:1 on white and
 >   worse on every tint, which is below the AA floor for normal text (4.5:1) *and* for large
 >   text (3.0:1) — no text size passes. It remains fine for placeholders, disabled controls
