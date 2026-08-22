@@ -62,6 +62,8 @@ export const en = {
   "contact.findPhoneNoPrice": "Find phone to dial",
   "contact.noPhone": "No phone on record",
   "contact.noEmail": "No email on record",
+  // Presence, not shape: we know an address exists but not what it looks like until it is revealed.
+  "contact.emailOnRecord": "Email on record",
   "contact.saveToReveal": "Save to TruePoint to reveal contact details",
   "contact.copy": "Copy",
   "contact.copied": "✓ Copied",

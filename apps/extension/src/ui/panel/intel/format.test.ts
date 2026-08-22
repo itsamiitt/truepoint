@@ -8,6 +8,7 @@ import {
   dateRange,
   datePoint,
   initials,
+  joined,
   maskEmail,
   monogram,
   monthLabel,
@@ -26,6 +27,25 @@ describe("initials / monogram", () => {
     expect(initials("   ")).toBe("?");
     expect(monogram("Acme Inc")).toBe("A");
     expect(monogram(null)).toBe("?");
+  });
+});
+
+describe("joined — the empty-string trap", () => {
+  it("returns null (not \"\") when nothing survives, so ?? fallbacks fire", () => {
+    // This is the whole reason the helper exists. `[].filter(Boolean).join(" ")` is "", and
+    // `"" ?? fallback` is "" — so the obvious one-liner renders a BLANK line exactly where the
+    // "not on record" copy belongs, on records with no name or no location.
+    expect(joined([null, undefined])).toBeNull();
+    expect(joined([])).toBeNull();
+    expect(joined(["", "   "])).toBeNull();
+    expect(joined([null, undefined]) ?? "fallback").toBe("fallback");
+  });
+
+  it("joins what it has, skipping the gaps", () => {
+    expect(joined(["Jane", "Visible"])).toBe("Jane Visible");
+    expect(joined(["Jane", null])).toBe("Jane");
+    expect(joined(["San Francisco", "United States"], ", ")).toBe("San Francisco, United States");
+    expect(joined([null, "United States"], ", ")).toBe("United States");
   });
 });
 

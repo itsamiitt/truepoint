@@ -11,6 +11,18 @@
 //     unknown"; the server already maps it back to null, and a null start must stay "—", never a duration
 //     measured from year zero.
 
+/**
+ * Join the parts we have, or null when we have none.
+ *
+ * `[a, b].filter(Boolean).join(" ")` returns the EMPTY STRING for an empty list, and `?? fallback` does not
+ * catch an empty string — so the obvious one-liner renders a blank line where the "not on record" fallback
+ * belongs. Every place the panel composes a name or a location goes through this instead.
+ */
+export function joined(parts: Array<string | null | undefined>, sep = " "): string | null {
+  const out = parts.filter((p): p is string => Boolean(p && p.trim())).join(sep);
+  return out.length > 0 ? out : null;
+}
+
 /** Two-letter initials for the avatar. The person's photo is deliberately not available (raw-only). */
 export function initials(name: string | null | undefined): string {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);

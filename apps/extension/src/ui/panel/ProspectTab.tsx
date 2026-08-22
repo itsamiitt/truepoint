@@ -16,6 +16,7 @@ import {
   contactSummary,
   dateRange,
   initials,
+  joined,
   maskEmail,
   monogram,
   tenure,
@@ -141,9 +142,15 @@ function ContactCard({
       {!intel.contactId ? (
         // In the database but not in this workspace: adding is free and is a separate, explicit gesture.
         // A one-click "save and reveal" would spend a credit on a button whose label said "save".
+        //
+        // NO MASKED EMAIL HERE, deliberately. A database person carries `hasEmail` and no domain — the only
+        // domain in scope is the COMPANY's, and rendering `••••••••@acme.example` from it would assert we
+        // hold an address at that domain when we may hold one anywhere or (if hasEmail is false) none at
+        // all. The presence line above already says what we have; inventing the shape of it would be the
+        // exact inference this panel promises not to make.
         <>
-          <div style={{ fontSize: 15, color: ink4, marginTop: 9, letterSpacing: "0.04em" }}>
-            {maskEmail(person?.companyDomain ?? contact?.emailDomain ?? null) ?? t("contact.noEmail")}
+          <div style={{ fontSize: 13, color: ink3, marginTop: 9 }}>
+            {hasEmail ? t("contact.emailOnRecord") : t("contact.noEmail")}
           </div>
           <Muted>{t("contact.saveToReveal")}</Muted>
         </>
@@ -318,16 +325,11 @@ export function ProspectTab({
   const { intel } = payload;
   const person = intel.person;
   const contact = intel.contact;
-  const name =
-    person?.fullName ??
-    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ??
-    null;
+  const name = person?.fullName ?? joined([contact?.firstName, contact?.lastName]);
   const title = person?.jobTitle ?? contact?.jobTitle ?? person?.headline ?? null;
   const company = person?.companyName ?? contact?.companyName ?? null;
   const location =
-    person?.locationRaw ??
-    [contact?.locationCity, contact?.locationCountry].filter(Boolean).join(", ") ??
-    null;
+    person?.locationRaw ?? joined([contact?.locationCity, contact?.locationCountry], ", ");
   const primary =
     intel.profile?.employment.find((e) => e.isPrimary && e.isCurrent) ??
     intel.profile?.employment.find((e) => e.isCurrent);
@@ -364,9 +366,10 @@ export function ProspectTab({
             </div>
           ) : null}
           <div style={{ fontSize: 11, color: ink4, marginTop: 2 }}>
-            {[location, inSeat ? t("identity.tenureInRole").replace("{tenure}", inSeat) : null]
-              .filter(Boolean)
-              .join(" · ")}
+            {joined(
+              [location, inSeat ? t("identity.tenureInRole").replace("{tenure}", inSeat) : null],
+              " · ",
+            )}
           </div>
         </div>
       </div>
