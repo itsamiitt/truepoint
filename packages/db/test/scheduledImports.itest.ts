@@ -108,11 +108,20 @@ describe("scheduled_imports — storage, fire idempotency, auto-disable, RLS (P5
     expect(byId?.name).toBe("nightly acme");
 
     // The (workspace_id, lower(name)) unique surfaces a dup name as a DB error (create is not an upsert).
-    await expect(
-      db.withTenantTx(scopeA(), (tx) =>
+    //
+    // Captured with `.then` rather than `expect(...).rejects` — the rule CLAUDE.md states and
+    // activitiesPartitioned.itest.ts:233 documents. Handing a rejecting DB call to `.rejects` can leave the
+    // promise unsettled on the single pooled connection (itest pools are max:1), and the symptom is a HANG,
+    // not a failure: this case burned the full 240s timeout before the rewrite.
+    const dupError = await db
+      .withTenantTx(scopeA(), (tx) =>
         db.scheduledImportRepository.create(tx, baseValues({ name: "NIGHTLY ACME" }) as never),
-      ),
-    ).rejects.toThrow();
+      )
+      .then(
+        () => "",
+        (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      );
+    expect(dupError).not.toBe("");
   });
 
   test("listDueSchedules returns only enabled rows with next_run_at ≤ now", async () => {
