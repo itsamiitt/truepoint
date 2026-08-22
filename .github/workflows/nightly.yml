@@ -11,11 +11,21 @@
 # written, on every PR and every push, and reporting green for it. A suite that cannot execute is the same
 # failure as a lint rule that cannot fail, and this repo found four of those today.
 #
-# WHAT RUNS HERE is the soak suites' own SMOKE default — 10,000 rows (`SOAK_ROWS` unset), the parameterisation
-# their headers describe as "nightly smoke". That exercises the whole path in minutes. The 2M-row TP-2 run
-# (`SOAK_ROWS=2000000`, the 12 §1.2 bar) is deliberately NOT the default here: it is a ~90-minute job whose
-# purpose is a published performance number, so it belongs on a deliberate manual dispatch rather than on a
-# nightly that everyone stops reading. Both are one input away — see `soak_rows` below.
+# WHAT RUNS HERE is 20,000 rows, NOT the suites' own 10,000-row smoke default — and the difference is not
+# arbitrary. TP-6 asserts that the loader's memory PLATEAUS: `max(RSS) - max(RSS over the first half of the
+# samples) <= 64 MB`. Measured on both sizes:
+#
+#   10,000 rows : RSS max 248.4 MB, first half  42.1 MB  → 206 MB "growth"  → FAILS
+#   20,000 rows : RSS max 248.1 MB, first half 244.6 MB  →   3.5 MB growth  → passes
+#
+# The max is IDENTICAL at both sizes, so nothing is leaking — 248 MB is the steady-state working set. At
+# 10,000 rows the run simply ends before the first half of the samples clears warm-up, so the assertion
+# measures the ramp rather than the plateau and reports a fixed cost as unbounded growth. Running the smoke
+# default here would have made this workflow permanently red on its first night, for a reason that is an
+# artifact of the sample window — which is precisely the disease it was written to cure.
+#
+# The 2M-row TP-2 run (`SOAK_ROWS=2000000`, the 12 §1.2 bar) is a ~90-minute job whose purpose is a published
+# performance number, so it stays one `workflow_dispatch` input away rather than being the nightly default.
 #
 # The S3 store itest still skips: it needs real object-store credentials, which are a procurement item
 # (data-management enable-gates), not something a workflow can conjure. Listed above so its absence stays
@@ -30,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       soak_rows:
-        description: "Rows per soak import (blank = the 10k smoke default; 2000000 = the TP-2 full run)"
+        description: "Rows per soak import (blank = 20000, the smallest size at which TP-6's plateau assertion is meaningful; 2000000 = the TP-2 full run)"
         required: false
         type: string
 
@@ -91,7 +101,9 @@ jobs:
 
       - name: Soak — throughput
         env:
-          SOAK_ROWS: ${{ inputs.soak_rows }}
+          # Default 20000 when dispatched without an input and on the schedule — see the header for why the
+          # suites own 10000 default cannot satisfy TP-6.
+          SOAK_ROWS: ${{ inputs.soak_rows || 20000 }}
         # Each file in its OWN process: the db client is a module singleton, which is why the itest sweep in
         # ci.yml does the same. --timeout so a hung await fails with the test's name instead of eating the
         # job's ceiling in silence.
@@ -99,7 +111,7 @@ jobs:
 
       - name: Soak — fast-lane fairness under whale load
         env:
-          SOAK_WHALE_ROWS: ${{ inputs.soak_rows }}
+          SOAK_WHALE_ROWS: ${{ inputs.soak_rows || 20000 }}
         run: bun test --timeout 3600000 ./apps/workers/test/importSoak.fairness.nightly.itest.ts
 
       - name: Confirm the suites actually RAN
