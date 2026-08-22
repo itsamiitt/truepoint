@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2372,
-  "fileSetHash": "sha256:6895ff96f6fc974a25e322fd0d4a3accc0d46ae3c397153e2370d1e271e80ead",
+  "fileCount": 2376,
+  "fileSetHash": "sha256:5d4a6cf308cc959de18a2a97c1c3d1ebdc035204c80214b86f60c3dd1655e9ba",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2702,6 +2702,8 @@
       "apps/doc/src/content/openapi.test.ts",
       "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
+      "apps/doc/src/content/searchIndex.test.ts",
+      "apps/doc/src/content/searchIndex.ts",
       "apps/doc/src/content/shippedContract.test.ts",
       "apps/doc/src/content/site.ts",
       "apps/doc/src/content/snippets.test.ts",
@@ -2735,6 +2737,8 @@
       "apps/doc/src/features/pricing/components/PlanCard.tsx",
       "apps/doc/src/features/pricing/components/PricingPage.tsx",
       "apps/doc/src/features/pricing/index.ts",
+      "apps/doc/src/features/search/components/DocsSearch.tsx",
+      "apps/doc/src/features/search/index.ts",
       "apps/doc/src/features/trust/components/TrustPage.tsx",
       "apps/doc/src/features/trust/index.ts"
     ],

@@ -977,11 +977,15 @@ flowchart TD
 - **`apps/doc`** (`@leadwolf/doc`, `doc.truepoint.in`, port 3007; areas `apps/doc/app` · `…/components` ·
   `…/content` · `…/features`) — the **public developer portal**: landing, `/pricing`, `/datasets`,
   `/docs` (quickstart + guides + a generated endpoint reference), `/trust`, `/changelog`. Anonymous and
-  fully prerendered — no session, and its one route handler (`app/llms.txt/route.ts`) is pinned
-  `force-static` so the build never opts into a server runtime. Its substance lives in typed content
+  fully prerendered — no session, and each of its three route handlers (`app/llms.txt/route.ts`,
+  `app/openapi.json/route.ts`, `app/changelog.xml/route.ts`) is pinned `force-static` so the build never
+  opts into a server runtime. Its substance lives in typed content
   modules under `src/content/` (endpoint specs, plan and credit tables, dataset field lists, the trust
   statement) which `src/features/*` render; there is no MDX and no `dangerouslySetInnerHTML` anywhere in the
-  app. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
+  app. **Site search is a fold over those same modules** (`content/searchIndex.ts` → `features/search`),
+  not a service: the app cannot reach `packages/search` (Postgres-backed, and the boundary rule forbids it)
+  and would not want to — a 24-document corpus scans faster in the browser than a round trip, and nothing a
+  prospect types leaves it. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
   and nothing else from `packages/*`, enforced by the `doc-app-holds-no-data-path` dependency-cruiser rule,
   which is what lets it build with **zero environment** while every other Next app needs one. Deliberately
   absent from `APP_ORIGINS`: it has no session, so adding it would widen the CORS/token-audience surface for
@@ -1376,4 +1380,19 @@ flowchart TD
   base URL, get a 404 from a route that was never mounted. The access sentence now rides on every callable
   endpoint page, the docs facts strip and the landing status line, and `shippedContract.test.ts` reads the
   deployment template so the copy and the posture cannot drift apart. Recorded as ADR-0048 C7.
+  2026-08-22 refresh (portal search, 3ce92ae1): 2372 → 2376 files — `content/searchIndex.ts` and its test
+  into the existing `shared["apps/doc/content"]` area, `features/search/{index.ts,components/DocsSearch.tsx}`
+  into `shared["apps/doc/features"]`. No new domain and no new area. Unassigned holds at **2**.
+
+  The portal had no search at all, so a reader whose question did not match a nav label had to guess which
+  of four sections held the answer — "why did I get a 429" is Guides/Errors, "which field carries the
+  LinkedIn URL" is a returns table inside one endpoint page. The index is a fold over the same typed
+  constants the pages render from, so an endpoint added to `ENDPOINTS` becomes searchable in the commit
+  that gives it a route; `searchIndex.test.ts` asserts every href resolves to a real page, which is what
+  stops a renamed slug leaving a searchable link pointing at nothing. Note for anyone adding to this app:
+  the corpus is ~37 kB and the masthead lives in the root layout, so it is imported dynamically on first
+  focus rather than statically — a static import puts every guide's prose in the chunk that the landing
+  page loads. The a11y pattern is `aria-activedescendant` rather than roving tabindex, chosen because the
+  playground had just shipped the roving half without a key handler and made its own control unreachable
+  (`scripts/lint-roving-tabindex.mjs` now gates that class repo-wide).
 ```
