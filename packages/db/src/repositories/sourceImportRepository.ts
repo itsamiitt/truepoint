@@ -7,6 +7,7 @@ import type { JobViewer, SourceName } from "@leadwolf/types";
 import { and, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { sourceImports } from "../schema/contacts.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { creatorVisibility } from "./jobVisibility.ts";
 
 /** One import batch for the Home dashboard — a (file, source, minute) group with its contact count. */
@@ -75,26 +76,31 @@ export const sourceImportRepository = {
    */
   async appendBatch(tx: Tx, inputs: SourceImportInput[]): Promise<void> {
     if (inputs.length === 0) return;
-    await tx
-      .insert(sourceImports)
-      .values(
-        inputs.map((input) => ({
-          tenantId: input.tenantId,
-          workspaceId: input.workspaceId,
-          contactId: input.contactId,
-          importedByUserId: input.importedByUserId ?? null,
-          sourceName: input.sourceName,
-          sourceFile: input.sourceFile ?? null,
-          rawData: input.rawData,
-          contentHash: input.contentHash ?? null,
-        })),
-      )
-      .onConflictDoNothing({
-        target: [sourceImports.workspaceId, sourceImports.contentHash],
-        // onConflictDoNothing's config takes `where` for the conflict-target predicate (only
-        // onConflictDoUpdate uses `targetWhere`); both emit the same `ON CONFLICT (…) WHERE …`.
-        where: sql`${sourceImports.contentHash} IS NOT NULL`,
-      });
+    const rows = inputs.map((input) => ({
+      tenantId: input.tenantId,
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      importedByUserId: input.importedByUserId ?? null,
+      sourceName: input.sourceName,
+      sourceFile: input.sourceFile ?? null,
+      rawData: input.rawData,
+      contentHash: input.contentHash ?? null,
+    }));
+    // Sliced to stay under PostgreSQL's 65,534 bind-parameter ceiling: 8 parameters a row against bands of
+    // CHUNK_ROWS = 10_000 is 80,000, and this threw MAX_PARAMETERS_EXCEEDED on every such chunk. See
+    // bindLimit.ts. Each slice runs on the caller's tx, so the chunk still commits or rolls back as one, and
+    // ON CONFLICT DO NOTHING is per-statement — unaffected by the split.
+    for (const slice of sliceForBindLimit(rows)) {
+      await tx
+        .insert(sourceImports)
+        .values(slice)
+        .onConflictDoNothing({
+          target: [sourceImports.workspaceId, sourceImports.contentHash],
+          // onConflictDoNothing's config takes `where` for the conflict-target predicate (only
+          // onConflictDoUpdate uses `targetWhere`); both emit the same `ON CONFLICT (…) WHERE …`.
+          where: sql`${sourceImports.contentHash} IS NOT NULL`,
+        });
+    }
   },
 
   /**

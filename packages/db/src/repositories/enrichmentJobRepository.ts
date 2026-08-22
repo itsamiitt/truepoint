@@ -22,6 +22,7 @@ import {
   enrichmentJobRows,
   enrichmentJobs,
 } from "../schema/enrichmentJobs.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { jobVisibility } from "./jobVisibility.ts";
 import { outboxRepository } from "./outboxRepository.ts";
 
@@ -561,7 +562,11 @@ export const enrichmentJobRepository = {
       matchConfidence: matchConfidence == null ? matchConfidence : String(matchConfidence),
     }));
     return withTenantTx(scope, async (tx) => {
-      await tx.insert(enrichmentJobRows).values(values);
+      // Sliced under the bind-parameter ceiling for the same reason as the import ledger (see bindLimit.ts):
+      // a bulk-enrichment chunk is the same order of magnitude as an import band.
+      for (const slice of sliceForBindLimit(values)) {
+        await tx.insert(enrichmentJobRows).values(slice);
+      }
     });
   },
 
