@@ -73,3 +73,4 @@ source plan/
 *.csv
 *.xlsx
 *.xls
+.gstack/
