@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2352,
-  "fileSetHash": "sha256:74af0ce90a9b1eebab93267de94db5d353aa72cba8cef9de64b7b828cce08468",
+  "fileCount": 2365,
+  "fileSetHash": "sha256:c357360e536e40c73e84f73c455613def1d43532087f215da0cf6c32ab607e82",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2697,6 +2697,8 @@
       "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
       "apps/doc/src/content/site.ts",
+      "apps/doc/src/content/snippets.test.ts",
+      "apps/doc/src/content/snippets.ts",
       "apps/doc/src/content/trust.ts",
       "apps/doc/src/content/types.ts"
     ],
@@ -2706,6 +2708,7 @@
       "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
       "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
       "apps/doc/src/features/api-reference/components/GuidePage.tsx",
+      "apps/doc/src/features/api-reference/components/SnippetTabs.tsx",
       "apps/doc/src/features/api-reference/index.ts",
       "apps/doc/src/features/changelog/components/ChangelogPage.tsx",
       "apps/doc/src/features/changelog/index.ts",
@@ -2796,8 +2799,18 @@
     "apps/extension/ui": [
       "apps/extension/src/ui/brand/CreditsPill.tsx",
       "apps/extension/src/ui/brand/Mark.tsx",
+      "apps/extension/src/ui/panel/CompanyTab.tsx",
       "apps/extension/src/ui/panel/Panel.tsx",
+      "apps/extension/src/ui/panel/ProspectTab.tsx",
+      "apps/extension/src/ui/panel/intel/deriveSignals.test.ts",
+      "apps/extension/src/ui/panel/intel/deriveSignals.ts",
+      "apps/extension/src/ui/panel/intel/format.test.ts",
+      "apps/extension/src/ui/panel/intel/format.ts",
+      "apps/extension/src/ui/panel/intel/headcount.test.ts",
+      "apps/extension/src/ui/panel/intel/headcount.ts",
       "apps/extension/src/ui/panel/main.tsx",
+      "apps/extension/src/ui/panel/primitives.tsx",
+      "apps/extension/src/ui/panel/useIntel.ts",
       "apps/extension/src/ui/popup/Popup.tsx",
       "apps/extension/src/ui/popup/main.tsx"
     ],

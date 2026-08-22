@@ -1297,4 +1297,16 @@ flowchart TD
   endpoints entirely — a spec has no register for "planned" that a client generator respects, so an
   operation in `paths` that was never built becomes a shipped client that 404s. The spec names what it
   withheld in its own description. Both routes are `force-static`.
+  2026-08-22 refresh (derived snippets + example corrections, b5b90020): 2352 → 2365 files. Three are this
+  change — `content/snippets.ts` (+ its test) and `api-reference/components/SnippetTabs.tsx`; the other
+  ten arrived with 69b84da6 (the extension Profile Intelligence Panel), which landed on main in between.
+  No new domain, no new warning, unassigned holds at **2**.
+
+  `snippets.ts` derives the Node and Python examples FROM the reviewed cURL rather than asking each endpoint
+  spec to carry three hand-written copies of one request. The parser is deliberately narrow — it reads the
+  flags our own examples use and nothing else — and `snippets.test.ts` is the seam that keeps it honest:
+  every example must still parse into a request whose method, URL and body match the endpoint's declared
+  contract. The same commit corrected two content defects the audit surfaced: the quickstart was teaching a
+  retired opaque-id body that the shipped endpoint answers 422 to, and every example implicated a real
+  domain with fabricated firmographics attached. Both are now assertions in `content.test.ts`.
 ```
