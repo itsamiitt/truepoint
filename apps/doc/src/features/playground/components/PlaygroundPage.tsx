@@ -17,7 +17,7 @@ import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import prose from "@/components/prose.module.css";
 import { StatusBadge, TpButton, TpInput } from "@leadwolf/ui";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 import styles from "../playground.module.css";
 import type { SandboxEndpoint, SandboxOutcome, StoredReplay } from "../sandbox.ts";
 import { buildCurl, simulate } from "../sandbox.ts";
@@ -65,6 +65,42 @@ export function PlaygroundPage() {
   const [history, setHistory] = useState<readonly HistoryEntry[]>([]);
 
   const isEnrich = endpoint === "enrich";
+
+  // Roving tabindex means only the SELECTED radio is in the tab order, so without arrow keys the other
+  // endpoint is unreachable by keyboard entirely — Tab skips tabIndex={-1}, and nothing else selects it. This
+  // shipped that way and was caught by driving the page in a browser: ArrowRight moved neither selection nor
+  // focus. The WAI-ARIA radiogroup pattern is what makes the roving tabindex legitimate rather than a trap.
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const ARROW_DELTA: Record<string, number> = {
+    ArrowRight: 1,
+    ArrowDown: 1,
+    ArrowLeft: -1,
+    ArrowUp: -1,
+  };
+
+  function selectByKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const delta = ARROW_DELTA[event.key];
+    const target =
+      delta === undefined
+        ? event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? ENDPOINT_TABS.length - 1
+            : null
+        : (index + delta + ENDPOINT_TABS.length) % ENDPOINT_TABS.length;
+    if (target === null) return;
+
+    // preventDefault so ArrowUp/ArrowDown select rather than scrolling the page out from under the reader.
+    event.preventDefault();
+    const next = ENDPOINT_TABS[target];
+    if (!next) return;
+    setEndpoint(next.value);
+    setOutcome(null);
+    // Focus follows selection — the pattern's other half. Without it the roving tabindex would move the tab
+    // stop to a radio the user cannot see they are on.
+    tabRefs.current[target]?.focus();
+  }
   const curl = useMemo(
     () => buildCurl({ endpoint, apiKey, domain, idempotencyKey }),
     [endpoint, apiKey, domain, idempotencyKey],
@@ -133,14 +169,18 @@ export function PlaygroundPage() {
               role="radiogroup"
               aria-labelledby="playground-endpoint-label"
             >
-              {ENDPOINT_TABS.map((tab) => (
+              {ENDPOINT_TABS.map((tab, index) => (
                 <button
                   key={tab.value}
                   type="button"
                   role="radio"
                   aria-checked={endpoint === tab.value}
                   tabIndex={endpoint === tab.value ? 0 : -1}
+                  ref={(node) => {
+                    tabRefs.current[index] = node;
+                  }}
                   className={styles.endpointTab}
+                  onKeyDown={(event) => selectByKey(event, index)}
                   onClick={() => {
                     setEndpoint(tab.value);
                     setOutcome(null);
