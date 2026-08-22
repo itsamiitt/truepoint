@@ -108,6 +108,14 @@ jobs:
       # a rotation plus a history rewrite.
       - name: Committed secrets + PII formats
         run: bun run lint:secrets
+      # A composite ARIA role with tabIndex={-1} takes those options OUT of the tab order, so arrow keys are
+      # the only way to reach them; ship the roving half without a key handler and the control is unreachable
+      # by keyboard (WCAG 2.2 SC 2.1.1). apps/doc's playground shipped exactly that, and neither typecheck,
+      # biome's a11y rules, nor verify.mjs's accessibility-tree assertions saw it — the STRUCTURE was correct
+      # (two radios, right aria-checked) and structure is all they inspect. It took pressing ArrowRight in a
+      # real browser. This is the source-level half of that check, which is the half CI can run.
+      - name: Roving tabindex needs arrow keys
+        run: bun run lint:roving-tabindex
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:

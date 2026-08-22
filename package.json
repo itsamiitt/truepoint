@@ -16,6 +16,7 @@
     "lint:itest-rejects": "node scripts/lint-itest-rejects.mjs",
     "lint:prod-switches": "node scripts/lint-prod-switches.mjs",
     "lint:secrets": "node scripts/lint-committed-secrets.mjs",
+    "lint:roving-tabindex": "node scripts/lint-roving-tabindex.mjs",
     "lint:lockfile": "node scripts/check-lockfile.mjs",
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
     "db:migrate": "bun run --filter @leadwolf/db migrate",
