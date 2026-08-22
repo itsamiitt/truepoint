@@ -1348,4 +1348,12 @@ flowchart TD
   TEXT via `fs` rather than importing it — `doc-app-holds-no-data-path` is what gives this app its zero-env
   build, and a file read creates no module edge (`lint:boundaries` confirms). Verified by mutation rather
   than assumed: renaming one documented field to something the serializer does not emit fails the suite.
+  2026-08-22 refresh (landing-page status line, b1788986): 2370 → 2371 files — `content/endpointStatus.ts`,
+  in the existing `shared["apps/doc/content"]` area. Unassigned holds at **2**.
+
+  It exists because the landing page said "It is not callable yet" for as long as the two company endpoints
+  had been live — the only surface on the site claiming there was nothing to try. The sentence survived
+  every content test because it was prose in JSX rather than a content module, so it now derives from the
+  availability each endpoint declares and is asserted like the rest. That gap is worth remembering when
+  adding copy: a claim written directly into a component is a claim nothing checks.
 ```
