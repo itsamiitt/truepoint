@@ -104,6 +104,12 @@ news/social feeds. See 04-opportunity-scores.md.
   only way to tell the ~20 real findings from the 1,582 line-ending ones — `bunx biome lint .` skips the
   FORMATTER, so it reports zero while CI fails. Two classes hide there and nothing local will show you them:
   genuine format drift in a file you edited after its last `--write`, and formatter-adjacent lint rules.
+  **`biome.json` takes no comments** (it validates against its own schema — a `//` key errors, and so does a
+  JSONC comment), so its one non-obvious entry is explained here: the `overrides` block turning `noConsoleLog`
+  off for `scripts/**`, the db seed, the extension packer, and the two logger modules. In those files the
+  console IS the output, not a stray debug line; the rule was 100% false positives there, and a check that is
+  always wrong trains you to skim past its output — which is how a real stray `console.log` ships. It stays a
+  warning everywhere else.
   **Biome suppression placement, learned twice:** `// biome-ignore lint/x/Rule:` binds to the node the
   diagnostic is REPORTED on and must be the **last line before it** — a11y rules often report on the
   `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
