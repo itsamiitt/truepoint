@@ -62,12 +62,15 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2245 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2376 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
-> no domain by nature and are expected). **The two unregistered repositories** —
-> `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
-> generator. That is a registration gap, not misplaced code; fixing it is a generator edit, left as a
-> tracked follow-up rather than folded into an unrelated change. (`provenanceBadgeRepository` left this list
+> no domain by nature and are expected). **The two unbucketed repositories** —
+> `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
+> "Notes / unbucketed", not a registration backlog: `usageEventRepository` is written by three domains and
+> read by the entitlement gate, so any single home would be wrong, and `REPO_DOMAIN`'s own rule is that a
+> confidently wrong home is worse than an honest gap. *(This paragraph previously called them a registration
+> gap awaiting a generator edit, contradicting the section that explains why they are left alone. Corrected
+> 2026-08-22 — the reasoned entry is the one that holds.)* (`provenanceBadgeRepository` left this list
 > when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
 > when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
 > never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
@@ -1021,14 +1024,21 @@ flowchart TD
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
-  families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
-  `data-sources` (the 0117 origin console),
-  `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
-  `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
-  `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical list can be
-  reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
-  Left as flagged warnings — the established handling — not papered over.
+- **Domain-vocabulary warnings (0, as of 2026-08-22 — previously 58).** The canonical list had fallen further behind
+  the code than it covered: 58 shipped folders were undeclared, more slugs than the declared list itself held. At that
+  ratio the channel stopped being a drift detector — 58 lines of "undeclared domain" on every run are
+  indistinguishable from none, and the one genuinely new folder tomorrow arrives as warning #59 where nobody looks.
+  All 58 are now declared in `CANONICAL_DOMAINS`, in a separate block below the planning-doc entries so the
+  provenance distinction survives: above the divider is *planned* vocabulary (docs/planning/05 + 11), below it is
+  *shipped* vocabulary. When a planning doc next enumerates modules, that block is the diff it owes.
+  Verified the channel still fires rather than assuming it: a throwaway `packages/core/src/zzProbeDomain/` produced
+  exactly one warning, and removing it returned the count to zero.
+  **One entry is a rename waiting to happen, not a declaration.** `packages/core/src/sourceLanding/` is the only
+  camelCase folder among ~40 in that directory — every sibling is kebab-case, so `source-landing` is the consistent
+  name. It is declared only so it stops drowning the other 57. The rename is 5 files and 11 import specifiers, but one
+  of them is `packages/core/src/prospect/profileIntel.ts`, which is live work on another branch as of 2026-08-22;
+  doing it underneath that session would trade a naming nit for a merge conflict. The generator comment says the same,
+  next to the entry, so whoever picks it up deletes the entry in the same commit.
   *(This entry previously listed `custom-fields`/`customFields`, `feature-flags`/`featureFlags`,
   `saved-searches`/`savedSearches` and `pipeline-stages`/`pipelineStages` as case-variant PAIRS. Checked against the
   JSON: no such pairs exist — every slug appears exactly once. The prose had gone stale against the generator.)*
