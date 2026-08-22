@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2369,
-  "fileSetHash": "sha256:4181392236d740022923e98cff01a5a0d2a05e4d6414dee515bdde035e046ce1",
+  "fileCount": 2370,
+  "fileSetHash": "sha256:923e57a28bedf6928134eaab69451fdc7eed6263c234f0fe99b42833dc6103de",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2700,6 +2700,7 @@
       "apps/doc/src/content/openapi.test.ts",
       "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
+      "apps/doc/src/content/shippedContract.test.ts",
       "apps/doc/src/content/site.ts",
       "apps/doc/src/content/snippets.test.ts",
       "apps/doc/src/content/snippets.ts",

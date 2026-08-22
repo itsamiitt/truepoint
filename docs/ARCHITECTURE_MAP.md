@@ -1337,4 +1337,15 @@ flowchart TD
   provenance promise (ADR-0048 C5) — and recorded a third it could not fix: the sourcing statement describes
   a crawler this repository does not contain (ADR-0048 C6), left untouched because rule 3 forbids an agent
   quietly narrowing a lawful-basis claim.
+  2026-08-22 refresh (docs-vs-code contract test, a0eff37a): 2369 → 2370 files — one new test,
+  `content/shippedContract.test.ts`, in the existing `shared["apps/doc/content"]` area. Unassigned holds
+  at **2**.
+
+  It is the systemic answer to the four documentation defects this sweep found by hand. It asserts the
+  documented company fields equal `PublicCompanyPayload`, that both routes are mounted behind
+  `requireScope("search:read")` with idempotency on the billable one, that every published error code is one
+  the platform can emit, and that a miss is a 200 in the code as well as on the page. It reads `apps/api` as
+  TEXT via `fs` rather than importing it — `doc-app-holds-no-data-path` is what gives this app its zero-env
+  build, and a file read creates no module edge (`lint:boundaries` confirms). Verified by mutation rather
+  than assumed: renaming one documented field to something the serializer does not emit fails the suite.
 ```
