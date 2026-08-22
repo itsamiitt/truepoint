@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2385,
-  "fileSetHash": "sha256:62ab0d00cf5945b7af77e53931c1faf53f16a3677f3397615f7bf4e14bd0e724",
+  "fileCount": 2387,
+  "fileSetHash": "sha256:103a4aa61f502d1b2c6c66a237460e5e96d7cc677466d090a2dfa9c2e529dfe7",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3181,6 +3181,8 @@
       "packages/db/src/repositories/accountChildPlan.test.ts",
       "packages/db/src/repositories/accountChildPlan.ts",
       "packages/db/src/repositories/arrayParamBinding.test.ts",
+      "packages/db/src/repositories/bindLimit.test.ts",
+      "packages/db/src/repositories/bindLimit.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
       "packages/db/src/repositories/contactChannelPlan.ts",
       "packages/db/src/repositories/crmDeadLetterRepository.test.ts",

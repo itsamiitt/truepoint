@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2385 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2387 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,24 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (bind-parameter ceiling, 80ffa065): 2385 → 2387 files —
+  `packages/db/src/repositories/bindLimit.{ts,test.ts}`, into the existing `shared["packages/db"]` area
+  (a util living beside the repositories, not an `<Entity>Repository`, so it is shared-area rather than a
+  domain slice).
+
+  **Read this before writing any multi-row INSERT in `packages/db`.** PostgreSQL addresses bind parameters
+  with a 16-bit count — 65,534 max per statement — and Drizzle emits ONE statement for `.values(array)`,
+  binding a parameter per present key per row. Four batch inserts sent a whole 10,000-row import band as a
+  single statement (`contacts` ~19 params/row = ~190,000; `source_imports` 8; `import_job_rows` 7;
+  `enrichment_job_rows`), so every bulk import of a chunk with more than ~3,400 new contacts threw
+  MAX_PARAMETERS_EXCEEDED. Route batch inserts through `sliceForBindLimit` — it derives the width from the
+  widest row rather than a hardcoded count, because a fixed limit breaks the day a column is added, and it
+  returns the array untouched when the batch already fits.
+
+  Why it survived this long: bulk import is dark behind `BULK_IMPORT_ENABLED`, and the soak suite written to
+  catch it gates on `NIGHTLY_SOAK`, which no workflow set — so it had never executed anywhere.
+  `.github/workflows/nightly.yml` now runs it (outside these roots, so it does not appear in the file count).
 
   2026-08-22 refresh (rate-limiter discrimination, 1087694e): 2384 → 2385 files —
   `packages/auth/src/rateLimit.test.ts`, into the existing `shared["packages/auth"]` area.
