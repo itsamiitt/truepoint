@@ -88,7 +88,13 @@ let scanned = 0;
 for (const root of ROOTS) {
   for (const file of sourceFiles(root)) {
     scanned += 1;
-    const text = readFileSync(file, "utf8");
+    // Comments blanked space-for-space first: a commented-out `<button role="radio" tabIndex={-1}>` is an
+    // EXAMPLE, and flagging one teaches the reader that the way past this gate is to annotate documentation.
+    // `[^\S\r\n]*` not `\s*` — \s matches newlines, so the greedy form deletes the blank lines above a comment
+    // and shifts every reported line number after it.
+    const text = readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+      .replace(/^[^\S\r\n]*\/\/.*$/gm, (m) => " ".repeat(m.length));
 
     // A key handler ANYWHERE in the file clears it. Deliberately permissive: a group container that handles
     // arrow keys and moves selection for its children is as correct as per-option handlers, and this check

@@ -65,7 +65,16 @@ function violations(app) {
   for (const file of sourceFiles(join(app, "src", "features"))) {
     const parts = file.split(sep);
     const owner = parts[parts.indexOf("features") + 1];
-    for (const match of readFileSync(file, "utf8").matchAll(CROSS_FEATURE)) {
+    // Comments are blanked space-for-space before matching. A commented-out `from "@/features/x"` is not an
+    // import, and counting one is worse here than elsewhere because the budgets are exact: it would push a
+    // zero-budget app over, and — during the refactor this gate exists to encourage — commenting a line out
+    // would leave the count unchanged, so the "went DOWN, now tighten it" branch would never fire.
+    // `[^\S\r\n]*` not `\s*`: \s matches newlines, so the greedy form swallows the blank lines above a comment
+    // and blanking them shifts every line after it.
+    const text = readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+      .replace(/^[^\S\r\n]*\/\/.*$/gm, (m) => " ".repeat(m.length));
+    for (const match of text.matchAll(CROSS_FEATURE)) {
       if (match[1] !== owner) {
         found.push(`${file.split(sep).join("/")} → @/features/${match[1]}`);
       }
