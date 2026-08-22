@@ -179,8 +179,11 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
     );
     await contactMergeRepository.tombstoneLoser(tx, loserContactId, survivorContactId);
 
-    // The contact.merge audit event (04 §4): reconstructable from audit alone — survivor, loser, decisions,
-    // the loser's field_provenance map, the scalar before/after, and the re-point tallies per child table.
+    // The contact.merge audit event (04 §4): survivor, loser, decisions, the loser's field_provenance map,
+    // the scalar before/after, and the re-point TALLIES per child table. The scalar half is fully
+    // recoverable from this; the child half is not — tallies are counts, not row ids, and collision-collapsed
+    // children leave no trace. This comment used to claim "reconstructable from audit alone" outright; see
+    // contactMergeRepository.recordMergeEvent for why that misleads the split verb, and 13-I4 §3 for the fix.
     const fieldChangeMeta: FieldChangeAuditMetadata = { src: "merge", fields: plan.fieldChanges };
     const auditEventId = await contactMergeRepository.recordMergeEvent(tx, {
       tenantId: scope.tenantId,

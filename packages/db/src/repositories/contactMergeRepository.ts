@@ -518,7 +518,19 @@ export const contactMergeRepository = {
 
   /** Write the contact.merge audit event IN-TX (04 §4) and return its id (support's reconstruction handle).
    *  metadata = survivor id, loser id, per-field decision set, the loser's field_provenance map, re-point
-   *  tallies per child table — reconstructable from audit alone. */
+   *  tallies per child table.
+   *
+   *  RECONSTRUCTABLE FOR FIELDS ONLY — this comment previously said "reconstructable from audit alone", which
+   *  overstates the child half and would mislead anyone building the split/un-merge verb. `repointChildren`
+   *  returns `Record<string, number>`: the audit records that 7 list_members moved, NOT which 7. Collapsed
+   *  rows are worse than lossy — a list/tag/reveal/outreach collision unions and a phone collision folds onto
+   *  the survivor's live row, so those rows leave no trace on the loser at all. The scalar half IS fully
+   *  recoverable (decisions + the loser's field_provenance + before/after).
+   *
+   *  So a merge performed today cannot be inverted, and no split built on this record can be correct. Making
+   *  it invertible is cheap going forward (a per-row merge journal written in this same transaction) and
+   *  impossible retroactively. See docs/planning/prospect-database-platform/13-I4-DB-Ops-Module-Build.md §3,
+   *  where it is slice 1 — ahead of the split verb that depends on it. */
   async recordMergeEvent(
     tx: Tx,
     e: {
