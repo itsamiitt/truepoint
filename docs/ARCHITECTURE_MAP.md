@@ -1278,4 +1278,10 @@ flowchart TD
   Generated from a clean worktree at c8def679 for the same reason as the previous two entries — the
   concurrent `feat/extension-profile-intel-panel` session still has uncommitted files in this shared
   checkout.
+  2026-08-22 refresh (concurrent profile-intel landing, 99b5a3d8): 2341 → 2345 files. That commit landed
+  between the two above, so the map published a moment earlier did not yet list its four files:
+  `packages/types/src/profileIntel.ts`, `packages/core/src/prospect/profileIntel.ts`,
+  `apps/api/src/features/contacts-resolve/intel.test.ts` and `packages/db/test/profileIntel.itest.ts`.
+  The index is corrected here so the tree hash matches main again; the one-line PURPOSES for that work
+  belong to its own author and are not invented here.
 ```

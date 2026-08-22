@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2341,
-  "fileSetHash": "sha256:9ab9513c7aca6d73ca00d0c2920190443d6d69bd2af46e8ab8d2d6be070fefde",
+  "fileCount": 2345,
+  "fileSetHash": "sha256:5abd01f6e5b29f395e6b99466af94931ff49da3364f6ab0bdc412a01a11a9d20",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -539,6 +539,7 @@
       "admin": [],
       "api": [
         "apps/api/src/features/contacts-resolve/index.ts",
+        "apps/api/src/features/contacts-resolve/intel.test.ts",
         "apps/api/src/features/contacts-resolve/routes.ts"
       ],
       "core": [],
@@ -1650,6 +1651,7 @@
         "packages/core/src/prospect/lists.ts",
         "packages/core/src/prospect/mergeContact.ts",
         "packages/core/src/prospect/mergePreview.ts",
+        "packages/core/src/prospect/profileIntel.ts",
         "packages/core/src/prospect/searchDatabase.ts",
         "packages/core/src/prospect/searchDatabaseCompanies.ts",
         "packages/core/src/prospect/tags.ts"
@@ -3324,6 +3326,7 @@
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
+      "packages/db/test/profileIntel.itest.ts",
       "packages/db/test/provenanceEvent.itest.ts",
       "packages/db/test/providerCallsLedger.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
@@ -3516,6 +3519,7 @@
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/pricing.ts",
       "packages/types/src/pricingAdmin.ts",
+      "packages/types/src/profileIntel.ts",
       "packages/types/src/provenanceEvent.test.ts",
       "packages/types/src/provenanceEvent.ts",
       "packages/types/src/providerConfigs.test.ts",
