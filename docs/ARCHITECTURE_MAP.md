@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2384 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2385 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,17 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (rate-limiter discrimination, 1087694e): 2384 → 2385 files —
+  `packages/auth/src/rateLimit.test.ts`, into the existing `shared["packages/auth"]` area.
+
+  Two files now share the name `rateLimit.test.ts` and they cover different layers — worth knowing before
+  concluding either one is redundant. `apps/api/src/middleware/rateLimit.test.ts` (pre-existing) covers WHICH
+  bucket a request is charged to and the `X-Forwarded-For` resolver; the new `packages/auth` one covers the
+  limiter module's rejection-vs-outage discrimination — a limiter rejection must throw, an infra error must
+  fail OPEN, and both mistakes are silent. So "rate limiting was untested" would be wrong; the limiter module
+  was, the middleware that calls it was not. Most of that module still has no coverage and cannot get it here:
+  every limiter needs a live Redis.
 
   2026-08-22 refresh (re-verification deadline contract, 807bff14): 2383 → 2384 files —
   `packages/db/test/reverificationDeadline.itest.ts`, in the existing `shared["packages/db"]` area.

@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2384,
-  "fileSetHash": "sha256:69aa92db921f7a2fdc0bdd7989514a2f1da2060c3576828beb087f7d727ebdd6",
+  "fileCount": 2385,
+  "fileSetHash": "sha256:62ab0d00cf5945b7af77e53931c1faf53f16a3677f3397615f7bf4e14bd0e724",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3098,6 +3098,7 @@
       "packages/auth/src/policy.ts",
       "packages/auth/src/policyShadow.test.ts",
       "packages/auth/src/policyShadow.ts",
+      "packages/auth/src/rateLimit.test.ts",
       "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
       "packages/auth/src/registration.ts",
