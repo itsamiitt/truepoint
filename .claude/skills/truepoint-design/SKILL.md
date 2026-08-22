@@ -293,11 +293,14 @@ is superseded — trust only its header banner, never its legacy body.)
 > - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
 >   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
 >   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
-> - **contrast — CHECKED for `apps/doc`, `apps/web` and `apps/admin`; `apps/forge` has no pair
->   assertions yet.** Each app asserts the token pairs it actually paints
+> - **contrast — CHECKED.** Each app asserts the token pairs it paints
 >   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`,
->   `apps/admin/src/contrast.test.ts`); enumerating those pairs is the work, and it is per-app
->   by design.
+>   `apps/admin/src/contrast.test.ts`), and `packages/ui/src/primitivesContrast.test.ts` covers
+>   the shared stylesheet by **deriving** its pairs from the CSS — so a new primitive with a bad
+>   pairing fails without anyone maintaining a list. `apps/forge` has no pair test on purpose:
+>   it paints exactly one token (`--tp-ink` on white, 21:1) through DS primitives, so there is
+>   nothing to enumerate yet. What none of them can see: colour-only rules (the background comes
+>   from an ancestor), composited alpha, and inline styles.
 > - **`--success` / `--warning` are FILL tones, not text tones.** 3.30:1 and 3.19:1 on white —
 >   fine behind a status dot or a check icon (WCAG 1.4.11 asks 3:1 of a meaningful graphic),
 >   under the 4.5:1 floor for a number or a label. Use **`--success-700`** / **`--warning-700`**

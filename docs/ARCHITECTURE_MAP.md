@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2379 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2380 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1405,10 +1405,11 @@ flowchart TD
   page loads. The a11y pattern is `aria-activedescendant` rather than roving tabindex, chosen because the
   playground had just shipped the roving half without a key handler and made its own control unreachable
   (`scripts/lint-roving-tabindex.mjs` now gates that class repo-wide).
-  2026-08-22 refresh (contrast guards, 256d54a4 + follow-ups): 2376 → 2379 files —
-  `apps/web/src/contrast.test.ts`, `apps/admin/src/contrast.test.ts` and
-  `packages/ui/src/inkFourContrast.test.ts`, into the existing `shared["apps/web"]`, `shared["apps/admin"]`
-  and `shared["packages/ui"]` areas. Unassigned holds at **2**.
+  2026-08-22 refresh (contrast guards, 256d54a4 + follow-ups): 2376 → 2380 files —
+  `apps/web/src/contrast.test.ts`, `apps/admin/src/contrast.test.ts`,
+  `packages/ui/src/inkFourContrast.test.ts` and `packages/ui/src/primitivesContrast.test.ts`, into the
+  existing `shared["apps/web"]`, `shared["apps/admin"]` and `shared["packages/ui"]` areas. Unassigned holds
+  at **2**.
 
   apps/doc has had a WCAG contrast guard since its redesign and apps/web, apps/admin and apps/forge have
   never had one — the three surfaces a paying user is actually in all day. This is the first of the three,

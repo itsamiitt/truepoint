@@ -31,8 +31,16 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-/** Measured 2026-08-22 across every surface below. */
-const INK4_TEXT_BUDGET = 97;
+/**
+ * Measured 2026-08-22 across every surface below.
+ *
+ * 97 → 95: `.tp-ui-field-hint` and `.tp-ui-page-header-eyebrow` moved to `--tp-ink-3` in primitives.css.
+ * Those two were worth taking out ahead of the rest because they are in the SHARED stylesheet — the hint
+ * under every form field and the eyebrow on every page header, in every app — and both are unambiguously
+ * text rather than the placeholder/icon cases that make up much of the remainder. The ratchet is what
+ * noticed: it failed demanding the budget be tightened, which is the whole point of the equality assertion.
+ */
+const INK4_TEXT_BUDGET = 95;
 
 /**
  * BOTH spellings, which is the correction that produced this file.
