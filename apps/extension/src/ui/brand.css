@@ -32,3 +32,23 @@ body {
 *::after {
   box-sizing: border-box;
 }
+
+/* The loading pulse for shape-matched skeletons (primitives.tsx). OPACITY ONLY — no layout, no transform —
+   and silenced entirely when the viewer has asked for less motion. A keyframe is one of the three things app
+   code may put in a stylesheet at all (design skill); the rest of the panel is token-driven inline styles. */
+@keyframes tp-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}
+

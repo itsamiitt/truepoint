@@ -1,0 +1,455 @@
+// ProspectTab.tsx — the person half of the Profile Intelligence Panel: who they are, how to reach them, what
+// the record says about them, and where they have worked and studied.
+//
+// The contact card is the only part that spends money, and it is written to be honest about that at every
+// step: the price comes from the server's reveal costs (never a hardcoded number), values this workspace
+// already owns are hydrated from the NO-CHARGE read rather than re-revealed, and "nothing on file" is said
+// plainly instead of dressed up as a failed reveal.
+import { useState } from "react";
+import { t } from "../../i18n/index.ts";
+import { send } from "../../shared/client.ts";
+import type { IntelPayload } from "../../shared/messages.ts";
+import type { RevealType } from "../../shared/types.ts";
+import { deriveSignals } from "./intel/deriveSignals.ts";
+import {
+  ageDays,
+  contactSummary,
+  dateRange,
+  initials,
+  maskEmail,
+  monogram,
+  tenure,
+} from "./intel/format.ts";
+import {
+  Badge,
+  type BadgeTone,
+  Button,
+  Chip,
+  Muted,
+  SectionLabel,
+  Skeleton,
+  Well,
+  hairline,
+  ink2,
+  ink3,
+  ink4,
+  mono,
+  surface3,
+} from "./primitives.tsx";
+
+/** The verification tone for an email status. Paired with text — the tone alone never carries the meaning. */
+function emailTone(status: string | null | undefined): BadgeTone {
+  if (status === "valid") return "success";
+  if (status === "invalid" || status === "risky") return "warning";
+  return "muted";
+}
+
+function IdentitySkeleton(): React.ReactElement {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 6 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <Skeleton width={46} height={46} radius="50%" />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          <Skeleton width="52%" height={15} />
+          <Skeleton width="80%" height={11} />
+        </div>
+      </div>
+      <Skeleton width="100%" height={104} radius={12} />
+    </div>
+  );
+}
+
+/**
+ * The contact block. Four money-relevant states, and the difference between them is the whole point:
+ *   • the workspace does not hold the person yet   → Save first (adding is free; revealing is not)
+ *   • held, not revealed                            → Reveal, priced from the server
+ *   • held and owned                                → the values, hydrated with no charge
+ *   • held, revealed, and the record was empty      → "nothing on file", which is a demand signal, not a loss
+ */
+function ContactCard({
+  payload,
+  onRevealed,
+}: {
+  payload: IntelPayload;
+  onRevealed: () => void;
+}): React.ReactElement {
+  const { intel, costs, revealed } = payload;
+  const [busy, setBusy] = useState<RevealType | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [justRevealed, setJustRevealed] = useState<{
+    email?: string;
+    phone?: string;
+    nothing?: boolean;
+    verification?: { lastVerifiedAt: string | null; sourceCount: number | null };
+  } | null>(null);
+
+  const contact = intel.contact;
+  const person = intel.person;
+  const hasEmail = contact?.hasEmail ?? person?.hasEmail ?? false;
+  const hasPhone = contact?.hasPhone ?? person?.hasPhone ?? false;
+  const email = justRevealed?.email ?? revealed?.email ?? null;
+  const phone = justRevealed?.phone ?? revealed?.phone ?? null;
+
+  const reveal = async (type: RevealType): Promise<void> => {
+    if (!intel.contactId) return;
+    setBusy(type);
+    setError(null);
+    const res = await send({ type: "REVEAL", contactId: intel.contactId, revealType: type });
+    setBusy(null);
+    if (!res.ok) {
+      setError(t(`error.${res.errorClass ?? "unexpected"}` as Parameters<typeof t>[0]));
+      return;
+    }
+    setJustRevealed((prev) => ({
+      ...prev,
+      email: res.email ?? prev?.email,
+      phone: res.phone ?? prev?.phone,
+      nothing: res.nothingToReveal,
+      verification: res.verification,
+    }));
+    onRevealed();
+  };
+
+  const copy = (value: string): void => {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    });
+  };
+
+  // The badge: recency now, corroboration only when the evidence log actually has something. A null source
+  // count is "no log yet", which is true of nearly every record until the provenance gate is on — rendering
+  // it as "0 sources" would stamp a false verdict across the whole database.
+  const verification = justRevealed?.verification;
+  const days = ageDays(verification?.lastVerifiedAt ?? contact?.lastVerifiedAt ?? null);
+  const freshness =
+    days === null
+      ? t("card.notVerified")
+      : days === 0
+        ? t("card.verifiedToday")
+        : t("card.verifiedDaysAgo").replace("{n}", String(days));
+  const badgeText =
+    verification?.sourceCount != null
+      ? `${freshness} · ${t("card.sources").replace("{k}", String(verification.sourceCount))}`
+      : freshness;
+
+  return (
+    <Well>
+      <SectionLabel right={contactSummary(hasEmail, hasPhone)}>{t("contact.label")}</SectionLabel>
+
+      {!intel.contactId ? (
+        // In the database but not in this workspace: adding is free and is a separate, explicit gesture.
+        // A one-click "save and reveal" would spend a credit on a button whose label said "save".
+        <>
+          <div style={{ fontSize: 15, color: ink4, marginTop: 9, letterSpacing: "0.04em" }}>
+            {maskEmail(person?.companyDomain ?? contact?.emailDomain ?? null) ?? t("contact.noEmail")}
+          </div>
+          <Muted>{t("contact.saveToReveal")}</Muted>
+        </>
+      ) : email || phone ? (
+        <div>
+          {email ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9 }}>
+              <span
+                style={{
+                  fontSize: 15,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {email}
+              </span>
+              <Badge tone={emailTone(contact?.emailStatus)}>
+                {contact?.emailStatus === "valid" ? t("badge.verified") : t("badge.unverified")}
+              </Badge>
+            </div>
+          ) : null}
+          {phone ? (
+            <div style={{ ...mono, fontSize: 14, marginTop: 6 }}>{phone}</div>
+          ) : null}
+          <div style={{ fontSize: 11, color: ink4, marginTop: 3 }}>{badgeText}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 11, flexWrap: "wrap" }}>
+            {email ? (
+              <Button variant="secondary" onClick={() => copy(email)}>
+                {copied ? t("contact.copied") : t("contact.copy")}
+              </Button>
+            ) : null}
+            {email ? (
+              <a
+                href={`mailto:${email}`}
+                style={{ textDecoration: "none" }}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="ghost">{t("contact.email")}</Button>
+              </a>
+            ) : null}
+          </div>
+          {!phone && hasPhone ? (
+            <div style={{ marginTop: 13, paddingTop: 13, borderTop: `1px solid ${hairline}` }}>
+              <Button
+                variant="primary"
+                full
+                busy={busy === "phone"}
+                onClick={() => void reveal("phone")}
+              >
+                {costs
+                  ? t("contact.findPhone").replace("{n}", String(costs.phone))
+                  : t("contact.findPhoneNoPrice")}
+              </Button>
+            </div>
+          ) : null}
+          {!hasPhone ? (
+            <div style={{ marginTop: 13, paddingTop: 13, borderTop: `1px solid ${hairline}` }}>
+              <Muted>{t("contact.noPhone")}</Muted>
+            </div>
+          ) : null}
+        </div>
+      ) : justRevealed?.nothing ? (
+        // NOT "already owned": we hold nothing for this person. Saying otherwise is the bug the web UI had.
+        <Muted>{t("card.nothingOnFile")}</Muted>
+      ) : (
+        <div>
+          <div style={{ fontSize: 15, color: ink4, marginTop: 9, letterSpacing: "0.04em" }}>
+            {maskEmail(contact?.emailDomain ?? null) ?? t("contact.noEmail")}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <Button
+              variant="primary"
+              full
+              busy={busy === "email"}
+              disabled={!hasEmail}
+              onClick={() => void reveal("email")}
+            >
+              {!hasEmail
+                ? t("contact.noEmail")
+                : costs
+                  ? t("contact.reveal").replace("{n}", String(costs.email))
+                  : t("contact.revealNoPrice")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {error ? (
+        <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger-ink, #b91c1c)" }}>
+          {error}
+        </div>
+      ) : null}
+    </Well>
+  );
+}
+
+/** The signals list. Each row expands to the field, basis and grade it was derived from. */
+function SignalsList({ payload }: { payload: IntelPayload }): React.ReactElement | null {
+  const [open, setOpen] = useState<string | null>(null);
+  const signals = deriveSignals(payload.intel);
+  if (signals.length === 0) return null;
+
+  return (
+    <div>
+      <SectionLabel>{t("signals.label")}</SectionLabel>
+      {signals.map((s) => (
+        <div key={s.id}>
+          <button
+            type="button"
+            aria-expanded={open === s.id}
+            onClick={() => setOpen((cur) => (cur === s.id ? null : s.id))}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "11px 0",
+              background: "none",
+              border: "none",
+              borderBottom: `1px solid ${hairline}`,
+              fontFamily: "inherit",
+              textAlign: "left",
+              cursor: "pointer",
+              minHeight: 44,
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.35 }}>{s.title}</span>
+            <span style={{ fontSize: 11, color: ink4, whiteSpace: "nowrap" }}>{s.kind}</span>
+          </button>
+          {open === s.id ? (
+            <div
+              style={{
+                ...mono,
+                padding: "9px 0 11px",
+                borderBottom: `1px solid ${hairline}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                fontSize: 11,
+                color: ink4,
+                lineHeight: 1.55,
+              }}
+            >
+              <div>{s.field}</div>
+              <div>{s.basis}</div>
+              <div>{s.grade}</div>
+            </div>
+          ) : null}
+        </div>
+      ))}
+      <div style={{ marginTop: 9, fontSize: 11, color: ink4, lineHeight: 1.5 }}>
+        {t("signals.footer")}
+      </div>
+    </div>
+  );
+}
+
+export function ProspectTab({
+  payload,
+  loading,
+  onChanged,
+}: {
+  payload: IntelPayload | null;
+  loading: boolean;
+  onChanged: () => void;
+}): React.ReactElement {
+  if (loading || !payload) return <IdentitySkeleton />;
+
+  const { intel } = payload;
+  const person = intel.person;
+  const contact = intel.contact;
+  const name =
+    person?.fullName ??
+    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ??
+    null;
+  const title = person?.jobTitle ?? contact?.jobTitle ?? person?.headline ?? null;
+  const company = person?.companyName ?? contact?.companyName ?? null;
+  const location =
+    person?.locationRaw ??
+    [contact?.locationCity, contact?.locationCountry].filter(Boolean).join(", ") ??
+    null;
+  const primary =
+    intel.profile?.employment.find((e) => e.isPrimary && e.isCurrent) ??
+    intel.profile?.employment.find((e) => e.isCurrent);
+  const inSeat = primary ? tenure(primary.startedOn, primary.startPrecision) : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div style={{ display: "flex", gap: 13, alignItems: "center", paddingTop: 4 }}>
+        {/* Initials, not a photo: profile pictures are retained raw-only and are never projected into the
+            structured record (the 2026-08-16 decision), so the panel has none to show and does not pretend. */}
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: "50%",
+            background: surface3,
+            display: "grid",
+            placeItems: "center",
+            flex: "none",
+            fontSize: 13,
+            fontWeight: 600,
+            color: ink4,
+          }}
+        >
+          {initials(name)}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+            {name ?? t("identity.unknownName")}
+          </div>
+          {title || company ? (
+            <div style={{ fontSize: 12.5, color: ink2, marginTop: 3 }}>
+              {[title, company].filter(Boolean).join(" · ")}
+            </div>
+          ) : null}
+          <div style={{ fontSize: 11, color: ink4, marginTop: 2 }}>
+            {[location, inSeat ? t("identity.tenureInRole").replace("{tenure}", inSeat) : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </div>
+        </div>
+      </div>
+
+      <ContactCard payload={payload} onRevealed={onChanged} />
+
+      <SignalsList payload={payload} />
+
+      {intel.profile && intel.profile.employment.length > 0 ? (
+        <div>
+          <SectionLabel
+            right={t("experience.count").replace("{n}", String(intel.profile.employment.length))}
+          >
+            {t("experience.label")}
+          </SectionLabel>
+          {intel.profile.employment.map((e, i) => (
+            <div
+              // Employment rows carry no id of their own (Layer-0 ids never cross the boundary), so the
+              // composite of what identifies a stint is the key.
+              key={`${e.companyName ?? "?"}-${e.title ?? "?"}-${e.startedOn ?? i}`}
+              style={{ display: "flex", gap: 11, padding: "11px 0", borderBottom: `1px solid ${hairline}` }}
+            >
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  background: surface3,
+                  flex: "none",
+                  marginTop: 1,
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 11,
+                  color: ink4,
+                }}
+              >
+                {monogram(e.companyName)}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>
+                  {e.title ?? t("experience.untitled")}
+                </div>
+                <div style={{ fontSize: 12, color: ink3, marginTop: 1 }}>{e.companyName}</div>
+                <div style={{ fontSize: 11, color: ink4, marginTop: 2 }}>
+                  {dateRange(e) ?? t("education.noDates")}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {intel.profile && intel.profile.education.length > 0 ? (
+        <div>
+          <SectionLabel>{t("education.label")}</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {intel.profile.education.map((e, i) => (
+              <div key={`${e.schoolName ?? "?"}-${e.degree ?? i}`}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {[e.degree, e.schoolName].filter(Boolean).join(" · ")}
+                </div>
+                <div style={{ fontSize: 11, color: ink4, marginTop: 1 }}>
+                  {dateRange({ ...e, startPrecision: null, endPrecision: null }) ??
+                    t("education.noDates")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {intel.profile && intel.profile.skills.length > 0 ? (
+        <div>
+          <SectionLabel right={String(intel.profile.skills.length)}>
+            {t("skills.label")}
+          </SectionLabel>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {intel.profile.skills.map((s) => (
+              <Chip key={s}>{s}</Chip>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
