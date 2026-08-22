@@ -50,3 +50,15 @@ packages/ui/.ds-tsconfig.json
 # Dev secrets generated on first boot by start.sh (Ed25519 signing key, blind-index key, bootstrap password).
 # Generated per machine so two developers never share a signing key — never commit this.
 .dev-secrets.env
+
+# Local data drops handed to an agent or a developer as working material — provider payload samples, export
+# extracts, anything pasted in to reason about. `source plan/` is the current one: six real LinkedIn profile
+# and company payloads (named individuals, employment histories, member ids). Same reasoning as *.rdb above —
+# it is data, not source — but with sharper stakes: committing a real person's record publishes it into git
+# history, where deleting it means rewriting a shared history rather than a revert. The whole point of the
+# suppression and provenance machinery in this repo is that such records do not spread, and a stray
+# `git add -A` is the likeliest way one would.
+#
+# Verified never committed (git log --all -- "source plan/" is empty) at the time this rule was added.
+# Ignoring does NOT delete anything: the files stay on disk and stay usable as a test oracle.
+source plan/
