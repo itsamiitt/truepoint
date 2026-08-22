@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2339,
-  "fileSetHash": "sha256:d40eb40ff6d2c7749d09893f3834146cb0030420d1b9a803a6b0f73fbe35b3ff",
+  "fileCount": 2341,
+  "fileSetHash": "sha256:9ab9513c7aca6d73ca00d0c2920190443d6d69bd2af46e8ab8d2d6be070fefde",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -539,7 +539,6 @@
       "admin": [],
       "api": [
         "apps/api/src/features/contacts-resolve/index.ts",
-        "apps/api/src/features/contacts-resolve/intel.test.ts",
         "apps/api/src/features/contacts-resolve/routes.ts"
       ],
       "core": [],
@@ -1651,7 +1650,6 @@
         "packages/core/src/prospect/lists.ts",
         "packages/core/src/prospect/mergeContact.ts",
         "packages/core/src/prospect/mergePreview.ts",
-        "packages/core/src/prospect/profileIntel.ts",
         "packages/core/src/prospect/searchDatabase.ts",
         "packages/core/src/prospect/searchDatabaseCompanies.ts",
         "packages/core/src/prospect/tags.ts"
@@ -2650,9 +2648,11 @@
       "apps/doc/src/app/docs/[slug]/page.tsx",
       "apps/doc/src/app/docs/api/[endpoint]/page.tsx",
       "apps/doc/src/app/docs/layout.tsx",
+      "apps/doc/src/app/docs/machine-reference/page.tsx",
       "apps/doc/src/app/docs/page.tsx",
       "apps/doc/src/app/docs/playground/page.tsx",
       "apps/doc/src/app/layout.tsx",
+      "apps/doc/src/app/llms.txt/route.ts",
       "apps/doc/src/app/not-found.tsx",
       "apps/doc/src/app/page.tsx",
       "apps/doc/src/app/pricing/page.tsx",
@@ -2688,6 +2688,8 @@
       "apps/doc/src/content/guides/index.ts",
       "apps/doc/src/content/guides/pagination.ts",
       "apps/doc/src/content/guides/quickstart.ts",
+      "apps/doc/src/content/machineReference.test.ts",
+      "apps/doc/src/content/machineReference.ts",
       "apps/doc/src/content/pricing.ts",
       "apps/doc/src/content/site.ts",
       "apps/doc/src/content/trust.ts",
@@ -2705,6 +2707,8 @@
       "apps/doc/src/features/datasets/components/DatasetPage.tsx",
       "apps/doc/src/features/datasets/components/DatasetsPage.tsx",
       "apps/doc/src/features/datasets/index.ts",
+      "apps/doc/src/features/machine-reference/components/MachineReferencePage.tsx",
+      "apps/doc/src/features/machine-reference/index.ts",
       "apps/doc/src/features/marketing/components/EndpointIndex.tsx",
       "apps/doc/src/features/marketing/components/HomePage.tsx",
       "apps/doc/src/features/marketing/index.ts",
@@ -3320,7 +3324,6 @@
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
-      "packages/db/test/profileIntel.itest.ts",
       "packages/db/test/provenanceEvent.itest.ts",
       "packages/db/test/providerCallsLedger.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
@@ -3513,7 +3516,6 @@
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/pricing.ts",
       "packages/types/src/pricingAdmin.ts",
-      "packages/types/src/profileIntel.ts",
       "packages/types/src/provenanceEvent.test.ts",
       "packages/types/src/provenanceEvent.ts",
       "packages/types/src/providerConfigs.test.ts",

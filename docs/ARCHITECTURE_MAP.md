@@ -977,7 +977,8 @@ flowchart TD
 - **`apps/doc`** (`@leadwolf/doc`, `doc.truepoint.in`, port 3007; areas `apps/doc/app` · `…/components` ·
   `…/content` · `…/features`) — the **public developer portal**: landing, `/pricing`, `/datasets`,
   `/docs` (quickstart + guides + a generated endpoint reference), `/trust`, `/changelog`. Anonymous and
-  fully prerendered — 21 static routes, no session, no route handlers. Its substance lives in typed content
+  fully prerendered — no session, and its one route handler (`app/llms.txt/route.ts`) is pinned
+  `force-static` so the build never opts into a server runtime. Its substance lives in typed content
   modules under `src/content/` (endpoint specs, plan and credit tables, dataset field lists, the trust
   statement) which `src/features/*` render; there is no MDX and no `dangerouslySetInnerHTML` anywhere in the
   app. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
@@ -1261,4 +1262,20 @@ flowchart TD
   (`packages/{core/src/prospect,types/src}/profileIntel.ts`, `apps/api/src/features/contacts-resolve/
   intel.test.ts`), and a filesystem scan would have stamped paths into this map that main does not
   contain. Expect the next refresh from that branch to add them for real.
+  2026-08-22 refresh (machine reference, c8def679): 2335 → 2341 files — a new
+  `apps/doc/src/features/machine-reference/` slice and `content/machineReference.ts` (+ its test), the
+  `/docs/machine-reference` page and `app/llms.txt/route.ts`. All bucket into the existing
+  `shared["apps/doc/features"]`, `shared["apps/doc/content"]` and `shared["apps/doc/app"]` areas; no new
+  domain, no new warning, unassigned holds at **2**.
+
+  `/llms.txt` is the whole published contract as one plain-text document, GENERATED from the same typed
+  content the pages render. It is the app's first route handler, and the `force-static` export is what
+  keeps ADR-0048 §D2 intact — Next prerenders it to a file at build time, so the zero-env, fully-prerendered
+  property survives. The `apps/doc` paragraph above was corrected for that: the old "no route handlers"
+  wording is no longer true, and the route-count claim was dropped rather than re-counted, since it was the
+  kind of number that silently ages.
+
+  Generated from a clean worktree at c8def679 for the same reason as the previous two entries — the
+  concurrent `feat/extension-profile-intel-panel` session still has uncommitted files in this shared
+  checkout.
 ```
