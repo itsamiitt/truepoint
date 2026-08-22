@@ -181,6 +181,23 @@ module.exports = {
       // Left enabled rather than removed: it still covers non-aliased locations, and the eight error-level
       // boundary rules above are what this cruise is really for. Fixing it properly means a per-app cruise
       // using that app's tsconfig -- a build-tooling change, not a rule tweak.
+      //
+      // ── 2026-08-22: the alias blindness is NOT confined to this warning ────────────────────────────────
+      // The note above stops at orphans, which reads as "one noisy warning". The same unresolved edge blinds
+      // an ERROR-level rule: `no-cross-feature-import` matches on `^apps/web/src/features/`, so it cannot see
+      // `@/features/prospect` either. apps/web has NINE cross-feature imports today and that rule has never
+      // reported one of them. Quantified: 251 `@/` imports in apps/web, 0 resolved.
+      //   → `scripts/lint-cross-feature-imports.mjs` (`bun run lint:cross-feature`) closes that hole by
+      //     reading the import TEXT, and ratchets the nine so they cannot become ten.
+      //
+      // The blindness is now fully scoped, so nobody has to fear the worst or wave it away:
+      //   • no-cross-feature-import — blind, 9 live instances, covered by the script above.
+      //   • no-orphans             — blind, ~14 false positives, documented here.
+      //   • no-circular            — blind in principle, and MEASURED CLEAN: an alias-aware cycle scan over
+      //     all six apps (976 modules: web 490, admin 204, auth 100, doc 82, extension 54, forge 46) found
+      //     ZERO cycles. Nothing is hiding there today.
+      //   • every other error rule — unaffected. They target `packages/*` and `apps/*` edges written as
+      //     workspace specifiers or relative paths, neither of which goes through `@/`.
       comment:
         "Flag unreachable modules (dead code). NOTE: blind to `@/...` alias imports -- see above.",
       severity: "warn",
@@ -191,7 +208,10 @@ module.exports = {
   options: {
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: "(\\.test\\.[tj]sx?$|\\.itest\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/|/\\.next/)",
+      // `/dist/` joins the list because build OUTPUT is not source: apps/extension/dist held a bundled
+      // `.js` chunk that cruised as a module and reported as an orphan, which is true and meaningless.
+      path:
+        "(\\.test\\.[tj]sx?$|\\.itest\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/|/\\.next/|/dist/)",
     },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
