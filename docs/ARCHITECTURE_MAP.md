@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2382 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2383 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,19 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (S-09 re-verification cover, 0f7a32a0): 2382 → 2383 files —
+  `packages/db/test/reverification.itest.ts`, into the existing `shared["packages/db"]` area. (Not
+  `features["data-health"].db`, which is where I first assumed it would land and where it reads like it
+  belongs: the bucketing rule keys on the file's own PATH, and `packages/db/test/**` is not a repository, so
+  every itest in that directory is shared-area regardless of the domain it exercises.)
+
+  `runReverification` had no test of any kind, and it is both the S-09 freshness loop and a money-spending
+  one. Two things a future session should know before seeding contacts in an itest, learned the hard way
+  here: `feature_flags`' primary key column is **`key`** (only the OVERRIDE table uses `flag_key`), and
+  `is_revealed = true` alone is REJECTED — `contacts_reveal_by` / `contacts_reveal_at` require
+  `revealed_by_user_id` and `revealed_at` to be non-null exactly when it is. Not covered, deliberately: the
+  deadline/abort + checkpoint-cursor contract, which wants its own file.
 
   2026-08-22 refresh (title-taxonomy integrity, 091e9e44): 2381 → 2382 files —
   `packages/core/src/search/titleTaxonomy.test.ts`, into the existing `features["search"].core` slice.
