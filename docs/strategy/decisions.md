@@ -554,3 +554,16 @@ how a decision quietly becomes a non-decision. Every one is measured, not estima
 Two standing ratchets exist so none of the above can quietly get worse while it waits: ink-4 at 95,
 cross-feature at 9 (web) / 0 (everywhere else). Both fail the build if the number rises, and both refuse to
 pass silently if it falls — they demand the budget be tightened instead.
+
+6. **The email send-quota window: rolling 30 days, or the billing cycle?** (2026-08-22,
+   `packages/db/src/repositories/sendQuotaRepository.ts`.) Until now nothing reset `email_send_used` at all —
+   `resetPeriod` had no caller, so a tenant that hit its quota was blocked from sending forever. That part is
+   simply a bug and is fixed: `lock()` now rolls an elapsed window under the row lock it already holds.
+   What is NOT settled is the window's length. The method's own comment said "monthly/daily" and never chose,
+   so the fix ships a documented `SEND_QUOTA_PERIOD_DAYS = 30` — the choice that is defensible without knowing
+   the answer, because a rolling 30 days can never hand a tenant two windows' worth of sends inside one
+   calendar month, which is the direction that costs money.
+   **Decide:** keep the rolling window, or align it to the billing cycle (`billing_cycles`) so quota and
+   invoice describe the same period. If billing-aligned, the constant should be REPLACED by the cycle
+   boundary, not re-tuned — a unit test asserts the 30 deliberately, so changing the number alone fails the
+   build and sends the next reader here.

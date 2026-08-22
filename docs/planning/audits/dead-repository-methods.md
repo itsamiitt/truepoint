@@ -53,14 +53,36 @@ system do not produce the same scrape.
 Compliance impact: reads only; the query returns ids and timings and never `subject_email_blind_index`, so no
 personal data reaches a log line or a metric. Net effect on data subjects is positive.
 
+**`sendQuotaRepository.resetPeriod` — traced, confirmed real, fixed.**
+
+The first lead below, followed through. Nothing anywhere reset `email_send_used`: not a job, not a trigger,
+not a DEFAULT, no raw SQL — searched across `apps/`, `packages/` and every migration. `resetPeriod` was the
+only reset in the system and it documented itself as "driven by the P6 retention/period sweep", a sweep that
+was never built. Usage only ever went up, so a tenant that reached its quota was refused by
+`assertWithinQuota` **permanently**, with nothing short of hand-written SQL able to clear it.
+
+Latent, not live, and that is why it survived review: `email_send_quota` has no default, so every tenant is
+NULL (unlimited) until a platform admin calls `setQuota` — which does have callers. The trap springs the first
+time anyone sets a quota.
+
+Fixed by rolling the window inside `lock()`, under the `FOR UPDATE` it already holds, rather than by building
+the missing sweep: a sweep is one more thing that can be down, mis-scheduled, or never built, which is how the
+counter came to have no reset in the first place. Rolling at the point of use is self-healing and costs a
+single UPDATE on the first send after the window elapses. `snapshot()` reports the effective usage so a GET
+cannot claim a tenant is out of quota when the very next send would succeed.
+
+**Open decision recorded in `docs/strategy/decisions.md`:** the window is a rolling 30 days. The method's own
+comment said "monthly/daily" and never chose. If these quotas are meant to be billing-aligned, the constant
+should be replaced by the billing-cycle boundary rather than tuned.
+
 ## Worth verifying next — possible real gaps, not yet confirmed
 
 Each of these has no `.method(` call anywhere. None has been traced to a conclusion; they are ordered by what
-would be worst if true.
+would be worst if true. The one that has been traced is struck through — it was real.
 
 | Method | If it really has no caller |
 |---|---|
-| `sendQuotaRepository.resetPeriod` | A send quota that never resets its period — either sending stops permanently at the cap, or the reset happens in SQL somewhere and this is redundant. |
+| ~~`sendQuotaRepository.resetPeriod`~~ | ~~A send quota that never resets its period.~~ **Confirmed and fixed — see above.** |
 | `oauthConnectStateRepository.sweepExpired` | OAuth connect-state rows accumulate forever; expired state is retained rather than reaped. |
 | `eventOutboxRepository.prunePublished` | The transactional outbox (migration 0051) grows without bound — published rows are never pruned. |
 | `userRepository.markEmailVerified` | Almost certainly verified through another path; worth confirming which, because the alternative is that nothing marks an address verified. |
