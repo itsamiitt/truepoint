@@ -228,13 +228,23 @@ describe("retention control plane: RLS / access posture", () => {
     expect(verif?.mode).toBe("shadow");
 
     // INSERT is REJECTED under FORCE RLS (no INSERT policy → WITH CHECK denies → error).
-    await expect(
-      db.withTenantTx(scopeA(), (tx) =>
+    //
+    // Written as an explicit try/catch rather than `expect(...).rejects`, per the rule CLAUDE.md states and
+    // the note at activitiesPartitioned.itest.ts:233: handing a rejecting DB call to `.rejects` can leave the
+    // promise unsettled on the single pooled connection (itest pools are max:1), and the symptom is not a
+    // failure but a HANG — of this assertion and of every query after it. This file was doing exactly that:
+    // A1 burned the entire 540s timeout instead of failing or passing.
+    const insertError = await db
+      .withTenantTx(scopeA(), (tx) =>
         tx
           .insert(db.schema.retentionClassPolicies)
           .values({ dataClass: "itest_blocked_class", ttlDays: 1, mode: "shadow" }),
-      ),
-    ).rejects.toThrow();
+      )
+      .then(
+        () => "",
+        (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      );
+    expect(insertError).not.toBe("");
 
     // UPDATE / DELETE affect ZERO rows (no UPDATE/DELETE policy → no rows are visible to the command).
     const updated = await db.withTenantTx(scopeA(), (tx) =>
@@ -321,7 +331,16 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     await admin`UPDATE retention_class_policies SET mode = 'shadow'`;
   });
 
-  test("B3: flag OFF (default) - enabled:false, records nothing, deletes nothing", async () => {
+  test("B3: flag OFF (pinned) - enabled:false, records nothing, deletes nothing", async () => {
+    // Pinned rather than assumed. This case used to rely on the beforeEach `DELETE FROM
+    // tenant_feature_flags` leaving the tenant on the flag's seeded default — but migration 0119 set
+    // `global_enabled = true` on every defined flag, so an un-overridden tenant now evaluates ON and this
+    // test was asserting the gate-OFF contract against a gate-ON sweep. A per-tenant override wins over the
+    // global default either way (evaluateFlag precedence). Same repair as 1211879d / 90bd6caa.
+    await admin`
+      INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
+      VALUES ('retention_engine_enabled', ${tenantA}, false)
+      ON CONFLICT (flag_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`;
     await seedVerificationJobs(scopeA(), VERIF_OLD, 3);
     await seedImportJobRows(scopeA(), IMPORT_OLD, 2);
 
