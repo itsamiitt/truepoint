@@ -110,12 +110,18 @@ if (offenders.length === 0) {
 }
 
 process.stdout.write(
-  `${offenders.length} keyboard trap(s):\n\n${offenders.join("\n")}\n\n` +
-    "A composite ARIA role with tabIndex={-1} removes those options from the tab order, so arrow keys are the\n" +
-    "ONLY way to reach them. Without a key handler they are unreachable by keyboard — WCAG 2.2 SC 2.1.1.\n\n" +
-    "Add the pattern's other half: Arrow keys move (with wrap-around), Home/End jump to the ends,\n" +
-    "preventDefault so ArrowUp/Down do not scroll the page, and focus follows selection.\n" +
-    "apps/doc/src/features/playground/components/PlaygroundPage.tsx is a worked example.\n\n" +
-    "If the element genuinely needs no key handling, say why:  // roving-tabindex-ok: <reason>\n",
+  `${offenders.length} keyboard trap(s):
+
+${offenders.join("\n")}
+
+A composite ARIA role with tabIndex={-1} removes those options from the tab order, so arrow keys are the
+ONLY way to reach them. Without a key handler they are unreachable by keyboard — WCAG 2.2 SC 2.1.1.
+
+Add the pattern's other half: Arrow keys move (with wrap-around), Home/End jump to the ends,
+preventDefault so ArrowUp/Down do not scroll the page, and focus follows selection.
+apps/doc/src/features/playground/components/PlaygroundPage.tsx is a worked example.
+
+If the element genuinely needs no key handling, say why:  // roving-tabindex-ok: <reason>
+`,
 );
 process.exit(1);

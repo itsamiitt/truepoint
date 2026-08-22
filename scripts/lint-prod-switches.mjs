@@ -57,8 +57,9 @@ const switches = [
 
 if (switches.length === 0) {
   process.stdout.write(
-    `Found no explicit-"true" switches in ${ENV_SOURCE}. The schema shape probably changed — this check is\n` +
-      "now blind and must be updated rather than deleted.\n",
+    `Found no explicit-"true" switches in ${ENV_SOURCE}. The schema shape probably changed — this check is
+now blind and must be updated rather than deleted.
+`,
   );
   process.exit(1);
 }
@@ -81,19 +82,26 @@ if (unexpected.length === 0 && stale.length === 0) {
 
 if (unexpected.length > 0) {
   process.stdout.write(
-    `${unexpected.length} env switch(es) are set to "true" in ${TEMPLATE} without a recorded reason:\n\n` +
-      `${unexpected.map((n) => `  ${n}`).join("\n")}\n\n` +
-      "Since migration 0119 turned the per-tenant half of most flags globally on, arming the env half is\n" +
-      "often the whole enablement. If that is intended, add the switch to INTENTIONALLY_ARMED in\n" +
-      `${import.meta.url.split("/").pop()} with a sentence on why. If it is not, remove the line.\n`,
+    `${unexpected.length} env switch(es) are set to "true" in ${TEMPLATE} without a recorded reason:
+
+${unexpected.map((n) => `  ${n}`).join("\n")}
+
+Since migration 0119 turned the per-tenant half of most flags globally on, arming the env half is
+often the whole enablement. If that is intended, add the switch to INTENTIONALLY_ARMED in
+${import.meta.url.split("/").pop()} with a sentence on why. If it is not, remove the line.
+`,
   );
 }
 
 if (stale.length > 0) {
   process.stdout.write(
-    `\n${stale.length} allow-list entr(ies) are no longer armed in the template:\n\n` +
-      `${stale.map((n) => `  ${n}`).join("\n")}\n\n` +
-      "Drop them from INTENTIONALLY_ARMED so the list keeps describing reality.\n",
+    `
+${stale.length} allow-list entr(ies) are no longer armed in the template:
+
+${stale.map((n) => `  ${n}`).join("\n")}
+
+Drop them from INTENTIONALLY_ARMED so the list keeps describing reality.
+`,
   );
 }
 

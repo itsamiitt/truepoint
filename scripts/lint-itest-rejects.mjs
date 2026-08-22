@@ -80,16 +80,22 @@ if (offenders.length === 0) {
 }
 
 process.stdout.write(
-  `expect(...).rejects found in ${offenders.length} place(s) across ${scanned} itest files.\n\n` +
-    `A rejecting DB call handed to .rejects can be left unsettled on the single pooled connection, and the\n` +
-    `symptom is a HANG rather than a failure — the suite eats its timeout and the eventual error points at\n` +
-    `the driver, not at the test. Use the .then-capture form instead:\n\n` +
-    `  const err = await doTheThing().then(\n` +
-    `    () => "",\n` +
-    `    (e) => (e instanceof Error ? e.message : String(e)),\n` +
-    `  );\n` +
-    `  expect(err).toMatch(/expected/);\n\n` +
-    `If the promise genuinely cannot hold a pooled connection, say so on the line above:\n` +
-    `  // itest-rejects-ok: <reason>\n\n${offenders.join("\n")}\n`,
+  `expect(...).rejects found in ${offenders.length} place(s) across ${scanned} itest files.
+
+A rejecting DB call handed to .rejects can be left unsettled on the single pooled connection, and the
+symptom is a HANG rather than a failure — the suite eats its timeout and the eventual error points at
+the driver, not at the test. Use the .then-capture form instead:
+
+  const err = await doTheThing().then(
+    () => "",
+    (e) => (e instanceof Error ? e.message : String(e)),
+  );
+  expect(err).toMatch(/expected/);
+
+If the promise genuinely cannot hold a pooled connection, say so on the line above:
+  // itest-rejects-ok: <reason>
+
+${offenders.join("\n")}
+`,
 );
 process.exit(1);

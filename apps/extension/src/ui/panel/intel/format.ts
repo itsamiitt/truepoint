@@ -19,7 +19,7 @@
  * belongs. Every place the panel composes a name or a location goes through this instead.
  */
 export function joined(parts: Array<string | null | undefined>, sep = " "): string | null {
-  const out = parts.filter((p): p is string => Boolean(p && p.trim())).join(sep);
+  const out = parts.filter((p): p is string => Boolean(p?.trim())).join(sep);
   return out.length > 0 ? out : null;
 }
 
