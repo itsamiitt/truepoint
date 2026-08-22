@@ -505,3 +505,52 @@ integrations"/"investors stated" would have required mining the company descript
 `specialties` field and says plainly that it is the company's own words. Credit prices are interpolated from
 `GET /credits/reveal-costs` — the design's "2 credits" for a phone is an ops setting
 (`REVEAL_COST_PHONE`, currently 1), not a number in code.
+
+---
+
+2026-08-22 — FIVE OPEN DECISIONS, gathered in one place. None is a blocked task waiting on effort; each is a
+judgement that belongs to a human, and each is currently the reason some real work is not proceeding. They
+accumulated across a long hardening session and were scattered over ~28 commits and four documents, which is
+how a decision quietly becomes a non-decision. Every one is measured, not estimated.
+
+1. **`--tp-ink-4` as a text colour — 95 sites.** The token is 2.54:1 on white and worse on every tint, below
+   the WCAG AA floor for normal text (4.5) AND for large text (3.0), so no text size makes it pass. The
+   selectors are mostly informational (`.note`, `.footnote`, `.kpiLabel`, `.timelineTime`, `.sectionHint`);
+   a minority are genuinely exempt (a placeholder, icon glyphs, disabled states — 1.4.3 exempts those).
+   Not a find-and-replace: `--tp-ink-3` clears AA on white and `--tp-surface-2` but FAILS on `--tp-surface-3`
+   and `--nav-hover-fill`, so it is a per-surface call. Held at 95 by
+   `packages/ui/src/inkFourContrast.test.ts`; two shared-primitive cases (every form hint, every page eyebrow)
+   were already fixed because they were unambiguous and in `packages/ui`.
+   **Decide:** migrate per surface, or accept a documented subset as exempt.
+
+2. **Nine cross-feature imports in `apps/web`.** accounts→prospect (×5), accounts→signals, lists→prospect,
+   search→prospect, home→api-usage. dependency-cruiser's `no-cross-feature-import` never reported them —
+   the cruise runs without a per-app tsconfig so the `@/*` alias does not resolve (251 unresolved, 0 resolved),
+   and the rule matches on resolved paths. Now held by `bun run lint:cross-feature`; every other app is at zero.
+   **Decide:** move the shared pieces into `shared/`, or acknowledge `prospect` as a base other destinations
+   may build on and record that as the rule.
+
+3. **I4's "merge→split→re-derive" exit gate cannot be met** (docs/planning/prospect-database-platform/13 §3a).
+   Layer-0 refuses unmerge on purpose — `erRepository.confirmMerge` says "there is no unmerge, and pretending
+   otherwise would invite a caller to try" — and Layer-1 records re-pointed children as tallies, not row ids,
+   so no merge either grain performs today is invertible. That is unfixable retroactively.
+   **Decide:** ship a split (which needs a per-row merge journal first), or amend the exit gate. Building
+   against code that says there is no unmerge would be the silent reinterpretation rule 6 forbids.
+
+4. **X3 security sign-off** (database-management-research/16). Unchanged and still the gate on A1/A2 to `main`.
+   The audit's own register says every remaining item there is blocked by design and "the next move is a human
+   decision, not more code" — worth taking at face value rather than re-scanning.
+
+5. **`users` / `user_sessions` grant posture** (docs/planning/audits/identity-grant-posture.md). Re-verified
+   2026-08-22: neither has an RLS policy or a REVOKE, while seven sibling auth tables have one or the other.
+   `users.is_platform_admin` is WRITABLE by the customer app role — a privilege-escalation primitive, and the
+   sharpest edge in the gap. The obvious fixes both fail as written: a blanket REVOKE breaks 20 join sites,
+   and a column-level REVOKE does nothing in PostgreSQL against a table-level grant (you must revoke the table
+   privilege and re-grant per column, which obliges every future column). The login path is outside the blast
+   radius either way — it runs on the owner connection, not `leadwolf_app`.
+   **Decide:** option A (policy on `user_sessions` keyed on `user_id`), B (column re-grant on `users`),
+   C (route both behind the auth service and REVOKE), or D (accept, documented). Security has final say.
+
+Two standing ratchets exist so none of the above can quietly get worse while it waits: ink-4 at 95,
+cross-feature at 9 (web) / 0 (everywhere else). Both fail the build if the number rises, and both refuse to
+pass silently if it falls — they demand the budget be tightened instead.
