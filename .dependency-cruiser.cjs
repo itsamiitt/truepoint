@@ -210,8 +210,7 @@ module.exports = {
     exclude: {
       // `/dist/` joins the list because build OUTPUT is not source: apps/extension/dist held a bundled
       // `.js` chunk that cruised as a module and reported as an orphan, which is true and meaningless.
-      path:
-        "(\\.test\\.[tj]sx?$|\\.itest\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/|/\\.next/|/dist/)",
+      path: "(\\.test\\.[tj]sx?$|\\.itest\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/|/\\.next/|/dist/)",
     },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

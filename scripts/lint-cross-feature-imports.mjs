@@ -94,8 +94,12 @@ if (over.length === 0 && lines.length === 0) {
 
 if (lines.length > 0 && over.length === 0) {
   process.stdout.write(
-    `Cross-feature imports went DOWN — good, now make it stick:\n\n${lines.join("\n")}\n\n` +
-      "A ratchet nobody tightens stops being a ratchet.\n",
+    `Cross-feature imports went DOWN — good, now make it stick:
+
+${lines.join("\n")}
+
+A ratchet nobody tightens stops being a ratchet.
+`,
   );
   process.exit(1);
 }
