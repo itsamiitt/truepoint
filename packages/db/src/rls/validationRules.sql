@@ -11,10 +11,16 @@
 -- not aspirational.
 --
 -- The line this comment used to carry — "CI's drizzle-kit generate emits the canonical migration + reconciles the
--- snapshot" — is NOT safe to act on. The snapshot lineage is hand-stopped at 0028 while the journal is at 0138, so
--- a naive generate diffs against a decade-old lineage and emits ~110 migrations of DDL in one file. See
--- docs/planning/database-management-research/16-Implementation-Audit.md X2: giving this table a hand-written
--- migration like its 110 neighbours is the likelier resolution, and it is a decision, not a CI chore.
+-- snapshot" — should not be acted on blind. drizzle-kit diffs against the NEWEST snapshot, which is 0107, so a
+-- generate would emit the delta for the 31 migrations since — and 21 migrations in this tree carry
+-- "HAND-AUTHORED (drizzle-kit generate is forbidden)" precisely because their DDL (RLS policies, partitions,
+-- expression/operator-class indexes, the forge schema) is not expressible in the schema files drizzle diffs.
+-- The house convention is therefore hand-authored SQL; this table wants a hand-written migration like its
+-- neighbours. See docs/planning/database-management-research/16-Implementation-Audit.md X2.
+--
+-- (0083_tan_wolfpack.sql REBASELINED the chain after it broke at 0029 — it is an intentionally empty migration
+-- carrying a correct snapshot, and its header is the best explanation of this hazard in the repo. Read it
+-- before touching migration tooling.)
 CREATE TABLE IF NOT EXISTS validation_rules (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   name varchar(120) NOT NULL,
