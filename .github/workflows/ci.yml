@@ -97,6 +97,11 @@ jobs:
       # scheduledImports 240s, enrichmentPolicy 240s, bulkImport.pipeline 120s).
       - name: Integration-test rejection shape
         run: bun run lint:itest-rejects
+      # Fails if an env kill-switch is armed in the production template without a recorded reason. Since
+      # 0119 flipped the per-tenant half of most flags globally on, arming the env half is often the WHOLE
+      # enablement — one template line can take a dark train live for every tenant.
+      - name: Production switch posture
+        run: bun run lint:prod-switches
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
