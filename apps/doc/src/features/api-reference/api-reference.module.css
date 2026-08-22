@@ -1,8 +1,11 @@
-/* api-reference.module.css — the /docs shell: a persistent sidebar next to a reading column. */
+/* api-reference.module.css — the /docs shell and the endpoint reference surfaces, in the API-documentation
+ * design's shape: a persistent rail beside a reading column, and endpoint pages split into a prose column
+ * with a sticky sample column beside it. Every colour and space is a --tp-* token; the raw numbers are
+ * 1px borders, the column widths and the breakpoints, which the tokens do not cover. */
 
 .shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   gap: var(--tp-space-8);
   align-items: start;
 }
@@ -11,9 +14,11 @@
    bounded by the viewport minus the masthead, so a long index cannot push the page height around. */
 .sidebar {
   position: sticky;
-  top: 76px;
-  max-height: calc(100vh - 96px);
+  top: 72px;
+  max-height: calc(100vh - 92px);
   overflow-y: auto;
+  padding-right: var(--tp-space-4);
+  border-right: 1px solid var(--tp-hairline);
 }
 
 .sidebarGroup {
@@ -41,7 +46,7 @@
   display: block;
   padding: var(--tp-space-2) var(--tp-space-3);
   border-radius: var(--tp-radius-sm);
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--tp-ink-2);
   text-decoration: none;
   transition: background var(--tp-duration-fast) var(--tp-ease);
@@ -56,61 +61,232 @@
   font-weight: 600;
 }
 
+/* ── Facts strip (docs index) ─────────────────────────────────────────────────────────────────────────── */
+/* The design's reference header card: the base URL on top, then a row of contract facts. Everything in it
+   restates a fact published elsewhere on the site — it is orientation, not new claims. */
+
+.facts {
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.factsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tp-space-4);
+  flex-wrap: wrap;
+  padding: var(--tp-space-3) var(--tp-space-4);
+  border-bottom: 1px solid var(--tp-hairline);
+  background: var(--tp-surface-2);
+}
+
+.factsBarLabel {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tp-space-3);
+  min-width: 0;
+}
+
+.factsEyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+
+.factsUrl {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tp-ink);
+  word-break: break-all;
+}
+
+.factsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.factsCell {
+  padding: var(--tp-space-3) var(--tp-space-4);
+}
+.factsCell + .factsCell {
+  border-left: 1px solid var(--tp-hairline);
+}
+
+.factsCellLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+  margin-bottom: var(--tp-space-1);
+}
+
+.factsCellValue {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tp-ink);
+}
+
 /* ── Endpoint page ────────────────────────────────────────────────────────────────────────────────────── */
 
+/* Method + path + billing, above the title — the design's signature row. */
 .signature {
   display: flex;
   align-items: center;
   gap: var(--tp-space-3);
-  margin-top: var(--tp-space-5);
-  padding: var(--tp-space-3) var(--tp-space-4);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-  background: var(--tp-surface-3);
-  overflow-x: auto;
+  flex-wrap: wrap;
+  margin-bottom: var(--tp-space-4);
 }
 
+/* Method pills are filled, with the word carrying the meaning (never colour alone). GET takes the ink fill
+   and POST the cobalt fill: the design's white-on-success GET pill measures 3.3:1 and fails the AA floor,
+   so the ink fill stands in for it. Cobalt-as-fill with white type is 5.7:1 — see contrast.test.ts. */
 .method {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--tp-ink);
-  padding: var(--tp-space-1) var(--tp-space-2);
+  color: var(--tp-on-fill);
   border-radius: var(--tp-radius-sm);
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
+  padding: 3px 7px;
+}
+.methodGet {
+  background: var(--tp-btn);
+}
+.methodPost {
+  background: var(--tp-cobalt);
 }
 
 .path {
   font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--tp-ink);
-  white-space: nowrap;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  word-break: break-all;
+}
+
+/* What the call costs, said next to what it is. Free is quiet; metered is the tinted chip. Both run ink-2:
+   ink-3 on cobalt-50 is 4.2:1 and fails AA (contrast.test.ts holds the pair that passes). */
+.costFree {
+  font-size: 11.5px;
+  color: var(--tp-ink-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  padding: 2px 9px;
+}
+.costMetered {
+  font-size: 11.5px;
+  color: var(--tp-ink-2);
+  background: var(--tp-cobalt-50);
+  border-radius: var(--tp-radius-sm);
+  padding: 2px 9px;
+}
+
+/* The split: prose left, sticky samples right. One column again under 1100px — the samples follow the prose
+   rather than truncating it. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: var(--tp-space-8);
+  align-items: start;
+  margin-top: var(--tp-space-6);
+}
+
+.aside {
+  position: sticky;
+  top: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-4);
+  min-width: 0;
+}
+
+.asideNote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--tp-ink-3);
+  padding: 0 var(--tp-space-1);
 }
 
 .billing {
-  margin: var(--tp-space-5) 0 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.65;
   color: var(--tp-ink-2);
   max-width: 70ch;
 }
 
 .section {
   margin-top: var(--tp-space-8);
+  min-width: 0;
 }
 
 .sectionHeading {
   margin: 0 0 var(--tp-space-3);
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--tp-ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
   scroll-margin-top: 80px;
 }
 
-.exampleGrid {
-  display: grid;
-  gap: var(--tp-space-4);
+/* One parameter, as the design's definition card: name, type and requirement on the first line, the
+   description under them. */
+.paramCard {
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: var(--tp-space-4);
+}
+.paramCard + .paramCard {
+  margin-top: var(--tp-space-3);
+}
+
+.paramHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tp-space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--tp-space-1);
+}
+
+.paramName {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.paramType {
+  font-size: 11.5px;
+  color: var(--tp-ink-3);
+}
+
+/* --danger-ink was darkened in tokens.css precisely so small annotations like this clear AA on white. */
+.paramRequired {
+  font-size: 11.5px;
+  color: var(--danger-ink);
+}
+
+.paramDescription {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--tp-ink-2);
+}
+
+@media (max-width: 1100px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: var(--tp-space-6);
+  }
+  .aside {
+    position: static;
+  }
 }
 
 @media (max-width: 900px) {
@@ -121,7 +297,19 @@
   .sidebar {
     position: static;
     max-height: none;
+    padding-right: 0;
     padding-bottom: var(--tp-space-4);
+    border-right: 0;
     border-bottom: 1px solid var(--tp-hairline-2);
+  }
+}
+
+@media (max-width: 640px) {
+  .factsGrid {
+    grid-template-columns: 1fr;
+  }
+  .factsCell + .factsCell {
+    border-left: 0;
+    border-top: 1px solid var(--tp-hairline);
   }
 }

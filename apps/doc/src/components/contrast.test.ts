@@ -21,12 +21,23 @@ const TOKEN = {
   "--tp-ink-2": "#374151",
   "--tp-ink-3": "#6b7280",
   "--tp-ink-4": "#9ca3af",
+  "--tp-cobalt": "#2563c9",
   "--tp-cobalt-700": "#1e4fa3",
+  "--tp-btn": "#111827",
+  "--tp-on-fill": "#ffffff",
+  "--tp-twilight": "#0c0e1a",
+  "--danger-ink": "#8c5f5f",
   "--tp-surface": "#ffffff",
   "--tp-surface-2": "#f9fafb",
   "--tp-surface-3": "#f4f5f7",
   "--tp-cobalt-50": "#e9f0fc",
   "--nav-hover-fill": "#f3f4f6",
+  /* The dark code panel paints white at measured alphas over --tp-twilight. These are the composited
+     results (alpha·255 + (1−alpha)·channel), asserted here because rgba cannot be — change an alpha in
+     prose.module.css and its blend here must move with it. */
+  "--blend-code-label": "#a3a3a8" /* rgba(255,255,255,.62) over twilight */,
+  "--blend-code-copy": "#dbdbdd" /* rgba(255,255,255,.85) over twilight */,
+  "--blend-code-text": "#ececee" /* rgba(255,255,255,.92) over twilight */,
 } as const;
 
 type Token = keyof typeof TOKEN;
@@ -61,12 +72,19 @@ const USED_PAIRS: readonly { fg: Token; bg: Token; where: string }[] = [
   { fg: "--tp-ink-2", bg: "--tp-surface", where: "prose paragraphs, card bodies" },
   { fg: "--tp-ink-3", bg: "--tp-surface", where: "eyebrows, section notes, changelog dates" },
   { fg: "--tp-ink-3", bg: "--tp-surface-2", where: "footer headings and notes" },
-  { fg: "--tp-ink-2", bg: "--tp-surface-3", where: "code-block language label" },
-  { fg: "--tp-ink", bg: "--tp-surface-3", where: "code samples, inline code, endpoint signature" },
+  { fg: "--tp-ink", bg: "--tp-surface-3", where: "inline code" },
+  { fg: "--tp-ink", bg: "--tp-surface-2", where: "facts-strip base URL, on the tinted bar" },
   { fg: "--tp-ink-2", bg: "--nav-hover-fill", where: "endpoint-index row cells, on hover" },
   { fg: "--tp-ink", bg: "--nav-hover-fill", where: "nav and sidebar links, on hover" },
   { fg: "--tp-cobalt-700", bg: "--tp-surface", where: "links" },
   { fg: "--tp-cobalt-700", bg: "--tp-cobalt-50", where: "current nav item" },
+  { fg: "--tp-on-fill", bg: "--tp-btn", where: "GET method pill" },
+  { fg: "--tp-on-fill", bg: "--tp-cobalt", where: "POST method pill" },
+  { fg: "--tp-ink-2", bg: "--tp-cobalt-50", where: "metered-cost chip" },
+  { fg: "--danger-ink", bg: "--tp-surface", where: "required-parameter annotation" },
+  { fg: "--blend-code-label", bg: "--tp-twilight", where: "code panel language label" },
+  { fg: "--blend-code-copy", bg: "--tp-twilight", where: "code panel copy control" },
+  { fg: "--blend-code-text", bg: "--tp-twilight", where: "code panel sample text" },
 ];
 
 describe("WCAG 2.2 AA contrast for every pair the app paints", () => {
