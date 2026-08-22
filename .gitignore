@@ -62,3 +62,14 @@ packages/ui/.ds-tsconfig.json
 # Verified never committed (git log --all -- "source plan/" is empty) at the time this rule was added.
 # Ignoring does NOT delete anything: the files stay on disk and stay usable as a test oracle.
 source plan/
+
+# Spreadsheet + CSV drops. These are THIS product's PII formats in both directions: bulk contact export,
+# audit-log export and billing export all write CSV, and the import path takes CSV/XLSX uploads — so testing
+# either end locally leaves a file of real revealed contacts sitting in the tree. Zero .csv/.xlsx/.xls files
+# are tracked today, so this costs nothing and closes the same hole as the `source plan/` rule above.
+#
+# If a genuine FIXTURE is ever needed (a tiny, synthetic, reserved-domain sample — ADR-0048 D5 discipline),
+# un-ignore it explicitly rather than weakening the rule:  !packages/db/test/fixtures/whatever.csv
+*.csv
+*.xlsx
+*.xls
