@@ -80,12 +80,17 @@ function sourceFiles(dir, out = []) {
  * so a reported line still points where a human will look.
  */
 function stripNonColour(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
-    .replace(/^\s*\/\/.*$/gm, (match) => " ".repeat(match.length))
-    .replace(/var\(\s*--[a-z0-9-]+\s*,\s*#[0-9a-fA-F]{3,8}\s*\)/g, (match) =>
-      " ".repeat(match.length),
-    );
+  return (
+    text
+      .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
+      // Horizontal whitespace ONLY. `^\s*//` swallows the newlines above a comment in multiline mode, and
+      // blanking them shifts every reported line number after it — see lint-batch-insert-bounds.mjs, where that
+      // moved a finding by 40 lines.
+      .replace(/^[^\S\r\n]*\/\/.*$/gm, (match) => " ".repeat(match.length))
+      .replace(/var\(\s*--[a-z0-9-]+\s*,\s*#[0-9a-fA-F]{3,8}\s*\)/g, (match) =>
+        " ".repeat(match.length),
+      )
+  );
 }
 
 const offenders = [];

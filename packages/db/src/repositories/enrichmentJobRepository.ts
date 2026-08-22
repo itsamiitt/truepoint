@@ -481,6 +481,10 @@ export const enrichmentJobRepository = {
   async createChunks(scope: TenantScope, values: ChunkCreateValues[]): Promise<string[]> {
     if (values.length === 0) return [];
     return withTenantTx(scope, async (tx) => {
+      // batch-insert-bounds-ok: one row per CHUNK BAND, i.e. total/CHUNK_ROWS — a 2M-row job plans 200 of
+      // them, which is nowhere near the bind-parameter ceiling. Deliberately left as ONE statement: the doc
+      // comment above turns on this insert being atomic, so a crashed-then-re-driven job never observes a
+      // partial chunk set and mistake it for "already planned".
       const rows = await tx
         .insert(enrichmentJobChunks)
         .values(values)

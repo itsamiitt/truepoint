@@ -76,7 +76,7 @@ news/social feeds. See 04-opportunity-scores.md.
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
   `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
   `bun run lint:secrets` · `bun run lint:roving-tabindex` · `bun run lint:design-tokens` ·
-  `bun run lint:cross-feature` · `bun run db:migrate`.
+  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run db:migrate`.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in

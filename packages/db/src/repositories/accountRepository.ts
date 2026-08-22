@@ -5,6 +5,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { accounts } from "../schema/contacts.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 
 /** Firmographic fields the rollup may set (24 Phase-0.5). Only provided fields are written. */
 export interface AccountFirmographicsPatch {
@@ -90,34 +91,39 @@ export const accountRepository = {
     const values = [...deduped.values()];
     if (values.length === 0) return new Map();
 
-    const rows = await tx
-      .insert(accounts)
-      .values(
-        values.map((input) => ({
-          tenantId: input.tenantId,
-          workspaceId: input.workspaceId,
-          name: input.name,
-          domain: input.domain,
-          masterCompanyId: input.masterCompanyId ?? null,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [accounts.workspaceId, accounts.domain],
-        // Match the S-A5 live-only partial arbiter (see upsertByDomain) — `AND deleted_at IS NULL` is required
-        // for partial-index inference once 0061 is applied; behaviour-neutral until soft-delete writes land.
-        targetWhere: sql`${accounts.domain} IS NOT NULL AND ${accounts.deletedAt} IS NULL`,
-        set: {
-          name: sql`excluded.name`,
-          updatedAt: new Date(),
-          // Never overwrite an existing bridge with null (mirror upsertByDomain): keep the prior value when the
-          // incoming row resolved no company. `excluded.*` is the proposed row; `accounts.*` is the existing one.
-          masterCompanyId: sql`coalesce(excluded.master_company_id, ${accounts.masterCompanyId})`,
-        },
-      })
-      .returning({ id: accounts.id, domain: accounts.domain });
-
+    // Sliced for the bind-parameter ceiling (bindLimit.ts): 5 parameters a row, so ~13,000 rows per
+    // statement. An import band of 10_000 distinct domains sits just under that today — close enough that
+    // raising CHUNK_ROWS, which its own comment calls a tuning target, would break this silently.
     const out = new Map<string, string>();
-    for (const r of rows) if (r.domain) out.set(r.domain, r.id);
+    for (const slice of sliceForBindLimit(values)) {
+      const rows = await tx
+        .insert(accounts)
+        .values(
+          slice.map((input) => ({
+            tenantId: input.tenantId,
+            workspaceId: input.workspaceId,
+            name: input.name,
+            domain: input.domain,
+            masterCompanyId: input.masterCompanyId ?? null,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [accounts.workspaceId, accounts.domain],
+          // Match the S-A5 live-only partial arbiter (see upsertByDomain) — `AND deleted_at IS NULL` is required
+          // for partial-index inference once 0061 is applied; behaviour-neutral until soft-delete writes land.
+          targetWhere: sql`${accounts.domain} IS NOT NULL AND ${accounts.deletedAt} IS NULL`,
+          set: {
+            name: sql`excluded.name`,
+            updatedAt: new Date(),
+            // Never overwrite an existing bridge with null (mirror upsertByDomain): keep the prior value when the
+            // incoming row resolved no company. `excluded.*` is the proposed row; `accounts.*` is the existing one.
+            masterCompanyId: sql`coalesce(excluded.master_company_id, ${accounts.masterCompanyId})`,
+          },
+        })
+        .returning({ id: accounts.id, domain: accounts.domain });
+
+      for (const r of rows) if (r.domain) out.set(r.domain, r.id);
+    }
     return out;
   },
 

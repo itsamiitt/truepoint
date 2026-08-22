@@ -130,6 +130,12 @@ jobs:
       # text directly, and ratchets apps/web's 9 known imports so they cannot become 10.
       - name: Cross-feature imports
         run: bun run lint:cross-feature
+      # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
+      # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
+      # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every
+      # bulk import of a full chunk threw. Dark feature + a soak suite that had never run = nobody noticed.
+      - name: Batch inserts stay under the bind-parameter ceiling
+        run: bun run lint:batch-inserts
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
