@@ -195,11 +195,18 @@ jobs:
   itests:
     name: Integration tests — *.itest.ts on Postgres + Redis (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # 114 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
-    # "cancelled" was this timeout. Four round-robin shards (~29 files each) keep every job under the ceiling.
-    # The shard split is `find | sort` + index mod 4, so a NEW *.itest.ts is picked up with no registry to
-    # update — but watch the per-shard count as files are added: the 40-minute ceiling is the next thing to
-    # give, and the fix is a fifth shard, not a longer timeout.
+    # 129 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
+    # "cancelled" was this timeout. Four round-robin shards (32-33 files each) keep every job under the
+    # ceiling. The shard split is `find | sort` + index mod 4, so a NEW *.itest.ts is picked up with no
+    # registry to update — but watch the per-shard count as files are added: the 40-minute ceiling is the
+    # next thing to give, and the fix is a fifth shard, not a longer timeout.
+    #
+    # Count updated 2026-08-22 (was 114/~29). The ceiling got FURTHER away despite the growth, because four
+    # suites were each stalling on the banned `expect(...).rejects` shape rather than failing — roughly 19
+    # minutes of pure wall-clock, unevenly spread: shard 3 lost 9 min to retention alone, shard 1 lost 6 min
+    # across scheduledImports + bulkImport.pipeline, shard 2 lost 4 min to enrichmentPolicy. All four are
+    # fixed and `bun run lint:itest-rejects` now fails the shape in the gates job, so that class of silent
+    # budget burn cannot come back. Read a rising shard time as new work, not as this.
     strategy:
       fail-fast: false
       matrix:
