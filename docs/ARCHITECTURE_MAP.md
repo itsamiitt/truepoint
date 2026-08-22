@@ -1284,4 +1284,17 @@ flowchart TD
   `apps/api/src/features/contacts-resolve/intel.test.ts` and `packages/db/test/profileIntel.itest.ts`.
   The index is corrected here so the tree hash matches main again; the one-line PURPOSES for that work
   belong to its own author and are not invented here.
+  2026-08-22 refresh (OpenAPI document, 4f36c290): 2345 → 2352 files. Three are this change —
+  `content/openapi.ts` (+ its test)
+  and `app/openapi.json/route.ts`, into the existing `shared["apps/doc/content"]` and
+  `shared["apps/doc/app"]` areas. The other four arrived with 1f0ec555 (extension service-worker
+  plumbing for the Profile Intelligence Panel), which landed on main between the two refreshes; its files
+  are indexed here and its one-line purposes belong to its own author. No new domain, no new warning,
+  unassigned holds at **2**.
+
+  The portal now publishes TWO generated machine artifacts from one source, and the split is the point:
+  `/llms.txt` is prose that can label a planned endpoint in words, while `/openapi.json` EXCLUDES planned
+  endpoints entirely — a spec has no register for "planned" that a client generator respects, so an
+  operation in `paths` that was never built becomes a shipped client that 404s. The spec names what it
+  withheld in its own description. Both routes are `force-static`.
 ```

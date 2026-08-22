@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2348,
-  "fileSetHash": "sha256:a2bd413891a39a1b7bce28b578ab91c32739520defa74776d0dbd78fec4824f8",
+  "fileCount": 2352,
+  "fileSetHash": "sha256:74af0ce90a9b1eebab93267de94db5d353aa72cba8cef9de64b7b828cce08468",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2656,6 +2656,7 @@
       "apps/doc/src/app/layout.tsx",
       "apps/doc/src/app/llms.txt/route.ts",
       "apps/doc/src/app/not-found.tsx",
+      "apps/doc/src/app/openapi.json/route.ts",
       "apps/doc/src/app/page.tsx",
       "apps/doc/src/app/pricing/page.tsx",
       "apps/doc/src/app/robots.ts",
@@ -2692,6 +2693,8 @@
       "apps/doc/src/content/guides/quickstart.ts",
       "apps/doc/src/content/machineReference.test.ts",
       "apps/doc/src/content/machineReference.ts",
+      "apps/doc/src/content/openapi.test.ts",
+      "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
       "apps/doc/src/content/site.ts",
       "apps/doc/src/content/trust.ts",
@@ -2750,6 +2753,7 @@
       "apps/extension/src/background/index.ts",
       "apps/extension/src/background/lookup/cache.test.ts",
       "apps/extension/src/background/lookup/cache.ts",
+      "apps/extension/src/background/lookup/intel.test.ts",
       "apps/extension/src/background/lookup/intel.ts",
       "apps/extension/src/background/lookup/resolver.test.ts",
       "apps/extension/src/background/lookup/resolver.ts",
