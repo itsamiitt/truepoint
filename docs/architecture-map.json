@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2365,
-  "fileSetHash": "sha256:c357360e536e40c73e84f73c455613def1d43532087f215da0cf6c32ab607e82",
+  "fileCount": 2368,
+  "fileSetHash": "sha256:ef0434a49f69de12d879bb311166ab828a66ccf13eb2746ab7c62f33b40ddb5d",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2644,6 +2644,7 @@
       "apps/doc/scripts/verify.mjs"
     ],
     "apps/doc/app": [
+      "apps/doc/src/app/changelog.xml/route.ts",
       "apps/doc/src/app/changelog/page.tsx",
       "apps/doc/src/app/datasets/[slug]/page.tsx",
       "apps/doc/src/app/datasets/page.tsx",
@@ -2685,6 +2686,8 @@
       "apps/doc/src/content/endpoints/person.ts",
       "apps/doc/src/content/endpoints/search.ts",
       "apps/doc/src/content/endpoints/shared.ts",
+      "apps/doc/src/content/feed.test.ts",
+      "apps/doc/src/content/feed.ts",
       "apps/doc/src/content/guides/authentication.ts",
       "apps/doc/src/content/guides/confidence.ts",
       "apps/doc/src/content/guides/errors.ts",

@@ -1309,4 +1309,17 @@ flowchart TD
   contract. The same commit corrected two content defects the audit surfaced: the quickstart was teaching a
   retired opaque-id body that the shipped endpoint answers 422 to, and every example implicated a real
   domain with fabricated firmographics attached. Both are now assertions in `content.test.ts`.
+  2026-08-22 refresh (changelog feed, 799a92c5): 2365 → 2368 files — `content/feed.ts` (+ its test) and
+  `app/changelog.xml/route.ts`, into the existing `shared["apps/doc/content"]` and `shared["apps/doc/app"]`
+  areas. No new domain, no new warning, unassigned holds at **2**. (19fedcb7 and e1a25dda landed alongside
+  and changed files in place rather than adding any, so the count moved only by this change.)
+
+  The portal now serves THREE generated artifacts from the content layer — `/llms.txt`, `/openapi.json`,
+  `/changelog.xml` — all `force-static`. The feed's own `updated` is the newest ENTRY date rather than the
+  build clock, deliberately: a build-stamped feed marks itself changed on every redeploy, which trains
+  subscribers to ignore it.
+
+  The same commit closed a third documentation defect the audit surfaced: the pagination guide told readers
+  to back off by a `Retry-After` HEADER, which `apps/api/src/middleware/error.ts` does not send — the
+  interval is a `retryAfterSeconds` body member. A client written from that sentence waits zero seconds.
 ```
