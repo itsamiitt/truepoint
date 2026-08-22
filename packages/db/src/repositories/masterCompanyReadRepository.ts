@@ -145,6 +145,48 @@ export const masterCompanyReadRepository = {
     return row ? toMasterCompanyRow(row) : null;
   },
 
+  /**
+   * The registrable domain of the visible company a LinkedIn company SLUG addresses — the hop the extension's
+   * Profile Intelligence Panel needs, because a `/company/<slug>` page carries no domain and the domain is
+   * what every company read in this module is keyed by.
+   *
+   * Reads `master_company_identifiers` (0113), NOT the numeric `linkedin_company_id` column: the slug is its
+   * own id_type namespace, and the numeric id is internal link metadata that must never leave the server.
+   * `MASTER_COMPANY_VISIBLE` is applied so a stub or a school is indistinguishable from absence, exactly like
+   * `findByDomainTx`.
+   */
+  async domainForLinkedinSlugTx(tx: Tx, slug: string): Promise<string | null> {
+    const rows = (await tx.execute(sql`
+      SELECT c.primary_domain
+        FROM master_company_identifiers i
+        JOIN master_companies c ON c.id = i.master_company_id
+       WHERE i.id_type = 'linkedin_company_slug' AND i.id_value = ${slug.toLowerCase()}
+         AND ${MASTER_COMPANY_VISIBLE("c")}
+       LIMIT 1
+    `)) as unknown as Array<{ primary_domain: string }>;
+    return rows[0]?.primary_domain ?? null;
+  },
+
+  /**
+   * The registrable domain a previously-fetched company URL resolved to — the Sales-Navigator hop
+   * (`/sales/company/<numeric id>`), whose id has no slug namespace.
+   * `source_fetch_registry.resolved_company_id` is stamped by the landing (`recordFetch`), so this answers
+   * only for URLs we have actually fetched; a never-fetched URL is a legitimate miss, not an error.
+   *
+   * URLs and domains only — the resolved uuid is a JOIN key inside the query and is never returned.
+   */
+  async domainForRegistryUrlTx(tx: Tx, normalizedUrl: string): Promise<string | null> {
+    const rows = (await tx.execute(sql`
+      SELECT c.primary_domain
+        FROM source_fetch_registry r
+        JOIN master_companies c ON c.id = r.resolved_company_id
+       WHERE r.entity_kind = 'company' AND r.normalized_url = ${normalizedUrl}
+         AND ${MASTER_COMPANY_VISIBLE("c")}
+       LIMIT 1
+    `)) as unknown as Array<{ primary_domain: string }>;
+    return rows[0]?.primary_domain ?? null;
+  },
+
   /** The HQ region (state/province) for a company, from the locations edge. Kept separate from the row
    *  projection because it is a JOIN the grid does not need and the profile does. */
   async findHqRegionTx(tx: Tx, domain: string): Promise<string | null> {

@@ -1535,3 +1535,7 @@ export {
   readDatabaseCompanyProfile,
   type DatabaseProfileScope,
 } from "./prospect/databaseProfile.ts";
+// The ONE composed read behind the extension's Profile Intelligence Panel — the two profile readers above
+// plus the caller's own overlay row, in a single non-PII answer per viewed LinkedIn URL. Read-only: it never
+// calls the vendor and never touches the 30-day freshness clock.
+export { readProfileIntel } from "./prospect/profileIntel.ts";

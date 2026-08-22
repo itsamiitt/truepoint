@@ -4,7 +4,7 @@
 // Transport only: scope comes from the verified token (never the body/path), and masking + RLS live in the db
 // layer. A masked read (no spend) → no role gate, matching GET /contacts and GET /:id/revealed (visibility is
 // workspace-wide under RLS). The slug alone is never trusted: RLS pins the read to the caller's workspace.
-import { checkCaptureRate } from "@leadwolf/auth";
+import { checkCaptureRate, checkDatabaseProfileRate } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
 import {
   LOOKUP_INTEREST_TTL_S,
@@ -13,6 +13,7 @@ import {
   linkedinUrlKey,
   lookupInterestKey,
   lookupInterestMember,
+  readProfileIntel,
 } from "@leadwolf/core";
 import {
   contactRepository,
@@ -21,7 +22,7 @@ import {
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
-import { ForbiddenError, ValidationError } from "@leadwolf/types";
+import { ForbiddenError, ValidationError, profileIntelResponseSchema } from "@leadwolf/types";
 import { Hono } from "hono";
 import { cacheRedis } from "../../cache.ts";
 import { authn } from "../../middleware/authn.ts";
@@ -224,4 +225,39 @@ contactsResolveRoutes.post("/lookup", async (c) => {
   }
   const status = result.outcome === "unavailable" ? "unavailable" : "not_found";
   return c.json({ status, contactId: null, contact: null });
+});
+
+/**
+ * POST /lookup/intel — the ONE read behind the extension's Profile Intelligence Panel (chrome-extension/14
+ * X06 remainder). Body `{ url }`: any LinkedIn / Sales-Navigator person OR company URL.
+ *
+ * Deliberately a sibling of `/lookup` rather than an option on it. `/lookup` is the hot path the content
+ * script fires on every SPA navigation and settle; this payload is ~50x larger and is fetched once, when a
+ * human opens the panel. Keeping them apart means the card's latency budget cannot be spent by the panel's
+ * richness, and the two allow-list rules stay separately reviewable (the `/lookup` rule is anchored, so this
+ * needs its own — that review is the deny-by-default control working, not friction).
+ *
+ * READ-ONLY: no vendor call, no freshness-clock burn, no write of any kind. Fetch-on-view already belongs to
+ * `/lookup` and `/ingest/linkedin-links/:kind/fetch`, both of which the extension drives on navigation.
+ *
+ * Rate-limited with the SAME per-caller budget as the global profile routes (`checkDatabaseProfileRate`):
+ * the body is a public slug / company URL, so this is an ENUMERATION surface and the limit is what bounds a
+ * walk. Suppression, visibility and tenancy are enforced INSIDE the composer's repositories, so absent and
+ * not-visible are the same answer here and neither is distinguishable by response shape.
+ */
+contactsResolveRoutes.post("/lookup/intel", async (c) => {
+  const claims = c.get("claims");
+  const workspaceId = claims.wid;
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view prospect intelligence.");
+  const body = (await c.req.json().catch(() => null)) as { url?: unknown } | null;
+  if (!body || typeof body.url !== "string") throw new ValidationError("Body must be { url }.");
+
+  await checkDatabaseProfileRate(claims.sub);
+
+  const intel = await readProfileIntel({ tenantId: claims.tid, workspaceId }, body.url);
+  // Parse on egress, not just on the way in: the schema is where the no-channel-values / no-Layer-0-ids
+  // invariants are written down, and a composer that ever grew an extra field would fail here instead of
+  // shipping it to a client.
+  return c.json(profileIntelResponseSchema.parse(intel));
 });
