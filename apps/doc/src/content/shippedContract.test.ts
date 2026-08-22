@@ -24,6 +24,8 @@ import { ACCESS_NOTE } from "./access.ts";
 import { endpointStatus } from "./endpointStatus.ts";
 import { COMPANY_ENRICH, COMPANY_MATCH } from "./endpoints/company.ts";
 import { COMMON_ERRORS } from "./endpoints/shared.ts";
+import { CREDIT_ACTIONS } from "./pricing.ts";
+import { API_BASE_URL } from "./site.ts";
 
 const API_ROOT = join(import.meta.dir, "..", "..", "..", "api", "src");
 
@@ -43,6 +45,12 @@ const ERROR_RENDERER = apiSource("middleware/error.ts");
 const ERRORS = apiSource(join("..", "..", "..", "packages", "types", "src", "errors.ts"));
 /** app.ts holds the mount, and the mount is what the enablement flag actually gates. */
 const ROUTES_MOUNT = apiSource("app.ts");
+/** The facts strip is JSX, so it is read as text like the API sources — a claim in a component is exactly
+ *  the kind no content test would otherwise see (see the landing-page status line, b1788986). */
+const FACTS_STRIP = readFileSync(
+  join(import.meta.dir, "..", "features", "api-reference", "components", "ApiFactsStrip.tsx"),
+  "utf8",
+);
 
 /** The documented `company.*` return field names for one endpoint, without the prefix. */
 function documentedCompanyFields(endpoint: typeof COMPANY_ENRICH): string[] {
@@ -149,6 +157,66 @@ describe("what the site says about access matches how the API is actually deploy
     if (shippedDefault === "true") return;
     expect(endpointStatus().line).not.toMatch(/generally available/i);
     expect(endpointStatus().line).toContain("enabled per account");
+  });
+});
+
+describe("the numbers and strings we publish are the ones the deployment ships", () => {
+  // ADR-0048 accepts that the pricing tables DUPLICATE values the product owns, because reconciling them in
+  // code would drag @leadwolf/config across the zero-env boundary this app depends on. That reasoning is
+  // about IMPORTS. Reading the deployment template as text costs nothing and keeps the duplicate honest —
+  // which is the whole lesson of this sweep: a second copy of a truth is fine only while something compares
+  // the two.
+  const TEMPLATE = readFileSync(
+    join(import.meta.dir, "..", "..", "..", "..", "deploy", "env.production.template"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+
+  test("the documented enrich cost equals the cost the deployment configures", () => {
+    const shipped = Number(/^API_COST_COMPANY_ENRICH=(\d+)$/m.exec(TEMPLATE)?.[1]);
+    expect(Number.isFinite(shipped)).toBe(true);
+    expect(COMPANY_ENRICH.credits).toBe(shipped);
+
+    // The pricing page states the same number in prose; it is the one a buyer budgets against.
+    const priced = CREDIT_ACTIONS.find((action) => /company enrichment/i.test(action.action));
+    expect(priced).toBeDefined();
+    expect((priced as { credits: number | "free" }).credits).toBe(shipped);
+  });
+
+  test("the documented free endpoint has no configured cost to contradict it", () => {
+    // There is no API_COST_COMPANY_MATCH: free is structural, not a tuned zero, and the docs say "free"
+    // rather than "0 credits" for that reason.
+    expect(/API_COST_COMPANY_MATCH/.test(TEMPLATE)).toBe(false);
+    const priced = CREDIT_ACTIONS.find((action) => /identification|match/i.test(action.action));
+    expect((priced as { credits: number | "free" }).credits).toBe("free");
+  });
+
+  test("the key band shown on the docs is the band the platform mints", () => {
+    const minted = /API_KEY_LIVE_PREFIX = "([^"]+)"/.exec(
+      readFileSync(
+        join(import.meta.dir, "..", "..", "..", "..", "packages", "types", "src", "apiKeys.ts"),
+        "utf8",
+      ),
+    )?.[1];
+    expect(minted).toBeDefined();
+    // Shown in the facts strip and in every generated snippet's placeholder.
+    expect(FACTS_STRIP).toContain(minted as string);
+  });
+
+  test("the published base URL is where the router is actually mounted", () => {
+    // ADR-0049 §Open records the collision that caused this: the portal originally published bare `/v1`
+    // paths while the service mounts under `/api/*` to inherit the body-size cap. The endpoint specs were
+    // corrected; this is what stops them drifting back.
+    const mount = /app\.route\("([^"]+)", publicCompanyRoutes\)/.exec(ROUTES_MOUNT)?.[1];
+    expect(mount).toBeDefined();
+
+    // The router mounts at the base plus its resource segment (`/api/v1/public` + `/company`), so the
+    // relationship is containment in that direction: the published base is a prefix of the mount, and every
+    // documented path begins at the mount.
+    const basePath = new URL(API_BASE_URL).pathname;
+    expect((mount as string).startsWith(basePath)).toBe(true);
+    for (const endpoint of [COMPANY_MATCH, COMPANY_ENRICH]) {
+      expect(endpoint.path.startsWith(mount as string)).toBe(true);
+    }
   });
 });
 
