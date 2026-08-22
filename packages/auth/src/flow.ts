@@ -112,7 +112,7 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
   // erroring. The tenant is resolved above (auto-selected single org, or carried from the org-selection step)
   // so the policy is the right per-tenant one. finalizeLogin remains the authoritative token gate (it still
   // refuses to mint for an un-enrolled required user), so this is a UX route, never the security boundary.
-  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true" && !txn.mfaVerified && !hasVerifiedMethod) {
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED && !txn.mfaVerified && !hasVerifiedMethod) {
     const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(tenantId);
     if (enforcementEnabled && policy.mfaEnforcement === "required") return "mfa_enroll";
   }
@@ -236,7 +236,7 @@ export async function finalizeLogin(
   // (the new session's absolute lifetime is min(default, cap)); the refresh path enforces the same absolute
   // cap to force re-auth. Stays undefined when enforcement is off → unchanged default session lifetime.
   let sessionMaxLifetimeSeconds: number | undefined;
-  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED) {
     const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(tenantId);
     if (enforcementEnabled) {
       if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
@@ -342,7 +342,7 @@ export async function finalizeLogin(
   // SHADOW (off unless AUTH_POLICY_SHADOW_ENABLED="true"): validate the effective-policy engine against the live
   // policy on real login traffic before any cutover. Detached (never awaited) + fully try/caught inside, so it
   // can neither slow nor break the login it runs alongside; it enforces nothing.
-  if (env.AUTH_POLICY_SHADOW_ENABLED === "true") {
+  if (env.AUTH_POLICY_SHADOW_ENABLED) {
     void shadowComparePolicy({ tenantId, workspaceId: workspaceId ?? undefined });
   }
   void Promise.allSettled([

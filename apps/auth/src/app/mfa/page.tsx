@@ -28,7 +28,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
   // Only offer the passkey option when the user has one enrolled — else the prompt would have no credential to
   // match and just fail. Owner-connection read (webauthn_credentials is REVOKEd from leadwolf_app).
   const hasPasskeys =
-    env.WEBAUTHN_ENABLED === "true" &&
+    env.WEBAUTHN_ENABLED &&
     (await webauthnCredentialRepository.listSummaryForUser(txn.userId)).length > 0;
 
   return (
@@ -53,7 +53,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
         </div>
         {/* Trusted-device MFA skip is OFF until its backend is built + reviewed (MFA-bypass surface). Hidden
             rather than shown as a no-op — a checkbox that silently does nothing is a trust bug. */}
-        {env.TRUSTED_DEVICES_ENABLED === "true" ? (
+        {env.TRUSTED_DEVICES_ENABLED ? (
           <label
             style={{
               marginBottom: "var(--tp-space-4)",

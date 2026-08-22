@@ -386,7 +386,10 @@ export const appEnvSchema = z
     // this arm off the gates are a strict no-op and do NO policy read (today's exact behavior, the merge-safety
     // guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it — "false"/"0"/"" can never be
     // coerced truthy.
-    AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
+    AUTH_POLICY_ENFORCEMENT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // AUTH-065: restrict an extension-scoped access token (scope:["extension"]) to the prospecting/ingestion
     // route allow-list in apps/api (extensionScope.ts), deny-by-default. LOCKOUT-CAPABLE (a wrong allow-list
@@ -402,7 +405,10 @@ export const appEnvSchema = z
     // gates enforce today — but ENFORCES NOTHING (the comparison is detached + try/caught, so it can neither slow
     // nor break a login). Lets on-call confirm the engine resolves identically on REAL traffic before any
     // cutover. Default OFF — unset ⇒ no shadow read, today's exact behaviour. Only the literal "true" arms it.
-    AUTH_POLICY_SHADOW_ENABLED: z.string().optional(),
+    AUTH_POLICY_SHADOW_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // OBSERVE-FIRST breached-password screening at LOGIN (credential-stuffing defence). When "true",
     // authenticatePassword screens the just-verified password against HaveIBeenPwned (detached + fail-open, so it
@@ -424,14 +430,20 @@ export const appEnvSchema = z
     // so a passkey registered on auth.* works across app.*/api.* in the subdomain estate. Ceremonies verify the
     // response's origin against the APP_ORIGINS allow-list and its rpIdHash against this. Flagged NEEDS
     // SPECIALIST REVIEW BEFORE ENABLE (the security-critical generate/verify lives in @leadwolf/auth).
-    WEBAUTHN_ENABLED: z.string().optional(),
+    WEBAUTHN_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     WEBAUTHN_RP_ID: z.string().default(""),
 
     // Trusted-device "remember this device for 30 days" MFA skip (device.trusted). OFF BY DEFAULT — the /mfa
     // checkbox is HIDDEN and no MFA is skipped until the trusted-device backend (token store + skip check +
     // revocation) is built and reviewed. It is an MFA-BYPASS surface, so it stays dark until then rather than
     // present a checkbox that silently does nothing. Only an explicit "true" shows the option.
-    TRUSTED_DEVICES_ENABLED: z.string().optional(),
+    TRUSTED_DEVICES_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
@@ -1113,7 +1125,7 @@ export const appEnvSchema = z
     // WebAuthn/passkeys (AUTH-024): once armed, the Relying Party ID is required — enabling the ceremony without
     // WEBAUTHN_RP_ID would fail cryptically at registration/assertion time. Fail fast at boot instead. Checked in
     // every environment (unlike the production-only checks below), since passkeys can be enabled in dev too.
-    if (val.WEBAUTHN_ENABLED === "true" && val.WEBAUTHN_RP_ID.trim() === "") {
+    if (val.WEBAUTHN_ENABLED && val.WEBAUTHN_RP_ID.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["WEBAUTHN_RP_ID"],

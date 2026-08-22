@@ -10,7 +10,7 @@ import { cookies } from "next/headers";
 export const dynamic = "force-dynamic";
 
 export async function POST(): Promise<Response> {
-  if (env.WEBAUTHN_ENABLED !== "true") return new Response("Not found", { status: 404 });
+  if (!env.WEBAUTHN_ENABLED) return new Response("Not found", { status: 404 });
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
   if (!txnId) return new Response("Unauthorized", { status: 401 });
   const txn = await getLoginTransaction(txnId);
