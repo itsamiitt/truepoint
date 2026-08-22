@@ -10,7 +10,7 @@ export function onBroadcast(handler: (msg: BroadcastMessage) => void): () => voi
   const listener = (raw: unknown): void => {
     if (raw && typeof raw === "object" && "type" in raw) {
       const type = (raw as { type: unknown }).type;
-      if (type === "STATE_CHANGED" || type === "SUBJECT_STATUS") {
+      if (type === "STATE_CHANGED" || type === "SUBJECT_STATUS" || type === "SUBJECT_VIEWED") {
         handler(raw as BroadcastMessage);
       }
     }

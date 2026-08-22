@@ -1,11 +1,38 @@
 // MessageBus (SW side) — validates every inbound message with Zod, routes to a handler, and returns a
 // typed response (03 §1.8). Unknown/invalid messages are dropped. Returns `true` to keep the channel
 // open for the async response.
+import { subjectFromUrl } from "../../shared/linkedinUrl.ts";
 import { type RequestMessage, requestMessage } from "../../shared/messages.ts";
+import { capturedRecord } from "../../shared/types.ts";
 import { ApiError } from "../api/client.ts";
 import type { RuntimeContext } from "../context.ts";
+import { intelCache, resolveIntel } from "../lookup/intel.ts";
 import { lookupCache, lookupSubject } from "../lookup/resolver.ts";
 import type { JobScheduler } from "../queue/scheduler.ts";
+
+/** Every cache keyed by subject, invalidated together — always. A mutation that cleared one and not the
+ *  other would leave the hover card and the panel disagreeing about the same person. */
+function clearSubjectCaches(subjectKey?: string): void {
+  if (subjectKey) {
+    lookupCache.invalidate(subjectKey);
+    intelCache.invalidate(subjectKey);
+    return;
+  }
+  lookupCache.clear();
+  intelCache.clear();
+}
+
+/** The active tab's subject, when it is a page the extension recognises. `tab.url` is readable without the
+ *  `tabs` permission because `*.linkedin.com` is a host permission — and a tab on any other site simply
+ *  yields null, which is the panel's normal "open a profile" state, not an error. */
+async function activeSubject(): Promise<ReturnType<typeof subjectFromUrl>> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return subjectFromUrl(tab?.url);
+  } catch {
+    return null;
+  }
+}
 
 export function registerBus(ctx: RuntimeContext, scheduler: JobScheduler): void {
   chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
@@ -61,9 +88,9 @@ async function handle(
 
     case "CAPTURE": {
       await ctx.queue.enqueue(msg.record);
-      // The subject's status will change once the capture lands; drop its warm entry so the next LOOKUP
-      // re-resolves rather than serving the pre-capture status.
-      lookupCache.invalidate(msg.record.subjectKey);
+      // The subject's status will change once the capture lands; drop its warm entries so the next LOOKUP
+      // (and the panel's next read) re-resolve rather than serving the pre-capture status.
+      clearSubjectCaches(msg.record.subjectKey);
       await ctx.telemetry.event("capture_click", {
         adapterId: msg.record.adapter,
         pageType: msg.record.pageType,
@@ -85,7 +112,7 @@ async function handle(
         const status = await ctx.api.addFromDatabase(msg.url, crypto.randomUUID());
         // The person is now a workspace contact — a later LOOKUP must return "found", not "in_database". We
         // don't hold the subjectKey here (only the URL), so clear the whole warm cache; it's a rare click.
-        lookupCache.clear();
+        clearSubjectCaches();
         await ctx.telemetry.event("database_add", {});
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return { status };
@@ -106,9 +133,9 @@ async function handle(
         });
         // The reveal charged credits — update the pill from the server-authoritative post-charge balance.
         ctx.credits.applyReveal(data.balanceAfter);
-        // Reveal changes owned/availability for this contact; the LOOKUP is keyed by subjectKey and we hold
-        // only the contactId here, so clear the warm cache rather than guess the mapping.
-        lookupCache.clear();
+        // Reveal changes owned/availability for this contact; the caches are keyed by subjectKey and we
+        // hold only the contactId here, so clear them rather than guess the mapping.
+        clearSubjectCaches();
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return {
           ok: true,
@@ -144,6 +171,11 @@ async function handle(
 
     case "VIEW_FETCH": {
       // Fetch-on-view: ensure the viewed profile/company is fresh, then hand back the resolved contact id.
+      //
+      // This is also the extension's one reliable "the user is now looking at X" signal for BOTH page kinds
+      // (the content script fires it on profiles and company pages alike), so it is where the panel learns
+      // to follow navigation. Broadcast FIRST: the panel must re-read even when the refresh call fails.
+      ctx.broadcast({ type: "SUBJECT_VIEWED", subject: subjectFromUrl(msg.url) });
       try {
         return await ctx.api.viewFetch(msg.entityKind, msg.url);
       } catch {
@@ -151,11 +183,79 @@ async function handle(
       }
     }
 
+    case "GET_SUBJECT":
+      // Hydrate-on-open: the panel asks what is on screen instead of waiting for a broadcast that already
+      // fired before it mounted (the gap flagged in Panel.tsx).
+      return { subject: await activeSubject() };
+
+    case "INTEL": {
+      try {
+        const payload = await resolveIntel(ctx, msg.subjectKey, msg.sourceUrl, {
+          force: msg.force,
+          entityKind: msg.subjectKey.startsWith("company:") ? "company" : "person",
+        });
+        return { ok: true, payload };
+      } catch (error) {
+        // A typed failure, not an empty panel: the surface renders an in-surface retry, and the user can
+        // tell "we hold nothing" (a successful not_found) from "we could not ask" (this).
+        const errorClass = error instanceof ApiError ? error.errorClass : "unexpected";
+        await ctx.telemetry.error(errorClass, {});
+        return {
+          ok: false,
+          errorClass,
+          message: error instanceof Error ? error.message : "error",
+        };
+      }
+    }
+
+    case "CAPTURE_CURRENT": {
+      // The panel has no DOM, so the SW asks the active tab's content script for the visible header it is
+      // already allowed to read, then enqueues it exactly like a hover-card Save. Still user-initiated: the
+      // panel button IS the gesture, on the page the user opened (hard constraint 4).
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab?.id === undefined) {
+        return { status: { contactId: null, known: false, owned: false, outcome: "rejected" } };
+      }
+      const raw = await chrome.tabs
+        .sendMessage(tab.id, { type: "EXTRACT_CURRENT" })
+        .catch(() => null);
+      // Untrusted input: it crossed a context boundary, so it is validated here like any bus message.
+      const parsed = capturedRecord.safeParse(raw);
+      if (!parsed.success) {
+        return { status: { contactId: null, known: false, owned: false, outcome: "rejected" } };
+      }
+      await ctx.queue.enqueue(parsed.data);
+      clearSubjectCaches(parsed.data.subjectKey);
+      await ctx.telemetry.event("capture_click", {
+        adapterId: parsed.data.adapter,
+        pageType: parsed.data.pageType,
+      });
+      void scheduler.drain();
+      ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
+      // QUEUED, not saved — the drain is fire-and-forget and can still fail. Same honesty as CAPTURE.
+      return { status: { contactId: null, known: false, owned: false, outcome: "queued" } };
+    }
+
+    case "LIST_LISTS":
+      return { lists: await ctx.api.listLists() };
+
+    case "ADD_TO_LIST": {
+      try {
+        const { affected } = await ctx.api.addToList(msg.listId, msg.contactId, crypto.randomUUID());
+        await ctx.telemetry.event("list_add", {});
+        return { ok: true, affected };
+      } catch (error) {
+        const errorClass = error instanceof ApiError ? error.errorClass : "unexpected";
+        await ctx.telemetry.error(errorClass, {});
+        return { ok: false, errorClass };
+      }
+    }
+
     case "AUTH_LOGIN": {
       try {
         const state = await ctx.auth.login();
-        // Signing in establishes the scope every lookup answer is relative to — start from an empty cache.
-        lookupCache.clear();
+        // Signing in establishes the scope every answer is relative to — start from empty caches.
+        clearSubjectCaches();
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return state;
       } catch {
@@ -166,8 +266,8 @@ async function handle(
     case "AUTH_LOGOUT": {
       const state = await ctx.auth.logout();
       ctx.credits.clear();
-      // Never serve one session's workspace-scoped lookups to the next.
-      lookupCache.clear();
+      // Never serve one session's workspace-scoped reads to the next.
+      clearSubjectCaches();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
@@ -175,8 +275,8 @@ async function handle(
     case "SWITCH_WORKSPACE": {
       const state = await ctx.auth.switchWorkspace(msg.workspaceId);
       await ctx.credits.refresh(true); // balance is tenant-scoped — re-pull after a scope change
-      // Lookup answers are workspace-scoped (found/in_database differ per workspace) — drop them on switch.
-      lookupCache.clear();
+      // Answers are workspace-scoped (found/in_database differ per workspace) — drop them on switch.
+      clearSubjectCaches();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
@@ -184,7 +284,7 @@ async function handle(
     case "SWITCH_ORG": {
       const state = await ctx.auth.switchOrg(msg.tenantId);
       await ctx.credits.refresh(true);
-      lookupCache.clear();
+      clearSubjectCaches();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }

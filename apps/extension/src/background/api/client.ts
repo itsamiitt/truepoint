@@ -7,7 +7,9 @@ import type {
   IngestAck,
   IngestionEnvelope,
   LinkedinResolveResponse,
+  ProfileIntelResponse,
   RawObservation,
+  RevealedContact,
 } from "@leadwolf/types";
 import { API_BASE } from "../../shared/env.ts";
 import type { QueueItem } from "../../shared/idb.ts";
@@ -337,6 +339,64 @@ export class ApiClient {
       { method: "POST", body: JSON.stringify({ url }) },
     );
     return { outcome: resp.outcome, contactId: resp.contactId };
+  }
+
+  /** The Profile Intelligence Panel's ONE read (POST /contacts/lookup/intel): the masked Layer-0 profile +
+   *  company + this workspace's own overlay row for the page being viewed. Person AND company URLs; the
+   *  server canonicalizes both. Read-only and non-PII — channel values are never on this payload. Throws
+   *  ApiError so the bus can surface a typed error state instead of an empty panel. */
+  async lookupIntel(url: string): Promise<ProfileIntelResponse> {
+    return this.request<ProfileIntelResponse>("/contacts/lookup/intel", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  /** The NO-CHARGE view of reveal data this workspace ALREADY owns (GET /contacts/:id/revealed, ADR-0042).
+   *  This is how a revealed card re-renders on panel open without spending a credit — never call reveal to
+   *  redisplay. Null on any failure: the panel then shows the unrevealed state, which is honest. */
+  async revealedContact(contactId: string): Promise<RevealedContact | null> {
+    try {
+      return await this.request<RevealedContact>(
+        `/contacts/${encodeURIComponent(contactId)}/revealed`,
+        { method: "GET" },
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /** The workspace's lists for the panel's add-to-list picker (GET /lists). Degrades to an empty list so the
+   *  picker shows its empty state rather than an error the user can do nothing about. */
+  async listLists(): Promise<Array<{ id: string; name: string; memberCount: number }>> {
+    try {
+      const data = await this.request<{
+        lists?: Array<{ id: string; name: string; memberCount: number }>;
+      }>("/lists", { method: "GET" });
+      return (data.lists ?? []).map((l) => ({
+        id: l.id,
+        name: l.name,
+        memberCount: l.memberCount,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Add ONE contact to a list (POST /lists/:id/members) — one user gesture, one member. Idempotency-keyed
+   *  like every other write from the SW: the endpoint is already idempotent on (list, contact), and the key
+   *  makes a killed-and-retried worker safe on the transport too. */
+  async addToList(
+    listId: string,
+    contactId: string,
+    idempotencyKey: string,
+  ): Promise<{ affected: number }> {
+    const resp = await this.request<{ listId: string; affected: number }>(
+      `/lists/${encodeURIComponent(listId)}/members`,
+      { method: "POST", body: JSON.stringify({ contactIds: [contactId] }) },
+      { idempotencyKey },
+    );
+    return { affected: resp.affected ?? 0 };
   }
 
   /** The caller's orgs (across tenants) for the org switcher — GET /orgs (chrome-extension/14 X04). Degrades to

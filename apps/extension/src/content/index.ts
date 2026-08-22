@@ -88,5 +88,33 @@ function settle(url: URL): void {
   else if (kind === "profile") card.refreshFromDom(() => adapter.extract(url, document));
 }
 
+/**
+ * Answer the service worker's EXTRACT_CURRENT with the visible header of the page this script is running on.
+ *
+ * The side panel has no DOM of its own, so its Save button cannot extract anything — it asks the SW, which
+ * asks the content script that is already on the page. The capture itself is unchanged: the SAME adapter,
+ * the SAME visible-DOM-only extraction the hover card's Save uses, on the page the user opened, triggered by
+ * an explicit click (hard constraint 4). Nothing here reads more than it did before; a different button
+ * reaches it.
+ *
+ * Re-extracts live rather than replaying the nav-time snapshot, because a LinkedIn header often renders
+ * after the navigation settles — the same reason `card.showForRecord` takes a re-extract callback.
+ */
+chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+  if (!raw || typeof raw !== "object" || (raw as { type?: unknown }).type !== "EXTRACT_CURRENT") {
+    return false;
+  }
+  try {
+    const url = new URL(location.href);
+    const adapter = registry.match(url);
+    sendResponse(adapter?.extract(url, document) ?? null);
+  } catch {
+    // Fail soft: a selector miss or a foreign page yields "nothing to capture", never a thrown error in a
+    // page we do not own.
+    sendResponse(null);
+  }
+  return false;
+});
+
 const observer = new NavigationObserver(evaluate, settle);
 observer.start();
