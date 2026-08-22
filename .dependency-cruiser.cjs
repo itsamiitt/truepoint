@@ -28,6 +28,27 @@ module.exports = {
   //   no-cross-feature-import         web features/inbox -> web features/sequences
   //
   // ALL TEN fire. Nothing here is taken on trust: each was made to fail on purpose and named the exact edge.
+  //
+  // ── ELEVENTH, VERIFIED 2026-08-22, AND THE METHOD MATTERS ──────────────────────────────────────────────
+  //   doc-app-holds-no-data-path      apps/doc -> packages/db/src/index.ts
+  //
+  // This one was missing from the list above, and trying to verify it the obvious way is what explains why.
+  // Planting `import { pingDb } from "@leadwolf/db"` in apps/doc reports NOTHING — 0 errors, exit 0 — which
+  // reads like a dead rule. It is not. apps/doc declares only @leadwolf/ui and @leadwolf/app-shell, so
+  // `apps/doc/node_modules/@leadwolf/` holds exactly those two and the specifier is UNRESOLVABLE. An
+  // unresolved dependency keeps the bare string `@leadwolf/db` as its `resolved` value, and every `to.path`
+  // here is anchored on `^packages/`, so no rule can match it. A cruiser rule can only fire on an edge the
+  // resolver could follow.
+  //
+  // That is not a hole, because the two mechanisms cover different halves and between them cover the ways in:
+  //   • bare specifier, dependency NOT declared → depcruise is silent, but `tsc` fails with TS2307
+  //     ("Cannot find module '@leadwolf/db'"). Verified. The typecheck gate is the wall here, not this file.
+  //   • RELATIVE import (`../../../packages/db/src/index.ts`) → resolves fine, so `tsc` is perfectly happy —
+  //     and THIS rule is the only thing that catches it. Verified: it errors and names the exact edge.
+  //   • dependency declared and then imported → resolves, rule fires. The deliberate case.
+  //
+  // So when re-verifying any "must not import X" rule in this file, plant a RELATIVE import. A bare specifier
+  // for an undeclared workspace package proves nothing about the rule, only about the package.json.
   // The two deep-import rules matter most to re-check if this file is ever refactored — their `pathNot`
   // carries a `$1` backreference and an index.ts exemption, which is the kind of expression that keeps
   // matching after it has stopped meaning what it says.
