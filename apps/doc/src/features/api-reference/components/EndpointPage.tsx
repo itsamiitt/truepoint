@@ -11,6 +11,7 @@ import { AvailabilityBadge } from "@/components/AvailabilityBadge.tsx";
 import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
+import { ACCESS_NOTE } from "@/content/access.ts";
 import { buildSnippets } from "@/content/snippets.ts";
 import type { Endpoint } from "@/content/types.ts";
 import type { ReactNode } from "react";
@@ -98,6 +99,9 @@ export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
         </div>
 
         <aside className={styles.aside} aria-label="Worked example">
+          {endpoint.availability === "planned" ? null : (
+            <p className={styles.asideNote}>{ACCESS_NOTE}</p>
+          )}
           <SnippetTabs snippets={buildSnippets(endpoint)} />
           <CodeBlock language="Response · 200" source={endpoint.example.response} />
         </aside>

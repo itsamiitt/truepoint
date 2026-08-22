@@ -9,6 +9,7 @@
 // not contradict them.
 
 import { ButtonLink } from "@/components/ButtonLink.tsx";
+import { ACCESS_NOTE_SHORT } from "@/content/access.ts";
 import { API_BASE_URL, CONTACT } from "@/content/site.ts";
 import styles from "../api-reference.module.css";
 
@@ -16,6 +17,7 @@ const FACTS: readonly { label: string; value: string }[] = [
   { label: "Auth", value: "Bearer tp_live_…" },
   { label: "Errors", value: "application/problem+json" },
   { label: "Scope", value: "search:read" },
+  { label: "Access", value: ACCESS_NOTE_SHORT },
 ];
 
 export function ApiFactsStrip() {

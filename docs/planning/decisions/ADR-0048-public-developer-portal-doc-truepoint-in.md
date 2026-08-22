@@ -178,6 +178,25 @@ belongs in this ADR and its robots.txt/rate-limit behaviour should be evidenced 
 the bullet has to change, and that change is a `decisions.md` entry because it narrows what the public page
 claims about how data is sourced.
 
+**C7 — Published availability described the CONTRACT, not the DOOR (surfaced and closed 2026-08-22).**
+The two company endpoints are built, metered and badged `beta`, and the site had begun counting them as
+callable. The router is mounted inside `if (env.PUBLIC_DATA_API_ENABLED)`, and
+`deploy/env.production.template` ships that flag OFF, with its own comment: *"while off the router is not
+mounted and /api/v1/public/* 404s"*. Key creation and the usage read stay live either way — deliberately, so
+a credential can be provisioned before the endpoints it calls are switched on — which is exactly the sequence
+that turns this into a support thread: read the docs, mint a key, curl the base URL, get a 404 from a route
+that was never mounted.
+
+The badge was not wrong. Availability answers *is the contract settled*; nothing on the site answered *is the
+door open for me*. Those are different axes and only one of them was published.
+
+**Resolution taken here:** the site says both now. `content/access.ts` carries one sentence — access is
+enabled per account, keys can exist before the endpoints do, and a 404 from the base URL means the account is
+not enabled rather than the path being wrong — and it appears on every callable endpoint page, in the docs
+facts strip, and inside the landing page's generated status line. A test in `content/shippedContract.test.ts`
+reads the deployment template and requires that wording for as long as the flag ships off; flipping the
+template to `true` stops the test demanding it.
+
 ## Consequences
 
 - A fifth deployable app, a fifth subdomain in origin/CORS config, one more CI matrix entry.

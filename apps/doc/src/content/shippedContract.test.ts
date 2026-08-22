@@ -20,6 +20,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ACCESS_NOTE } from "./access.ts";
+import { endpointStatus } from "./endpointStatus.ts";
 import { COMPANY_ENRICH, COMPANY_MATCH } from "./endpoints/company.ts";
 import { COMMON_ERRORS } from "./endpoints/shared.ts";
 
@@ -39,6 +41,8 @@ const KEY_AUTH = apiSource("features/public-api/apiKeyAuth.ts");
  *  spelled there — the one documented code that exists in neither the type package nor the routes. */
 const ERROR_RENDERER = apiSource("middleware/error.ts");
 const ERRORS = apiSource(join("..", "..", "..", "packages", "types", "src", "errors.ts"));
+/** app.ts holds the mount, and the mount is what the enablement flag actually gates. */
+const ROUTES_MOUNT = apiSource("app.ts");
 
 /** The documented `company.*` return field names for one endpoint, without the prefix. */
 function documentedCompanyFields(endpoint: typeof COMPANY_ENRICH): string[] {
@@ -109,6 +113,42 @@ describe("the endpoints we document are the endpoints that are mounted", () => {
     // The published promise is that a retry with the same key cannot double-charge. That is only true if the
     // middleware is actually on the route.
     expect(ROUTES).toMatch(/post\("\/enrich",\s*requireScope\("search:read"\),\s*idempotency/);
+  });
+});
+
+describe("what the site says about access matches how the API is actually deployed", () => {
+  // The endpoints are built, metered and badged beta — and the router is mounted inside
+  // `if (env.PUBLIC_DATA_API_ENABLED)`, which the production template ships OFF with the comment "while off
+  // the router is not mounted and /api/v1/public/* 404s". Key creation stays live either way, deliberately,
+  // so a developer could read these pages, mint a key, curl the base URL and get a 404 from a route that was
+  // never mounted. Availability (is the contract settled) and access (is the door open for you) are
+  // different axes; the pages now say both, and this couples the second one to the deployment posture.
+  const TEMPLATE = readFileSync(
+    join(import.meta.dir, "..", "..", "..", "..", "deploy", "env.production.template"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+
+  const shippedDefault = /^PUBLIC_DATA_API_ENABLED=(\S+)$/m.exec(TEMPLATE)?.[1];
+
+  test("the template still declares the flag — the parse found it", () => {
+    expect(shippedDefault).toBeDefined();
+  });
+
+  test("the mount is gated, not unconditional", () => {
+    expect(ROUTES_MOUNT).toContain("if (env.PUBLIC_DATA_API_ENABLED)");
+  });
+
+  test("while the flag ships off, the site says access is per-account", () => {
+    if (shippedDefault === "true") return;
+    expect(ACCESS_NOTE).toMatch(/enabled per account/i);
+    // The specific failure a reader would otherwise hit, named on the page rather than left to be guessed.
+    expect(ACCESS_NOTE).toMatch(/404/);
+  });
+
+  test("no page claims open or general availability while the flag ships off", () => {
+    if (shippedDefault === "true") return;
+    expect(endpointStatus().line).not.toMatch(/generally available/i);
+    expect(endpointStatus().line).toContain("enabled per account");
   });
 });
 

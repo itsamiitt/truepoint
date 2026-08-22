@@ -11,6 +11,7 @@
 // availability each endpoint declares, and is asserted in content.test.ts. It cannot be wrong again without
 // the endpoint list itself being wrong.
 
+import { ACCESS_NOTE_SHORT } from "./access.ts";
 import { ENDPOINTS } from "./endpoints/index.ts";
 
 const WORDS = ["none", "one", "two", "three", "four", "five", "six"] as const;
@@ -37,7 +38,7 @@ export function endpointStatus(): EndpointStatus {
       ? "None of it is callable yet — the contract is published ahead of the build, and every endpoint page carries its status."
       : planned === 0
         ? `All ${count(ENDPOINTS.length)} are callable today. Every endpoint page carries its status, and the changelog records the day one changes.`
-        : `${count(callable).replace(/^./, (c) => c.toUpperCase())} of the ${count(ENDPOINTS.length)} are callable today; the ${count(planned) === "one" ? "other is" : `other ${count(planned)} are`} published contract, not a running service. Every endpoint page carries its status, and the changelog records the day one changes.`;
+        : `${count(callable).replace(/^./, (c) => c.toUpperCase())} of the ${count(ENDPOINTS.length)} are built and callable (${ACCESS_NOTE_SHORT.toLowerCase()}); the ${count(planned) === "one" ? "other is" : `other ${count(planned)} are`} published contract, not a running service. Every endpoint page carries its status, and the changelog records the day one changes.`;
 
   return { callable, planned, total: ENDPOINTS.length, line };
 }

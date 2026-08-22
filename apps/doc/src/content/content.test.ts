@@ -282,8 +282,11 @@ describe("the landing page's status sentence tracks the endpoint list", () => {
 
   test("it does not deny that callable endpoints exist", () => {
     if (status.callable > 0) {
-      expect(status.line).toContain("callable today");
+      expect(status.line).toMatch(/\bcallable\b/);
       expect(status.line).not.toMatch(/not callable yet/i);
+      // …and it does not overcorrect into implying the door is open to everyone: the router is gated by
+      // PUBLIC_DATA_API_ENABLED, which the production template ships off (shippedContract.test.ts).
+      expect(status.line).toContain("enabled per account");
     }
   });
 

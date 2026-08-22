@@ -106,7 +106,7 @@
 
 .factsGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .factsCell {
@@ -308,6 +308,15 @@
     padding-bottom: var(--tp-space-4);
     border-right: 0;
     border-bottom: 1px solid var(--tp-hairline-2);
+  }
+}
+
+@media (max-width: 900px) {
+  .factsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .factsCell:nth-child(3) {
+    border-left: 0;
   }
 }
 
