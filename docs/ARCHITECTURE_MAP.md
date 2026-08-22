@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2380 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2381 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1410,6 +1410,16 @@ flowchart TD
   `packages/ui/src/inkFourContrast.test.ts` and `packages/ui/src/primitivesContrast.test.ts`, into the
   existing `shared["apps/web"]`, `shared["apps/admin"]` and `shared["packages/ui"]` areas. Unassigned holds
   at **2**.
+
+  2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
+  `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  Two guards on the tenancy wall landed together and are worth knowing about before touching
+  `packages/db`. `rlsCoverage.test.ts` no longer reads only `pgTable` — it reads the MIGRATIONS too, so a
+  tenant-keyed table that exists purely as hand-authored SQL must be policied, REVOKE'd, or listed with a
+  reason. And the raw owner handle (`db`, `client.ts:179` — **not** `leadwolf_app`, so RLS does not apply to
+  it) is now counted: audit 32 §9.3-2 recorded ~40 call sites across 18 repositories, and it had drifted to
+  **49 across 20** with nothing enforcing it. Adding one is still allowed and costs a deliberate budget bump.
 
   apps/doc has had a WCAG contrast guard since its redesign and apps/web, apps/admin and apps/forge have
   never had one — the three surfaces a paying user is actually in all day. This is the first of the three,

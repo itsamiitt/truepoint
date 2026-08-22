@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2380,
-  "fileSetHash": "sha256:5cd2c9cfb32da0ecb598816a1d87b4aafa8c576639ffabfae3b43a869a547851",
+  "fileCount": 2381,
+  "fileSetHash": "sha256:0793a833236ef79afb2c4dff038b7b4a68e6790c6e364fb6a128b140532197be",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3172,6 +3172,7 @@
       "packages/db/src/migrationShape.test.ts",
       "packages/db/src/migrationSnapshots.test.ts",
       "packages/db/src/migrationTolerance.test.ts",
+      "packages/db/src/ownerConnectionRatchet.test.ts",
       "packages/db/src/poolTimeouts.test.ts",
       "packages/db/src/provenanceVocabularyParity.test.ts",
       "packages/db/src/rawClientRatchet.test.ts",
