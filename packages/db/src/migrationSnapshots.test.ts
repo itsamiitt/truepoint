@@ -189,8 +189,18 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  96 → 97 for 0138_api_key_usage_daily (ADR-0049) — the public API's usage rollup, hand-authored for the
  *  same reason 0137 was: generate diffs against a baseline that stopped at 0107. Also in schema/index.ts, so
- *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 97;
+ *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  97 → 98 for 0139_validation_rules (database-management-research 06; audit X2) — same category as 0137/0138,
+ *  with one difference worth recording: this migration did not introduce a table, it CANONICALISED one that
+ *  had been shipping without a migration at all. `validation_rules` was created by a defensive
+ *  `CREATE TABLE IF NOT EXISTS` inside rls/validationRules.sql, on the assumption that a later drizzle regen
+ *  would emit the real one. That regen is not safe here — the same stale-baseline problem — so "later" never
+ *  came and the table had no journal entry, which is the one place a reader looks to find out when it
+ *  appeared. So the deficit grows by one to close a worse gap than the one it opens. `IF NOT EXISTS`
+ *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
+ *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 98;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
