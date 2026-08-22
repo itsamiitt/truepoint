@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2376,
-  "fileSetHash": "sha256:5d4a6cf308cc959de18a2a97c1c3d1ebdc035204c80214b86f60c3dd1655e9ba",
+  "fileCount": 2377,
+  "fileSetHash": "sha256:acaecf9e15e11baab0de522758a2c67ca3f687ab2721222e22a2cf97d0a9fa53",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2906,6 +2906,7 @@
     ],
     "apps/web": [
       "apps/web/next.config.mjs",
+      "apps/web/src/contrast.test.ts",
       "apps/web/src/noVendorNames.test.ts",
       "apps/web/src/securityHeaders.test.ts"
     ],

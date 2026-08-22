@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2376 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2377 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1405,4 +1405,17 @@ flowchart TD
   page loads. The a11y pattern is `aria-activedescendant` rather than roving tabindex, chosen because the
   playground had just shipped the roving half without a key handler and made its own control unreachable
   (`scripts/lint-roving-tabindex.mjs` now gates that class repo-wide).
+  2026-08-22 refresh (web contrast ratchet, 256d54a4): 2376 → 2377 files — `apps/web/src/contrast.test.ts`,
+  in the existing `shared["apps/web"]` area. Unassigned holds at **2**.
+
+  apps/doc has had a WCAG contrast guard since its redesign and apps/web, apps/admin and apps/forge have
+  never had one — the three surfaces a paying user is actually in all day. This is the first of the three,
+  and it is a RATCHET rather than a wall because the first run measured something too big to fix as a side
+  effect: `--tp-ink-4` is the TEXT colour in **74** places across apps/web and packages/ui, at 2.54:1 on
+  white — below the AA floor for normal text (4.5) AND for large text (3.0), so no text size rescues it. The
+  selectors are `.note`, `.footnote`, `.kpiLabel`, `.timelineTime`, `.sectionHint` and friends: informational
+  text, not decoration, though the set does contain genuinely exempt placeholder and icon-glyph cases. The
+  migration is a per-surface design decision rather than a find-and-replace, because ink-3 clears AA on white
+  and surface-2 but fails on surface-3 and nav-hover-fill. Worth knowing before styling anything in this app:
+  reach for `--tp-ink-3`, and if the surface underneath is tinted, check the pair rather than assuming.
 ```
