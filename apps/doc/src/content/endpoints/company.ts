@@ -44,11 +44,11 @@ export const COMPANY_MATCH: Endpoint = {
   ],
   errors: COMMON_ERRORS,
   example: {
-    request: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=acme.com" \\
+    request: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=northgate.example.com" \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY"`,
     response: `{
   "matched": true,
-  "company": { "domain": "acme.com", "name": "Acme" },
+  "company": { "domain": "northgate.example.com", "name": "Northgate Tax Partners" },
   "credits_charged": 0
 }`,
   },
@@ -118,20 +118,20 @@ export const COMPANY_ENRICH: Endpoint = {
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: 8f2a1c40-1f3e-4d9b-9a77-5f0c2e9b1a34" \\
-  -d '{"domain":"acme.com"}'`,
+  -d '{"domain":"northgate.example.com"}'`,
     response: `{
   "matched": true,
   "company": {
-    "domain": "acme.com",
-    "name": "Acme",
-    "website_url": "https://acme.com",
-    "description": "Industrial supplies since 1948.",
-    "industry": "Software",
+    "domain": "northgate.example.com",
+    "name": "Northgate Tax Partners",
+    "website_url": "https://northgate.example.com",
+    "description": "Regional tax advisory and audit practice.",
+    "industry": "Accounting",
     "employee_count": 312,
     "revenue_range": "$10M–$50M",
     "ownership_type": "private",
     "year_founded": 1948,
-    "specialties": ["logistics", "fulfilment"],
+    "specialties": ["tax advisory", "audit"],
     "hq_country": "IN",
     "hq_city": "Pune",
     "last_updated": "2026-08-11T09:14:22.000Z"

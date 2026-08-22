@@ -195,6 +195,13 @@
   margin-top: var(--tp-space-6);
 }
 
+/* The language selector sits directly above its code panel, tight enough to read as one unit. */
+.snippets {
+  display: grid;
+  gap: var(--tp-space-2);
+  min-width: 0;
+}
+
 .aside {
   position: sticky;
   top: 76px;

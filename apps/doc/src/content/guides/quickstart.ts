@@ -38,12 +38,12 @@ export const QUICKSTART: Guide = {
     {
       kind: "code",
       language: "bash",
-      source: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=acme.com" \\
+      source: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=northgate.example.com" \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY"`,
     },
     {
       kind: "p",
-      text: "A match returns a stable company id. Store it: it is the cheapest way to re-query later, and it survives a company changing its name or domain.",
+      text: "A match returns the canonical domain we hold the company under. That domain is the identifier every other call takes — there is no opaque id to store, and normalising your own records onto it is what makes the next call cheap.",
     },
     { kind: "h2", text: "Then enrich" },
     {
@@ -52,7 +52,7 @@ export const QUICKSTART: Guide = {
       source: `curl -X POST https://api.truepoint.in/api/v1/public/company/enrich \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"id":"cmp_2b81"}'`,
+  -d '{"domain":"northgate.example.com"}'`,
     },
     {
       kind: "p",

@@ -71,7 +71,7 @@ export const SEARCH: Endpoint = {
       }'`,
     response: `{
   "results": [
-    { "id": "cmp_2b81", "name": "Acme", "domain": "acme.com", "headcount": 312 }
+    { "domain": "northgate.example.com", "name": "Northgate Tax Partners", "headcount": 74 }
   ],
   "next_cursor": "c2Vhcm5jaDo0Mg",
   "credits_charged": 1

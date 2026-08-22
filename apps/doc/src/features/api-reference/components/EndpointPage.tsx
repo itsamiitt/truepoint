@@ -11,9 +11,11 @@ import { AvailabilityBadge } from "@/components/AvailabilityBadge.tsx";
 import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
+import { buildSnippets } from "@/content/snippets.ts";
 import type { Endpoint } from "@/content/types.ts";
 import type { ReactNode } from "react";
 import styles from "../api-reference.module.css";
+import { SnippetTabs } from "./SnippetTabs.tsx";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -96,7 +98,7 @@ export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
         </div>
 
         <aside className={styles.aside} aria-label="Worked example">
-          <CodeBlock language="Request · cURL" source={endpoint.example.request} />
+          <SnippetTabs snippets={buildSnippets(endpoint)} />
           <CodeBlock language="Response · 200" source={endpoint.example.response} />
         </aside>
       </div>

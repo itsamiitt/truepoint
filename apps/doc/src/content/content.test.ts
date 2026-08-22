@@ -89,6 +89,98 @@ describe("dataset samples are fabricated (ADR-0048 §D5)", () => {
   }
 });
 
+describe("worked examples never implicate a real domain (ADR-0048 §D5)", () => {
+  // The dataset rule above covers sample ROWS. Examples were exempt by oversight, and they had drifted into
+  // exactly the same failure: a fabricated firmographic record — industry, headcount, revenue band — attached
+  // to acme.com, and a fabricated person with a work address at it. A reader cannot tell an illustration from
+  // a claim, and the subject of the claim never consented to appear in either. Reserved domains only.
+  const RESERVED = /(?:^|@|\.)example\.(?:com|net|org)$/;
+
+  /** Hosts a request or response sample may legitimately name: our own API, and the error type namespace. */
+  const OURS = new Set([
+    "api.truepoint.in",
+    "doc.truepoint.in",
+    "truepoint.in",
+    "app.truepoint.in",
+  ]);
+
+  function hostsIn(sample: string): string[] {
+    const hosts = new Set<string>();
+    for (const match of sample.matchAll(/https?:\/\/([a-z0-9.-]+)/gi))
+      hosts.add((match[1] ?? "").toLowerCase());
+    for (const match of sample.matchAll(/"(?:domain|company_domain)"\s*:\s*"([^"]+)"/gi)) {
+      hosts.add(
+        (match[1] ?? "")
+          .toLowerCase()
+          .replace(/^https?:\/\//, "")
+          .split("/")[0] ?? "",
+      );
+    }
+    for (const match of sample.matchAll(/[?&]domain=([^"&\s\\]+)/gi)) {
+      hosts.add(
+        (match[1] ?? "")
+          .toLowerCase()
+          .replace(/^https?:\/\//, "")
+          .split("/")[0] ?? "",
+      );
+    }
+    for (const match of sample.matchAll(/"[a-z_]*email"\s*:\s*"[^"@]+@([^"]+)"/gi)) {
+      hosts.add((match[1] ?? "").toLowerCase());
+    }
+    return [...hosts].filter(Boolean);
+  }
+
+  for (const endpoint of ENDPOINTS) {
+    test(`${endpoint.slug} examples name only reserved or TruePoint hosts`, () => {
+      for (const sample of [endpoint.example.request, endpoint.example.response]) {
+        for (const host of hostsIn(sample)) {
+          if (OURS.has(host)) continue;
+          expect(host).toMatch(RESERVED);
+        }
+      }
+    });
+  }
+
+  test("guide code samples follow the same rule", () => {
+    for (const guide of [QUICKSTART, ...GUIDES]) {
+      for (const block of guide.blocks) {
+        if (block.kind !== "code") continue;
+        for (const host of hostsIn(block.source)) {
+          if (OURS.has(host)) continue;
+          expect(host).toMatch(RESERVED);
+        }
+      }
+    }
+  });
+});
+
+describe("no sample teaches a request the API would reject", () => {
+  // The quickstart shipped `-d '{"id":"cmp_2b81"}'` for company enrich long after the opaque id was retired
+  // in favour of the registrable domain (endpoints/company.ts, corrected 2026-08-21). Someone following the
+  // page verbatim got a 422 on their second-ever call. The company endpoints are keyed by domain, and no
+  // sample for them may say otherwise.
+  const COMPANY_SLUGS = new Set(["company-match", "company-enrich"]);
+
+  for (const endpoint of ENDPOINTS) {
+    if (!COMPANY_SLUGS.has(endpoint.slug)) continue;
+    test(`${endpoint.slug} example is keyed by domain, not an opaque id`, () => {
+      expect(endpoint.example.request).toContain("domain");
+      expect(endpoint.example.request).not.toMatch(/"id"\s*:/);
+      expect(endpoint.example.response).not.toContain("cmp_");
+    });
+  }
+
+  test("no guide sample sends a cmp_ id to a company endpoint", () => {
+    for (const guide of [QUICKSTART, ...GUIDES]) {
+      for (const block of guide.blocks) {
+        if (block.kind !== "code") continue;
+        if (!block.source.includes("/company/")) continue;
+        expect(block.source).not.toContain("cmp_");
+      }
+    }
+  });
+});
+
 describe("nothing claims to be live before it is", () => {
   test("every endpoint, dataset and plan declares its availability", () => {
     const declared = [
