@@ -55,18 +55,32 @@ export interface DsarDeadlineSweepDeps {
       dueAt: Date;
     }>
   >;
+  /**
+   * The clock, injectable for tests.
+   *
+   * Added because the first version of the test was FLAKY and CI caught it: the fixture built its `dueAt`
+   * inside the `findOverdue` callback, which runs AFTER the sweep has already read the wall clock, so the
+   * measured age was 28h minus however many milliseconds separated the two reads. It floored to 28 locally
+   * (same millisecond) and to 27 on the runner. Worse, the sibling branch carrying the identical test passed
+   * — so it was intermittent, not broken, which is the harder kind to ever diagnose again.
+   *
+   * Padding the fixture would have hidden it. Handing the test the clock removes wall-time from the
+   * assertion altogether, so an age assertion is exact rather than probable.
+   */
+  now?: () => Date;
 }
 
 export function makeProcessDsarDeadlineSweep(redis: IORedis, deps: DsarDeadlineSweepDeps = {}) {
   const findOverdue =
     deps.findOverdue ??
     ((now: Date) => withPrivilegedTx((tx) => dsarRequestRepository.findOverdue(tx, now, MAX_ROWS)));
+  const clock = deps.now ?? (() => new Date());
 
   return async function processDsarDeadlineSweep(
     _job: Job<DsarDeadlineSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const now = new Date();
+      const now = clock();
       const overdue = await findOverdue(now);
 
       // Both gauges are written on EVERY tick, including the zero case. A gauge that is only set when
