@@ -102,6 +102,12 @@ jobs:
       # enablement — one template line can take a dark train live for every tenant.
       - name: Production switch posture
         run: bun run lint:prod-switches
+      # Scans TRACKED files for credential shapes and for this product's PII formats (.csv/.xlsx/.xls/.rdb).
+      # .gitignore stops the accident; this stops `git add -f`, a path that slips a pattern, and a key pasted
+      # into source as a temporary default. Asymmetric cost: a wrong commit is a revert, a committed secret is
+      # a rotation plus a history rewrite.
+      - name: Committed secrets + PII formats
+        run: bun run lint:secrets
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
