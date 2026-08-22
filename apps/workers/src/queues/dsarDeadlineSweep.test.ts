@@ -34,8 +34,17 @@ mock.module("../logger.ts", () => ({
 const redis = {} as never;
 const job = {} as never;
 
+// A FIXED clock, handed to the sweep. The first version of this file read the wall clock in BOTH the sweep
+// and the fixture, and the fixture read it second — so an age built as "28 hours ago" was really 28 hours
+// minus the microseconds between the two reads, which Math.floor turned into 27. It passed locally (same
+// millisecond) and failed on the runner, while the sibling branch running the identical test passed. That is
+// what makes this class expensive: intermittent, not wrong. Padding the fixture would have hidden it; taking
+// the clock as a dependency removes wall-time from the assertions entirely.
+const NOW = new Date("2026-08-22T12:00:00.000Z");
+const clock = () => NOW;
+
 function hoursAgo(n: number): Date {
-  return new Date(Date.now() - n * 3_600_000);
+  return new Date(NOW.getTime() - n * 3_600_000);
 }
 
 describe("dsarDeadlineSweep", () => {
@@ -45,7 +54,10 @@ describe("dsarDeadlineSweep", () => {
   });
 
   test("publishes zeroes when nothing is overdue, rather than leaving the series absent", async () => {
-    const process = makeProcessDsarDeadlineSweep(redis, { findOverdue: async () => [] });
+    const process = makeProcessDsarDeadlineSweep(redis, {
+      now: clock,
+      findOverdue: async () => [],
+    });
     await process(job);
 
     // Both gauges present and zero. If either were merely absent, a collector could not tell "no breaches"
@@ -57,6 +69,7 @@ describe("dsarDeadlineSweep", () => {
 
   test("reports the count and the age of the WORST breach", async () => {
     const process = makeProcessDsarDeadlineSweep(redis, {
+      now: clock,
       findOverdue: async () => [
         {
           id: "11111111-1111-4111-8111-111111111111",
@@ -79,13 +92,14 @@ describe("dsarDeadlineSweep", () => {
     expect(complianceGaugesSnapshot().get("dsar_overdue")).toBe(2);
     // 48h, not the 8h of the first row: the age is recomputed across all rows rather than trusting the
     // query's ORDER BY, so an upstream sort change cannot silently under-report the worst breach.
-    const seconds = complianceGaugesSnapshot().get("dsar_oldest_overdue_seconds") ?? 0;
-    expect(seconds).toBeGreaterThanOrEqual(48 * 3600 - 5);
-    expect(seconds).toBeLessThanOrEqual(48 * 3600 + 5);
+    // Exact, not a tolerance window — with the clock injected there is no drift left to absorb, and a range
+    // here would quietly re-admit the off-by-one-second class this file was just fixed for.
+    expect(complianceGaugesSnapshot().get("dsar_oldest_overdue_seconds")).toBe(48 * 3600);
   });
 
   test("logs ids, types and statuses — never the data subject", async () => {
     const process = makeProcessDsarDeadlineSweep(redis, {
+      now: clock,
       findOverdue: async () => [
         {
           id: "33333333-3333-4333-8333-333333333333",
@@ -120,7 +134,10 @@ describe("dsarDeadlineSweep", () => {
       requestedAt: hoursAgo(100),
       dueAt: hoursAgo(10),
     }));
-    const process = makeProcessDsarDeadlineSweep(redis, { findOverdue: async () => rows });
+    const process = makeProcessDsarDeadlineSweep(redis, {
+      now: clock,
+      findOverdue: async () => rows,
+    });
     await process(job);
 
     expect(complianceGaugesSnapshot().get("dsar_overdue")).toBe(500);
