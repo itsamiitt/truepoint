@@ -1356,4 +1356,14 @@ flowchart TD
   every content test because it was prose in JSX rather than a content module, so it now derives from the
   availability each endpoint declares and is asserted like the rest. That gap is worth remembering when
   adding copy: a claim written directly into a component is a claim nothing checks.
+  2026-08-22 refresh (access gating, 5f1bfca7): 2371 → 2372 files — `content/access.ts`, in the existing
+  `shared["apps/doc/content"]` area. Unassigned holds at **2**.
+
+  The portal had been publishing one axis and calling it two. `beta` answers whether the CONTRACT is
+  settled; the company router is mounted inside `if (env.PUBLIC_DATA_API_ENABLED)`, which
+  `deploy/env.production.template` ships OFF, so nothing on the site answered whether the DOOR is open. Key
+  creation stays live either way by design, which is what made the failure reachable: mint a key, curl the
+  base URL, get a 404 from a route that was never mounted. The access sentence now rides on every callable
+  endpoint page, the docs facts strip and the landing status line, and `shippedContract.test.ts` reads the
+  deployment template so the copy and the posture cannot drift apart. Recorded as ADR-0048 C7.
 ```

@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2371,
-  "fileSetHash": "sha256:ceb792228e89f50c863caa2f1b5f209f884e92caa5667ca5426714f28c5e4136",
+  "fileCount": 2372,
+  "fileSetHash": "sha256:6895ff96f6fc974a25e322fd0d4a3accc0d46ae3c397153e2370d1e271e80ead",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2678,6 +2678,7 @@
       "apps/doc/src/components/contrast.test.ts"
     ],
     "apps/doc/content": [
+      "apps/doc/src/content/access.ts",
       "apps/doc/src/content/changelog.ts",
       "apps/doc/src/content/content.test.ts",
       "apps/doc/src/content/datasets.ts",
