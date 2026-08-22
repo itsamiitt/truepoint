@@ -149,7 +149,10 @@ export function deriveSignals(
 
   const contact = intel.contact;
   if (contact) {
-    if (contact.hasEmail && (contact.emailStatus === "unverified" || contact.emailStatus === "unknown")) {
+    if (
+      contact.hasEmail &&
+      (contact.emailStatus === "unverified" || contact.emailStatus === "unknown")
+    ) {
       out.push({
         id: "email_unverified",
         kind: "data quality",

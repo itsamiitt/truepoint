@@ -29,7 +29,8 @@ const ROOTS = ["apps", "packages"];
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage", ".turbo"]);
 
 /** Roles whose ARIA pattern moves selection with arrow keys rather than Tab. */
-const COMPOSITE_ROLE = /role=["'](radio|tab|option|menuitem|menuitemradio|menuitemcheckbox|treeitem)["']/;
+const COMPOSITE_ROLE =
+  /role=["'](radio|tab|option|menuitem|menuitemradio|menuitemcheckbox|treeitem)["']/;
 
 /** The roving part: an explicitly negative tabIndex, in JSX or HTML spelling. */
 const ROVING = /tabIndex=\{[^}]*-\s*1[^}]*\}|tabindex=["']-1["']/;
@@ -105,7 +106,9 @@ for (const root of ROOTS) {
 }
 
 if (offenders.length === 0) {
-  process.stdout.write(`ok   ${scanned} component files, no roving tabindex without key handling\n`);
+  process.stdout.write(
+    `ok   ${scanned} component files, no roving tabindex without key handling\n`,
+  );
   process.exit(0);
 }
 

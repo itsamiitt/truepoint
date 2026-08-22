@@ -30,7 +30,9 @@ describe("subjectFromUrl", () => {
   });
 
   it("2. reads a Sales-Navigator lead (no public slug exists on those pages)", () => {
-    expect(subjectFromUrl("https://www.linkedin.com/sales/lead/ACwAAB3u3xU,NAME_SEARCH,fnHM")).toEqual({
+    expect(
+      subjectFromUrl("https://www.linkedin.com/sales/lead/ACwAAB3u3xU,NAME_SEARCH,fnHM"),
+    ).toEqual({
       kind: "person",
       subjectKey: "sales-lead:ACwAAB3u3xU",
       sourceUrl: "https://www.linkedin.com/sales/lead/ACwAAB3u3xU",
@@ -65,7 +67,9 @@ describe("subjectFromUrl", () => {
       "https://www.linkedin.com/sales/lead/ACwAAB3u3xU,NAME_SEARCH,fnHM",
       "https://www.linkedin.com/sales/people/ACwAAB3u3xU",
     ]) {
-      expect(subjectFromUrl(url)?.subjectKey).toBe(linkedinAdapter.subjectKey(new URL(url)) as string);
+      expect(subjectFromUrl(url)?.subjectKey).toBe(
+        linkedinAdapter.subjectKey(new URL(url)) as string,
+      );
     }
   });
 

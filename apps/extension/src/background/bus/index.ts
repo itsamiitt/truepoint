@@ -241,7 +241,11 @@ async function handle(
 
     case "ADD_TO_LIST": {
       try {
-        const { affected } = await ctx.api.addToList(msg.listId, msg.contactId, crypto.randomUUID());
+        const { affected } = await ctx.api.addToList(
+          msg.listId,
+          msg.contactId,
+          crypto.randomUUID(),
+        );
         await ctx.telemetry.event("list_add", {});
         return { ok: true, affected };
       } catch (error) {

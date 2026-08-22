@@ -127,8 +127,10 @@ for (const route of [...PAGES, ...FILES]) {
     const combobox = /<input\b[^>]*role="combobox"[^>]*>/.exec(body)?.[0];
     if (!combobox) problems.push("missing masthead search");
     else {
-      if (!/aria-label=|aria-labelledby=/.test(combobox)) problems.push("search has no accessible name");
-      if (!/aria-expanded="false"/.test(combobox)) problems.push("search does not render collapsed");
+      if (!/aria-label=|aria-labelledby=/.test(combobox))
+        problems.push("search has no accessible name");
+      if (!/aria-expanded="false"/.test(combobox))
+        problems.push("search does not render collapsed");
       if (!/aria-controls=/.test(combobox)) problems.push("search combobox names no popup");
     }
     problems.push(...checkAccessibility(body));

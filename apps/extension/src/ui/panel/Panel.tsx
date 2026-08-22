@@ -241,7 +241,9 @@ export function Panel(): React.ReactElement {
     }
     if (subject.kind === "company" && !loading) {
       // A company page has no person to describe — say so rather than rendering an empty person card.
-      return <EmptyBlock title={t("prospect.emptyOnCompany")} hint={t("prospect.emptyOnCompanyHint")} />;
+      return (
+        <EmptyBlock title={t("prospect.emptyOnCompany")} hint={t("prospect.emptyOnCompanyHint")} />
+      );
     }
     return <ProspectTab payload={payload} loading={loading} onChanged={refresh} />;
   };
@@ -293,7 +295,11 @@ export function Panel(): React.ReactElement {
       </div>
 
       <div style={{ display: "flex", gap: 2, padding: "0 18px 12px", flex: "none" }}>
-        <button type="button" style={tabStyle(tab === "prospect")} onClick={() => setTab("prospect")}>
+        <button
+          type="button"
+          style={tabStyle(tab === "prospect")}
+          onClick={() => setTab("prospect")}
+        >
           {t("tab.prospect")}
         </button>
         <button type="button" style={tabStyle(tab === "company")} onClick={() => setTab("company")}>
