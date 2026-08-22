@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2383 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2384 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,14 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (re-verification deadline contract, 807bff14): 2383 → 2384 files —
+  `packages/db/test/reverificationDeadline.itest.ts`, in the existing `shared["packages/db"]` area.
+
+  Pins the abort/checkpoint half of `runReverification`. Worth reading before changing that loop: `aborted`
+  is latched immediately AFTER the bounded verify fan-out (not only at the top of the batch loop), which is
+  what keeps the cursor from advancing past rows a killed wave never graded. Reading only the top-of-loop
+  check makes it look like a skip bug; it is not, and a probe said so before the claim was written.
 
   2026-08-22 refresh (S-09 re-verification cover, 0f7a32a0): 2382 → 2383 files —
   `packages/db/test/reverification.itest.ts`, into the existing `shared["packages/db"]` area. (Not
