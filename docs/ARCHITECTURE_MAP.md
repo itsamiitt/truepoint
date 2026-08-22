@@ -1243,4 +1243,22 @@ flowchart TD
   one path. No new domain and no new warning; unassigned holds at **2** (the same two metering
   repositories). The `apps/doc` purpose paragraph above still describes the app correctly — the redesign
   changed how the portal looks, not what it holds.
+  2026-08-22 refresh (doc-portal playground, 94748416): 2329 → 2335 files — a new
+  `apps/doc/src/features/playground/` slice (the pure request simulator `sandbox.ts`, its fabricated
+  fixtures, 17 contract tests, the client console and its stylesheet) plus the `/docs/playground` route,
+  bucketed into the existing `shared["apps/doc/features"]` and `shared["apps/doc/app"]` areas. No new
+  domain and no new warning; unassigned holds at **2** (the same two metering repositories).
+
+  The playground is a **simulator, not a client**: `sandbox.ts` is a pure function from a composed request
+  to the response the service would return, so the portal keeps the property that makes it unusual in the
+  fleet — no data client, no env, CSP `connect-src 'self'` — and the page does not contradict its own
+  authentication guide, which tells a reader never to put a key in a browser. Its fixtures are the same
+  fictional firms on reserved `example.com` domains the `/datasets` sample rows use (ADR-0048 §D5),
+  asserted in `sandbox.test.ts` beside the contract behaviours.
+
+  **Generated from a clean worktree at 94748416, not from the working tree.** A concurrent session on
+  `feat/extension-profile-intel-panel` had uncommitted files in this shared checkout
+  (`packages/{core/src/prospect,types/src}/profileIntel.ts`, `apps/api/src/features/contacts-resolve/
+  intel.test.ts`), and a filesystem scan would have stamped paths into this map that main does not
+  contain. Expect the next refresh from that branch to add them for real.
 ```

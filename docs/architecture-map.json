@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2329,
-  "fileSetHash": "sha256:e9486a4fddb3e398c5c8e8c215f3e841ef34f32ad8eb76cba4d52cb7c4e0215d",
+  "fileCount": 2335,
+  "fileSetHash": "sha256:8b1f13fe4748bb5d8ccee91012024fde20464a9ad2f5d2b5b8b87d43a8c9233d",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2649,6 +2649,7 @@
       "apps/doc/src/app/docs/api/[endpoint]/page.tsx",
       "apps/doc/src/app/docs/layout.tsx",
       "apps/doc/src/app/docs/page.tsx",
+      "apps/doc/src/app/docs/playground/page.tsx",
       "apps/doc/src/app/layout.tsx",
       "apps/doc/src/app/not-found.tsx",
       "apps/doc/src/app/page.tsx",
@@ -2705,6 +2706,11 @@
       "apps/doc/src/features/marketing/components/EndpointIndex.tsx",
       "apps/doc/src/features/marketing/components/HomePage.tsx",
       "apps/doc/src/features/marketing/index.ts",
+      "apps/doc/src/features/playground/components/PlaygroundPage.tsx",
+      "apps/doc/src/features/playground/index.ts",
+      "apps/doc/src/features/playground/sandbox.test.ts",
+      "apps/doc/src/features/playground/sandbox.ts",
+      "apps/doc/src/features/playground/sandboxRecords.ts",
       "apps/doc/src/features/pricing/components/PlanCard.tsx",
       "apps/doc/src/features/pricing/components/PricingPage.tsx",
       "apps/doc/src/features/pricing/index.ts",
