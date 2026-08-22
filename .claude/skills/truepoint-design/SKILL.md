@@ -281,10 +281,26 @@ no-raw-hex adherence is **manual review** against `Guidelines/TruePoint Brand Ki
 and the live tokens in `packages/ui/src/tokens.css`. (`docs/planning/brand-identity.md`
 is superseded — trust only its header banner, never its legacy body.)
 
-> **Implementation status:** there is no custom design-lint yet — the token / a11y /
-> no-raw-hex / no-raw-element rules below are not automatically checked. They are
-> enforced by code review against the Brand Kit + tokens.css; Biome and
-> dependency-cruiser cover only formatting/lint and import boundaries.
+> **Implementation status (updated 2026-08-22):** two of these rules are now checked, the
+> rest still are not.
+>
+> - **no-raw-hex — CHECKED.** `bun run lint:design-tokens` (`scripts/lint-design-tokens.mjs`,
+>   a CI gate) flags a hex used as a colour value in a `.css` declaration or a `.tsx` style
+>   object. Deliberately narrow: `packages/ui/src/tokens.css`, `var(--token, #fallback)`
+>   (which `apps/extension` needs — a content script runs where tokens.css never loaded),
+>   Next's `themeColor` `<meta>` literal, and hexes inside comments are all excluded.
+>   Escape hatch: `// design-tokens-ok: <reason>`.
+> - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
+>   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
+>   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
+> - **contrast — CHECKED FOR `apps/doc` ONLY.** `apps/doc/src/components/contrast.test.ts`
+>   asserts every token pair that app paints against the WCAG 2.2 AA floor and bans
+>   `--tp-ink-4` as a text colour outright. **Nothing equivalent guards `apps/web`,
+>   `apps/admin` or `apps/forge`** — porting it is real work, not a formality: the value
+>   is in enumerating the pairs each app actually paints.
+> - **no-raw-element, and the rest below — NOT checked.** Still code review against the
+>   Brand Kit + tokens.css. Biome and dependency-cruiser cover only formatting/lint and
+>   import boundaries.
 
 - **No hardcoded hex.** `#2563c9` → `var(--tp-cobalt)`.
 - **No raw `<button>`/`<input>`/`<table>`/`<dialog>`** — use the DS equivalents.
