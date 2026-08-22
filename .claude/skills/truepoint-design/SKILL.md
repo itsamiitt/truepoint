@@ -293,11 +293,19 @@ is superseded — trust only its header banner, never its legacy body.)
 > - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
 >   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
 >   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
-> - **contrast — CHECKED FOR `apps/doc` ONLY.** `apps/doc/src/components/contrast.test.ts`
->   asserts every token pair that app paints against the WCAG 2.2 AA floor and bans
->   `--tp-ink-4` as a text colour outright. **Nothing equivalent guards `apps/web`,
->   `apps/admin` or `apps/forge`** — porting it is real work, not a formality: the value
->   is in enumerating the pairs each app actually paints.
+> - **contrast — CHECKED for `apps/doc` and `apps/web`; `apps/admin` and `apps/forge` still
+>   have no pair assertions.** Each app asserts the token pairs it actually paints
+>   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`); enumerating
+>   those pairs is the work, and it is per-app by design.
+> - **`--tp-ink-4` is NOT a text colour — ratcheted repo-wide.** It is 2.54:1 on white and
+>   worse on every tint, which is below the AA floor for normal text (4.5:1) *and* for large
+>   text (3.0:1) — no text size passes. It remains fine for placeholders, disabled controls
+>   (WCAG 1.4.3 exempts those) and icon glyphs. There are **97** existing text usages across
+>   `apps/web`, `apps/admin`, `apps/auth` and `packages/ui`;
+>   `packages/ui/src/inkFourContrast.test.ts` stops that number growing and must be tightened
+>   as usages come out. **Do not add a new one.** Reach for `--tp-ink-3` — but check the
+>   surface first: ink-3 clears AA on white and `--tp-surface-2` and FAILS on `--tp-surface-3`
+>   and `--nav-hover-fill`.
 > - **no-raw-element, and the rest below — NOT checked.** Still code review against the
 >   Brand Kit + tokens.css. Biome and dependency-cruiser cover only formatting/lint and
 >   import boundaries.

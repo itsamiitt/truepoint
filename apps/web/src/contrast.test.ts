@@ -1,36 +1,26 @@
-// contrast.test.ts — WCAG 2.2 AA contrast for the CUSTOMER app, as a ratchet.
+// contrast.test.ts — WCAG 2.2 AA contrast for the pairs the CUSTOMER app paints.
 //
-// apps/doc has had a contrast guard since its redesign; nothing equivalent has ever guarded apps/web,
-// apps/admin or apps/forge — the three surfaces a paying user actually spends the day in. This is the first
-// half of closing that, and it is deliberately shaped as a RATCHET rather than a pass/fail wall, because the
-// first run found a problem too large to fix as a side effect of adding the check.
+// apps/doc has had a contrast guard since its redesign; apps/web, apps/admin and apps/forge never have —
+// the surfaces a paying user is actually in all day. This is web's half: assert the colour pairs this app
+// puts on screen, and record the one token that fails.
 //
-// THE FINDING (measured 2026-08-22): `--tp-ink-4` is used as a TEXT colour in 74 places across apps/web and
-// packages/ui. At #9ca3af it scores **2.54:1 on pure white** and less on every tinted surface this app paints
-// (2.43 on --tp-surface-2, 2.33 on --tp-surface-3, 2.31 on --nav-hover-fill). AA asks 4.5:1 for normal text
-// and 3.0:1 for large text, so there is **no text size at which this token passes** — it is not a
-// "small-print" trade-off, it fails outright at every size.
+// THE FINDING (2026-08-22): `--tp-ink-4` (#9ca3af) is used as a TEXT colour across the product. It scores
+// 2.54:1 on pure white and less on every tinted surface (2.43 on --tp-surface-2, 2.33 on --tp-surface-3,
+// 2.31 on --nav-hover-fill). AA asks 4.5:1 for normal text and 3.0:1 for large, so it is below BOTH floors —
+// there is no text size at which it passes. Not a small-print trade-off; it fails outright.
 //
-// The selectors say what the text is, and it is not decoration: `.note` (×5), `.footnote` (×3), `.kpiLabel`,
-// `.fieldLabel`, `.optionHint`, `.sectionHint`, `.timelineTime`, `.threadTime`, `.taskSub`, `.secondaryLabel`,
-// `.scoreCompositeLabel`, `.wsSlug`, `.tp-ui-page-header-eyebrow`, `.tp-ui-field-hint`. Those are labels,
-// hints, timestamps and footnotes — informational text a user is expected to read. Genuinely exempt cases
-// exist in the set (`.tp-ui-field::placeholder`, and icon glyphs like `.tp-ws-caret`, `.tp-ui-th-arrow`,
-// `.tp-ui-chip-x`) but they are a small minority.
+// The selectors say what the text is: `.note`, `.footnote`, `.kpiLabel`, `.fieldLabel`, `.optionHint`,
+// `.sectionHint`, `.timelineTime`, `.threadTime`, `.taskSub`, `.secondaryLabel`, `.scoreCompositeLabel`,
+// `.wsSlug`, `.tp-ui-page-header-eyebrow`, `.tp-ui-field-hint`. Labels, hints, timestamps and footnotes —
+// informational text someone is expected to read. The set does contain genuinely exempt cases
+// (`.tp-ui-field::placeholder`, icon glyphs like `.tp-ws-caret`), but they are the minority.
 //
-// WHY A RATCHET AND NOT A FIX. Swapping ink-4 → ink-3 changes the visual hierarchy on most screens in the
-// product, and it is not even a mechanical swap: ink-3 clears AA on white (4.83) and --tp-surface-2 (4.63)
-// but FAILS on --tp-surface-3 (4.43) and --nav-hover-fill (4.39) — the two pairings apps/doc already shipped
-// broken and had to fix. So the correct change is a design decision per surface, not a find-and-replace, and
-// making it silently while adding a test would be the wrong way round. What this file does is stop the number
-// growing and put the measurement somewhere a human can act on it.
-//
-// Lower INK4_TEXT_BUDGET whenever usages are removed. A ratchet that is never tightened stops being a ratchet
-// (the same rule migrationSnapshots.test.ts states for the snapshot deficit).
+// Migrating is a per-surface DESIGN decision, not a find-and-replace: `--tp-ink-3` clears AA on white (4.83)
+// and --tp-surface-2 (4.63) but FAILS on --tp-surface-3 (4.43) and --nav-hover-fill (4.39) — the two
+// pairings apps/doc shipped broken and had to repair. Both facts are asserted below so the reasoning cannot
+// rot silently.
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
 
 /** Values copied from packages/ui/src/tokens.css — literal on purpose, so a change to either the token or a
  *  usage is caught. A test that reads the same source as the code cannot do that. */
@@ -121,52 +111,7 @@ describe("--tp-ink-4 as text: the measurement behind the ratchet", () => {
   });
 });
 
-/** Measured 2026-08-22. Lower it whenever usages are removed; it must never rise. */
-const INK4_TEXT_BUDGET = 74;
-
-const ROOTS = [
-  join(import.meta.dir, "..", "..", "..", "apps", "web", "src"),
-  join(import.meta.dir, "..", "..", "..", "packages", "ui", "src"),
-];
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage", ".turbo"]);
-
-function styleFiles(dir: string, out: string[] = []): string[] {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    if (SKIP_DIRS.has(entry)) continue;
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) styleFiles(full, out);
-    else if (entry.endsWith(".css") || entry.endsWith(".tsx")) out.push(full);
-  }
-  return out;
-}
-
-function inkFourTextUsages(): number {
-  let count = 0;
-  for (const root of ROOTS) {
-    for (const file of styleFiles(root)) {
-      const matches = readFileSync(file, "utf8").match(/color:\s*var\(--tp-ink-4\)/g);
-      count += matches?.length ?? 0;
-    }
-  }
-  return count;
-}
-
-describe("--tp-ink-4 text ratchet", () => {
-  test("the count does not grow", () => {
-    expect(inkFourTextUsages()).toBeLessThanOrEqual(INK4_TEXT_BUDGET);
-  });
-
-  test("INK4_TEXT_BUDGET is honest — tighten it whenever usages are removed", () => {
-    expect(inkFourTextUsages()).toBe(INK4_TEXT_BUDGET);
-  });
-
-  test("the scan actually finds things (a ratchet on zero would pass vacuously)", () => {
-    expect(inkFourTextUsages()).toBeGreaterThan(0);
-  });
-});
+// The COUNT of ink-4-as-text usages is ratcheted in packages/ui/src/inkFourContrast.test.ts — with the
+// token, because the usages span every app and a ratchet parked in one app that fails when somebody edits
+// another is the kind of test people delete. It also matches both spellings; the version that briefly lived
+// here matched only the stylesheet form and undercounted by 23.

@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2377,
-  "fileSetHash": "sha256:acaecf9e15e11baab0de522758a2c67ca3f687ab2721222e22a2cf97d0a9fa53",
+  "fileCount": 2378,
+  "fileSetHash": "sha256:f9dc260af0ff32d4d375e951ce5911895f00e840e88c362c83a4da646231e32b",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3612,7 +3612,8 @@
       "packages/ui/src/components/ui/separator.tsx",
       "packages/ui/src/components/virtualWindow.test.ts",
       "packages/ui/src/components/virtualWindow.ts",
-      "packages/ui/src/index.ts"
+      "packages/ui/src/index.ts",
+      "packages/ui/src/inkFourContrast.test.ts"
     ]
   },
   "unassigned": [
