@@ -22,6 +22,7 @@ const PAGES = [
   "/datasets/us-accounting-firms",
   "/datasets/us-managed-it-services",
   "/docs",
+  "/docs/playground",
   "/docs/authentication",
   "/docs/errors",
   "/docs/pagination",

@@ -25,6 +25,7 @@ const TOKEN = {
   "--tp-cobalt-700": "#1e4fa3",
   "--tp-btn": "#111827",
   "--tp-on-fill": "#ffffff",
+  "--danger-700": "#b91c1c",
   "--tp-twilight": "#0c0e1a",
   "--danger-ink": "#8c5f5f",
   "--tp-surface": "#ffffff",
@@ -82,7 +83,10 @@ const USED_PAIRS: readonly { fg: Token; bg: Token; where: string }[] = [
   { fg: "--tp-on-fill", bg: "--tp-cobalt", where: "POST method pill" },
   { fg: "--tp-ink-2", bg: "--tp-cobalt-50", where: "metered-cost chip" },
   { fg: "--danger-ink", bg: "--tp-surface", where: "required-parameter annotation" },
+  { fg: "--tp-on-fill", bg: "--danger-700", where: "playground error status pill" },
   { fg: "--blend-code-label", bg: "--tp-twilight", where: "code panel language label" },
+  { fg: "--blend-code-copy", bg: "--tp-twilight", where: "playground idle status pill" },
+  { fg: "--blend-code-label", bg: "--tp-twilight", where: "playground response meta line" },
   { fg: "--blend-code-copy", bg: "--tp-twilight", where: "code panel copy control" },
   { fg: "--blend-code-text", bg: "--tp-twilight", where: "code panel sample text" },
 ];
