@@ -52,6 +52,18 @@
     {
       "include": ["**/tsconfig*.json"],
       "json": { "parser": { "allowComments": true } }
+    },
+    {
+      "//": "noConsoleLog off where the console IS the output, not a stray debug line. Eight warnings sat here permanently: two CLI gate scripts, the extension packer, the db seed, and the two logger modules that implement logging. A rule that is 100% false positives trains you to skim past its output, which is exactly how a real stray console.log ships. Everywhere else it stays a warning.",
+      "include": [
+        "scripts/**",
+        "**/scripts/**",
+        "packages/db/src/seed.ts",
+        "packages/auth/src/log.ts",
+        "apps/workers/src/logger.ts",
+        "apps/auth/src/lib/bootstrapAdmin.ts"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsoleLog": "off" } } }
     }
   ],
   "javascript": {
