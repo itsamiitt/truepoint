@@ -48,6 +48,8 @@ export const en = {
   "panel.noSubject": "No prospect in view",
   "panel.noSubjectHint": "Open a LinkedIn profile or company page to see what TruePoint holds.",
   "panel.errorTitle": "Couldn't load this profile",
+  "panel.signedOut": "Sign in to see prospect intel",
+  "panel.signedOutHint": "TruePoint shows what it holds about the person on this page.",
   "tab.prospect": "Prospect",
   "tab.company": "Company",
   "prospect.emptyOnCompany": "No person on this page",

@@ -205,6 +205,24 @@ export function Panel(): React.ReactElement {
   };
 
   const body = (): React.ReactElement => {
+    // Signed out is not an error, and it is the FIRST thing a new install shows. Falling through to the
+    // generic error block gave it "Please sign in again" over a Retry button that could never succeed —
+    // the one action that helps is the one the popup offers, so the panel offers it too.
+    if (state && !signedIn) {
+      return (
+        <div style={{ padding: "40px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            {t("panel.signedOut")}
+          </div>
+          <Muted>{t("panel.signedOutHint")}</Muted>
+          <div style={{ marginTop: 14, display: "flex", justifyContent: "center" }}>
+            <Button variant="primary" onClick={() => void send({ type: "AUTH_LOGIN" })}>
+              {t("popup.signIn")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
     if (!subject) {
       return <EmptyBlock title={t("panel.noSubject")} hint={t("panel.noSubjectHint")} />;
     }
