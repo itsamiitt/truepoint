@@ -11,6 +11,7 @@
 import { describe, expect, test } from "bun:test";
 import { CHANGELOG } from "./changelog.ts";
 import { DATASETS } from "./datasets.ts";
+import { endpointStatus } from "./endpointStatus.ts";
 import { ENDPOINTS } from "./endpoints/index.ts";
 import { GUIDES, QUICKSTART } from "./guides/index.ts";
 import { CREDIT_ACTIONS, PLANS } from "./pricing.ts";
@@ -262,6 +263,37 @@ describe("the change policy publishes a mechanism, not an invented commitment", 
     // same class of defect this guide is trying to close.
     expect(copy).toContain("/changelog.xml");
     expect(copy).toContain("x-availability");
+  });
+});
+
+describe("the landing page's status sentence tracks the endpoint list", () => {
+  // The inverse of every other defect in this sweep, and the costliest: the landing page said the contract
+  // was "not callable yet" for weeks after the two company endpoints shipped, while the endpoint pages, the
+  // playground and the OpenAPI document all said otherwise. A developer reading the first page concluded
+  // there was nothing to try. It survived because it was prose in JSX, which no content test could see.
+  const status = endpointStatus();
+
+  test("the counts are the real counts", () => {
+    expect(status.callable).toBe(
+      ENDPOINTS.filter((endpoint) => endpoint.availability !== "planned").length,
+    );
+    expect(status.callable + status.planned).toBe(ENDPOINTS.length);
+  });
+
+  test("it does not deny that callable endpoints exist", () => {
+    if (status.callable > 0) {
+      expect(status.line).toContain("callable today");
+      expect(status.line).not.toMatch(/not callable yet/i);
+    }
+  });
+
+  test("it does not promise callable endpoints that do not exist", () => {
+    if (status.callable === 0) expect(status.line).toMatch(/not callable yet/i);
+  });
+
+  test("the fixture this guards is still real — some endpoint IS callable", () => {
+    // If everything became planned again, the assertions above would pass vacuously.
+    expect(status.callable).toBeGreaterThan(0);
   });
 });
 
