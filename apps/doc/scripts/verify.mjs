@@ -35,7 +35,7 @@ const PAGES = [
   "/trust",
   "/changelog",
 ];
-const FILES = ["/robots.txt", "/sitemap.xml", "/llms.txt", "/openapi.json"];
+const FILES = ["/robots.txt", "/sitemap.xml", "/llms.txt", "/openapi.json", "/changelog.xml"];
 
 // Claims that must never reach a reader. Each is a CLAUDE.md hard rule, not a style preference:
 // earned credits and bounties are rule 7; the Sales Navigator supply path is rule 4.

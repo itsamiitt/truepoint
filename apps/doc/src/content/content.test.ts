@@ -181,6 +181,29 @@ describe("no sample teaches a request the API would reject", () => {
   });
 });
 
+describe("the site does not describe headers the API never sends", () => {
+  // The pagination guide told readers to back off by a `Retry-After` header. The shipped renderer
+  // (apps/api/src/middleware/error.ts) sets only `content-type: application/problem+json` and returns
+  // RateLimitedError's `retryAfterSeconds` as a body member — no route sets the header. A client following
+  // that guide read null, waited zero seconds, and hammered the limit it had just hit. The errors guide had
+  // it right all along, which is what made the contradiction invisible in review: both pages sounded
+  // authoritative.
+  //
+  // If the API ever does send the header, delete this test in the same change — not before.
+  test("every mention of Retry-After says the API does not send one", () => {
+    // Naming the header is fine — useful, even, since a reader arrives expecting it. What is not fine is
+    // naming it without the correction, so the rule is "mention it only while denying it".
+    const DENIES = /(?:no|not|rather than|instead of)\s+(?:a\s+)?Retry-After/i;
+    const offenders = ALL_COPY.filter((line) => /Retry-After/i.test(line) && !DENIES.test(line));
+    expect(offenders).toEqual([]);
+  });
+
+  test("the retry interval is described where it actually lives — the body", () => {
+    const mentions = ALL_COPY.filter((line) => /retryAfterSeconds/.test(line));
+    expect(mentions.length).toBeGreaterThan(0);
+  });
+});
+
 describe("nothing claims to be live before it is", () => {
   test("every endpoint, dataset and plan declares its availability", () => {
     const declared = [

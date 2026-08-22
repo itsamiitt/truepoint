@@ -10,6 +10,7 @@
 // before the primitives that consume them.
 
 import { SiteChrome } from "@/components/SiteChrome.tsx";
+import { FEED_PATH } from "@/content/feed.ts";
 import { SITE_ORIGIN, SITE_TAGLINE } from "@/content/site.ts";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
@@ -27,6 +28,12 @@ export const metadata: Metadata = {
   // The opposite of apps/auth, which sets index:false. This site is meant to be found — the plan's own
   // position is that the documentation is the sales team.
   robots: { index: true, follow: true },
+  // Feed autodiscovery: a reader pointed at the site root finds the changelog without being told its URL.
+  alternates: {
+    types: {
+      "application/atom+xml": [{ url: FEED_PATH, title: "TruePoint Data API — changelog" }],
+    },
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#2563C9" };
