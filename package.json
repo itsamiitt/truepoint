@@ -20,6 +20,7 @@
     "lint:design-tokens": "node scripts/lint-design-tokens.mjs",
     "lint:cross-feature": "node scripts/lint-cross-feature-imports.mjs",
     "lint:batch-inserts": "node scripts/lint-batch-insert-bounds.mjs",
+    "lint:gates-selftest": "node scripts/lint-gates-selftest.mjs",
     "lint:lockfile": "node scripts/check-lockfile.mjs",
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
     "db:migrate": "bun run --filter @leadwolf/db migrate",

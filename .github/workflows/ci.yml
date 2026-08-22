@@ -136,6 +136,14 @@ jobs:
       # bulk import of a full chunk threw. Dark feature + a soak suite that had never run = nobody noticed.
       - name: Batch inserts stay under the bind-parameter ceiling
         run: bun run lint:batch-inserts
+      # Every gate above is a regex over source, and SEVEN of this repo's checks have been caught reporting a
+      # clean `ok` while blind to the exact defect they were written for — a resolver that never resolved, a
+      # lookahead defeated by backtracking, patterns blind to ES6 shorthand, comments counted as code. Each was
+      # found by planting a failure by hand. This step does that on every run: it writes a file that MUST trip
+      # each gate, requires a non-zero exit that names the plant, removes it, and requires green again. A gate
+      # that passes its own plant fails here, by name.
+      - name: Each gate can still fail (plant-and-check)
+        run: bun run lint:gates-selftest
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
