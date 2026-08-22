@@ -22,6 +22,44 @@ Legend: ✅ shipped & live · 🌒 built, dark (flag-off) · 💤 built, inert �
 
 ---
 
+## Build log — 2026-08-22 — the Profile Intelligence Panel (X06 remainder, X07-lite)
+
+Rebuilt the side panel as the **Prospect | Company** surface specified by the Claude Design project
+"TruePoint Extension" (`templates/profile-intel-panel`), on the data the `linkedin_api` landing already
+holds. Three commits on `feat/extension-profile-intel-panel`; gates run locally (bun + Postgres 17 are on
+this host now), including the new itest.
+
+- **P1 — the server seam.** `POST /api/v1/contacts/lookup/intel`: ONE masked aggregate per viewed LinkedIn
+  URL (person **or** company), composed in `packages/core/src/prospect/profileIntel.ts` from the two
+  existing Layer-0 readers plus the caller's own overlay row and tenant signals. Deliberately a **sibling**
+  of `/contacts/lookup` rather than an option on it: `/lookup` is the hot path the content script fires on
+  every SPA nav and settle, and this payload is far larger and fetched once. **Read-only** — no vendor call,
+  no burn of the 30-day clock. Contract `packages/types/src/profileIntel.ts`, parsed on **egress** so the
+  no-channel-values / no-Layer-0-ids invariants fail closed. Four allow-list rules added.
+- **P2 — SW plumbing.** `GET_SUBJECT` (hydrate-on-open, from the active tab's URL), `INTEL`,
+  `CAPTURE_CURRENT`, `LIST_LISTS`, `ADD_TO_LIST`, plus the `SUBJECT_VIEWED` broadcast so the panel follows
+  navigation and tab switches. `LookupCache` is now **generic** and a second instance caches intel; both are
+  invalidated through one helper so the hover card and the panel can never disagree.
+- **P3 — the panel.** Two tabs; three placeholder tabs **removed**. Pure derivers for signals, headcount
+  windows and formatting, each unit-tested.
+
+**Closed by this pass:** the **X06 remainder** (the panel tabs — reveal, lists and the deep-intel reads are
+now on a real surface) and a **company path** that needs no company DOM extraction: the Company tab resolves
+from the URL server-side, so X07's content-script adapter stays deferred and unneeded for this.
+
+**Deliberately NOT reproduced from the design, each with a standing reason:** profile photos and
+per-position logos (photos are raw-only by the 2026-08-16 decision; position logos are unmapped — initials
+and monograms instead, with the company logo shown because it *is* mapped); numeric `company_id`/`member_id`
+in the footer (internal link metadata — the domain and captured date instead); "Verify · 1" (no per-contact
+verify endpoint exists); "stated integrations"/"investors" (would require mining the company description —
+an inference, not a fact; `specialties` is shown instead); grouped skills (no taxonomy exists to group by).
+
+**Operator decisions recorded (2026-08-22, user):** the new route ships **default-on** rather than behind its
+own flag — the extension-wide counsel gates (`CHROME_EXTENSION_ENABLED`, `EXTENSION_ORIGINS`) still wall it
+off in production, so nothing becomes reachable before enablement; and the panel keeps **only** the two tabs.
+
+---
+
 ## Build log — 2026-07-21
 
 The gap-closure pass shipped in five commits on `feat/data-mgmt-01-research-brief` (dark; CI runs the gates,
@@ -57,7 +95,7 @@ verification.
 | **Capture / ingest** (LinkedIn profile → SW queue → `POST /ingest`) | `06`/`02` | 🌒 built, dark (`CHROME_EXTENSION_ENABLED`) | `src/content/index.ts:15-33`; `src/background/{bus/index.ts:48-57,queue/captureQueue.ts,queue/scheduler.ts}`; `src/background/api/client.ts:92-127`; connector `packages/core/src/ingestion/connectors/chromeExtension.ts` |
 | **Live credits** (SW `CreditsStore` · pill · reveal `balanceAfter` delta) | `13` | 🌒 built, dark | `src/background/credits/store.ts`; `src/ui/brand/CreditsPill.tsx`; `client.ts:144-162` (`/credits/balance`, `/credits/reveal-costs`) |
 | **Reveal** (money path) | `06` | 🌒 built, dark — **now reachable (P3)**: LOOKUP resolves a real `contactId` → reveal works end-to-end | `src/background/bus/index.ts` (LOOKUP→resolver), `client.ts` reveal |
-| **Side panel** (shell + Captured + Reveal tabs) | `08` | 🟡 partial — Captured + **Reveal tab now render (P3, four states)**; `lists`/`sequences`/`ai` still `EmptyState` | `src/ui/panel/Panel.tsx` (`RevealTab`) |
+| **Side panel** (Profile Intelligence Panel: Prospect + Company) | `08` | 🌒 **built, dark (2026-08-22)** — two tabs, four states each; the `lists`/`sequences`/`ai` placeholders and the standalone Reveal/Captured tabs are **removed** (reveal now lives in the contact card) | `src/ui/panel/{Panel,ProspectTab,CompanyTab,useIntel,primitives}.tsx`; derivers `src/ui/panel/intel/*` |
 | **Popup** | `11`/`13` | 🌒 built, dark | `src/ui/popup/Popup.tsx:85-142` |
 | **LinkedIn content script** (profile detect + SPA nav + hover card) | `01`/`02` | 🌒 built, dark — **profiles only** (`extract()` returns null off-profile) | `adapters/linkedin/index.ts:18-29,36-39,60-62`; SPA nav `content/observer.ts:1-40` (popstate + `MutationObserver`) |
 | **Messaging bus** (Zod discriminated union · validate-and-drop) | `02` | 🌒 built, dark | `src/shared/messages.ts:13-100`; `src/background/bus/index.ts:11-20` |
@@ -68,11 +106,11 @@ verification.
 | **RemoteConfig signed fetch** (fail-closed) | `02`/`03` | 🟡 partial — caches locally; signature check is a marked TODO (X09) | `src/background/config/remoteConfig.ts:3-4,40-47` |
 | **Telemetry upload** | `02`/`03` | 🟡 partial — events buffered in IDB, never uploaded (X10) | `src/background/telemetry/telemetry.ts:2` |
 | **Options page** | — | 🔲 not built (absent — no `options_ui` in the manifest) | `manifest.config.ts` |
-| **Company card + adapter** | `06`/`08` | 🔲 not built (X07) | `adapters/linkedin/index.ts:36-39` |
-| **Quick actions** (add-to-list · add-note · server timeline) | `06`/`09` | 🔲 not built — **endpoints exist** (X06) | `POST /lists/:id/members` (`lists/routes.ts:134`); `POST/GET /contacts/:id/activities` (`activity/routes.ts:18,29`) |
+| **Company card + adapter** | `06`/`08` | 🟡 partial — the **Company tab is built** and resolves from the URL server-side (`/company/<slug>` via `master_company_identifiers`, `/sales/company/<id>` via the fetch registry). The content-script company ADAPTER (X07) stays deferred and is not needed for it — no company DOM is read | `src/ui/panel/CompanyTab.tsx`; `packages/core/src/prospect/profileIntel.ts`; `adapters/linkedin/index.ts:36-39` (still returns null, by design) |
+| **Quick actions** (add-to-list · add-note · server timeline) | `06`/`09` | 🟡 partial — **add-to-list built** (panel footer picker → `GET /lists` + `POST /lists/:id/members`, both newly allow-listed); notes + server timeline still not built | `src/ui/panel/Panel.tsx` (`AddToList`); `POST/GET /contacts/:id/activities` (`activity/routes.ts:18,29`) — unbuilt |
 | **Tasks / dialer / one-off email** | `06` | 🔲 not built — **no backend either** (X14, deferred) | no `tasks` table; calls are activity-log only; email is sequence-based |
 | **Claude Skills library** | net-new | ✅ **built (P1)** | three concern-split skills `.claude/skills/truepoint-extension-{architecture,linkedin,auth}/` + CLAUDE.md routing |
-| **Tests** | `04` | 🟡 partial (P4) — first tests landed; broader suite owed | resolver isolation itest `packages/db/test/contactResolve.itest.ts`; adapter unit test `.../adapters/linkedin/index.test.ts`; `bun test` script added |
+| **Tests** | `04` | 🟡 partial — 82 extension unit tests + the API/itest pair for the panel seam; no DOM/E2E suite yet | `packages/db/test/{contactResolve,profileIntel}.itest.ts`; `apps/api/src/features/contacts-resolve/intel.test.ts`; extension `src/**/*.test.ts` (URL parser, intel resolver, the three panel derivers) |
 
 ---
 

@@ -467,3 +467,41 @@ from three sites only". The searchRepository half is FIXED — buildWhere now ca
 over all three suppression rungs, covering results, facet counts and typeahead. assertNotSuppressed has four
 call sites, not three. The REMAINING half of that invariant is (a) above: the Layer-0 plane, which is exactly
 where the new API would read.
+
+## 2026-08-22 — Profile Intelligence Panel: shape, gating, and the photo gate held (user decisions)
+
+The user directed that the extension's side panel be built to the Claude Design project "TruePoint
+Extension" (`templates/profile-intel-panel`). Three decisions were taken in-session and are recorded here
+because two of them deviate from a standing convention and the third RE-AFFIRMS a hard gate.
+
+(a) **Two tabs only — Prospect and Company.** The Captured, Reveal, Lists, Sequences and AI tabs are removed.
+    Three of those rendered an `EmptyState` and nothing else (the X06 remainder), and two of them named
+    explicit non-goals (X-01 sequencing, X-02 AI email). Reveal's job moves into the Prospect tab's contact
+    card. The IndexedDB `recent` store and its reaper stay — the popup still reports "{count} captured on
+    this page" — so nothing about the capture queue changes.
+
+(b) **The new read ships DEFAULT-ON, not behind its own feature flag.** `POST /api/v1/contacts/lookup/intel`
+    has no `*_ENABLED` switch of its own. This deviates from the "everything dark behind a default-off gate"
+    convention the extension series otherwise follows, and the reasoning is that the convention's purpose is
+    already served: the extension-wide counsel gates (`CHROME_EXTENSION_ENABLED`, `EXTENSION_ORIGINS`,
+    both unset in production per D10/D12) mean no extension-scoped token exists to call it, and the route is
+    on the deny-by-default `extensionScope` allow-list. The enumeration guard that DOES matter is kept:
+    per-caller rate limiting (`checkDatabaseProfileRate`), the same budget the web's global profile routes
+    carry. Note the consequence honestly — a WEB session's token can call this route today, and it returns
+    the same masked, suppression-checked data the profile routes already serve.
+
+(c) **Profile photos stay raw-only — the 2026-08-16 HUMAN GATE is NOT opened.** The design shows a LinkedIn
+    profile picture and per-position company logos. `profile_picture` is dropped at the mapper boundary and
+    survives only in `source_records.raw_data`; position `company_logo` was never mapped. The panel renders
+    initials for people and monograms for positions instead, and shows the COMPANY logo, which is a mapped
+    field. Opening that gate would need its own entry here plus a column, a mapper change and a DSAR path;
+    the user declined it for this pass.
+
+Also recorded, as design-versus-record conflicts resolved against the record (rule 6): the design's mono
+footer showed `company_id` / `member_id`, which are internal link metadata under the 2026-08-16 front-end
+contract — replaced with the registrable domain and the captured date; "Verify · 1" has no endpoint behind
+it and was omitted rather than wired to enrichment, which finds rather than verifies; and "stated
+integrations"/"investors stated" would have required mining the company description, so the tab shows the
+`specialties` field and says plainly that it is the company's own words. Credit prices are interpolated from
+`GET /credits/reveal-costs` — the design's "2 credits" for a phone is an ops setting
+(`REVEAL_COST_PHONE`, currently 1), not a number in code.
