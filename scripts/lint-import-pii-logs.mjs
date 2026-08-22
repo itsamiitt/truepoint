@@ -30,7 +30,9 @@ const ROOTS = [
   "packages/core/src/ingestion",
 ];
 
-// A log/console/logger call opener — we then scan its single-line argument list.
+// A log/console/logger call opener — we then scan its FULL argument list, balanced across lines by argsOf().
+// (This comment used to say "single-line", which was wrong about the code below it and would have sent the
+// next reader chasing a multi-line blind spot that does not exist. The real one was object shorthand.)
 const CALL = /\b(?:log|logger|console)\s*\.\s*(?:log|info|warn|error|debug|trace)\s*\(/g;
 
 // PII-value carriers that must NEVER appear inside a log argument list. Codes/columns/ids/counts are fine;
@@ -56,6 +58,22 @@ const FORBIDDEN = [
   { re: /\.records\b/, why: "captured records array (.records)" },
   { re: /\brecords\s*:/, why: "records: value in a log object" },
   { re: /\bobservations\b/, why: "parsed observations (ingest's row equivalent)" },
+
+  // ── ES6 OBJECT SHORTHAND (added 2026-08-22) ────────────────────────────────────────────────────────────
+  // The patterns above that anchor on `:` or `.` could not see `{ rows }`, and shorthand is the form somebody
+  // is most likely to write — `log.info("import.done", { jobId, rows })` reads as the tidy version. Measured
+  // by planting all four spellings in an import module: `{ rows: parsed }` and `{ email: email }` were both
+  // caught, `{ rows }` and `{ email }` both passed as CLEAN. So the gate had a hole exactly where the
+  // idiomatic style lives, which is the worst place for a heuristic tripwire to have one.
+  //
+  // `rawData`, `input`, `fileName`, `observations` and `records`... were already bare-word matches, so they
+  // caught shorthand all along; only the four below needed it. `\b…\s*[,}]` keeps `rowsSkipped` and
+  // `emailsSent` out (the next character is a letter, not a comma or brace).
+  { re: /\brows\s*[,}]/, why: "parsed rows array as shorthand ({ rows })" },
+  { re: /\b(?:email|phone)\s*[,}]/i, why: "a channel value as shorthand ({ email } / { phone })" },
+  { re: /\bbody\s*[,}]/, why: "request/response body as shorthand ({ body })" },
+  // A spread of a row object puts every column in the log at once — the same leak with fewer characters.
+  { re: /\.\.\.\s*(?:row|record|parsed|raw)\b/, why: "spread of a row/record into a log object" },
 ];
 
 /** Extract the argument text of a call starting at `openParenIdx` (index of the `(`), balancing parens on the
