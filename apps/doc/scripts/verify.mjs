@@ -119,6 +119,18 @@ for (const route of [...PAGES, ...FILES]) {
     // The chrome is what carries the skip link and the route to privacy@ — both required on every page.
     if (!body.includes("Skip to content")) problems.push("missing skip link");
     if (!body.includes("privacy@truepoint.in")) problems.push("missing privacy contact");
+    // Search lives in the root layout, so its absence from ANY page means the chrome itself broke. It is
+    // also the one control on this site a reader is likely to reach for before the nav, and it is a client
+    // component: a hydration failure would leave the input inert rather than missing, which is why the
+    // keyboard behaviour is proven in a browser rather than here. This asserts only that it was delivered,
+    // named, and in its closed state.
+    const combobox = /<input\b[^>]*role="combobox"[^>]*>/.exec(body)?.[0];
+    if (!combobox) problems.push("missing masthead search");
+    else {
+      if (!/aria-label=|aria-labelledby=/.test(combobox)) problems.push("search has no accessible name");
+      if (!/aria-expanded="false"/.test(combobox)) problems.push("search does not render collapsed");
+      if (!/aria-controls=/.test(combobox)) problems.push("search combobox names no popup");
+    }
     problems.push(...checkAccessibility(body));
   }
 

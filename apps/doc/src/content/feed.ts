@@ -71,7 +71,7 @@ export function buildFeed(): string {
     '<feed xmlns="http://www.w3.org/2005/Atom">',
     "  <title>TruePoint Data API — changelog</title>",
     `  <subtitle>${xml("Contract, price and sourcing changes. Published when they happen, not when they are announced.")}</subtitle>`,
-    `  <id>tag:doc.truepoint.in,2026:changelog</id>`,
+    "  <id>tag:doc.truepoint.in,2026:changelog</id>",
     `  <updated>${updated}</updated>`,
     `  <link rel="alternate" type="text/html" href="${SITE_ORIGIN}/changelog"/>`,
     `  <link rel="self" type="application/atom+xml" href="${SITE_ORIGIN}${FEED_PATH}"/>`,

@@ -173,6 +173,8 @@ export function PlaygroundPage() {
                 <button
                   key={tab.value}
                   type="button"
+                  // biome-ignore lint/a11y/useSemanticElements: a native radio cannot carry this segmented
+                  // control's label markup, and swapping it would change the keyboard contract below.
                   role="radio"
                   aria-checked={endpoint === tab.value}
                   tabIndex={endpoint === tab.value ? 0 : -1}
