@@ -212,6 +212,43 @@ describe("co-op-safe MATCH-AGAINST resolveForImport (Phase 2′; ADR-0021, PLAN_
     expect(result.masterPersonId).toBe(personId);
   });
 
+  // ── TEST 3b: A NAME IS NEVER AN IDENTITY KEY ───────────────────────────────────────────────────────────────
+  // The negative case behind TEST 3, and the one that protects real people rather than a dedup metric. Names
+  // collide constantly in this dataset — checking a provider's real payloads turned up two distinct members
+  // whose names differ only by a professional suffix, and "John Smith" needs no explanation. If identity ever
+  // gained a name fallback, the resolver would fuse two humans into one master person: their employment
+  // histories interleave, one person's suppression starts hiding the other's record, and no later correction
+  // can separate them because the evidence has already been folded into one cluster.
+  //
+  // resolveForImport takes no name at all today — companyName is a company key, never a person one. This test
+  // exists so that adding one has to be a deliberate act with a failing test in front of it.
+  test("two people sharing a name but not a slug resolve to DIFFERENT persons", async () => {
+    const shared = { registrableDomain: "acme.com", companyName: "Acme Inc" };
+
+    const first = await dbmod.withErTx((tx) =>
+      dbmod.masterGraphRepository.resolveForImport(tx, {
+        ...shared,
+        linkedinPublicId: "john-smith-1a2b3c",
+      }),
+    );
+    const second = await dbmod.withErTx((tx) =>
+      dbmod.masterGraphRepository.resolveForImport(tx, {
+        ...shared,
+        linkedinPublicId: "john-smith-9z8y7x",
+      }),
+    );
+
+    expect(first.masterPersonId).toBeTruthy();
+    expect(second.masterPersonId).toBeTruthy();
+    expect(second.masterPersonId).not.toBe(first.masterPersonId);
+    // …and neither collided with the person the earlier tests minted.
+    expect(first.masterPersonId).not.toBe(personId);
+    expect(second.masterPersonId).not.toBe(personId);
+
+    // Same company, though: sharing an employer is exactly what these two DO share.
+    expect(second.masterCompanyId).toBe(first.masterCompanyId);
+  });
+
   // ── TEST 4: COMPANY DEDUP + COMPANY-LESS ───────────────────────────────────────────────────────────────────
   // The registrable domain is the company dedup key: the same domain LINKs the same company (no second mint). With
   // NO registrable domain the resolver mints a company-less person (masterCompanyId null) — a company mint REQUIRES
