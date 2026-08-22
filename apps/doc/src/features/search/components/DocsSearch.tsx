@@ -177,10 +177,12 @@ export function DocsSearch() {
           value, so it never sits behind typed text. Decorative and aria-hidden: the input already has an
           accessible name, and a screen-reader user reaching this control has not used the shortcut. */}
       {!open && query === "" ? (
-        // biome-ignore lint/a11y/noAriaHiddenOnFocusable: a <kbd> has no tabindex and no interactive role, so
-        // it is not focusable — the rule is matching conservatively on any element carrying aria-hidden. The
-        // attribute is the correct semantic here: this is a decorative duplicate of a shortcut, and a reader
-        // who has arrived at the input does not need "slash" read out after its accessible name.
+        // A <kbd> has no tabindex and no interactive role, so it is not focusable — the rule below matches
+        // conservatively on any element carrying aria-hidden. The attribute is the correct semantic here: a
+        // decorative duplicate of a shortcut, and a reader who has already reached the input does not need
+        // "slash" read out after its accessible name. (The directive has to be the LAST line before the
+        // element — a wrapped comment between them makes it bind to nothing and report suppressions/unused.)
+        // biome-ignore lint/a11y/noAriaHiddenOnFocusable: <kbd> is not focusable; see above.
         <kbd className={styles.shortcut} aria-hidden="true">
           /
         </kbd>
