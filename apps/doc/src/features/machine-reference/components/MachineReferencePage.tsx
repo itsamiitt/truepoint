@@ -9,6 +9,7 @@ import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { Note } from "@/components/Note.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import { MACHINE_REFERENCE_PATH, buildMachineReference } from "@/content/machineReference.ts";
+import { OPENAPI_PATH, callableEndpoints, withheldEndpoints } from "@/content/openapi.ts";
 import { StatusBadge } from "@leadwolf/ui";
 import styles from "../machine-reference.module.css";
 
@@ -31,6 +32,9 @@ export function MachineReferencePage() {
       <div className={styles.actions}>
         <a className="tp-ui-btn tp-ui-btn--primary" href={MACHINE_REFERENCE_PATH}>
           Open {MACHINE_REFERENCE_PATH}
+        </a>
+        <a className="tp-ui-btn tp-ui-btn--secondary" href={OPENAPI_PATH}>
+          Open {OPENAPI_PATH}
         </a>
         <span className={styles.meta}>
           plain text · {lines} lines · {kilobytes} kB
@@ -63,10 +67,26 @@ export function MachineReferencePage() {
           </li>
         </ul>
 
+        <h2 className={styles.heading}>Two documents, for two kinds of reader</h2>
+        <p className={styles.paragraph}>
+          <span className={styles.mono}>{MACHINE_REFERENCE_PATH}</span> is prose: it describes every
+          endpoint we have written down, including the {withheldEndpoints().length} that are planned
+          and say so in words. <span className={styles.mono}>{OPENAPI_PATH}</span> is an OpenAPI 3.1
+          document for tools — client generators, Postman, a mock server — and it lists only the{" "}
+          {callableEndpoints().length} endpoints you can actually call today.
+        </p>
+        <p className={styles.paragraph}>
+          That difference is deliberate. A spec has no register for &ldquo;planned&rdquo; that a
+          generator would respect: an operation in <span className={styles.mono}>paths</span> is a
+          callable operation, so publishing one we have not built means somebody generates a client,
+          ships it, and gets a 404. The spec names the withheld endpoints in its description
+          instead.
+        </p>
+
         <h2 className={styles.heading}>Keeping it current</h2>
         <p className={styles.paragraph}>
-          Fetch it at build time rather than pinning a copy. It is regenerated with every deploy, so
-          a stale copy is the one way to end up with a field name we no longer publish.
+          Fetch either at build time rather than pinning a copy. Both are regenerated with every
+          deploy, so a stale copy is the one way to end up with a field name we no longer publish.
         </p>
 
         <h2 className={styles.heading}>The document</h2>

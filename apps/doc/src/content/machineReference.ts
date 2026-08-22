@@ -19,6 +19,7 @@
 
 import { ENDPOINTS } from "./endpoints/index.ts";
 import { ERROR_TYPE_BASE } from "./endpoints/shared.ts";
+import { OPENAPI_PATH, withheldEndpoints } from "./openapi.ts";
 import {
   CREDIT_ACTIONS,
   CREDIT_UNIT_NOTE,
@@ -107,6 +108,7 @@ export function buildMachineReference(): string {
     "",
     `human docs: ${SITE_ORIGIN}/docs`,
     `machine reference: ${SITE_ORIGIN}${MACHINE_REFERENCE_PATH}`,
+    `OpenAPI 3.1 (callable endpoints only): ${SITE_ORIGIN}${OPENAPI_PATH}`,
     "",
     "## Connection",
     "",
@@ -126,6 +128,14 @@ export function buildMachineReference(): string {
     "Availability is stated per endpoint. A `planned` endpoint is documented but not callable — do not write",
     "code against it expecting a response today.",
     "",
+    ...(withheldEndpoints().length
+      ? [
+          `The OpenAPI document at ${SITE_ORIGIN}${OPENAPI_PATH} lists only the callable ones, because a spec`,
+          "has no way to mark an operation as planned that a client generator would respect. This file",
+          "describes all of them, labelled.",
+          "",
+        ]
+      : []),
     ...ENDPOINTS.map(endpointSection),
     "",
     "## Credit costs",

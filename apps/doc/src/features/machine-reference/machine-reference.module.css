@@ -42,3 +42,9 @@
   display: grid;
   gap: var(--tp-space-2);
 }
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--tp-ink);
+}
