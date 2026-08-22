@@ -104,11 +104,24 @@ async function importFlat(
   expect(res.created).toBe(3);
 }
 
-async function enableFlag(tenantId: string) {
+/**
+ * Pin the tenant override explicitly, in BOTH directions.
+ *
+ * This used to insert only the `true` row and trust the flag to be off otherwise. Migration 0119
+ * (operator-directed, 2026-08-18) set `global_enabled = true` on every defined flag including
+ * `channels_dual_write`, so "no override" now evaluates ON — and the flat-only premise below silently
+ * became false. A per-tenant override wins over the global default in either direction (evaluateFlag
+ * precedence), so pinning it is what makes this test independent of the global posture rather than
+ * quietly dependent on it.
+ */
+async function setFlag(tenantId: string, enabled: boolean) {
   await admin`
     INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
-    VALUES ('channels_dual_write', ${tenantId}, true)`;
+    VALUES ('channels_dual_write', ${tenantId}, ${enabled})
+    ON CONFLICT (flag_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`;
 }
+
+const enableFlag = (tenantId: string) => setFlag(tenantId, true);
 
 async function childCounts(workspaceId: string): Promise<{ emails: number; phones: number }> {
   const [e] = await admin`
@@ -185,6 +198,9 @@ async function seedTenantWorkspaceAndFlat(
   slug: string,
 ): Promise<{ tenantId: string; workspaceId: string }> {
   const seeded = await seedTenantWorkspace(slug);
+  // Pin dual-write OFF for this tenant before importing: post-0119 the global default is ON, so the
+  // flat-only precondition has to be asserted rather than assumed.
+  await setFlag(seeded.tenantId, false);
   await importFlat(scope(seeded.tenantId, seeded.workspaceId), seeded.ownerId, slug);
   const counts = await childCounts(seeded.workspaceId);
   expect(counts).toEqual({ emails: 0, phones: 0 }); // flat-only by construction (flag off)
