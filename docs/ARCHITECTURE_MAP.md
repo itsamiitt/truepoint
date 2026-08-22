@@ -1234,4 +1234,13 @@ flowchart TD
   One design-system change: `TpChip` gained an optional `removeLabel`. Its remove control had a hardcoded
   `aria-label="Remove"`, so an applied-filter row announced eight identical buttons and a screen-reader user
   could not tell which filter they were about to drop. Default unchanged.
+
+  2026-08-22 refresh (doc-portal API-reference redesign, 763584eb): 2328 → 2329 files — one new file,
+  `apps/doc/src/features/api-reference/components/ApiFactsStrip.tsx` (the docs-index facts strip:
+  base URL · bearer scheme · problem+json · key scope, every value verified against `apps/api`), bucketed
+  into the existing `shared["apps/doc/features"]` area. The rest of the change restyled files in place
+  (masthead, docs rail, split endpoint pages, twilight code samples), so the tree shape moved by exactly
+  one path. No new domain and no new warning; unassigned holds at **2** (the same two metering
+  repositories). The `apps/doc` purpose paragraph above still describes the app correctly — the redesign
+  changed how the portal looks, not what it holds.
 ```

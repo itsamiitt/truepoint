@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2328,
-  "fileSetHash": "sha256:42f8d4ce125bfdf24ec8e04af06b85003d3ebbbc44f8cf9b6fc7bc1b343cd200",
+  "fileCount": 2329,
+  "fileSetHash": "sha256:e9486a4fddb3e398c5c8e8c215f3e841ef34f32ad8eb76cba4d52cb7c4e0215d",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2691,6 +2691,7 @@
       "apps/doc/src/content/types.ts"
     ],
     "apps/doc/features": [
+      "apps/doc/src/features/api-reference/components/ApiFactsStrip.tsx",
       "apps/doc/src/features/api-reference/components/DocsShell.tsx",
       "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
       "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
