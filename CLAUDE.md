@@ -84,9 +84,14 @@ news/social feeds. See 04-opportunity-scores.md.
   `ITEST_DATABASE_URL` at any superuser connection and each file clones its own database from a migrated
   template. Run each `.itest.ts` in its OWN process — the db client is a module singleton.
   In external mode also export `DATABASE_APP_ROLE=leadwolf_app` +
-  `DATABASE_APP_ROLE_PASSWORD` (the applyMigrations default), or `withTenantTx` silently falls back to the
-  OWNER connection and the role-identity proofs fail with `session_user` = `postgres`. A few files need Redis
-  (session revocation) and are unrunnable without it.
+  `DATABASE_APP_ROLE_PASSWORD` (the applyMigrations default `Lw_App_Role_2026!x7Qm`) **and**
+  `DATABASE_FORGE_ROLE_PASSWORD` — each missing password makes its connection helper fall back to the OWNER
+  connection *silently*, and the failure then reads like a broken security boundary rather than a missing env
+  var: `withTenantTx` → role-identity proofs fail with `session_user` = `postgres`; a WRONG app password fails
+  `28P01` (invalid password), which looks like the RLS wall is broken; `withForgeTx` with no forge password →
+  `forgeSchemaIsolation.itest.ts` reports `postgres` where it expects `leadwolf_forge`, which looks like the
+  ADR-0047 forge↔tenant firewall has failed. All three are the environment, not the code. A few files need
+  Redis (session revocation) and are unrunnable without it.
 - **Never assert a rejected DB call with `expect(...).rejects`.** A promise holding a pooled connection can be
   left unsettled, and the symptom is a HANG — of that assertion AND of every later query in the file, since
   the itest pools are `max: 1`. Use an explicit try/catch that returns the error. This has bitten
