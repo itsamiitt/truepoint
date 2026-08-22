@@ -115,6 +115,8 @@ export const en = {
   "footer.addToList": "Add to list",
   "footer.noLists": "No lists in this workspace yet.",
   "footer.close": "Close",
+  // Said rather than shown as a dead button: the extension saves people, not companies (D-7).
+  "footer.companyNote": "Open a person to save them",
   "footer.dashboard": "Dashboard",
   "footer.recapture": "Re-check this profile",
   "state.loading": "Loading…",

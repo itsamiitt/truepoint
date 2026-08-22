@@ -230,6 +230,11 @@ export function Panel(): React.ReactElement {
 
   const canAddToList = Boolean(payload?.intel.contactId);
   const savedCompany = payload?.intel.company?.company.name;
+  // Save is a PERSON action. There is no company-save path and that is a decision, not a gap: the content
+  // script deliberately extracts nothing from a company page (X07), and "gesture-gated Save company" was
+  // weighed and skipped for v1 (market-intelligence D-7). Rendering the button on a company page would give
+  // it one outcome — rejected — so the footer offers what the surface can actually do.
+  const canSave = Boolean(payload) && subject?.kind === "person";
 
   return (
     <div style={shell}>
@@ -291,7 +296,11 @@ export function Panel(): React.ReactElement {
           alignItems: "center",
         }}
       >
-        {saved ? (
+        {!canSave && !saved ? (
+          <span style={{ flex: 1, fontSize: 12, color: ink4 }}>
+            {subject?.kind === "company" ? t("footer.companyNote") : ""}
+          </span>
+        ) : saved ? (
           <span
             style={{
               flex: 1,
@@ -312,7 +321,7 @@ export function Panel(): React.ReactElement {
               variant="primary"
               full
               busy={saving}
-              disabled={!payload || payload.intel.status === "found"}
+              disabled={payload?.intel.status === "found"}
               onClick={() => void save()}
             >
               {payload?.intel.status === "found" ? t("footer.inWorkspace") : t("footer.save")}
