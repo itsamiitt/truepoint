@@ -142,6 +142,12 @@ jobs:
       # found by planting a failure by hand. This step does that on every run: it writes a file that MUST trip
       # each gate, requires a non-zero exit that names the plant, removes it, and requires green again. A gate
       # that passes its own plant fails here, by name.
+      # A queue with a producer and no consumer fills Redis and never errors: the enqueue succeeds, the jobs
+      # sit there, and the only symptom is work that silently never happens. Adding a queue is two edits in two
+      # files; this fails the build when the second one is missing. *_DLQ is skipped — a dead-letter queue is a
+      # parking lot by design.
+      - name: Every queue has a consumer
+        run: bun run lint:queue-consumers
       - name: Each gate can still fail (plant-and-check)
         run: bun run lint:gates-selftest
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built

@@ -111,6 +111,23 @@ export const probeRepository = {
 `,
   },
   {
+    gate: "lint:queue-consumers",
+    script: "scripts/lint-queue-consumers.mjs",
+    dir: `apps/workers/src/queues/${TAG}`,
+    name: "probeQueue.ts",
+    // The NESTED generic is deliberate. The gate's first pattern was `tracedQueue<[^>]*>\(`, which stops at
+    // the inner `>` and so PASSED this exact shape — it reported clean on a planted violation, which is how
+    // the blind spot was found. Keep the nested form here; a plain `<Foo>` would no longer prove anything.
+    content: `import { tracedQueue } from "../../tracedQueue.ts";
+
+export const PROBE_QUEUE = "probe_queue";
+export const probeQueue = tracedQueue<Record<string, never>>(
+  PROBE_QUEUE,
+  { connection: undefined as never },
+);
+`,
+  },
+  {
     gate: "lint:itest-rejects",
     script: "scripts/lint-itest-rejects.mjs",
     dir: `packages/db/test/${TAG}`,
