@@ -148,11 +148,28 @@ that can only ever delete zero rows. Revisit if and when that handshake ships �
   expected state of an unshipped module, not rot.
 - **`erRepository.confirmMerge`** — the subject of the I4 brief, whose exit gate is already recorded as
   unmeetable. Not something to wire opportunistically.
-- **`outcomeMetricsRepository` (`mostWanted`, `revealOutcomes`, `actionCounts`)** — the repository is exported
-  from the `@leadwolf/db` barrel and referenced by nothing else in the monorepo. **The queries that measure
-  the product's own outcome metrics have no consumer.** CLAUDE.md rule 2 requires acceptance criteria written
-  as outcome metrics; the SQL for several exists and no surface reads it. Building that surface is a product
-  decision (which metrics, for whom, on which page), so it is raised here rather than decided.
+- **`outcomeMetricsRepository.mostWanted`** — still unsurfaced, and deliberately. Its own contract says any
+  surface rendering it must first suppression-check every fingerprint against `suppression_list`'s
+  `email_blind_index`, and that the demand feed itself is Phase 3. Shipping the numbers without that check
+  would be exactly the compliance failure the method warns about. The miss COUNT is now surfaced (below); the
+  miss SUBJECTS are not.
+- **`outcomeMetricsRepository.actionCounts`** — still unsurfaced. Nothing needs per-action counts yet, and it
+  has no workspace predicate of its own (it relies entirely on RLS under `withTenantTx`), so a future caller
+  must run it on that seam and nowhere else.
+
+**`outcomeMetricsRepository.revealOutcomes` — surfaced.** This was raised here as a product decision ("which
+metrics, for whom, on which page") and turned out to have an answer already written down. The repository's own
+header says the reveal-hit rate is the number **06-roadmap Phase 1 states its KILL criterion against** —
+"reveal-hit rate <40% in the beachhead after seed load → stop" — and explains why no shipped meter can
+substitute: `contact_reveals` records what was CHARGED, a miss never creates a claim row, so a hit rate derived
+from it is 100% by construction. A kill criterion whose input nothing reads is not a criterion.
+
+The remaining question was the page, and `apps/web`'s Reports destination already had six dashboard sections
+and a route; this became the seventh rather than a new surface. `GET /api/v1/reports/reveal-outcomes` runs
+under `withTenantTx` because these reads are workspace-scoped by RLS rather than by a WHERE clause. `hitRate`
+and `p95ServerMs` stay NULLABLE end to end: "nothing attempted yet" and "every attempt missed" are opposite
+conclusions, and a kill criterion that cannot tell them apart would stop the project on an empty table — the
+panel renders that case as "Not enough data", never 0%.
 
 ## The general point
 

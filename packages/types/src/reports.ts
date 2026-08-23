@@ -86,3 +86,33 @@ export const reportsSummarySchema = z.object({
   memberOptions: z.array(reportMemberOptionSchema),
 });
 export type ReportsSummary = z.infer<typeof reportsSummarySchema>;
+
+/**
+ * Reveal outcomes — the hit-rate and latency read off `usage_event`.
+ *
+ * This is the number 06-roadmap Phase 1 states its KILL criterion against ("reveal-hit rate <40% in the
+ * beachhead after seed load → stop"), and until now nothing surfaced it: `outcomeMetricsRepository` was
+ * exported from the db barrel and read by no caller anywhere in the monorepo, so the metric the roadmap says
+ * decides whether to continue could not actually be looked at.
+ *
+ * It cannot come from the shipped credit meters. `contact_reveals` records what was CHARGED, and a miss never
+ * creates a claim row — so a hit rate derived from it is 100% by construction. That is why this rides on
+ * usage_event's reveal_hit / reveal_miss actions instead.
+ */
+export const revealOutcomesSchema = z.object({
+  /** Reveals that exposed or owned at least one field. */
+  hits: z.number().int().nonnegative(),
+  /** Lookups that found nothing — the demand signal, and the hit rate's complement. */
+  misses: z.number().int().nonnegative(),
+  /**
+   * hits / (hits + misses), or NULL when nothing has been attempted.
+   *
+   * Nullable on purpose, all the way out to the client: "no data yet" and "every attempt missed" are opposite
+   * conclusions, and a kill criterion that cannot tell them apart would stop the project on an empty table.
+   * The UI must render the empty case as "not enough data", never as 0%.
+   */
+  hitRate: z.number().min(0).max(1).nullable(),
+  /** Server-side p95 in ms — a lower bound on click-to-displayed, not the user-perceived number. */
+  p95ServerMs: z.number().nonnegative().nullable(),
+});
+export type RevealOutcomes = z.infer<typeof revealOutcomesSchema>;

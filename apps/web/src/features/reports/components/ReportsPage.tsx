@@ -1,8 +1,13 @@
-// ReportsPage.tsx — the Reports destination (11 §4.5 MVP slice): a Tabs dashboard switcher over six sections
-// (Pipeline funnel · Credit usage · Sending & deliverability · Team activity · Data health · Lead score &
-// intent). A shared date-range + member filter row drives the three dashboards composed from live data; the
-// two without a backend yet render first-class empty states. Each dashboard has an Export CSV action. The
-// ClickHouse /reports/* pipeline (ADR-0010) is post-MVP. Public slice component.
+// ReportsPage.tsx — the Reports destination (11 §4.5 MVP slice): a Tabs dashboard switcher over seven
+// sections (Pipeline funnel · Credit usage · Sending & deliverability · Team activity · Data health · Lead
+// score & intent · Reveal outcomes). A shared date-range + member filter row drives the dashboards composed
+// from live data; the two without a backend yet render first-class empty states. Each dashboard has an Export
+// CSV action. The ClickHouse /reports/* pipeline (ADR-0010) is post-MVP. Public slice component.
+//
+// Reveal outcomes is the odd one out and deliberately so: it carries its OWN loading/error rather than the
+// shared page-level pair, because it is a single panel on its own endpoint and a failure there should not
+// blank the dashboards that loaded. It also has no export dataset — activeDataset() returns null for it, so
+// Export toasts "nothing to export" rather than emitting a file with four numbers in it.
 "use client";
 
 import {
@@ -34,6 +39,7 @@ import { DataHealthSection } from "./DataHealthSection";
 import { DeliverabilitySection } from "./DeliverabilitySection";
 import { FunnelSection } from "./FunnelSection";
 import { LeadScoreSection } from "./LeadScoreSection";
+import { RevealOutcomesSection } from "./RevealOutcomesSection";
 import { TeamActivitySection } from "./TeamActivitySection";
 
 const TABS: { value: DashboardId; label: string }[] = [
@@ -43,6 +49,7 @@ const TABS: { value: DashboardId; label: string }[] = [
   { value: "team", label: "Team activity" },
   { value: "health", label: "Data health" },
   { value: "score", label: "Lead score & intent" },
+  { value: "outcomes", label: "Reveal outcomes" },
 ];
 
 const DASHBOARD_TITLE: Record<DashboardId, string> = {
@@ -52,6 +59,7 @@ const DASHBOARD_TITLE: Record<DashboardId, string> = {
   team: "Team activity",
   health: "Data health",
   score: "Lead score & intent",
+  outcomes: "Reveal outcomes",
 };
 
 export function ReportsPage() {
@@ -69,6 +77,10 @@ export function ReportsPage() {
     error,
     loading,
     reload,
+    outcomes,
+    outcomesLoading,
+    outcomesError,
+    reloadOutcomes,
   } = useReports();
   const { success, toast } = useToast();
   const [tab, setTab] = useState<DashboardId>("funnel");
@@ -200,6 +212,14 @@ export function ReportsPage() {
           <DataHealthSection rollup={health} loading={loading} error={error} onRetry={reload} />
         )}
         {tab === "score" && <LeadScoreSection />}
+        {tab === "outcomes" && (
+          <RevealOutcomesSection
+            outcomes={outcomes}
+            loading={outcomesLoading}
+            error={outcomesError}
+            onRetry={reloadOutcomes}
+          />
+        )}
       </section>
 
       <p className={styles.footnote}>
