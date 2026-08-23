@@ -67,10 +67,29 @@ export const eventOutboxRepository = {
     `);
   },
 
-  /** Prune old published rows (retention). Returns the count deleted. Owner tx. */
-  async prunePublished(tx: Tx, olderThan: Date): Promise<number> {
+  /**
+   * Prune old published rows (retention). Returns the count deleted. Owner/privileged tx.
+   *
+   * BATCHED, via a bounded subselect. Until this was wired into the retention sweep it had no caller at all,
+   * so `event_outbox` had no retention of any kind while `emitRevealEvent` and linkedinLinkFetchSweep kept
+   * appending and the relay only ever flipped rows to `published`. The first run of an unbounded
+   * `DELETE … WHERE status='published'` against that accumulated backlog would take a very large number of
+   * row locks in a single statement and bloat the table in one pass — so the limit is not a nicety, it is
+   * what makes the first execution safe. The caller loops until a short batch comes back, exactly like the
+   * idempotency and session reaps beside it.
+   *
+   * `ctid`-free and id-based on purpose: the subselect picks ids under the same predicate, so the DELETE
+   * stays index-driven and two concurrent sweeps cannot fight over the same rows for long.
+   */
+  async prunePublished(tx: Tx, olderThan: Date, limit = 5000): Promise<number> {
     const rows = (await tx.execute(sql`
-      DELETE FROM event_outbox WHERE status = 'published' AND published_at < ${olderThan.toISOString()} RETURNING id
+      DELETE FROM event_outbox
+       WHERE id IN (
+         SELECT id FROM event_outbox
+          WHERE status = 'published' AND published_at < ${olderThan.toISOString()}
+          LIMIT ${limit}
+       )
+      RETURNING id
     `)) as unknown as Array<{ id: string }>;
     return rows.length;
   },

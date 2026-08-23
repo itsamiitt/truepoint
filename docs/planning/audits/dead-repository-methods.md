@@ -83,10 +83,40 @@ would be worst if true. The one that has been traced is struck through — it wa
 | Method | If it really has no caller |
 |---|---|
 | ~~`sendQuotaRepository.resetPeriod`~~ | ~~A send quota that never resets its period.~~ **Confirmed and fixed — see above.** |
-| `oauthConnectStateRepository.sweepExpired` | OAuth connect-state rows accumulate forever; expired state is retained rather than reaped. |
-| `eventOutboxRepository.prunePublished` | The transactional outbox (migration 0051) grows without bound — published rows are never pruned. |
+| ~~`eventOutboxRepository.prunePublished`~~ | ~~The outbox grows without bound.~~ **Confirmed and fixed — see below.** |
+| ~~`oauthConnectStateRepository.sweepExpired`~~ | ~~OAuth connect-state rows accumulate forever.~~ **Not a bug — the table is inert. See below.** |
 | `userRepository.markEmailVerified` | Almost certainly verified through another path; worth confirming which, because the alternative is that nothing marks an address verified. |
 | `retentionClassPolicyRepository.getPolicy` | Per-class retention policy read by nothing — relevant to the double-gated retention engine, which is inert by design. |
+
+**`eventOutboxRepository.prunePublished` — traced, confirmed real, fixed.**
+
+`event_outbox` is live: `emitRevealEvent` and `linkedinLinkFetchSweep` append to it, and `realtimeRelay`
+drains it — but the relay only ever flips rows to `published`, and nothing deleted them. `prunePublished`
+documented itself as "retention" and had no caller, so the table has been accumulating for its entire life.
+
+Wired into the existing `retentionSweep`, beside the idempotency-key and dead-session reaps it already runs —
+no new queue, and the job's stated purpose already covered this. The window is 7 days rather than the house
+30: a published row has no consumer left (the relay has already published it), so what remains is forensic
+value, and it is the highest-volume of the three tables because every reveal appends.
+
+`prunePublished` also gained a batch limit. Its unbounded `DELETE … WHERE status='published'` would, on the
+first run against an accumulated backlog, take every matching row's locks in a single statement. The limit is
+not a nicety — it is what makes the first execution safe. The caller loops until a short batch returns, the
+same shape as the reaps beside it.
+
+New itest (`eventOutboxRetention.itest.ts` — the table had no coverage at all). Every case pins something the
+prune must LEAVE ALONE, because that is the dangerous direction: deleting too little wastes disk, deleting too
+much destroys events that were never published. It covers a pending row, a `failed` row, a recently-published
+row, the batch bound, and specifically that a NULL `published_at` is never swept even under a cutoff far in
+the future — SQL's three-valued logic gives that for free today, and the test exists so a later rewrite to
+`COALESCE(published_at, occurred_at)` fails loudly instead of quietly eating the queue.
+
+**`oauthConnectStateRepository.sweepExpired` — traced, NOT a bug, nothing built.**
+
+The reaper has no caller, but neither does anything else on that table: `oauth_connect_state` has no writer
+anywhere outside tests. The mailbox OAuth handshake it was built for does not run. An unused reaper on an
+empty table is a dark feature, not unbounded growth, and building a sweep for it would add a scheduled job
+that can only ever delete zero rows. Revisit if and when that handshake ships — the method is already correct.
 
 ## Deliberately not acted on
 
