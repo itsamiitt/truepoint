@@ -23,6 +23,7 @@
     "lint:gates-selftest": "node scripts/lint-gates-selftest.mjs",
     "lint:lockfile": "node scripts/check-lockfile.mjs",
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
+    "backfill:title-function": "bun run scripts/backfill-title-function.ts",
     "db:migrate": "bun run --filter @leadwolf/db migrate",
     "db:seed": "bun run --filter @leadwolf/db seed",
     "dev:admin": "turbo run dev --filter @leadwolf/admin",

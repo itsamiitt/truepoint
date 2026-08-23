@@ -357,6 +357,16 @@ export {
   type LandLinkedinPayloadInput,
   type LandLinkedinPayloadResult,
 } from "./sourceLanding/landSourcePayload.ts";
+// The title_function catch-up for rows that predate the landing writer — the operator sweep migration 0136
+// promised by name (`backfillTitleFunctionTx`) and nobody wrote. Reuses the SAME canonicalizeTitle call the
+// landing writer makes; a second implementation of the taxonomy is precisely what 0136 refused to create.
+export {
+  backfillTitleFunction,
+  decideTitleFunctions,
+  type BackfillTitleFunctionOptions,
+  type BackfillTitleFunctionResult,
+  type TitleFunctionDecision,
+} from "./sourceLanding/backfillTitleFunction.ts";
 // The origin fleet (0117): failover-chain fetch client for the real vendor contract
 // (POST <origin>/api/linkedin/{profile,company}), the origin router (60s cache + env fallback), and the
 // console's key-ingest boundary (sealOriginKey — cleartext key never leaves apps/api unencrypted).
