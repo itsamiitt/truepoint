@@ -18,6 +18,13 @@ real.)
 For each `export const xRepository = { … }`, extract the method names, then search every non-test `.ts`/`.tsx`
 under `apps/` and `packages/` for either the qualified `xRepository.method` or the bare `.method(`.
 
+A method called by a SIBLING in its own file counts as reached. Skipping the defining file outright was wrong
+and had a live victim: after `sendQuotaRepository.lock()` was fixed to call `resetPeriod`, the audit still
+reported `resetPeriod` as dead. The check inside the defining file uses only the QUALIFIED form, which can
+only be a call — the declaration `async resetPeriod(` is a different shape. Known edge: a directly recursive
+method would clear itself this way. None exist here, and the alternative re-introduces a false positive on
+every internal call.
+
 The bare form is load-bearing. The first version matched only the qualified spelling and produced false
 positives immediately: `apps/workers/src/outboxRelay.ts` calls `repository.markFailed(...)` where `repository`
 is an injected `Pick<typeof outboxRepository, …>`, and `importReaperSweep` calls `.listReapableDrafts(` off a
@@ -85,8 +92,23 @@ would be worst if true. The one that has been traced is struck through — it wa
 | ~~`sendQuotaRepository.resetPeriod`~~ | ~~A send quota that never resets its period.~~ **Confirmed and fixed — see above.** |
 | ~~`eventOutboxRepository.prunePublished`~~ | ~~The outbox grows without bound.~~ **Confirmed and fixed — see below.** |
 | ~~`oauthConnectStateRepository.sweepExpired`~~ | ~~OAuth connect-state rows accumulate forever.~~ **Not a bug — the table is inert. See below.** |
-| `userRepository.markEmailVerified` | Almost certainly verified through another path; worth confirming which, because the alternative is that nothing marks an address verified. |
-| `retentionClassPolicyRepository.getPolicy` | Per-class retention policy read by nothing — relevant to the double-gated retention engine, which is inert by design. |
+| ~~`userRepository.markEmailVerified`~~ | ~~Nothing marks an address verified.~~ **Not a bug — vestigial. See below.** |
+| ~~`retentionClassPolicyRepository.getPolicy`~~ | ~~Per-class retention policy read by nothing.~~ **Not a bug — redundant accessor. See below.** |
+
+All five leads are now traced: two were real and are fixed, three were not bugs. The verdicts also live in the
+script's `ADJUDICATED` register, so a re-run prints them with their reason instead of re-listing the symbols as
+unknowns. Without that the audit is a treadmill — the reader cannot tell "nobody has looked at this" from
+"somebody looked and it was fine", and noise trains you to skim past the one finding that matters.
+
+**`userRepository.markEmailVerified` — vestigial, not a gap.** `email_verified_at` is set at CREATION in both
+`create()` call sites: registration proves the address with a code before the row exists, and SSO JIT takes the
+IdP's word for it. `verifyEmailCode` therefore runs *before* the user exists, and there is no change-email flow
+anywhere, so no address is ever verified after the fact. The method is a leftover from a design in which
+verification came second.
+
+**`retentionClassPolicyRepository.getPolicy` — redundant accessor, not a gap.** The repository is used:
+`listPolicies` by `runRetentionSweep` and the admin routes, `upsertPolicy` by the admin write path. Only the
+fetch-one-by-id accessor is unused, because the sweep reads the whole set per run.
 
 **`eventOutboxRepository.prunePublished` — traced, confirmed real, fixed.**
 
