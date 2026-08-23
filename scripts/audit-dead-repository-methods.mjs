@@ -74,6 +74,36 @@ const ADJUDICATED = [
       "the subject of prospect-database-platform I4, whose exit gate is already recorded as unmeetable. Wiring it opportunistically is exactly what that brief says not to do.",
   },
   {
+    match: "masterJobPostingsRepository.upsertPosting",
+    verdict:
+      "writer deliberately ahead of its producer — the file says so: hiring-intelligence evidence (0127, MI-S1) whose feed is D-6 procurement. When the feed lands, ingest is wiring rather than schema work.",
+  },
+  {
+    match: "accountChildRepository.setParentAccount",
+    verdict:
+      "guard deliberately ahead of its verb — the file says so: 'NO API verb ships in this task'; the PATCH /accounts/:id parent verb rides doc 04/11's account UI slice. Method + tests first, tracked as a drift row.",
+  },
+  {
+    match: "effectivePolicyRepository.backfillTenantPolicies",
+    verdict:
+      "invoked by a deploy step, not app code (auth tracker 1.1b-backfill), and it is the prerequisite of the 1.1b-cutover flip, which is explicitly gated on 'backfill applied, no drift'. Correctly sequenced, not stranded.",
+  },
+  {
+    match: "masterPersonDerivedRepository.backfillEmploymentDatesTx",
+    verdict:
+      "migration 0136 performs this backfill in SQL as one statement; the bounded version exists for a re-run after a bulk landing, where a whole-table UPDATE would be a lock and a WAL spike rather than a task.",
+  },
+  {
+    match: "erRepository.listPersonsMissingBlockKey",
+    verdict:
+      "superseded — erSweep folds the populate into its own cursor scan (setBlockKey per keyless seed) because 'a separate backfill would re-scan the same table to do strictly less'. Kept as the entry point if the populate is ever separated again; must not become a second writer.",
+  },
+  {
+    match: "providerCallRepository.spendSinceByProvider",
+    verdict:
+      "unused refinement, not a broken brake — the aggregate spendSince IS the daily spend guard, called by enrichContact, enrichContactV2 and refreshAccount. Only the per-provider breakdown has no consumer.",
+  },
+  {
     match: "crm*",
     verdict:
       "the CRM connector module is dark behind CRM_SYNC_ENABLED (9 tables). Uncalled methods are the expected state of an unshipped module, not rot.",

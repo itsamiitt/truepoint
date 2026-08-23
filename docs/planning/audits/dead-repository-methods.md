@@ -177,3 +177,32 @@ None of these were invisible. They sit in files that are reviewed, in packages t
 tests that pass. What no check asks is whether anything *calls* them — and a method with no caller cannot
 fail, so nothing ever goes red. That is the same shape as the seven blind gates recorded in
 `scripts/lint-gates-selftest.mjs`: the failure mode is silence, and silence has to be looked for deliberately.
+
+## Second pass (2026-08-23) — six more traced, and the pattern behind them
+
+Standing at **20 OPEN, 26 adjudicated** of 46 findings; "tested but never called" is down from 13 to 7. Each
+verdict below was traced to a primary source, not inferred from the shape of the name.
+
+| Method | Verdict |
+|---|---|
+| `masterJobPostingsRepository.upsertPosting` | Writer ahead of its producer. The file says so: hiring-intelligence evidence (0127, MI-S1) whose feed is D-6 procurement. |
+| `accountChildRepository.setParentAccount` | Guard ahead of its verb. The file says so: *"NO API verb ships in this task"* — the `PATCH /accounts/:id` parent verb rides the account UI slice. |
+| `effectivePolicyRepository.backfillTenantPolicies` | Invoked by a deploy step, not app code (tracker 1.1b-backfill), and the prerequisite of the 1.1b-cutover flip, which is gated on *"backfill applied, no drift"*. |
+| `masterPersonDerivedRepository.backfillEmploymentDatesTx` | Migration 0136 does this backfill in SQL; the bounded version is the re-run tool for after a bulk landing. |
+| `erRepository.listPersonsMissingBlockKey` | Superseded — `erSweep` folds the populate into its own cursor scan, because *"a separate backfill would re-scan the same table to do strictly less"*. |
+| `providerCallRepository.spendSinceByProvider` | An unused refinement, not a broken brake: the aggregate `spendSince` IS the daily spend guard, called from three places. |
+
+**The pattern: this codebase deliberately lands a repository method ahead of its caller, and says so at the
+definition.** Two of the six state it outright in the doc comment ("the WRITER exists ahead of its producer",
+"NO API verb ships in this task"). That is a deliberate sequencing habit, not rot — which means a raw
+"no caller" list systematically over-reports here, and the first move on any finding should be to read the
+method's own comment before assuming neglect.
+
+It cuts the other way too, so the audit stays worth running: **the two real bugs this audit found — a send
+quota that never reset, and an outbox with no retention — were BOTH in methods whose comments claimed a caller
+that did not exist** ("driven by the P6 retention/period sweep", "retention"). The tell is not silence. It is a
+comment that names a caller, plus no caller.
+
+**One stale comment corrected.** `listPersonsMissingBlockKey` said "nothing writes it yet"; `erSweep` does.
+That comment briefly convinced this audit it had found an inert column, which is the cost of documentation that
+outlives its facts.
