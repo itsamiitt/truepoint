@@ -567,3 +567,20 @@ pass silently if it falls — they demand the budget be tightened instead.
    invoice describe the same period. If billing-aligned, the constant should be REPLACED by the cycle
    boundary, not re-tuned — a unit test asserts the 30 deliberately, so changing the number alone fails the
    build and sends the next reader here.
+
+7. **Managed callback origins (AUTH-036): platform-scoped, or post-authentication widening?** (2026-08-23,
+   `docs/planning/auth-platform/MANAGED_ORIGINS_BLOCKER.md`.) The auth tracker lists "wire the redirect/CORS
+   guards to `resolveAllowedOrigins`" as the next item. It is not a wiring task: three of the four call sites
+   validate the return origin before any tenant exists (the user has supplied only an email), and the fourth
+   is gated by a CORS preflight, which carries no credentials and so cannot be tenant-scoped even in
+   principle. Both obvious workarounds — unioning all tenants' origins, or resolving a tenant from a hint —
+   let an untrusted input choose which allow-list to validate against, which hands any tenant a redirect
+   target for everyone else's users.
+   **Decide:** (B) honour only the platform-NULL rows the table already carries, so the env floor becomes
+   bootstrap and platform origins extend it without a deploy — small, no cross-tenant widening possible, works
+   at every call site including the preflight; or (A) keep the env floor as the sole pre-auth gate and consult
+   per-tenant managed origins only after authentication has established the tenant — more work, and the
+   extension mint surface stays env-only regardless. Recommendation is (B) first, (A) only if tenant
+   self-service is a real requirement. Nothing was changed unilaterally: security has final say on redirect
+   gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
+   repository-call-site audit — there is nowhere correct to call them from yet.
