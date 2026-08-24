@@ -42,19 +42,72 @@
 // Neither alone is enough: (1) without (2) trusts a path built by string arithmetic, and (2) without (1) would
 // happily delete a leftover directory this run did not create.
 //
-// NOT SELF-TESTED HERE, deliberately, because a plant would have to mutate state this script should not touch:
-//   • lint:secrets scans `git ls-files`, so an untracked fixture is invisible to it — proving it would mean
-//     `git add`-ing a fake credential, which is precisely the thing that must never happen by accident.
+// TWO GATES NEED A DIFFERENT SHAPE, and this file used to claim they could not be covered at all:
+//   • lint:secrets scans `git ls-files`, so an untracked fixture is invisible to it — proving it appeared to
+//     require `git add`-ing a fake credential, which must never happen by accident.
 //   • lint:prod-switches reads deploy/env.production.template, and arming a switch there — even briefly — is
 //     a production-posture edit in a shared working copy.
-// Both were verified by hand instead (secrets: a scratch git repo holding a PEM and a .csv; prod-switches: a
-// crafted env tree). Their absence is stated rather than left as an inference from a shorter list.
+//
+// Both objections were about planting IN THIS REPO. Neither gate is bound to this repo: both resolve every
+// path from the CURRENT WORKING DIRECTORY, so each runs against a throwaway tree under the OS temp dir with
+// its own `git init`, and the fake credential never touches this checkout or its index. That is what
+// SANDBOX_CASES below do. No change to either gate was required — only noticing that "cannot be tested"
+// actually meant "cannot be tested the way the other five are".
+//
+// All seven script gates are therefore covered.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 
 const TAG = `__gate_selftest_${process.pid}__`;
+
+/**
+ * Gates that read from the CURRENT WORKING DIRECTORY, exercised against a throwaway tree in the OS temp dir.
+ *
+ * `build(dir)` lays out the smallest tree that must trip the gate; the gate then runs with that directory as
+ * its cwd. Nothing is written inside this repository, so the planted credential never reaches this checkout,
+ * its index, or any file a later `git add -A` could sweep up.
+ */
+const SANDBOX_CASES = [
+  {
+    gate: "lint:secrets",
+    script: "scripts/lint-committed-secrets.mjs",
+    // A syntactically valid AWS access-key id that is not one: the AKIA prefix plus 16 uppercase characters
+    // is the shape the scanner matches. It lives for milliseconds in a temp dir and is never committed
+    // anywhere. The gate only sees TRACKED files, so the fixture must be `git add`-ed — inside its own
+    // repository, which is the whole reason this case is a sandbox rather than a plant.
+    expect: /AWS access key id/i,
+    build(dir) {
+      // autocrlf off: the fixture must be byte-exact, and on Windows git otherwise warns about line endings
+      // on every run — noise in a check whose whole value is that its output is worth reading.
+      execFileSync("git", ["init", "-q"], { cwd: dir });
+      execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir });
+      writeFileSync(join(dir, "leaked.ts"), 'export const key = "AKIAQQQQQQQQQQQQQQQQ";\n');
+      execFileSync("git", ["add", "leaked.ts"], { cwd: dir });
+    },
+  },
+  {
+    gate: "lint:prod-switches",
+    script: "scripts/lint-prod-switches.mjs",
+    // The gate reads the env schema for explicit-"true" switches, then checks the production template for any
+    // that are armed. A switch armed here is unknown to its INTENTIONALLY_ARMED map, so it must be reported.
+    expect: /PROBE_SELFTEST_ENABLED/,
+    build(dir) {
+      mkdirSync(join(dir, "packages", "config", "src"), { recursive: true });
+      mkdirSync(join(dir, "deploy"), { recursive: true });
+      writeFileSync(
+        join(dir, "packages", "config", "src", "env.ts"),
+        'export const schema = {\n  PROBE_SELFTEST_ENABLED: z.string().optional().transform((v) => v === "true"),\n};\n',
+      );
+      writeFileSync(
+        join(dir, "deploy", "env.production.template"),
+        "PROBE_SELFTEST_ENABLED=true\n",
+      );
+    },
+  },
+];
 
 /**
  * Each plant is the smallest thing that must trip its gate.
@@ -151,10 +204,17 @@ export function probe(rows: unknown[], jobId: string): void {
   },
 ];
 
-/** Run a gate. Returns { code, output } instead of throwing — a non-zero exit is the expected result here. */
-function runGate(script) {
+/** Run a gate. Returns { code, output } instead of throwing — a non-zero exit is the expected result here.
+ *  `cwd` matters for the sandbox cases: those gates resolve every path from the working directory, so running
+ *  them elsewhere is what points them at a fixture instead of this repo. The script path is resolved to an
+ *  absolute one first, or a changed cwd would make node unable to find the gate itself. */
+function runGate(script, cwd) {
   try {
-    const output = execFileSync("node", [script], { encoding: "utf8", stdio: "pipe" });
+    const output = execFileSync("node", [resolve(script)], {
+      encoding: "utf8",
+      stdio: "pipe",
+      ...(cwd ? { cwd } : {}),
+    });
     return { code: 0, output };
   } catch (err) {
     return { code: err.status ?? 1, output: `${err.stdout ?? ""}${err.stderr ?? ""}` };
@@ -223,6 +283,40 @@ for (const testCase of CASES) {
     failures.push(
       `${testCase.gate} still fails after its plant was removed — it was already red, so the plant proved nothing.`,
     );
+  }
+}
+
+// ── The cwd-scoped gates ───────────────────────────────────────────────────────────────────────────────────
+// No "goes green again" half for these: the fixture directory IS the world the gate sees, and it is deleted
+// wholesale. There is no residue to re-measure, unlike an in-repo plant where a lingering failure would mean
+// the gate was already red for an unrelated reason.
+for (const testCase of SANDBOX_CASES) {
+  const sandbox = mkdtempSync(join(tmpdir(), "tp-gate-selftest-"));
+  try {
+    testCase.build(sandbox);
+
+    const result = runGate(testCase.script, sandbox);
+    if (result.code === 0) {
+      failures.push(
+        `${testCase.gate} PASSED its own sandbox plant — the gate is blind.\n` +
+          `    sandbox: ${sandbox}\n` +
+          `    output : ${result.output.trim().split("\n")[0] ?? "(none)"}`,
+      );
+      continue;
+    }
+    if (!testCase.expect.test(result.output)) {
+      failures.push(
+        `${testCase.gate} failed, but its output did not match ${testCase.expect} — so it failed for some\n` +
+          `    OTHER reason, and this case proved nothing about the planted shape.\n` +
+          `    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
+      );
+      continue;
+    }
+    proven += 1;
+  } finally {
+    // Whole sandbox, always. It is a mkdtemp path under the OS temp dir and contains a fake credential; it
+    // must not survive this process even when an assertion above threw.
+    rmSync(sandbox, { recursive: true, force: true });
   }
 }
 
