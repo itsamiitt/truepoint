@@ -159,3 +159,35 @@ jobs:
             fi
           done
           exit "$failed"
+
+      # The numbers this workflow exists to produce, on the run page instead of buried in a log nobody
+      # downloads. The suites already print them as `[TP-n] …` lines; this lifts those lines verbatim rather
+      # than re-deriving anything, so the summary cannot disagree with the run that produced it.
+      #
+      # `always()` for the same reason as the step above: a FAILED soak is when these numbers are most worth
+      # reading, and a summary that only appears on success is a summary you cannot use to diagnose.
+      #
+      # No thresholds are re-asserted here. The suites own their budgets and fail on them; a second copy of a
+      # bound in a shell script is a number that drifts from the one that matters.
+      - name: Summarise the soak numbers
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "## Nightly soak"
+            echo
+            echo "\`SOAK_ROWS=${{ inputs.soak_rows || 20000 }}\` · commit \`${GITHUB_SHA:0:8}\`"
+            echo
+            found=0
+            for log in /tmp/soak-throughput.log /tmp/soak-fairness.log; do
+              [ -s "$log" ] || continue
+              # The suites' own instrumentation lines. -h so the filename never leaks into the table.
+              while IFS= read -r line; do
+                echo "- \`${line}\`"
+                found=1
+              done < <(grep -hoE "\[TP-[0-9]+\].*" "$log" || true)
+            done
+            if [ "$found" -eq 0 ]; then
+              echo "_No \`[TP-n]\` lines found — the suites did not reach their instrumentation._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
