@@ -434,7 +434,13 @@ const crmBudget = redisCrmBudgetStore(connection);
 // same reasoning as crmBudget above (horizontally-scaled workers make a process-local breaker let N
 // workers each burn the full error budget). Shares the existing BullMQ connection. Inert while
 // WATERFALL_V2_ENABLED is off (the legacy path never touches them).
-const enrichBreaker = redisBreakerStore(connection);
+// (default threshold/cooldown; the 4th arg caps a vendor-sent 429 horizon fleet-wide)
+const enrichBreaker = redisBreakerStore(
+  connection,
+  undefined,
+  undefined,
+  env.ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S,
+);
 const enrichGate = redisProviderGate(connection);
 const crmConnectorFor = (provider: string) => crmConnectors[provider as keyof typeof crmConnectors];
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
@@ -1004,10 +1010,13 @@ export function startWorkers(): Worker[] {
           deadlineMs(ENRICHMENT_QUEUE),
           makeProcessEnrichment({
             enrich: { breaker: enrichBreaker, gate: enrichGate },
-            // Throttle deferral (v2): re-enqueue with the vendor-suggested delay — deferred, never dropped.
+            // Throttle deferral (v2): re-enqueue with the vendor-suggested delay (jittered up inside the
+            // processor) — deferred, never dropped; parked past ENRICH_DEFER_MAX_DELAY_MS.
             defer: async (data, delayMs) => {
               await enrichmentQueue.add("enrich", data, { ...ENRICHMENT_RETRY, delay: delayMs });
             },
+            maxDeferrals: env.ENRICH_MAX_DEFERRALS,
+            maxDeferDelayMs: env.ENRICH_DEFER_MAX_DELAY_MS,
           }),
         ),
         { connection, ...eventTuning(ENRICHMENT_QUEUE) },

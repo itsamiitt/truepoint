@@ -294,8 +294,13 @@ export async function runEnrichmentV2(run: EnrichmentV2Run): Promise<EnrichmentV
         // sentinel and must never appear on a per-field row.
         filledFields: attempt.filledFields,
         verification: attempt.verification,
+        // hit → the vendor document; rate_limited/error → the classified failure detail (proxy
+        // classification + correlation id), so a failure row is inspectable from the ledger alone.
+        // Safe under the upgrade-in-place conflict rule: a later paid answer overwrites it.
         responsePayload:
-          attempt.status === "hit" ? outcome.rawPayloadByProvider.get(attempt.provider) : undefined,
+          attempt.status === "hit"
+            ? outcome.rawPayloadByProvider.get(attempt.provider)
+            : attempt.errorDetail,
       });
     }
 

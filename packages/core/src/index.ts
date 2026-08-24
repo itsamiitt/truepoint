@@ -375,10 +375,27 @@ export {
   fetchLinkedinCompany,
   salesNavCompanyUrl,
   defaultLinkedinTransport,
+  walkOriginChain,
+  type ChainDeps,
   type LinkedinFetchOptions,
   type LinkedinFetchResult,
   type LinkedinTransport,
 } from "./sourceLanding/linkedinSourceClient.ts";
+export {
+  makeOriginCooldownStore,
+  originCooldowns,
+  type OriginCooldownStore,
+} from "./sourceLanding/originCooldowns.ts";
+// Shared reliability primitives (the data-source fetch + enrichment lanes): Retry-After parsing (seconds
+// AND HTTP-date), the pure source-error classifier over the expo proxy's classification contract, and
+// the capped-exponential backoff (moved from crm-sync/reliability.ts, which re-exports it).
+export { parseRetryAfterMs, retryAfterFromHeaders } from "./reliability/retryAfter.ts";
+export {
+  classifySourceError,
+  type SourceClassifierDefaults,
+  type SourceErrorInput,
+  type SourceErrorVerdict,
+} from "./reliability/sourceErrorClassifier.ts";
 export {
   loadOrigins,
   invalidateOriginCache,

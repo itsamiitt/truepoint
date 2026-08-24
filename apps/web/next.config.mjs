@@ -1,5 +1,7 @@
 // next.config.mjs — the app shell. On Replit all three services share one domain; auth (port 3000) and
 // the Hono API (port 3001) are proxied through Next.js rewrites so the browser sees a single origin.
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Compression happens at the edge (deploy/Caddyfile `encode zstd gzip`) — the exact reasoning that removed
@@ -76,4 +78,21 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// ── Sentry ──────────────────────────────────────────────────────────────────────────────────────────────
+// withSentryConfig wraps the build so server/edge bundles get instrumented and source maps can be uploaded.
+//
+// `tunnelRoute` is deliberately NOT set. It mounts a proxy API route to dodge ad-blockers, and this stack
+// fronts every app with Caddy (and auth runs under basePath "/auth" behind its own middleware matcher) — a
+// new top-level route there is a routing change to reason about, not a free win.
+//
+// Source-map upload is inert until SENTRY_AUTH_TOKEN is present in the build environment. Without it the
+// build still succeeds; production stack traces just stay minified.
+export default withSentryConfig(nextConfig, {
+  org: "truepoint",
+  project: "truepoint",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Upload a wider set of client files so frames resolve to real source rather than chunk offsets.
+  widenClientFileUpload: true,
+  // Keep the build log quiet outside CI.
+  silent: !process.env.CI,
+});

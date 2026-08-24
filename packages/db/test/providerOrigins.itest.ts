@@ -157,7 +157,15 @@ describe("provider_origins — the origin fleet (0117)", () => {
       transport,
     );
     expect(result.status).toBe("ok");
-    expect(calls).toEqual(["a.origin-itest.example", "b.origin-itest.example"]);
+    // A bare 500 is a TRANSIENT verdict (sourceErrorClassifier): the walk retries the SAME origin once
+    // (ENRICH_ORIGIN_TRANSIENT_RETRIES default 1 — the proxy caches + single-flights, so the retry is
+    // nearly free) before failing over. Health still records ONE failure for A: recordOutcome fires
+    // after the retries are exhausted, not per probe.
+    expect(calls).toEqual([
+      "a.origin-itest.example",
+      "a.origin-itest.example",
+      "b.origin-itest.example",
+    ]);
     // POST path is the vendor contract path on both attempts.
     const [a] = await admin`
       SELECT consecutive_failures, last_error FROM provider_origins WHERE id = ${originA}`;
