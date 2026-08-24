@@ -63,12 +63,37 @@ function sourceFiles(dir, out = []) {
 const producers = new Map(); // queue const → first file that declares it
 const consumers = new Set();
 const exempted = new Set();
+/** Queue constructions this check CANNOT analyse — reported, never silently dropped. */
+const unanalysable = [];
 let scanned = 0;
 
 for (const root of ROOTS) {
   for (const file of sourceFiles(root)) {
     scanned += 1;
     const text = readFileSync(file, "utf8");
+
+    // Raw BullMQ constructions, outside the traced* helpers this check understands. apps/forge-* builds its
+    // queues as `new Queue(\`forge-${stage}\`)` and consumes them through the matching templated Worker, so
+    // the NAMES are computed and cannot be matched statically at all.
+    //
+    // Deliberately NOT half-extended to cover the literal case: `new Queue("forge-parse")` is a literal
+    // producer whose consumer is templated, so recognising literal producers WITHOUT resolving templated
+    // consumers would report correct code as an orphan — a false positive on the one subsystem this would
+    // newly touch. Reporting the count is the honest alternative: the reader learns the coverage boundary
+    // instead of assuming there isn't one.
+    // Comments blanked space-for-space first. The first run of this listed apps/workers/src/tuning.ts:4,
+    // which is a COMMENT describing how register.ts spreads tuning into `new Worker(...)` — prose about a
+    // construction, not one. `[^\S\r\n]*` and not `\s*`: \s matches newlines, so the greedy form deletes the
+    // blank lines above a comment and shifts every line number after it.
+    const code = text
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+      .replace(/^[^\S\r\n]*\/\/.*$/gm, (m) => " ".repeat(m.length));
+
+    for (const m of code.matchAll(/new\s+(?:Queue|Worker)\s*\(/g)) {
+      const line = code.slice(0, m.index).split("\n").length;
+      unanalysable.push(`${file.split(sep).join("/")}:${line}`);
+    }
+
     if (!text.includes("traced")) continue;
 
     for (const m of text.matchAll(PRODUCER)) {
@@ -91,7 +116,13 @@ const orphans = [...producers.keys()]
 if (orphans.length === 0) {
   const dlqs = [...producers.keys()].filter((q) => /_DLQ$/.test(q)).length;
   process.stdout.write(
-    `ok   ${producers.size} queue(s) across ${scanned} files, every non-DLQ one has a consumer (${dlqs} DLQ parking lot(s) skipped)\n`,
+    `ok   ${producers.size} queue(s) across ${scanned} files, every non-DLQ one has a consumer (${dlqs} DLQ parking lot(s) skipped)` +
+      (unanalysable.length > 0
+        ? `\n     note: ${unanalysable.length} raw new Queue()/new Worker() construction(s) NOT analysed — ` +
+          `their names are computed (apps/forge-*). Coverage boundary, stated rather than hidden:\n` +
+          unanalysable.map((u) => `       ${u}`).join("\n")
+        : "") +
+      "\n",
   );
   process.exit(0);
 }
