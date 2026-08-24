@@ -124,6 +124,21 @@ const ADJUDICATED = [
       "unused refinement, not a broken brake — the aggregate spendSince IS the daily spend guard, called by enrichContact, enrichContactV2 and refreshAccount. Only the per-provider breakdown has no consumer.",
   },
   {
+    match: "authAllowedOriginsRepository.*",
+    verdict:
+      "blocked on a design decision, not neglect — AUTH-036 cannot be wired as its tracker describes: three of the four redirect call sites have no tenant at check time, and the fourth is gated by a CORS preflight that carries no credentials. Written up in docs/planning/auth-platform/MANAGED_ORIGINS_BLOCKER.md and recorded as decisions.md #7. There is nowhere correct to call these from yet.",
+  },
+  {
+    match: "revealJobRepository.requeueFailedRows",
+    verdict:
+      "unexposed, and not casually exposable. Bulk reveal is a confirm-before-spend money path; re-queuing rows in place would re-enter spend without a fresh confirmation. The shipped job-control surface (cancelAndRelease, pauseRunning, resumePaused, listFailedContactIds) instead LISTS failed contacts so a new, confirmed job can be submitted. Wiring an in-place retry is a spend-path product decision.",
+  },
+  {
+    match: "mailboxRepository.markError",
+    verdict:
+      "the durable failure IS recorded — markReauthRequired has callers and is the state that needs surfacing. markError would flip status to a generic 'error' on a transient provider blip, and its CRM sibling documents exactly why that is undesirable. Whether transient failures should be visible at all is an ops question, not a missing call.",
+  },
+  {
     match: "crm*",
     verdict:
       "the CRM connector module is dark behind CRM_SYNC_ENABLED (9 tables). Uncalled methods are the expected state of an unshipped module, not rot.",
