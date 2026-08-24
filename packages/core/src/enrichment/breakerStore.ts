@@ -14,8 +14,15 @@
 export interface BreakerStore {
   /** Is the provider's circuit open right now? (Half-open probing is the store's concern.) */
   isOpen(provider: string): Promise<boolean>;
-  /** Record a call outcome. ok = the provider ANSWERED (hit or miss); rate_limited/error are failures. */
+  /** Record a call outcome. ok = the provider ANSWERED (hit or miss); error is a failure strike. */
   record(provider: string, ok: boolean): Promise<void>;
+  /**
+   * A 429 with a horizon: block the provider until now + retryAfterMs, WITHOUT an error strike — the
+   * vendor said when, believe it (the v1 waterfall.ts blockedUntil semantics, lost in the v2 port).
+   * Backpressure means the provider is HEALTHY; only genuine errors should trip the breaker. OPTIONAL so
+   * out-of-tree fakes stay valid — the caller (fieldWaterfall) falls back to record(provider, false).
+   */
+  recordRateLimited?(provider: string, retryAfterMs: number): Promise<void>;
 }
 
 const DEFAULT_THRESHOLD = 3; // consecutive failures → open (the waterfall.ts constant, unchanged)
@@ -24,6 +31,8 @@ const DEFAULT_COOLDOWN_MS = 60_000; // half-open probe after cooldown
 interface BreakerState {
   consecutiveErrors: number;
   openedAt: number | null;
+  /** Rate-limit horizon (recordRateLimited) — blocked until this clock time; success clears it. */
+  blockedUntil: number | null;
 }
 
 /**
@@ -39,7 +48,7 @@ export function inMemoryBreakerStore(
   const stateFor = (name: string): BreakerState => {
     let s = states.get(name);
     if (!s) {
-      s = { consecutiveErrors: 0, openedAt: null };
+      s = { consecutiveErrors: 0, openedAt: null, blockedUntil: null };
       states.set(name, s);
     }
     return s;
@@ -47,6 +56,7 @@ export function inMemoryBreakerStore(
   return {
     isOpen(provider) {
       const s = stateFor(provider);
+      if (s.blockedUntil !== null && now() < s.blockedUntil) return Promise.resolve(true);
       if (s.openedAt === null) return Promise.resolve(false);
       if (now() - s.openedAt >= cooldownMs) return Promise.resolve(false); // half-open probe
       return Promise.resolve(true);
@@ -56,10 +66,19 @@ export function inMemoryBreakerStore(
       if (ok) {
         s.consecutiveErrors = 0;
         s.openedAt = null;
+        s.blockedUntil = null;
       } else {
         s.consecutiveErrors += 1;
         if (s.consecutiveErrors >= threshold) s.openedAt = now();
       }
+      return Promise.resolve();
+    },
+    recordRateLimited(provider, retryAfterMs) {
+      const s = stateFor(provider);
+      // No strike — the vendor answered "later", not "broken". LATEST-WINS (the redisBreakerStore
+      // SET..EX contract): the newest Retry-After replaces the horizon, shrink or extend — the vendor's
+      // most recent answer is the truest one.
+      s.blockedUntil = now() + Math.max(0, retryAfterMs);
       return Promise.resolve();
     },
   };

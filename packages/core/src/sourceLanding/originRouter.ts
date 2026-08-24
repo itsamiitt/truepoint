@@ -12,6 +12,7 @@
 import { env } from "@leadwolf/config";
 import { providerOriginRepository, withPlatformReadTx, withPrivilegedTx } from "@leadwolf/db";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
+import { originCooldowns } from "./originCooldowns.ts";
 
 export interface ResolvedOrigin {
   id: string | null; // null = the synthetic env-fallback origin (no health row to update)
@@ -23,10 +24,15 @@ export interface ResolvedOrigin {
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; origins: ResolvedOrigin[] }>();
 
-/** Test seam: drop the cache so a test (or an admin mutation path) sees fresh rows immediately. */
+/** Drop the cache so a test (or an admin mutation path) sees fresh rows immediately. Also resets the
+ *  in-process origin COOLDOWNS: every caller is an operator action (key/URL fixed, origin paused/resumed,
+ *  live probe) after which a stale "cooling until" would make a FIXED origin look dead for up to the
+ *  cooldown horizon — the probe must prove the origin, not the cooldown store. Cooldown keys are origin
+ *  ids (not provider-scoped), so the reset is global; re-cooling costs at most one probe per origin. */
 export function invalidateOriginCache(provider?: string): void {
   if (provider) cache.delete(provider);
   else cache.clear();
+  originCooldowns.reset();
 }
 
 function toResolved(row: {

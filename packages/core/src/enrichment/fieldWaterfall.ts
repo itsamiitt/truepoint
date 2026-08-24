@@ -50,6 +50,9 @@ const FIELD_PASS_ORDER: readonly EnrichField[] = [
   "department",
 ];
 
+/** Fallback horizon when a vendor 429s without a Retry-After — the breaker's own cooldown magnitude. */
+const DEFAULT_RATE_LIMIT_HORIZON_MS = 60_000;
+
 export interface ProviderAttempt {
   provider: string;
   status: ProviderResult["status"];
@@ -60,6 +63,8 @@ export interface ProviderAttempt {
   retryAfterMs?: number;
   /** Verify verdicts attached to this attempt's values, keyed by field (persisted to the ledger). */
   verification?: Partial<Record<EnrichField, { status: string; verifier: string }>>;
+  /** On rate_limited/error: what the source said (ProviderResult.errorDetail) — persisted to the ledger. */
+  errorDetail?: ProviderResult["errorDetail"];
 }
 
 export interface FieldWin {
@@ -203,17 +208,27 @@ export async function runFieldWaterfalls(
       latencyMs,
       filledFields: [],
       retryAfterMs: result.retryAfterMs,
+      errorDetail: result.errorDetail,
     };
     attempts.push(attempt);
     attemptByProvider.set(provider.name, attempt);
     rawPayloadByProvider.set(provider.name, result.rawPayload);
 
-    // Breaker bookkeeping: hit/miss = the provider ANSWERED; rate_limited/error count against it.
+    // Breaker bookkeeping: hit/miss = the provider ANSWERED (clears state); error strikes; rate_limited
+    // sets the vendor's OWN horizon instead of a strike — backpressure is not brokenness (the v1
+    // blockedUntil semantics, restored). Stores without recordRateLimited fall back to a strike.
     try {
-      await input.breaker.record(
-        provider.name,
-        result.status === "hit" || result.status === "miss",
-      );
+      if (result.status === "rate_limited" && input.breaker.recordRateLimited) {
+        await input.breaker.recordRateLimited(
+          provider.name,
+          result.retryAfterMs ?? DEFAULT_RATE_LIMIT_HORIZON_MS,
+        );
+      } else {
+        await input.breaker.record(
+          provider.name,
+          result.status === "hit" || result.status === "miss",
+        );
+      }
     } catch {
       // never fail a paid call on breaker bookkeeping
     }
@@ -331,9 +346,12 @@ export async function runFieldWaterfalls(
     }
   }
 
-  const anyAnswered = attempts.some((a) => a.status === "hit" || a.status === "miss");
+  // "allThrottled" (kept name — cross-package API): nothing filled AND at least one provider was
+  // throttle-denied. The old `!anyAnswered` suppressor meant ONE paid miss hid widespread throttling and
+  // the job never deferred; safe to drop because the deferred re-run's skipProviders already excludes
+  // answered providers (enrichContactV2), so the retry only re-asks the throttled ones.
   const anyThrottled = attempts.some((a) => a.status === "rate_limited");
-  const allThrottled = winners.size === 0 && anyThrottled && !anyAnswered;
+  const allThrottled = winners.size === 0 && anyThrottled;
 
   return {
     winners,

@@ -323,6 +323,7 @@ export function clearbitProvider(fetchJson?: FetchJson): EnrichmentProvider {
       headers: (key) => ({ authorization: `Bearer ${key}` }),
       body: (req) => ({ email: req.subject.email, company_domain: req.subject.companyDomain }),
       extract: (json, fields) => extractFlat(json, "person", FIELD_MAP, fields),
+      noMatchStatuses: [404], // Clearbit documents 404 = person not found — a definitive no-match
     },
     fetchJson,
   );
@@ -378,6 +379,7 @@ export function pdlProvider(fetchJson?: FetchJson): EnrichmentProvider {
         profile: req.subject.linkedinUrl,
       }),
       extract: pdlExtract,
+      noMatchStatuses: [404], // PDL documents 404 = no matching person (and bills nothing for it)
     },
     fetchJson,
   );
@@ -429,6 +431,7 @@ export function coresignalProvider(fetchJson?: FetchJson): EnrichmentProvider {
         linkedin_url: req.subject.linkedinUrl,
       }),
       extract: coresignalExtract,
+      noMatchStatuses: [404], // Coresignal documents 404 = employee not found — a definitive no-match
     },
     fetchJson,
   );
@@ -503,9 +506,28 @@ export function linkedinApiProvider(
 
       const result = await fetchProfile(url);
       if (result.status === "unavailable") {
+        if (result.retryAfterMs !== undefined) {
+          // The fleet is THROTTLED/cooling with a known horizon — surface it as rate_limited so the
+          // breaker sets the vendor's own horizon and the job layer can defer, instead of the old
+          // shape where a fleet-wide 429 masqueraded as an error strike with no wait hint.
+          return {
+            fields: [],
+            rawPayload: null,
+            costMicros: 0,
+            status: "rate_limited",
+            retryAfterMs: result.retryAfterMs,
+            errorDetail: { detail: `origin fleet ${result.reason ?? "throttled"}` },
+          };
+        }
         // No origin answered (fleet dark, all paused, or all failing) — zero-cost error; the breaker
         // counts it and the waterfall cascades.
-        return { fields: [], rawPayload: null, costMicros: 0, status: "error" };
+        return {
+          fields: [],
+          rawPayload: null,
+          costMicros: 0,
+          status: "error",
+          errorDetail: { detail: "origin fleet unavailable" },
+        };
       }
       if (result.status === "rejected") {
         // The vendor answered and said no (unknown profile / bad url) — an honest zero-cost miss.

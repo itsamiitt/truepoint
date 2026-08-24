@@ -92,6 +92,29 @@ describe("redisBreakerStore", () => {
     expect(await breaker.isOpen("apollo")).toBe(true);
     expect(await breaker.isOpen("pdl")).toBe(false);
   });
+
+  test("recordRateLimited sets the `limited` key with the Retry-After as its expiry — no strike", async () => {
+    const redis = fakeRedis();
+    const breaker = redisBreakerStore(redis);
+    await breaker.recordRateLimited?.("apollo", 42_000);
+    expect(await breaker.isOpen("apollo")).toBe(true);
+    expect(redis.ttls.get("enrich:breaker:limited:apollo")).toBe(42); // the expiry IS the horizon
+    // No strike: the errors counter never moved, so the open key never appears.
+    expect(redis.store.has("enrich:breaker:errors:apollo")).toBe(false);
+    expect(redis.store.has("enrich:breaker:open:apollo")).toBe(false);
+  });
+
+  test("horizon is clamped to the cap, floored at 1s, and cleared by a successful answer", async () => {
+    const redis = fakeRedis();
+    const breaker = redisBreakerStore(redis, undefined, undefined, 3_600);
+    await breaker.recordRateLimited?.("apollo", 86_400_000); // vendor asks for a day
+    expect(redis.ttls.get("enrich:breaker:limited:apollo")).toBe(3_600); // capped
+    await breaker.recordRateLimited?.("apollo", 10); // sub-second → still a real key
+    expect(redis.ttls.get("enrich:breaker:limited:apollo")).toBe(1);
+    await breaker.record("apollo", true); // success clears all three keys
+    expect(await breaker.isOpen("apollo")).toBe(false);
+    expect(redis.store.has("enrich:breaker:limited:apollo")).toBe(false);
+  });
 });
 
 describe("redisProviderGate", () => {
