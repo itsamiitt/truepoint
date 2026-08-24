@@ -584,3 +584,24 @@ pass silently if it falls — they demand the budget be tightened instead.
    self-service is a real requirement. Nothing was changed unilaterally: security has final say on redirect
    gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
    repository-call-site audit — there is nowhere correct to call them from yet.
+
+8. **Global suppression has TWO writers, and the live one is the narrower.** (2026-08-24,
+   `packages/core/src/email/governance.ts` vs `apps/api/src/features/admin/compliance.ts:273`.) Found by
+   auditing `packages/core` for exported functions nothing references.
+   - **Live path:** `POST /admin/compliance/suppression` inlines `suppressionRepository.insert` with
+     `matchType: "domain"` hardcoded, and its contract (`addGlobalSuppressionSchema`) rejects `@` outright.
+     Platform staff can therefore suppress a whole DOMAIN but not an individual ADDRESS — blocking one person
+     means blocking everyone at their employer.
+   - **Unused path:** `addGlobalSuppression` in core accepts exactly one of `{email, domain}`, and for an
+     email stores a **blind index** rather than the address — the PII-minimising form. It has no caller.
+   - **Two further asymmetries** that matter beyond the feature gap: the same logical operation writes two
+     different audit actions (`suppress.add.global` vs `email.global_suppression.add`), so the platform audit
+     log cannot be queried for "global suppressions" without knowing both strings; and the default reason
+     differs (`null` vs `global_dnc`).
+   - **Why it matters structurally:** two writers to a compliance-critical table is the drift hazard this
+     codebase names elsewhere in its own words (migration 0136 refused to duplicate the title taxonomy in SQL
+     for exactly this reason). A future fix to one path silently misses the other.
+   **Decide:** (a) wire the route to `addGlobalSuppression` and widen the contract to accept an email — one
+   writer, one audit action, address-level suppression becomes possible; or (b) confirm domain-only is the
+   intended product policy, delete the unused core function, and adopt its audit action name. Not changed
+   unilaterally: suppression is a compliance control and CLAUDE.md rule 3 applies.
