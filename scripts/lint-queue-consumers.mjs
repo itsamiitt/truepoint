@@ -116,13 +116,11 @@ const orphans = [...producers.keys()]
 if (orphans.length === 0) {
   const dlqs = [...producers.keys()].filter((q) => /_DLQ$/.test(q)).length;
   process.stdout.write(
-    `ok   ${producers.size} queue(s) across ${scanned} files, every non-DLQ one has a consumer (${dlqs} DLQ parking lot(s) skipped)` +
-      (unanalysable.length > 0
-        ? `\n     note: ${unanalysable.length} raw new Queue()/new Worker() construction(s) NOT analysed — ` +
-          `their names are computed (apps/forge-*). Coverage boundary, stated rather than hidden:\n` +
-          unanalysable.map((u) => `       ${u}`).join("\n")
-        : "") +
-      "\n",
+    `ok   ${producers.size} queue(s) across ${scanned} files, every non-DLQ one has a consumer (${dlqs} DLQ parking lot(s) skipped)${
+      unanalysable.length > 0
+        ? `\n     note: ${unanalysable.length} raw new Queue()/new Worker() construction(s) NOT analysed — their names are computed (apps/forge-*). Coverage boundary, stated rather than hidden:\n${unanalysable.map((u) => `       ${u}`).join("\n")}`
+        : ""
+    }\n`,
   );
   process.exit(0);
 }
