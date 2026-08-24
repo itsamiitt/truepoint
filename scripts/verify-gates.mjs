@@ -59,10 +59,17 @@ for (const gate of GATES) {
   const output = `${stdout}\n${(run.stderr ?? "").trim()}`.trim();
 
   if (run.status === 0) {
-    // The gate's own last STDOUT line — its summary. Deliberately not the combined output: `bun run` echoes
-    // `$ node scripts/…` to stderr, and reading the last combined line printed that echo instead of the
-    // result, which is precisely the "looks like output, means nothing" reading this script exists to stop.
-    const summary = stdout.split("\n").filter(Boolean).pop() ?? "";
+    // The gate's own headline. STDOUT only — `bun run` echoes `$ node scripts/…` to stderr, and reading the
+    // last COMBINED line printed that echo instead of the result: a line that looks like output and means
+    // nothing, which is exactly the reading this script exists to stop.
+    //
+    // First `ok …` line, not the LAST line. lint:queue-consumers appends a multi-line coverage note after its
+    // summary, so "last line" rendered `PASS   apps/forge-worker/src/register.ts:40` — genuinely the gate's
+    // output, and useless as a headline. The fallback keeps gates that do not use the `ok ` convention
+    // (lint:import-pii, lint:lockfile) reporting something meaningful.
+    const stdoutLines = stdout.split("\n").filter(Boolean);
+    const summary =
+      stdoutLines.find((l) => l.trimStart().startsWith("ok")) ?? stdoutLines.pop() ?? "";
     process.stdout.write(`PASS   ${summary.slice(0, 96)}\n`);
     continue;
   }
