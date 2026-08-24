@@ -26,6 +26,7 @@
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
     "backfill:title-function": "bun run scripts/backfill-title-function.ts",
     "audit:feature-flags": "node scripts/audit-feature-flag-coherence.mjs",
+    "verify": "node scripts/verify-gates.mjs",
     "db:migrate": "bun run --filter @leadwolf/db migrate",
     "db:seed": "bun run --filter @leadwolf/db seed",
     "dev:admin": "turbo run dev --filter @leadwolf/admin",
