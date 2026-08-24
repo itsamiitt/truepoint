@@ -51,6 +51,16 @@
 > + core's origin router/`linkedinSourceClient` (POST `/api/linkedin/{profile,company}`), the customer
 > account-refresh lane (`account_refresh` queue behind `LINKEDIN_ACCOUNT_REFRESH_ENABLED`), the
 > attributes/headcount read surfaces + prospect-drawer UI, and the admin **data-sources** console.
+> **Third amendment (classification-aware failover):** the chain walk (`walkOriginChain`) now classifies
+> every failure via `core/reliability/sourceErrorClassifier` (the expo proxy's error contract —
+> VALIDATION/REQUEST_ERROR/QUEUE_*/POOL_DEAD/SHUTDOWN/AUTH/… + the LINKEDIN_* capture family), honors
+> Retry-After (seconds AND HTTP-date) as a per-origin in-process cooldown (`sourceLanding/originCooldowns.ts`,
+> clamped by `ENRICH_ORIGIN_COOLDOWN_MAX_MS`), gives 502-class faults one cheap jittered same-origin retry
+> (`ENRICH_ORIGIN_TRANSIENT_RETRIES`), fails over on AUTH/FORBIDDEN instead of stopping the chain, and
+> surfaces the smallest horizon as `unavailable{retryAfterMs}` so `fetchAndLandUrl`, the link-fetch sweep
+> (hinted skip-flag), and `linkedinApiProvider` (→ `rate_limited` into the waterfall + breaker horizon)
+> defer instead of burning attempts. `[CLASSIFICATION] http N retry_after cid` lands in
+> `provider_origins.last_error` for the console.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -116,7 +126,8 @@ packages/                       # side-effect-free libraries, each exported via 
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
                                 #   data-health · scoring · activity · outreach · email · search · ai · home · prospect ·
-                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark) ·
+                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark; + originCooldowns for the failover chain) ·
+                                #   reliability (Retry-After parser · source-error classifier · capped backoff) ·
                                 #   customFields · pipelineStages · savedSearches · webhooks · featureFlags · auth · sales-navigator
   auth/    src/                 # self-built auth primitives (no HTTP): login/mfa/registration/invitations/password(+policy/breach) /
                                 #   sso/switchWorkspace + ipBinding/ipAllowlist + sessionTimeout + revocation + auditEvent + log
@@ -220,11 +231,22 @@ apps/                           # deployable processes (thin transport adapters)
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
+- **core (reliability — shared retry/wait primitives, consumed by enrichment + sourceLanding):** `reliability/` —
+  `retryAfter.ts` (the ONE Retry-After parser: delta-seconds AND HTTP-date, injected clock),
+  `sourceErrorClassifier.ts` (pure verdict table over the expo proxy's error contract — classification +
+  bare-status → permanent(request|origin) | provider_miss | throttled(retryAfterMs) | transient |
+  source_down(cooldownMs)), `backoff.ts` (capped exponential, moved from crm-sync/reliability.ts which
+  re-exports it)
 - **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal/linkedin_api (dark
   until DPA'd keys; linkedin_api's base URL is env-supplied and joins the host allowlist at config time)** VendorSpecs over
-  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap; injectable fetch. Status taxonomy:
+  429 → rate_limited + Retry-After via core's parser; a vendor-DECLARED no-match status
+  (`VendorSpec.noMatchStatuses` — 404 on PDL/Clearbit/Coresignal; never blanket, ZoomInfo/Apollo no-match
+  is a 200 body) → definitive zero-cost miss (answered, no breaker strike, no re-buy); other 4xx/5xx → error) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
-  `provider_configs`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
+  `provider_configs`; the breaker also holds the 429 HORIZON key `enrich:breaker:limited:{p}` — a vendor
+  Retry-After blocks the provider fleet-wide without an error strike, capped by
+  `ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
   `/authenticate` — PKI-signed assertion or username/password — cached and re-minted pre-expiry behind the
   VendorSpec `resolveApiKey` seam; unconfigured ⇒ the same zero-cost `miss` as an absent key)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
@@ -256,7 +278,9 @@ apps/                           # deployable processes (thin transport adapters)
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
   **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
-  (factory w/ Redis deps + throttle deferral) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
+  (factory w/ Redis deps + throttle deferral — jittered UP over the vendor delay, capped at
+  `ENRICH_MAX_DEFERRALS`, PARKED past `ENRICH_DEFER_MAX_DELAY_MS` so a daily-budget 86400s Retry-After
+  never piles up delayed jobs) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
   priority + verification knobs) · **admin:** provider stats block (30d hit/verified-valid/latency/cost per provider)
 
 #### enrichment-jobs — *bulk enrichment job UI* (web; ADR-0039)

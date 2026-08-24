@@ -133,7 +133,7 @@ for (const route of [...PAGES, ...FILES]) {
 // Only checked against a production server: the whole set is NODE_ENV-gated, so `next dev` legitimately
 // sends none of it.
 {
-  const res = await fetch(BASE + "/");
+  const res = await fetch(`${BASE}/`);
   const csp = res.headers.get("content-security-policy") ?? "";
   const problems = [];
 
@@ -179,7 +179,7 @@ for (const route of [...PAGES, ...FILES]) {
 {
   const problems = [];
   const pageUrl = new URL(BASE);
-  const html = await (await fetch(BASE + "/")).text();
+  const html = await (await fetch(`${BASE}/`)).text();
 
   /** Same-origin, root-relative, or a data: URI — anything else needs a CSP allowance we do not grant. */
   function permitted(url) {

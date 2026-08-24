@@ -27,6 +27,9 @@ export const CANONICAL_DOMAINS = [
   "workspaces",
   "import",
   "enrichment",
+  // Shared reliability primitives (packages/core/src/reliability): Retry-After parsing, the data-source
+  // error classifier, capped backoff — consumed by enrichment + sourceLanding, owned by neither.
+  "reliability",
   "sales-navigator",
   "search",
   "reveal",

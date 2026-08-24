@@ -75,6 +75,7 @@
     "provider-configs",
     "public-api",
     "public-pricing",
+    "reliability",
     "reports",
     "retention",
     "reveal",
@@ -111,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2353,
-  "fileSetHash": "sha256:2c2c7e3afd2f7de382460256da385a170c0cbdc851db8001c93a79908963fc6b",
+  "fileCount": 2361,
+  "fileSetHash": "sha256:38604d36a595fac8f6a571df7835e7c3428d9b4c5f4cf58c362d4cd47fb39b24",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -938,6 +939,7 @@
       "workers": [
         "apps/workers/src/queues/accountRefresh.ts",
         "apps/workers/src/queues/bulkEnrichment.ts",
+        "apps/workers/src/queues/enrichment.test.ts",
         "apps/workers/src/queues/enrichment.ts",
         "apps/workers/src/queues/firmographics.ts"
       ],
@@ -1719,6 +1721,21 @@
       "workers": [],
       "integrations": []
     },
+    "reliability": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/reliability/backoff.ts",
+        "packages/core/src/reliability/retryAfter.test.ts",
+        "packages/core/src/reliability/retryAfter.ts",
+        "packages/core/src/reliability/sourceErrorClassifier.test.ts",
+        "packages/core/src/reliability/sourceErrorClassifier.ts"
+      ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "reports": {
       "web": [
         "apps/web/src/features/reports/api.ts",
@@ -2226,6 +2243,8 @@
         "packages/core/src/sourceLanding/lookupInterest.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.test.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.ts",
+        "packages/core/src/sourceLanding/originCooldowns.test.ts",
+        "packages/core/src/sourceLanding/originCooldowns.ts",
         "packages/core/src/sourceLanding/originRouter.ts",
         "packages/core/src/sourceLanding/refreshAccount.ts"
       ],

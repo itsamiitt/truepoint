@@ -29,20 +29,32 @@ const DEFAULT_COOLDOWN_SECONDS = 60;
 /** The error counter self-heals if a provider goes quiet mid-streak (10 cooldowns). */
 const COUNTER_TTL_SECONDS = 600;
 
+/** Cap on a vendor-sent rate-limit horizon — one bad Retry-After header must not block a provider
+ *  fleet-wide for longer than this (env ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S at the composition root). */
+const DEFAULT_HORIZON_CAP_SECONDS = 86_400;
+
 export function redisBreakerStore(
   redis: BreakerRedis,
   threshold = DEFAULT_THRESHOLD,
   cooldownSeconds = DEFAULT_COOLDOWN_SECONDS,
+  horizonCapSeconds = DEFAULT_HORIZON_CAP_SECONDS,
 ): BreakerStore {
   const errorsKey = (p: string) => `enrich:breaker:errors:${p}`;
   const openKey = (p: string) => `enrich:breaker:open:${p}`;
+  // Rate-limit horizon (recordRateLimited): presence = blocked until the vendor's Retry-After elapses.
+  // The key EXPIRY IS the horizon (the openKey idiom) — no strike, the errors counter is untouched.
+  const limitedKey = (p: string) => `enrich:breaker:limited:${p}`;
   return {
     async isOpen(provider) {
-      return (await redis.get(openKey(provider))) !== null;
+      const [open, limited] = await Promise.all([
+        redis.get(openKey(provider)),
+        redis.get(limitedKey(provider)),
+      ]);
+      return open !== null || limited !== null;
     },
     async record(provider, ok) {
       if (ok) {
-        await redis.del(errorsKey(provider), openKey(provider));
+        await redis.del(errorsKey(provider), openKey(provider), limitedKey(provider));
         return;
       }
       const errors = await redis.incr(errorsKey(provider));
@@ -50,6 +62,10 @@ export function redisBreakerStore(
       if (errors >= threshold) {
         await redis.set(openKey(provider), "1", "EX", cooldownSeconds);
       }
+    },
+    async recordRateLimited(provider, retryAfterMs) {
+      const seconds = Math.min(Math.max(1, Math.ceil(retryAfterMs / 1000)), horizonCapSeconds);
+      await redis.set(limitedKey(provider), "1", "EX", seconds);
     },
   };
 }

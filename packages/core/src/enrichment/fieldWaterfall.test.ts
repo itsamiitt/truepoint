@@ -318,9 +318,9 @@ describe("runFieldWaterfalls — gate + breaker", () => {
     expect(out.retryAfterMs).toBe(12_000);
   });
 
-  test("allThrottled is FALSE when any provider actually answered", async () => {
+  test("allThrottled is TRUE on a throttle + paid miss with nothing filled — the deferral re-asks only the throttled provider (semantics changed with the !anyAnswered suppressor removal)", async () => {
     const throttled = stub({ name: "t", answer: { email: "x@y.z" } });
-    const answering = stub({ name: "b", answer: {} }); // paid miss
+    const answering = stub({ name: "b", answer: {} }); // paid miss — ANSWERED, excluded on the re-run
     const oneDenied: ProviderGate = {
       allow: (provider): Promise<GateDecision> =>
         provider === "t"
@@ -335,6 +335,26 @@ describe("runFieldWaterfalls — gate + breaker", () => {
       gate: oneDenied,
     });
     expect(out.winners.size).toBe(0);
+    expect(out.allThrottled).toBe(true);
+  });
+
+  test("allThrottled stays FALSE when a field was actually WON", async () => {
+    const throttled = stub({ name: "t", answer: { email: "x@y.z" } });
+    const winning = stub({ name: "b", answer: { email: "jane@acme.com" } });
+    const oneDenied: ProviderGate = {
+      allow: (provider): Promise<GateDecision> =>
+        provider === "t"
+          ? Promise.resolve({ allowed: false, reason: "rate_limited" })
+          : Promise.resolve({ allowed: true }),
+      settle: () => Promise.resolve(),
+    };
+    const out = await base({
+      providers: [throttled.provider, winning.provider],
+      orderFor: () => ["t", "b"],
+      request: { ...REQUEST, fields: ["email"] },
+      gate: oneDenied,
+    });
+    expect(out.winners.get("email")?.provider).toBe("b");
     expect(out.allThrottled).toBe(false);
   });
 
@@ -429,5 +449,83 @@ describe("inMemoryBreakerStore", () => {
     expect(await b.isOpen("p")).toBe(false);
     await b.record("p", true); // probe succeeded → fully closed
     expect(await b.isOpen("p")).toBe(false);
+  });
+
+  test("recordRateLimited blocks until the vendor's horizon WITHOUT a strike; success clears it", async () => {
+    let clock = 1_000_000;
+    const b = inMemoryBreakerStore(3, 60_000, () => clock);
+    await b.recordRateLimited?.("p", 30_000);
+    expect(await b.isOpen("p")).toBe(true); // blocked immediately — no 3-strike wait
+    clock += 29_999;
+    expect(await b.isOpen("p")).toBe(true);
+    clock += 1;
+    expect(await b.isOpen("p")).toBe(false); // horizon lapsed
+    // No strikes were accumulated: two real errors still do not open a threshold-3 breaker.
+    await b.record("p", false);
+    await b.record("p", false);
+    expect(await b.isOpen("p")).toBe(false);
+    // A fresh horizon is cleared by a successful answer.
+    await b.recordRateLimited?.("p", 30_000);
+    await b.record("p", true);
+    expect(await b.isOpen("p")).toBe(false);
+  });
+});
+
+describe("rate-limit horizon + allThrottled (the 429-aware breaker path)", () => {
+  test("a 429 routes to recordRateLimited with the vendor's Retry-After — never a strike", async () => {
+    const throttled = stub({ name: "a", answer: "rate_limited" }); // stub sends retryAfterMs 5000
+    const horizons: Array<{ provider: string; retryAfterMs: number }> = [];
+    const strikes: Array<{ provider: string; ok: boolean }> = [];
+    const out = await base({
+      providers: [throttled.provider],
+      orderFor: () => ["a"],
+      request: { ...REQUEST, fields: ["email"] },
+      breaker: {
+        isOpen: () => Promise.resolve(false),
+        record: (provider, ok) => {
+          strikes.push({ provider, ok });
+          return Promise.resolve();
+        },
+        recordRateLimited: (provider, retryAfterMs) => {
+          horizons.push({ provider, retryAfterMs });
+          return Promise.resolve();
+        },
+      },
+    });
+    expect(horizons).toEqual([{ provider: "a", retryAfterMs: 5_000 }]);
+    expect(strikes).toEqual([]);
+    expect(out.allThrottled).toBe(true);
+    expect(out.retryAfterMs).toBe(5_000);
+  });
+
+  test("a store WITHOUT recordRateLimited falls back to a failure strike (out-of-tree fakes)", async () => {
+    const throttled = stub({ name: "a", answer: "rate_limited" });
+    const strikes: Array<{ provider: string; ok: boolean }> = [];
+    await base({
+      providers: [throttled.provider],
+      orderFor: () => ["a"],
+      request: { ...REQUEST, fields: ["email"] },
+      breaker: {
+        isOpen: () => Promise.resolve(false),
+        record: (provider, ok) => {
+          strikes.push({ provider, ok });
+          return Promise.resolve();
+        },
+      },
+    });
+    expect(strikes).toEqual([{ provider: "a", ok: false }]);
+  });
+
+  test("one paid MISS no longer suppresses allThrottled — miss+429 with nothing filled defers", async () => {
+    const missed = stub({ name: "a", answer: {} }); // paid miss — ANSWERED
+    const throttled = stub({ name: "b", answer: "rate_limited" });
+    const out = await base({
+      providers: [missed.provider, throttled.provider],
+      orderFor: () => ["a", "b"],
+      request: { ...REQUEST, fields: ["email"] },
+    });
+    expect(out.winners.size).toBe(0);
+    expect(out.allThrottled).toBe(true); // the old !anyAnswered suppressor is gone
+    expect(out.retryAfterMs).toBe(5_000);
   });
 });

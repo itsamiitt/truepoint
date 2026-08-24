@@ -33,6 +33,9 @@ export interface ProviderResult {
   status: "hit" | "miss" | "rate_limited" | "error";
   /** On rate_limited: the vendor's Retry-After, when it sent one — feeds the deferral delay (v2). */
   retryAfterMs?: number;
+  /** On rate_limited/error: what the source actually said (proxy classification, correlation id, or a
+   *  short detail string) — persisted to provider_calls.response_payload so a failure row is inspectable. */
+  errorDetail?: { classification?: string; correlationId?: string; detail?: string };
 }
 
 export interface EnrichmentProvider {

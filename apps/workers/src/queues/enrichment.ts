@@ -27,13 +27,29 @@ export type { EnrichmentJobData };
 
 const DEFAULT_DEFER_MS = 30_000;
 /** All-throttled deferrals per original job — bounds the re-enqueue cycle (defer, never drop, never spin). */
-const MAX_DEFERRALS = 3;
+const DEFAULT_MAX_DEFERRALS = 3;
+/** Above this vendor-suggested delay the job PARKS instead of deferring (env ENRICH_DEFER_MAX_DELAY_MS
+ *  at the composition root): the ledger's rate_limited rows + the breaker horizon carry the state, and a
+ *  daily-budget 86400s Retry-After never piles up day-long delayed jobs in Redis. */
+const DEFAULT_MAX_DEFER_DELAY_MS = 1_800_000;
+/** Deferral jitter spreads UP (base..1.5×base): retrying EARLIER than Retry-After re-hits the throttle,
+ *  and an unjittered fleet retries in lockstep (the exact herd retryPolicies.ts jitters against). */
+const defaultDeferJitter = (ms: number): number => Math.round(ms * (1 + 0.5 * Math.random()));
 
 export interface EnrichmentProcessorDeps {
   /** Redis-shared breaker/gate (+ verifier overrides in tests) for the v2 path. */
   enrich?: EnrichDeps;
   /** Re-enqueue this job's data after a throttle deferral. Absent ⇒ no deferral (result returned as-is). */
   defer?: (data: EnrichmentJobData, delayMs: number) => Promise<void>;
+  /** Deferral cap per original job (env ENRICH_MAX_DEFERRALS). Default 3. */
+  maxDeferrals?: number;
+  /** Park threshold (env ENRICH_DEFER_MAX_DELAY_MS). Default 30 min. */
+  maxDeferDelayMs?: number;
+  /** Injected for deterministic tests; default spreads the delay up by 0–50%. */
+  jitter?: (ms: number) => number;
+  /** Test seam: the core waterfall entry. Default the real enrichContact — no module mocks (bun's
+   *  mock.module is process-global; the global-state hazard this repo has been bitten by). */
+  enrichContactFn?: typeof enrichContact;
 }
 
 export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
@@ -43,7 +59,7 @@ export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
     const { tenantId, workspaceId, contactId, fields, requestedByUserId, providerOrder } = job.data;
     let result: EnrichContactResult;
     try {
-      result = await enrichContact(
+      result = await (deps.enrichContactFn ?? enrichContact)(
         {
           scope: { tenantId, workspaceId },
           contactId,
@@ -70,21 +86,25 @@ export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
       }
       throw err;
     }
-    // v2 deferral: every capable provider was throttle-denied and nothing was filled — try again after
-    // the smallest vendor-suggested delay. Deferred, never dropped; the re-enqueued job re-reads the
-    // cache first, so a concurrent fill costs nothing. CAPPED at MAX_DEFERRALS so a permanently
-    // throttled vendor set can't turn one request into an infinite re-enqueue cycle — the final
-    // `unfilled` result stands and the ledger's rate_limited rows say why.
+    // v2 deferral: throttling filled nothing — try again after the smallest vendor-suggested delay,
+    // JITTERED UP so a fleet throttled by one vendor doesn't retry in lockstep. Deferred, never dropped;
+    // the re-enqueued job re-reads the cache first, so a concurrent fill costs nothing. CAPPED at
+    // maxDeferrals so a permanently throttled vendor set can't turn one request into an infinite
+    // re-enqueue cycle, and PARKED (no re-enqueue at all) when the vendor's horizon exceeds
+    // maxDeferDelayMs — a daily-budget wait is structural, not schedulable; the `unfilled` result
+    // stands, and the ledger's rate_limited rows + the breaker horizon say why.
     const deferrals = job.data.deferrals ?? 0;
+    const suggestedDelayMs = result.retryAfterMs ?? DEFAULT_DEFER_MS;
     if (
       result.status === "unfilled" &&
       result.allThrottled &&
       deps.defer &&
-      deferrals < MAX_DEFERRALS
+      deferrals < (deps.maxDeferrals ?? DEFAULT_MAX_DEFERRALS) &&
+      suggestedDelayMs <= (deps.maxDeferDelayMs ?? DEFAULT_MAX_DEFER_DELAY_MS)
     ) {
       await deps.defer(
         { ...job.data, deferrals: deferrals + 1 },
-        result.retryAfterMs ?? DEFAULT_DEFER_MS,
+        (deps.jitter ?? defaultDeferJitter)(suggestedDelayMs),
       );
     }
     return result;
