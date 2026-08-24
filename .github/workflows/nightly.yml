@@ -169,6 +169,9 @@ jobs:
       #
       # No thresholds are re-asserted here. The suites own their budgets and fail on them; a second copy of a
       # bound in a shell script is a number that drifts from the one that matters.
+      # tee, not a bare redirect: the summary renders on the run page AND stays in the job log. A step whose
+      # output goes only to the summary cannot be read back from the API, so its content is unverifiable
+      # except by eye in the UI — and this file has already been bitten once by a step that hid its output.
       - name: Summarise the soak numbers
         if: always()
         run: |
@@ -190,4 +193,4 @@ jobs:
             if [ "$found" -eq 0 ]; then
               echo "_No \`[TP-n]\` lines found — the suites did not reach their instrumentation._"
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
