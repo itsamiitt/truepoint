@@ -605,23 +605,38 @@ pass silently if it falls — they demand the budget be tightened instead.
    writer, one audit action, address-level suppression becomes possible; or (b) confirm domain-only is the
    intended product policy, delete the unused core function, and adopt its audit action name. Not changed
    unilaterally: suppression is a compliance control and CLAUDE.md rule 3 applies.
-9. **Two dual gates have no tenant half in the code.** (2026-08-24, `scripts/audit-feature-flag-coherence.mjs`.)
-   Migration 0088 seeds `provenance_events` and `usage_events` and describes them as "the per-tenant halves of
-   three DUAL GATES", and `apps/api/src/features/admin/routes.ts:1428-1443` presents each to staff as a paired
-   per-tenant flag. **No runtime path reads either one.** The provenance writers do
-   `const emitEvents = env.PROVENANCE_EVENTS_ENABLED`, and every usage-event emitter does
-   `if (env.USAGE_EVENTS_ENABLED)`. There is no `isFlagEnabledForTenant` call for either key anywhere.
-   - **Consequence:** enablement is all-or-nothing per environment. Flipping `PROVENANCE_EVENTS_ENABLED` turns
-     overlay provenance events on for EVERY tenant simultaneously — precisely the staged rollout the dual gate
-     was designed to make possible. The same for usage events.
-   - **Second consequence, quieter:** the admin surface shows a per-tenant control that does nothing. An
-     operator can set it, see it stored, and observe no behavioural change — and there is nothing to look at
-     when they go hunting for why.
-   - Migration 0119 later set `global_enabled = true` on every defined flag, so even if the reads were added
-     the tenant half would default to ON; the seeds' own `false` defaults no longer apply. Whoever wires this
-     has to decide the intended default explicitly rather than inherit it.
-   **Decide:** (a) add the tenant-half read to both gate points, restoring the documented per-tenant rollout
-   (small, and the env switches are off so nothing changes today); or (b) accept env-only gating for these
-   two, remove the `flagKey` from the admin listing so staff are not shown a dead control, and correct 0088's
-   description. Not done unilaterally: (a) changes gating on the provenance/compliance spine, and (b) edits
-   an operator-facing surface.
+9. **`usage_events` has no tenant half in the code.** (2026-08-24,
+   `scripts/audit-feature-flag-coherence.mjs`.) Migration 0088 seeds `provenance_events` and `usage_events`,
+   describes them as "the per-tenant halves of three DUAL GATES", and
+   `apps/api/src/features/admin/routes.ts:1428-1443` presents each to staff as a paired per-tenant flag.
+   Neither key has an `isFlagEnabledForTenant` call anywhere. **Only one of the two is a gap** — this entry
+   originally claimed both were, and that was wrong; the correction is below.
+
+   **`provenance_events` — NOT a gap. Seeded ahead of its consumer, exactly as 0088 says.** That flag gates
+   OVERLAY events only (`entity_type` contact|account), and 0088's own asymmetry note states Layer-0
+   `master_*` events "ride the env half ALONE" because Layer 0 has no tenant to key on. **Every
+   `provenance_event` writer that exists today is Layer-0**: `enrichmentEvidence` (person), `runImport`
+   (person, company), `landSourcePayload` and `forgeSyncRepository`. `revealContact`'s
+   `PROVENANCE_EVENTS_ENABLED` check is a Layer-0 READ (`badgeFor(tx, "person", …)`). No overlay writer has
+   been built — the `contact`/`account` entity types in `consent.ts`, `deleteFanout.ts` and `fanoutSignals.ts`
+   are audit-log and notification writes, a different table. So env-only gating is CORRECT here, and the
+   tenant flag is waiting for a writer, the same "seeded ahead of its consumer" pattern recorded for
+   `masterJobPostingsRepository.upsertPosting`. **Add the tenant read when the first overlay writer lands, not
+   before.**
+
+   **`usage_events` — a real gap.** `usage_event` rows carry tenant and workspace, 0088 calls the flag a
+   "per-tenant rollout gate for usage_event emission", and all four emitters gate on the env switch alone:
+   `packages/core/src/prospect/lists.ts:396`, `packages/core/src/reveal/revealContact.ts:417`,
+   `apps/api/src/features/contacts-from-database/routes.ts:49`,
+   `apps/api/src/features/contacts-resolve/routes.ts:69`. Flipping `USAGE_EVENTS_ENABLED` therefore starts
+   emission for EVERY tenant at once, which is the staged rollout the dual gate exists to make possible, and
+   the per-tenant control staff can see does nothing.
+   - Cost is small and the codebase already solved the hot-path question: the two `apps/api` sites can use
+     `apps/api/src/lib/gateMemo.ts` (5s in-process + 30s shared read-through, with invalidation), and the two
+     core sites sit on paths that already hold a tenant scope.
+   - Migration 0119 later set `global_enabled = true` on every defined flag, so adding the read makes the
+     tenant half default to ON; the seed's own `false` no longer applies. Whoever wires it must choose the
+     intended default explicitly rather than inherit it.
+   **Decide:** (a) add the tenant-half read at the four `usage_events` emitters; or (b) accept env-only gating
+   for it, and remove `flagKey: "usage_events"` from the admin listing so staff are not shown a dead control.
+   Either way `provenance_events` needs no change now.
