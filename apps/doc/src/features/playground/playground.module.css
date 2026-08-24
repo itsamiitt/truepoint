@@ -1,0 +1,403 @@
+/* playground.module.css — the sandbox console: a form column beside the sticky request/response panels.
+ *
+ * Same two-column grammar as the endpoint pages, so the playground reads as part of the reference rather
+ * than a separate toy. Every colour and space is a --tp-* token; the raw numbers are 1px borders, the
+ * column widths and the breakpoints. */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: var(--tp-space-8);
+  align-items: start;
+  margin-top: var(--tp-space-6);
+}
+
+.formColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-5);
+  min-width: 0;
+}
+
+.aside {
+  position: sticky;
+  top: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-4);
+  min-width: 0;
+}
+
+.panel {
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  padding: var(--tp-space-5);
+}
+
+.panelLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+  margin-bottom: var(--tp-space-3);
+}
+
+/* ── Endpoint chooser ─────────────────────────────────────────────────────────────────────────────────── */
+/* A radiogroup, not two buttons: the choice is exclusive and has a current value, which is what a screen
+   reader needs announced. Arrow-key movement comes with the role via roving tabindex in the component. */
+
+.endpointTabs {
+  display: flex;
+  gap: var(--tp-space-2);
+  margin-bottom: var(--tp-space-5);
+}
+
+.endpointTab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: var(--tp-space-3);
+  text-align: left;
+  font-family: var(--font-sans);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-card);
+  cursor: pointer;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease);
+}
+.endpointTab:hover {
+  border-color: var(--tp-cobalt);
+}
+.endpointTab[aria-checked="true"] {
+  background: var(--tp-cobalt-50);
+  border-color: var(--tp-cobalt);
+}
+
+/* The method word, in the ink the method pills use on the reference pages. Not the design's coloured
+   text: cobalt and success as TEXT both fail the AA floor, and cobalt is a fill colour by brand rule. */
+.endpointMethod {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-2);
+}
+
+.endpointPath {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tp-ink);
+}
+
+.endpointCost {
+  font-size: 11px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Fields ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.field + .field {
+  margin-top: var(--tp-space-5);
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-ink-2);
+  margin-bottom: var(--tp-space-2);
+}
+
+.fieldRow {
+  display: flex;
+  gap: var(--tp-space-2);
+  align-items: stretch;
+}
+
+.fieldRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldHint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+  margin: var(--tp-space-2) 0 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tp-space-2);
+  margin-top: var(--tp-space-2);
+}
+
+.sampleChip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  padding: var(--tp-space-1) var(--tp-space-3);
+  cursor: pointer;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease);
+}
+.sampleChip:hover {
+  border-color: var(--tp-cobalt);
+  color: var(--tp-cobalt-700);
+}
+
+/* ── Send row ─────────────────────────────────────────────────────────────────────────────────────────── */
+
+.sendRow {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--tp-space-6);
+}
+
+.balance {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.balanceValue {
+  font-family: var(--font-mono);
+  color: var(--tp-ink-2);
+}
+
+.resetButton {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.resetButton:hover {
+  color: var(--tp-ink);
+}
+
+/* ── Usage rollup ─────────────────────────────────────────────────────────────────────────────────────── */
+
+.usage {
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.usageHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--tp-space-3);
+  flex-wrap: wrap;
+  padding: var(--tp-space-4) var(--tp-space-5);
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.usageTitle {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.usageNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.usageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.usageCell {
+  padding: var(--tp-space-4) var(--tp-space-5);
+}
+.usageCell + .usageCell {
+  border-left: 1px solid var(--tp-hairline);
+}
+
+.usageCellLabel {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+  margin-bottom: var(--tp-space-1);
+}
+
+.usageCellValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The call log. A real table, not a grid of divs — it has a header row and three columns of related
+   values, which is exactly what a table communicates to a screen reader. */
+.historyWrap {
+  border-top: 1px solid var(--tp-hairline);
+  overflow-x: auto;
+}
+
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.history th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+  padding: var(--tp-space-2) var(--tp-space-5);
+  border-bottom: 1px solid var(--tp-hairline);
+  white-space: nowrap;
+}
+
+.history td {
+  padding: var(--tp-space-2) var(--tp-space-5);
+  border-bottom: 1px solid var(--tp-hairline);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+  white-space: nowrap;
+}
+
+.history tr:last-child td {
+  border-bottom: 0;
+}
+
+.historyDomain {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.historyCredits {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status is a filled pill carrying the numeral. The fill states the class of outcome; the numeral is what
+   carries the meaning, so the colour is never the only signal. Ink and cobalt fills only — the design's
+   success/warning fills under white type both fail the AA floor (contrast.test.ts). */
+.statusPill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tp-on-fill);
+  border-radius: var(--tp-radius-sm);
+  padding: 2px 7px;
+}
+.statusOk {
+  background: var(--tp-btn);
+}
+.statusBilled {
+  background: var(--tp-cobalt);
+}
+.statusError {
+  background: var(--danger-700);
+}
+
+/* ── Response panel header ────────────────────────────────────────────────────────────────────────────── */
+/* The response reuses the twilight code panel, with a status row where the language label sits. */
+
+.responseHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tp-space-3);
+  padding: var(--tp-space-2) var(--tp-space-4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.responseStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+  min-width: 0;
+}
+
+.responseMeta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.responseIdle {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: var(--tp-radius-sm);
+  padding: 2px 7px;
+}
+
+.responseBody {
+  min-height: 220px;
+}
+
+.asideNote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--tp-ink-2);
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+  padding: var(--tp-space-4);
+}
+
+.asideFooter {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tp-ink-3);
+  padding: 0 var(--tp-space-1);
+}
+
+@media (max-width: 1100px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: var(--tp-space-6);
+  }
+  .aside {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .endpointTabs {
+    flex-direction: column;
+  }
+  .usageGrid {
+    grid-template-columns: 1fr;
+  }
+  .usageCell + .usageCell {
+    border-left: 0;
+    border-top: 1px solid var(--tp-hairline);
+  }
+}

@@ -52,6 +52,8 @@ export const crmFieldMappingRepository = {
     rows: CrmFieldMappingRow[],
   ): Promise<number> {
     if (rows.length === 0) return 0;
+    // batch-insert-bounds-ok: one row per mapped CRM field — bounded by the connector's schema (dozens), not
+    // by any user-supplied volume.
     const inserted = await tx
       .insert(crmFieldMappings)
       .values(

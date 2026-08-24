@@ -88,7 +88,7 @@ See Conflict C1.
 
 ## Conflicts surfaced (rule 6 — recorded, NOT silently reinterpreted)
 
-The brief and the shipped strategy disagree in four places. None is resolved by this ADR; each is
+The brief and the shipped strategy disagree in five places, and reading the published pages against the shipped code has surfaced one more. None is resolved by this ADR; each is
 carried as an open decision for the operator.
 
 **C1 — Contributor-earned credits (BLOCKING; `CLAUDE.md` Rule 7).**
@@ -129,6 +129,73 @@ pages — plan pricing, credit costs, dataset catalogue — describe a business 
 not ratified. They ship as *published intent*, clearly dated, and the operator owes a `decisions.md`
 entry ratifying the fourth market before any metering, billing, or public API code is written
 against it.
+
+**C5 — The published provenance shape is not the stored one (surfaced 2026-08-22).**
+`/docs/confidence` publishes a per-field descriptor of `{ sources, class, last_seen }` with a four-value
+class vocabulary (`verified` | `corroborated` | `single-source` | `inferred`), and the planned
+`POST /person/enrich` example returns it. The SHIPPED substrate stores something different:
+`packages/types/src/fieldProvenance.ts` defines the descriptor as
+`{ src, mth, conf, obs, ver, pin, by, at, cf }` — a platform source LABEL, a match method, a confidence in
+[0,1], observed-at and last-verified-at timestamps, and the human-correction pin. There is no stored count
+of agreeing sources and no stored class.
+
+Neither side is simply wrong, which is why this is a conflict rather than a bug. The stored keys are
+deliberately short and internal (billions of rows x ~15 fields), and `src` carries values like
+`provider:zoominfo` — publishing that verbatim would name a commercial supplier per field, a disclosure
+decision nobody has taken, and the same class of leak `PLAN_03 §C2` forbids for contributing workspaces.
+A public egress shape therefore has to be a DERIVED projection, and what it derives — how a confidence
+number and a source label become a class word, and whether an agreement count is even computable from a
+store that keeps only the winning descriptor — is an unmade product decision.
+
+**Resolution taken here:** nothing is silently reinterpreted. The guide keeps the class vocabulary, because
+it is the model the product intends and the one that makes the in-app badge legible (outcome S-10), but it
+now states plainly that no callable endpoint emits `field_provenance` today — both endpoints that carry it
+are `planned` — and it describes what the store actually records. A test forbids any `available`/`beta`
+endpoint from declaring a `field_provenance` return until the projection exists. The operator owes a
+`decisions.md` entry defining the public projection before `POST /person/enrich` ships.
+
+**C6 — The sourcing statement describes a crawler this repository does not contain (surfaced 2026-08-22; NOT
+edited, deliberately).**
+`/trust` opens its source list with *"Public web pages: company sites, career pages and public job postings,
+crawled directly, respecting robots.txt and rate-limited to be a polite visitor."* A repository-wide search
+finds no robots.txt parsing, no crawl scheduler, and no politeness/rate-limit layer for outbound page
+fetches anywhere outside `apps/doc`'s own `robots.ts` route. `master_job_postings` exists as a Layer-0 table
+with a repository and a read route, but nothing in this repo writes to it from a crawl.
+
+Two readings are possible and this ADR cannot choose between them: the claim is aspirational and currently
+unbacked, or the crawling runs in a system outside this repository. Both matter, differently — the first is
+a compliance statement we cannot evidence, the second is a supply path whose politeness behaviour nobody
+here can verify.
+
+**Why this was recorded rather than fixed.** `CLAUDE.md` rule 3 requires any change touching personal-data
+collection to state its compliance impact and pass the checklist, and to stop and ask when uncertain. The
+sourcing statement is the lawful-basis claim itself: softening it without knowing whether the crawler exists
+would risk making the page wrong in the opposite direction, and an agent is the wrong actor to quietly
+narrow a published data-ethics commitment. So the wording is untouched.
+
+**What the operator owes:** confirmation of whether a crawler exists and where. If it does, a pointer to it
+belongs in this ADR and its robots.txt/rate-limit behaviour should be evidenced by a test. If it does not,
+the bullet has to change, and that change is a `decisions.md` entry because it narrows what the public page
+claims about how data is sourced.
+
+**C7 — Published availability described the CONTRACT, not the DOOR (surfaced and closed 2026-08-22).**
+The two company endpoints are built, metered and badged `beta`, and the site had begun counting them as
+callable. The router is mounted inside `if (env.PUBLIC_DATA_API_ENABLED)`, and
+`deploy/env.production.template` ships that flag OFF, with its own comment: *"while off the router is not
+mounted and /api/v1/public/* 404s"*. Key creation and the usage read stay live either way — deliberately, so
+a credential can be provisioned before the endpoints it calls are switched on — which is exactly the sequence
+that turns this into a support thread: read the docs, mint a key, curl the base URL, get a 404 from a route
+that was never mounted.
+
+The badge was not wrong. Availability answers *is the contract settled*; nothing on the site answered *is the
+door open for me*. Those are different axes and only one of them was published.
+
+**Resolution taken here:** the site says both now. `content/access.ts` carries one sentence — access is
+enabled per account, keys can exist before the endpoints do, and a 404 from the base URL means the account is
+not enabled rather than the path being wrong — and it appears on every callable endpoint page, in the docs
+facts strip, and inside the landing page's generated status line. A test in `content/shippedContract.test.ts`
+reads the deployment template and requires that wording for as long as the flag ships off; flipping the
+template to `true` stops the test demanding it.
 
 ## Consequences
 

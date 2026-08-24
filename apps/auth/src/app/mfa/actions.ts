@@ -34,7 +34,7 @@ import { redirect } from "next/navigation";
  * the assertion @simplewebauthn/browser produced; a wrong/absent assertion is the same uniform "didn't match".
  */
 export async function submitMfaPasskey(assertion: AuthenticationResponseJSON): Promise<void> {
-  if (env.WEBAUTHN_ENABLED !== "true") redirect("/mfa?error=1");
+  if (!env.WEBAUTHN_ENABLED) redirect("/mfa?error=1");
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
   if (!txnId) redirect("/login");
   const txn = await getLoginTransaction(txnId);

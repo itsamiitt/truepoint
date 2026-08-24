@@ -14,7 +14,7 @@ export const AUTHENTICATION: Guide = {
     {
       kind: "code",
       language: "bash",
-      source: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=acme.com" \\
+      source: `curl "https://api.truepoint.in/api/v1/public/company/match?domain=northgate.example.com" \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY"`,
     },
     {

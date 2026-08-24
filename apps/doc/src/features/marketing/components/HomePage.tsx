@@ -7,6 +7,7 @@
 import { ButtonLink } from "@/components/ButtonLink.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import intro from "@/components/page-intro.module.css";
+import { endpointStatus } from "@/content/endpointStatus.ts";
 import { PROOF_POINTS, SITE_TAGLINE } from "@/content/site.ts";
 import { Card, PageContainer } from "@leadwolf/ui";
 import styles from "../marketing.module.css";
@@ -41,8 +42,7 @@ export function HomePage() {
 
       <h2 className={intro.sectionTitle}>The endpoints</h2>
       <p className={intro.sectionNote}>
-        The contract is published in full below. It is not callable yet — every endpoint page
-        carries its status, and the changelog records the day that changes.
+        The contract is published in full below. {endpointStatus().line}
       </p>
       <EndpointIndex />
 

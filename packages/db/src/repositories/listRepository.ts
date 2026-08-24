@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 import { listMembers, lists } from "../schema/lists.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 
 /** A list row with its live membership count — the list/governance view-model. `kind` distinguishes a static
  *  (explicit `list_members`) list from a dynamic (saved-search-backed) one; `savedSearchId` is the backing
@@ -371,22 +372,27 @@ export const listRepository = {
     if (input.contactIds.length === 0) return 0;
     const addedVia = input.addedVia ?? "manual";
     const sourceImportId = input.sourceImportId ?? null;
-    const rows = await tx
-      .insert(listMembers)
-      .values(
-        input.contactIds.map((contactId) => ({
-          tenantId: input.tenantId,
-          workspaceId: input.workspaceId,
-          listId: input.listId,
-          contactId,
-          addedByUserId: input.addedByUserId,
-          addedVia,
-          sourceImportId,
-        })),
-      )
-      .onConflictDoNothing({ target: [listMembers.listId, listMembers.contactId] })
-      .returning({ id: listMembers.id });
-    return rows.length;
+    // NOTE: sliced below for the bind-parameter ceiling — 7 params a row against a 10,000-contact import is
+    // 70,000 against PostgreSQL's 65,534 limit. See bindLimit.ts.
+    const memberRows = input.contactIds.map((contactId) => ({
+      tenantId: input.tenantId,
+      workspaceId: input.workspaceId,
+      listId: input.listId,
+      contactId,
+      addedByUserId: input.addedByUserId,
+      addedVia,
+      sourceImportId,
+    }));
+    let inserted = 0;
+    for (const slice of sliceForBindLimit(memberRows)) {
+      const rows = await tx
+        .insert(listMembers)
+        .values(slice)
+        .onConflictDoNothing({ target: [listMembers.listId, listMembers.contactId] })
+        .returning({ id: listMembers.id });
+      inserted += rows.length;
+    }
+    return inserted;
   },
 
   /** Remove contacts from a list. Returns how many membership rows were removed. Workspace-scoped via RLS. */

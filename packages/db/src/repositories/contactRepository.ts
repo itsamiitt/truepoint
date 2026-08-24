@@ -30,6 +30,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { contactChannelRepository } from "./contactChannelRepository.ts";
 
 /** S-CH4 read opt threaded from the caller-evaluated composed read gate (05 §6). Default off ⇒ the email
@@ -644,14 +645,30 @@ export const contactRepository = {
   },
 
   /**
-   * Batched mirror of insert: ONE multi-row INSERT for a whole chunk, returning the new ids in input order.
-   * Column handling matches insert (the value objects pass straight through — undefined optional fields fall
-   * back to column defaults/null; no definedOnly, exactly like the single-row insert). A single INSERT statement's
-   * RETURNING preserves the VALUES order, so result[i] is the id for values[i] (the caller relies on alignment).
+   * Batched mirror of insert: a multi-row INSERT per parameter-safe slice, returning the new ids in input
+   * order. Column handling matches insert (the value objects pass straight through — undefined optional fields
+   * fall back to column defaults/null; no definedOnly, exactly like the single-row insert). A single INSERT
+   * statement's RETURNING preserves the VALUES order and the slices are concatenated in order, so result[i] is
+   * the id for values[i] (the caller relies on alignment).
+   *
+   * WHY IT SLICES. This was ONE statement for the whole chunk, which cannot work at the chunk size the bulk
+   * importer actually uses: a contact binds ~19 parameters and PostgreSQL caps a statement at 65,534 of them,
+   * so the ceiling is ~3,400 rows against bands of CHUNK_ROWS = 10_000. See bindLimit.ts for the full account.
+   *
+   * Atomicity is unchanged — every slice runs on the caller's `tx`, so the chunk still commits or rolls back
+   * as one.
    */
   async insertBatch(tx: Tx, values: ContactWriteValues[]): Promise<Array<{ id: string }>> {
     if (values.length === 0) return [];
-    return tx.insert(contacts).values(values).returning({ id: contacts.id });
+    const slices = sliceForBindLimit(values);
+    if (slices.length === 1) {
+      return tx.insert(contacts).values(values).returning({ id: contacts.id });
+    }
+    const out: Array<{ id: string }> = [];
+    for (const slice of slices) {
+      out.push(...(await tx.insert(contacts).values(slice).returning({ id: contacts.id })));
+    }
+    return out;
   },
 
   /** Merge non-undefined fields into an existing contact (sparse re-imports never wipe known values). */

@@ -51,7 +51,7 @@ curl -X POST https://api.truepoint.in/api/v1/public/search \\
     {
       kind: "list",
       items: [
-        "Exceeding a limit returns 429 with a `Retry-After` header, in seconds.",
+        "Exceeding a limit returns 429 rate_limited, carrying `retryAfterSeconds` in the problem body. There is no Retry-After header — a backoff that reads one gets nothing back and retries immediately, which is the loop this limit exists to stop.",
         "429s are never billed, so a backoff loop cannot cost you credits.",
         "Retry with exponential backoff and jitter. Retrying immediately, in lockstep, is how a fleet of workers turns one limit breach into a sustained one.",
         "If you need a sustained ceiling above the default, that is a conversation rather than a config flag — the limit exists to keep one caller from degrading everyone.",

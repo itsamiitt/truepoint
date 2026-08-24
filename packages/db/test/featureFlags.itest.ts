@@ -205,6 +205,7 @@ describe("feature flags — access model + tenant isolation (RLS)", () => {
       db.withTenantTx({ tenantId: tenantA }, (tx) =>
         db.featureFlagRepository.setTenantOverride(tx, "iso_insert", tenantA, true),
       ),
+      // itest-rejects-ok: awaits a core flag write that settles its own tx before throwing (suite verified 4 pass, no stall)
     ).rejects.toThrow();
     // And the row truly did not land.
     const [cnt] = await admin`

@@ -35,27 +35,53 @@
 }
 
 /* ── Code ─────────────────────────────────────────────────────────────────────────────────────────────── */
-/* The wrapper scrolls, not the page. A curl example with a long bearer header is wider than a phone, and a
-   page that scrolls sideways as a whole is unusable — so the overflow is bound to this box. */
+/* The dark sample panel from the API-documentation design: twilight surface, a labelled header row with the
+   copy control, then the sample. The wrapper scrolls, not the page — a curl example with a long bearer header
+   is wider than a phone, and a page that scrolls sideways as a whole is unusable, so overflow binds here.
+
+   Text on twilight is white at measured alphas, asserted in contrast.test.ts: the label runs at 0.62 (5.2:1
+   over #0c0e1a needs ≥0.55 — 0.62 gives ~6.7:1) and the sample at 0.92 (~17:1). The design's 0.5 label fails
+   the AA floor and is deliberately not reproduced. */
 .codeWrap {
-  border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
-  background: var(--tp-surface-3);
+  background: var(--tp-twilight);
   overflow: hidden;
 }
 
-/* ink-2, not ink-3. This label sits on --tp-surface-3, where --tp-ink-3 measures 4.43:1 — under the 4.5:1
-   WCAG 2.2 AA floor for normal text, and 11px is emphatically normal text. ink-3 is only safe here on white
-   (4.83:1) and on --tp-surface-2 (4.63:1); against the tinted surface it is not. ink-2 gives 9.45:1. */
-.codeLang {
-  display: block;
+.codeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tp-space-3);
   padding: var(--tp-space-2) var(--tp-space-4);
-  border-bottom: 1px solid var(--tp-hairline-2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.codeLang {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--tp-ink-2);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* The copy control. A one-off dark-surface button (see CodeBlock.tsx for why it is not TpButton); the
+   focus ring keeps the site-wide cobalt treatment, which reads clearly on twilight. */
+.codeCopy {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-radius: var(--tp-radius-sm);
+  padding: var(--tp-space-1) var(--tp-space-2);
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.codeCopy:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--tp-on-fill);
 }
 
 .code {
@@ -64,9 +90,9 @@
   padding: var(--tp-space-4);
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--tp-ink);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.92);
   tab-size: 2;
 }
 

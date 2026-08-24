@@ -467,3 +467,120 @@ from three sites only". The searchRepository half is FIXED — buildWhere now ca
 over all three suppression rungs, covering results, facet counts and typeahead. assertNotSuppressed has four
 call sites, not three. The REMAINING half of that invariant is (a) above: the Layer-0 plane, which is exactly
 where the new API would read.
+
+## 2026-08-22 — Profile Intelligence Panel: shape, gating, and the photo gate held (user decisions)
+
+The user directed that the extension's side panel be built to the Claude Design project "TruePoint
+Extension" (`templates/profile-intel-panel`). Three decisions were taken in-session and are recorded here
+because two of them deviate from a standing convention and the third RE-AFFIRMS a hard gate.
+
+(a) **Two tabs only — Prospect and Company.** The Captured, Reveal, Lists, Sequences and AI tabs are removed.
+    Three of those rendered an `EmptyState` and nothing else (the X06 remainder), and two of them named
+    explicit non-goals (X-01 sequencing, X-02 AI email). Reveal's job moves into the Prospect tab's contact
+    card. The IndexedDB `recent` store and its reaper stay — the popup still reports "{count} captured on
+    this page" — so nothing about the capture queue changes.
+
+(b) **The new read ships DEFAULT-ON, not behind its own feature flag.** `POST /api/v1/contacts/lookup/intel`
+    has no `*_ENABLED` switch of its own. This deviates from the "everything dark behind a default-off gate"
+    convention the extension series otherwise follows, and the reasoning is that the convention's purpose is
+    already served: the extension-wide counsel gates (`CHROME_EXTENSION_ENABLED`, `EXTENSION_ORIGINS`,
+    both unset in production per D10/D12) mean no extension-scoped token exists to call it, and the route is
+    on the deny-by-default `extensionScope` allow-list. The enumeration guard that DOES matter is kept:
+    per-caller rate limiting (`checkDatabaseProfileRate`), the same budget the web's global profile routes
+    carry. Note the consequence honestly — a WEB session's token can call this route today, and it returns
+    the same masked, suppression-checked data the profile routes already serve.
+
+(c) **Profile photos stay raw-only — the 2026-08-16 HUMAN GATE is NOT opened.** The design shows a LinkedIn
+    profile picture and per-position company logos. `profile_picture` is dropped at the mapper boundary and
+    survives only in `source_records.raw_data`; position `company_logo` was never mapped. The panel renders
+    initials for people and monograms for positions instead, and shows the COMPANY logo, which is a mapped
+    field. Opening that gate would need its own entry here plus a column, a mapper change and a DSAR path;
+    the user declined it for this pass.
+
+Also recorded, as design-versus-record conflicts resolved against the record (rule 6): the design's mono
+footer showed `company_id` / `member_id`, which are internal link metadata under the 2026-08-16 front-end
+contract — replaced with the registrable domain and the captured date; "Verify · 1" has no endpoint behind
+it and was omitted rather than wired to enrichment, which finds rather than verifies; and "stated
+integrations"/"investors stated" would have required mining the company description, so the tab shows the
+`specialties` field and says plainly that it is the company's own words. Credit prices are interpolated from
+`GET /credits/reveal-costs` — the design's "2 credits" for a phone is an ops setting
+(`REVEAL_COST_PHONE`, currently 1), not a number in code.
+
+---
+
+2026-08-22 — FIVE OPEN DECISIONS, gathered in one place. None is a blocked task waiting on effort; each is a
+judgement that belongs to a human, and each is currently the reason some real work is not proceeding. They
+accumulated across a long hardening session and were scattered over ~28 commits and four documents, which is
+how a decision quietly becomes a non-decision. Every one is measured, not estimated.
+
+1. **`--tp-ink-4` as a text colour — 95 sites.** The token is 2.54:1 on white and worse on every tint, below
+   the WCAG AA floor for normal text (4.5) AND for large text (3.0), so no text size makes it pass. The
+   selectors are mostly informational (`.note`, `.footnote`, `.kpiLabel`, `.timelineTime`, `.sectionHint`);
+   a minority are genuinely exempt (a placeholder, icon glyphs, disabled states — 1.4.3 exempts those).
+   Not a find-and-replace: `--tp-ink-3` clears AA on white and `--tp-surface-2` but FAILS on `--tp-surface-3`
+   and `--nav-hover-fill`, so it is a per-surface call. Held at 95 by
+   `packages/ui/src/inkFourContrast.test.ts`; two shared-primitive cases (every form hint, every page eyebrow)
+   were already fixed because they were unambiguous and in `packages/ui`.
+   **Decide:** migrate per surface, or accept a documented subset as exempt.
+
+2. **Nine cross-feature imports in `apps/web`.** accounts→prospect (×5), accounts→signals, lists→prospect,
+   search→prospect, home→api-usage. dependency-cruiser's `no-cross-feature-import` never reported them —
+   the cruise runs without a per-app tsconfig so the `@/*` alias does not resolve (251 unresolved, 0 resolved),
+   and the rule matches on resolved paths. Now held by `bun run lint:cross-feature`; every other app is at zero.
+   **Decide:** move the shared pieces into `shared/`, or acknowledge `prospect` as a base other destinations
+   may build on and record that as the rule.
+
+3. **I4's "merge→split→re-derive" exit gate cannot be met** (docs/planning/prospect-database-platform/13 §3a).
+   Layer-0 refuses unmerge on purpose — `erRepository.confirmMerge` says "there is no unmerge, and pretending
+   otherwise would invite a caller to try" — and Layer-1 records re-pointed children as tallies, not row ids,
+   so no merge either grain performs today is invertible. That is unfixable retroactively.
+   **Decide:** ship a split (which needs a per-row merge journal first), or amend the exit gate. Building
+   against code that says there is no unmerge would be the silent reinterpretation rule 6 forbids.
+
+4. **X3 security sign-off** (database-management-research/16). Unchanged and still the gate on A1/A2 to `main`.
+   The audit's own register says every remaining item there is blocked by design and "the next move is a human
+   decision, not more code" — worth taking at face value rather than re-scanning.
+
+5. **`users` / `user_sessions` grant posture** (docs/planning/audits/identity-grant-posture.md). Re-verified
+   2026-08-22: neither has an RLS policy or a REVOKE, while seven sibling auth tables have one or the other.
+   `users.is_platform_admin` is WRITABLE by the customer app role — a privilege-escalation primitive, and the
+   sharpest edge in the gap. The obvious fixes both fail as written: a blanket REVOKE breaks 20 join sites,
+   and a column-level REVOKE does nothing in PostgreSQL against a table-level grant (you must revoke the table
+   privilege and re-grant per column, which obliges every future column). The login path is outside the blast
+   radius either way — it runs on the owner connection, not `leadwolf_app`.
+   **Decide:** option A (policy on `user_sessions` keyed on `user_id`), B (column re-grant on `users`),
+   C (route both behind the auth service and REVOKE), or D (accept, documented). Security has final say.
+
+Two standing ratchets exist so none of the above can quietly get worse while it waits: ink-4 at 95,
+cross-feature at 9 (web) / 0 (everywhere else). Both fail the build if the number rises, and both refuse to
+pass silently if it falls — they demand the budget be tightened instead.
+
+6. **The email send-quota window: rolling 30 days, or the billing cycle?** (2026-08-22,
+   `packages/db/src/repositories/sendQuotaRepository.ts`.) Until now nothing reset `email_send_used` at all —
+   `resetPeriod` had no caller, so a tenant that hit its quota was blocked from sending forever. That part is
+   simply a bug and is fixed: `lock()` now rolls an elapsed window under the row lock it already holds.
+   What is NOT settled is the window's length. The method's own comment said "monthly/daily" and never chose,
+   so the fix ships a documented `SEND_QUOTA_PERIOD_DAYS = 30` — the choice that is defensible without knowing
+   the answer, because a rolling 30 days can never hand a tenant two windows' worth of sends inside one
+   calendar month, which is the direction that costs money.
+   **Decide:** keep the rolling window, or align it to the billing cycle (`billing_cycles`) so quota and
+   invoice describe the same period. If billing-aligned, the constant should be REPLACED by the cycle
+   boundary, not re-tuned — a unit test asserts the 30 deliberately, so changing the number alone fails the
+   build and sends the next reader here.
+
+7. **Managed callback origins (AUTH-036): platform-scoped, or post-authentication widening?** (2026-08-23,
+   `docs/planning/auth-platform/MANAGED_ORIGINS_BLOCKER.md`.) The auth tracker lists "wire the redirect/CORS
+   guards to `resolveAllowedOrigins`" as the next item. It is not a wiring task: three of the four call sites
+   validate the return origin before any tenant exists (the user has supplied only an email), and the fourth
+   is gated by a CORS preflight, which carries no credentials and so cannot be tenant-scoped even in
+   principle. Both obvious workarounds — unioning all tenants' origins, or resolving a tenant from a hint —
+   let an untrusted input choose which allow-list to validate against, which hands any tenant a redirect
+   target for everyone else's users.
+   **Decide:** (B) honour only the platform-NULL rows the table already carries, so the env floor becomes
+   bootstrap and platform origins extend it without a deploy — small, no cross-tenant widening possible, works
+   at every call site including the preflight; or (A) keep the env floor as the sole pre-auth gate and consult
+   per-tenant managed origins only after authentication has established the tenant — more work, and the
+   extension mint surface stays env-only regardless. Recommendation is (B) first, (A) only if tenant
+   self-service is a real requirement. Nothing was changed unilaterally: security has final say on redirect
+   gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
+   repository-call-site audit — there is nowhere correct to call them from yet.

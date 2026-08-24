@@ -189,10 +189,19 @@ beforeAll(async () => {
     workspaceId: wsOn,
     ownerId: ownerOn,
   } = await seedTenantWorkspace("acme-on"));
-  // The ON tenant's per-tenant override; the OFF tenant keeps the 0059 seed (off/off ⇒ effective off).
+  // BOTH tenants get an explicit per-tenant override, in opposite directions.
+  //
+  // This block used to pin only the ON tenant and let the OFF tenant "keep the 0059 seed (off/off ⇒
+  // effective off)". Migration 0119 (operator-directed, 2026-08-18) set `global_enabled = true` on every
+  // defined flag — `channels_dual_write` included, deliberately, since the write half is what starts
+  // convergence — so an un-overridden tenant now evaluates ON and the gate-off half of this parity test
+  // was silently testing the gate-ON path. An override wins over the global default in either direction
+  // (evaluateFlag precedence), so pinning both is what makes the parity claim independent of whatever the
+  // global posture happens to be on the day the suite runs.
   await admin`
     INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
-    VALUES ('channels_dual_write', ${tenantOn}, true)`;
+    VALUES ('channels_dual_write', ${tenantOn}, true), ('channels_dual_write', ${tenantOff}, false)
+    ON CONFLICT (flag_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`;
 
   core = await import("../../core/src/index.ts");
   db = await import("@leadwolf/db");

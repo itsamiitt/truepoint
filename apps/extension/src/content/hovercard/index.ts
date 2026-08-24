@@ -196,7 +196,7 @@ export class HoverCard {
     // The app has no per-contact detail route yet, so open the prospect workspace (a deep link is a future
     // apps/web route). A content-script click is a user gesture, so window.open is allowed.
     if (contactId && this.status?.owned) {
-      window.open(`${ENV.appOrigin}/prospect`, "_blank", "noopener,noreferrer");
+      window.open(`${ENV.appOrigin}/search`, "_blank", "noopener,noreferrer");
       return;
     }
 

@@ -8,8 +8,12 @@
 // Why this endpoint exists at all: the dashboards used to roll up in the browser over the most recent 200
 // contacts and 200 reveals, so every number above that was wrong while being labelled a total.
 
-import { reportsRepository } from "@leadwolf/db";
-import { reportsSummaryQuerySchema, reportsSummarySchema } from "@leadwolf/types";
+import { outcomeMetricsRepository, reportsRepository, withTenantTx } from "@leadwolf/db";
+import {
+  reportsSummaryQuerySchema,
+  reportsSummarySchema,
+  revealOutcomesSchema,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
@@ -50,3 +54,39 @@ reportsRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"),
 
   return c.json(reportsSummarySchema.parse(rows), 200);
 });
+
+/**
+ * GET /reveal-outcomes — hit rate + p95 for the workspace, over the same trailing windows as /summary.
+ *
+ * This exists because the metric had no reader. `outcomeMetricsRepository` was exported from the db barrel
+ * and called by nothing, which meant the number 06-roadmap Phase 1 names its KILL criterion against
+ * ("reveal-hit rate <40% in the beachhead after seed load → stop") could not be looked at by anyone.
+ *
+ * `withTenantTx` directly, rather than a scope-taking repository wrapper: the outcome reads take a `Tx`
+ * because they are workspace-scoped BY RLS (rls/usageEvents.sql) rather than by a WHERE clause —
+ * `actionCounts` has no workspace predicate in its SQL at all. Running them on any other seam would silently
+ * widen them past the caller's workspace, so the transaction is the enforcement and it belongs at the call
+ * site. Same shape as account-intelligence's routes.
+ *
+ * Deliberately NOT exposed here: `outcomeMetricsRepository.mostWanted`. Its own contract says any surface
+ * rendering it must first suppression-check every fingerprint against `suppression_list`'s email_blind_index,
+ * and that the demand feed is Phase 3. Shipping the numbers without that check would be the compliance
+ * failure the method warns about, so the miss COUNT is surfaced and the miss SUBJECTS are not.
+ */
+reportsRoutes.get(
+  "/reveal-outcomes",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
+    const range = c.req.query("range") ?? "30d";
+    // Same bounded window set as /summary — an unrecognised value falls back to the 30-day default rather than
+    // reaching the interval cast as anything else.
+    const days = range in RANGE_DAYS ? RANGE_DAYS[range] : 30;
+
+    const outcomes = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
+      outcomeMetricsRepository.revealOutcomes(tx, days ?? null),
+    );
+
+    return c.json(revealOutcomesSchema.parse(outcomes), 200);
+  },
+);

@@ -87,6 +87,7 @@ d("Gate B — S3 FileStore round-trip (non-prod bucket)", () => {
       (async () => {
         await drain(await store.getObjectStream(`${runPrefix}a.csv`));
       })(),
+      // itest-rejects-ok: an object-store call — no Postgres pool involved
     ).rejects.toThrow();
   }, 60_000);
 });

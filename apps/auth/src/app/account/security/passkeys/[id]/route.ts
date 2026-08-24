@@ -18,7 +18,7 @@ export async function DELETE(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  if (env.WEBAUTHN_ENABLED !== "true") return new Response("Not found", { status: 404 });
+  if (!env.WEBAUTHN_ENABLED) return new Response("Not found", { status: 404 });
   const account = await resolveApiUser();
   if (!account) return new Response("Unauthorized", { status: 401 });
   const body = (await req.json().catch(() => null)) as { stepUp?: string } | null;

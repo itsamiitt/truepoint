@@ -10,6 +10,7 @@ import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { type TenantScope, withTenantTx } from "../client.ts";
 import { users } from "../schema/auth.ts";
 import { revealJobRows, revealJobs } from "../schema/revealJobs.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { creditRepository } from "./creditRepository.ts";
 import { jobVisibility } from "./jobVisibility.ts";
 
@@ -162,19 +163,19 @@ export const revealJobRepository = {
     rows: Array<{ contactId: string; rowIndex: number }>,
   ): Promise<void> {
     if (rows.length === 0) return;
+    // Sliced for the bind-parameter ceiling (bindLimit.ts): a bulk reveal enqueues one row per selected
+    // contact, which is a user-chosen list and therefore unbounded from this code's point of view.
+    const values = rows.map((r) => ({
+      jobId,
+      workspaceId: scope.workspaceId,
+      contactId: r.contactId,
+      rowIndex: r.rowIndex,
+      outcome: "queued",
+    }));
     return withTenantTx(scope, async (tx) => {
-      await tx
-        .insert(revealJobRows)
-        .values(
-          rows.map((r) => ({
-            jobId,
-            workspaceId: scope.workspaceId,
-            contactId: r.contactId,
-            rowIndex: r.rowIndex,
-            outcome: "queued",
-          })),
-        )
-        .onConflictDoNothing();
+      for (const slice of sliceForBindLimit(values)) {
+        await tx.insert(revealJobRows).values(slice).onConflictDoNothing();
+      }
     });
   },
 

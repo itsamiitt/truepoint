@@ -27,6 +27,28 @@ and cred-gated work waits for sign-off (Security has final say; CI gates each sl
 
 Parallelizable: I2 ∥ I3 after I1; I6 after I2; I7 is infra-gated throughout.
 
+**Build records** — a stage that has been built or planned in detail has its own doc, and nothing here linked
+them until 2026-08-22, so a reader of this table could not tell which stages had one:
+
+| Stage | Doc | State |
+|---|---|---|
+| I3 | [11-I3-Enrichment-Pipeline-Build](./11-I3-Enrichment-Pipeline-Build.md) | built |
+| I5 | [12-I5-Probabilistic-ER-Build](./12-I5-Probabilistic-ER-Build.md) | built, shadow-only, dark behind `ER_SHADOW_ENABLED` |
+| I4 | [13-I4-DB-Ops-Module-Build](./13-I4-DB-Ops-Module-Build.md) | **plan only**, human-gated |
+
+> **Two corrections to the I4 row above, from writing that plan.** (1) "dedup merge/split executor" reads as
+> greenfield; it is not. A tenant-grain merge engine is fully shipped and live, and the Layer-0 executor
+> (`erRepository.confirmMerge`) is built and itested with **no caller** — I4 is wiring, not building, and the
+> real risk is a second merge path landing beside a tested one. (2) The exit gate "merge→split→re-derive"
+> cannot be met as written: `confirmMerge` states in as many words that there is no unmerge, and the Layer-1
+> engine records re-pointed children as **tallies, not row ids**, so no merge either grain performs today is
+> invertible. Whether I4 ships a split, or this exit gate is amended, is a decision recorded in 13 §3a — not
+> one to settle by building.
+>
+> Note that I5's stated entry gate is "I4 (queue)" while I5 has already shipped ahead of it. That is fine —
+> it shipped shadow-only precisely so it could not act without the queue — but the table reads as though the
+> order held.
+
 ## 3. Migration strategy (the load-bearing risk)
 
 - **Dual-write everything new** (evidence, match_links, projection) behind `INGESTION_EVIDENCE_ENABLED` /

@@ -21,12 +21,24 @@ const TOKEN = {
   "--tp-ink-2": "#374151",
   "--tp-ink-3": "#6b7280",
   "--tp-ink-4": "#9ca3af",
+  "--tp-cobalt": "#2563c9",
   "--tp-cobalt-700": "#1e4fa3",
+  "--tp-btn": "#111827",
+  "--tp-on-fill": "#ffffff",
+  "--danger-700": "#b91c1c",
+  "--tp-twilight": "#0c0e1a",
+  "--danger-ink": "#8c5f5f",
   "--tp-surface": "#ffffff",
   "--tp-surface-2": "#f9fafb",
   "--tp-surface-3": "#f4f5f7",
   "--tp-cobalt-50": "#e9f0fc",
   "--nav-hover-fill": "#f3f4f6",
+  /* The dark code panel paints white at measured alphas over --tp-twilight. These are the composited
+     results (alpha·255 + (1−alpha)·channel), asserted here because rgba cannot be — change an alpha in
+     prose.module.css and its blend here must move with it. */
+  "--blend-code-label": "#a3a3a8" /* rgba(255,255,255,.62) over twilight */,
+  "--blend-code-copy": "#dbdbdd" /* rgba(255,255,255,.85) over twilight */,
+  "--blend-code-text": "#ececee" /* rgba(255,255,255,.92) over twilight */,
 } as const;
 
 type Token = keyof typeof TOKEN;
@@ -61,12 +73,28 @@ const USED_PAIRS: readonly { fg: Token; bg: Token; where: string }[] = [
   { fg: "--tp-ink-2", bg: "--tp-surface", where: "prose paragraphs, card bodies" },
   { fg: "--tp-ink-3", bg: "--tp-surface", where: "eyebrows, section notes, changelog dates" },
   { fg: "--tp-ink-3", bg: "--tp-surface-2", where: "footer headings and notes" },
-  { fg: "--tp-ink-2", bg: "--tp-surface-3", where: "code-block language label" },
-  { fg: "--tp-ink", bg: "--tp-surface-3", where: "code samples, inline code, endpoint signature" },
+  { fg: "--tp-ink", bg: "--tp-surface-3", where: "inline code" },
+  { fg: "--tp-ink", bg: "--tp-surface-2", where: "facts-strip base URL, on the tinted bar" },
   { fg: "--tp-ink-2", bg: "--nav-hover-fill", where: "endpoint-index row cells, on hover" },
   { fg: "--tp-ink", bg: "--nav-hover-fill", where: "nav and sidebar links, on hover" },
   { fg: "--tp-cobalt-700", bg: "--tp-surface", where: "links" },
   { fg: "--tp-cobalt-700", bg: "--tp-cobalt-50", where: "current nav item" },
+  { fg: "--tp-on-fill", bg: "--tp-btn", where: "GET method pill" },
+  { fg: "--tp-on-fill", bg: "--tp-cobalt", where: "POST method pill" },
+  { fg: "--tp-ink-2", bg: "--tp-cobalt-50", where: "metered-cost chip" },
+  { fg: "--tp-ink", bg: "--tp-cobalt-50", where: "search result title, on the active row" },
+  {
+    fg: "--tp-ink-2",
+    bg: "--tp-cobalt-50",
+    where: "search result section label, on the active row",
+  },
+  { fg: "--danger-ink", bg: "--tp-surface", where: "required-parameter annotation" },
+  { fg: "--tp-on-fill", bg: "--danger-700", where: "playground error status pill" },
+  { fg: "--blend-code-label", bg: "--tp-twilight", where: "code panel language label" },
+  { fg: "--blend-code-copy", bg: "--tp-twilight", where: "playground idle status pill" },
+  { fg: "--blend-code-label", bg: "--tp-twilight", where: "playground response meta line" },
+  { fg: "--blend-code-copy", bg: "--tp-twilight", where: "code panel copy control" },
+  { fg: "--blend-code-text", bg: "--tp-twilight", where: "code panel sample text" },
 ];
 
 describe("WCAG 2.2 AA contrast for every pair the app paints", () => {
@@ -82,6 +110,9 @@ describe("the math itself", () => {
   test("catches the pairs that actually shipped broken", () => {
     expect(contrast("--tp-ink-3", "--tp-surface-3")).toBeLessThan(AA_NORMAL);
     expect(contrast("--tp-ink-3", "--nav-hover-fill")).toBeLessThan(AA_NORMAL);
+    // Why docs-search.module.css switches the result's section label from ink-3 to ink-2 on the active row:
+    // the muted ink that is fine on white does NOT survive the cobalt tint under it.
+    expect(contrast("--tp-ink-3", "--tp-cobalt-50")).toBeLessThan(AA_NORMAL);
   });
 
   test("black on white is 21:1", () => {
@@ -91,7 +122,10 @@ describe("the math itself", () => {
 
 describe("--tp-ink-4 is never a text colour here", () => {
   // It is the design system's faintest ink — legitimate for placeholders and disabled states elsewhere, but
-  // it fails AA against every surface this app paints (2.9:1 even on pure white), and this app is prose.
+  // it fails AA against every surface this app paints, and this app is prose. **2.54:1 on pure white**, not
+  // the 2.9:1 this comment claimed until 2026-08-22; the real figure is below the 3.0 LARGE-text floor too,
+  // so no text size rescues it. Measured while building apps/web's contrast ratchet, which found 74 places
+  // where this token IS the text colour in the customer app — see apps/web/src/contrast.test.ts.
   function stylesheets(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);

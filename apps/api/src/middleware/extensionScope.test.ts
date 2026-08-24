@@ -35,6 +35,31 @@ describe("extensionRouteAllowed", () => {
     expect(extensionRouteAllowed("GET", "/api/v1/events/stream")).toBe(true);
   });
 
+  it("allows the Profile Intelligence Panel's four routes", () => {
+    // The panel's one composed read. A SIBLING of /contacts/lookup, not a sub-path of it: the rules are
+    // anchored, so this asserts the new grant exists rather than riding the older one.
+    expect(extensionRouteAllowed("POST", "/api/v1/contacts/lookup/intel")).toBe(true);
+    // The no-charge owned-values hydrate (ADR-0042) — how a revealed card re-renders without re-charging.
+    expect(extensionRouteAllowed("GET", "/api/v1/contacts/abc-123/revealed")).toBe(true);
+    // Add-to-list: read the lists, add one contact. Nothing else on that surface (see the denials below).
+    expect(extensionRouteAllowed("GET", "/api/v1/lists")).toBe(true);
+    expect(extensionRouteAllowed("POST", "/api/v1/lists/list-1/members")).toBe(true);
+  });
+
+  it("grants the panel the narrowest lists surface that works", () => {
+    // Everything the panel does NOT need stays denied. Removing a member, enumerating a list's masked
+    // members, creating or deleting a list — none of these are panel actions, and each would widen what an
+    // exfiltrated extension token can reach. Asserted explicitly so a future "just allow /lists/*" is caught.
+    expect(extensionRouteAllowed("DELETE", "/api/v1/lists/list-1/members")).toBe(false);
+    expect(extensionRouteAllowed("GET", "/api/v1/lists/list-1/members")).toBe(false);
+    expect(extensionRouteAllowed("POST", "/api/v1/lists")).toBe(false);
+    expect(extensionRouteAllowed("DELETE", "/api/v1/lists/list-1")).toBe(false);
+    // The web's global profile routes remain out of reach: the panel reads through its own composed route,
+    // whose response shape is the contract where the no-channel-values invariant is written down.
+    expect(extensionRouteAllowed("GET", "/api/v1/search/database/people/some-slug")).toBe(false);
+    expect(extensionRouteAllowed("GET", "/api/v1/search/database/companies/acme.com")).toBe(false);
+  });
+
   it("is method-aware (an allowed path with the wrong verb is denied)", () => {
     // Uses by-linkedin because it is a path the list DOES grant (for GET) — asserting the wrong verb on a
     // path that is denied for every verb would pass without testing method-awareness at all.

@@ -9,10 +9,17 @@ import { CONFIDENCE } from "./confidence.ts";
 import { ERRORS } from "./errors.ts";
 import { PAGINATION } from "./pagination.ts";
 import { QUICKSTART } from "./quickstart.ts";
+import { VERSIONING } from "./versioning.ts";
 
 export { QUICKSTART };
 
-export const GUIDES: readonly Guide[] = [AUTHENTICATION, ERRORS, PAGINATION, CONFIDENCE];
+export const GUIDES: readonly Guide[] = [
+  AUTHENTICATION,
+  ERRORS,
+  PAGINATION,
+  CONFIDENCE,
+  VERSIONING,
+];
 
 export function findGuide(slug: string): Guide | undefined {
   return GUIDES.find((guide) => guide.slug === slug);

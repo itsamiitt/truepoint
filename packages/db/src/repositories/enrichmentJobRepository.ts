@@ -22,6 +22,7 @@ import {
   enrichmentJobRows,
   enrichmentJobs,
 } from "../schema/enrichmentJobs.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { jobVisibility } from "./jobVisibility.ts";
 import { outboxRepository } from "./outboxRepository.ts";
 
@@ -480,6 +481,10 @@ export const enrichmentJobRepository = {
   async createChunks(scope: TenantScope, values: ChunkCreateValues[]): Promise<string[]> {
     if (values.length === 0) return [];
     return withTenantTx(scope, async (tx) => {
+      // batch-insert-bounds-ok: one row per CHUNK BAND, i.e. total/CHUNK_ROWS — a 2M-row job plans 200 of
+      // them, which is nowhere near the bind-parameter ceiling. Deliberately left as ONE statement: the doc
+      // comment above turns on this insert being atomic, so a crashed-then-re-driven job never observes a
+      // partial chunk set and mistake it for "already planned".
       const rows = await tx
         .insert(enrichmentJobChunks)
         .values(values)
@@ -561,7 +566,11 @@ export const enrichmentJobRepository = {
       matchConfidence: matchConfidence == null ? matchConfidence : String(matchConfidence),
     }));
     return withTenantTx(scope, async (tx) => {
-      await tx.insert(enrichmentJobRows).values(values);
+      // Sliced under the bind-parameter ceiling for the same reason as the import ledger (see bindLimit.ts):
+      // a bulk-enrichment chunk is the same order of magnitude as an import band.
+      for (const slice of sliceForBindLimit(values)) {
+        await tx.insert(enrichmentJobRows).values(slice);
+      }
     });
   },
 

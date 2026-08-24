@@ -738,12 +738,18 @@ describe("S-P1 — the COPY spike (Gate A / G09): criteria 2–4 as CI assertion
     // destroys the COPY Writable → the server-side COPY must abort. copyRows rejects (wrapped with the
     // jobId; the underlying reason may be the producer error or the driver's premature-close, either is
     // a correct abort — the load-bearing assertions are the post-conditions below).
-    await expect(
-      db.importStagingRepository.copyRows(
-        jobId,
-        syntheticRows(BAND, wsA, { startAt: BASELINE, abortAt: 25_000 }),
-      ),
-    ).rejects.toThrow(/copyRows failed/);
+    // Captured with `.then` rather than `expect(...).rejects`: the rule CLAUDE.md states and
+    // activitiesPartitioned.itest.ts:233 documents at its own call site. Handing a rejecting DB call to
+    // `.rejects` can leave the promise unsettled on the single pooled connection, and the symptom is a HANG
+    // rather than a failure — this case burned its full 120s timeout and then surfaced as
+    // `write CONNECTION_ENDED`, which reads like a driver fault rather than a test-shape problem.
+    const abortError = await db.importStagingRepository
+      .copyRows(jobId, syntheticRows(BAND, wsA, { startAt: BASELINE, abortAt: 25_000 }))
+      .then(
+        () => "",
+        (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      );
+    expect(abortError).toMatch(/copyRows failed/);
 
     // No wedge: the owner connection keeps serving queries…
     expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);

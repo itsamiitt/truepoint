@@ -20,6 +20,7 @@ import type { Tx } from "../client.ts";
 import { matchLinks, sourceRecords } from "../schema/masterGraph.ts";
 import { projectionOutbox } from "../schema/projectionOutbox.ts";
 import { provenanceEvent } from "../schema/provenanceEvent.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 
 /** One observed payload to append as evidence. `contentHash` is sha256(canonical payload) — the UNIQUE idempotency
  *  key, so re-ingesting an identical payload is a no-op. `rawData` is kept verbatim; `matchKeys` are the extracted
@@ -107,26 +108,29 @@ export const evidenceRepository = {
    */
   async appendProvenanceEvents(tx: Tx, drafts: readonly ProvenanceEventDraft[]): Promise<number> {
     if (drafts.length === 0) return 0;
-    await tx.insert(provenanceEvent).values(
-      drafts.map((d) => ({
-        entityType: d.entityType,
-        entityId: d.entityId,
-        field: d.field,
-        action: d.action,
-        sourceType: d.sourceType,
-        sourceName: d.sourceName ?? null,
-        method: d.method ?? null,
-        contributorRef: d.contributorRef ?? null,
-        lawfulBasis: d.lawfulBasis,
-        payload: d.payload as Record<string, unknown>,
-        // numeric(4,3) round-trips as a string in postgres.js — mirrors matchProbability in linkToCluster.
-        confidence: d.confidence != null ? String(d.confidence) : null,
-        acceptanceState: d.acceptanceState,
-        sourceRecordId: d.sourceRecordId ?? null,
-        scopeRef: d.scopeRef ?? null,
-        observedAt: d.observedAt ?? null,
-      })),
-    );
+    // Sliced for the bind-parameter ceiling: provenance is per FIELD, so one import chunk fans out to tens of
+    // thousands of drafts at ~14 parameters each — far past PostgreSQL's 65,534. See bindLimit.ts.
+    const rows = drafts.map((d) => ({
+      entityType: d.entityType,
+      entityId: d.entityId,
+      field: d.field,
+      action: d.action,
+      sourceType: d.sourceType,
+      sourceName: d.sourceName ?? null,
+      method: d.method ?? null,
+      contributorRef: d.contributorRef ?? null,
+      lawfulBasis: d.lawfulBasis,
+      payload: d.payload as Record<string, unknown>,
+      // numeric(4,3) round-trips as a string in postgres.js — mirrors matchProbability in linkToCluster.
+      confidence: d.confidence != null ? String(d.confidence) : null,
+      acceptanceState: d.acceptanceState,
+      sourceRecordId: d.sourceRecordId ?? null,
+      scopeRef: d.scopeRef ?? null,
+      observedAt: d.observedAt ?? null,
+    }));
+    for (const slice of sliceForBindLimit(rows)) {
+      await tx.insert(provenanceEvent).values(slice);
+    }
     return drafts.length;
   },
 

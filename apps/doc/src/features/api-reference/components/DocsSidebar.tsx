@@ -21,6 +21,10 @@ interface Entry {
 const GUIDE_ENTRIES: readonly Entry[] = [
   { href: "/docs", label: "Quickstart" },
   ...GUIDES.map((guide) => ({ href: `/docs/${guide.slug}`, label: guide.title })),
+  // Neither of these is a Guide: one renders a console and one renders a generated document, so neither has
+  // a content module of blocks to be generated from.
+  { href: "/docs/playground", label: "Playground" },
+  { href: "/docs/machine-reference", label: "Machine reference" },
 ];
 
 const ENDPOINT_ENTRIES: readonly Entry[] = ENDPOINTS.map((endpoint) => ({

@@ -50,7 +50,13 @@ const COLUMNS: Column<AiUsageTenant>[] = [
     cell: (t) =>
       t.failures > 0 ? (
         <span
-          style={{ color: "var(--warning)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
+          // --warning-700, not --warning: this is a NUMBER, and the base tone is 3.19:1 on white — under the
+          // 4.5:1 AA floor for text. The base tone stays correct for fills and icons.
+          style={{
+            color: "var(--warning-700)",
+            fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+          }}
         >
           {fmt(t.failures)}
         </span>

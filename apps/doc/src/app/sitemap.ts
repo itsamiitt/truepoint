@@ -10,7 +10,18 @@ import { GUIDES } from "@/content/guides/index.ts";
 import { SITE_ORIGIN } from "@/content/site.ts";
 import type { MetadataRoute } from "next";
 
-const STATIC_PATHS = ["/", "/pricing", "/datasets", "/docs", "/trust", "/changelog"];
+// `/docs/playground` is listed here rather than derived: it is a rendered console, not a content module,
+// so there is no list for it to fall out of.
+const STATIC_PATHS = [
+  "/",
+  "/pricing",
+  "/datasets",
+  "/docs",
+  "/docs/playground",
+  "/docs/machine-reference",
+  "/trust",
+  "/changelog",
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const paths = [

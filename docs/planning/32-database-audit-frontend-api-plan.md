@@ -97,6 +97,16 @@ itest-pinned. The genuine gaps are:
    `db.transaction` directly for money/lifecycle writes with no `platform_audit_log` row. The
    staff console honors the audited-privileged-access invariant; the worker fleet does not. (§6.4)
 
+   > **Re-counted 2026-08-22: it is now 49 sites across 20 repositories** — up about nine sites and two
+   > repositories since this was written. The finding was recorded and agreed, and then quietly got worse,
+   > which is what a number in a document does when nothing enforces it.
+   > `packages/db/src/ownerConnectionRatchet.test.ts` now pins the count: adding a call site is still allowed,
+   > but it costs a deliberate budget bump with a reason rather than passing unnoticed. Heaviest holders are
+   > `userRepository.ts` (10 — the auth spine, where owner is deliberate; see
+   > [audits/identity-grant-posture.md](./audits/identity-grant-posture.md) §3b) and `importJobRepository.ts`
+   > (8). The ratchet counts without judging: a static scan cannot tell a correct platform-owned write from a
+   > seam that should have been used, so it stops growth rather than claiming all 49 are defects.
+
 ### 1.5 Does the schema support current + planned functionality?
 
 **Yes, with room to spare.** The audited schema supports everything the current frontends do, plus
@@ -436,7 +446,12 @@ authorization client-side.
    the other auth tables. (b) matches the existing pattern; requires rerouting the
    workspace-admin session views through privileged, audited reads. **Flagged for decision** —
    security-skill review required either way.
-3. `instrumentation.ts:26` raw `SELECT 1` → use the existing `pingDb()`.
+3. ~~`instrumentation.ts:26` raw `SELECT 1` → use the existing `pingDb()`.~~ **DONE 2026-08-22.** Filed here
+   as tidiness; it was a live perf defect. The raw query warmed `db.$client`, the OWNER pool, while tenant
+   traffic runs on the APP pool via `withTenantTx` — a separate postgres.js pool with its own lazy connect.
+   So the connection serving customer requests stayed cold and the first user after every restart paid the
+   handshake that file exists to eliminate. `pingDb()` warms both, which is the same blind spot it had
+   already been fixed for on the readiness side.
 
 ---
 

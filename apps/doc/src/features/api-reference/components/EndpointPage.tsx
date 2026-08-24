@@ -1,4 +1,6 @@
-// EndpointPage.tsx — one endpoint, rendered from its typed spec.
+// EndpointPage.tsx — one endpoint, rendered from its typed spec, in the API-documentation design's shape:
+// the method signature above the title, then a prose column (billing, parameters, returns, errors) with the
+// worked request/response samples sticky beside it.
 //
 // Every endpoint page is this component. That is the point of typing the contract (ADR-0048 §D3): parameters,
 // return fields, errors and a worked example are structurally guaranteed to be present on all of them,
@@ -9,9 +11,12 @@ import { AvailabilityBadge } from "@/components/AvailabilityBadge.tsx";
 import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
+import { ACCESS_NOTE } from "@/content/access.ts";
+import { buildSnippets } from "@/content/snippets.ts";
 import type { Endpoint } from "@/content/types.ts";
 import type { ReactNode } from "react";
 import styles from "../api-reference.module.css";
+import { SnippetTabs } from "./SnippetTabs.tsx";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -23,12 +28,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
-  const paramRows = endpoint.params.map((param) => [
-    param.name,
-    param.type,
-    param.required ? "Required" : "Optional",
-    param.description,
-  ]);
   const returnRows = endpoint.returns.map((field) => [
     field.name,
     field.type,
@@ -42,6 +41,26 @@ export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
 
   return (
     <article>
+      <div className={styles.signature}>
+        <span
+          className={`${styles.method} ${
+            endpoint.method === "GET" ? styles.methodGet : styles.methodPost
+          }`}
+        >
+          {endpoint.method}
+        </span>
+        <span className={styles.path}>{endpoint.path}</span>
+        {endpoint.credits === 0 ? (
+          <span className={styles.costFree}>Free</span>
+        ) : (
+          <span className={styles.costMetered}>
+            {endpoint.credits === 1
+              ? "1 credit per match"
+              : `${endpoint.credits} credits per match`}
+          </span>
+        )}
+      </div>
+
       <PageIntro
         eyebrow="API reference"
         title={endpoint.title}
@@ -49,30 +68,44 @@ export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
         badge={<AvailabilityBadge availability={endpoint.availability} />}
       />
 
-      <div className={styles.signature}>
-        <span className={styles.method}>{endpoint.method}</span>
-        <span className={styles.path}>{endpoint.path}</span>
-      </div>
-      <p className={styles.billing}>{endpoint.billing}</p>
+      <div className={styles.split}>
+        <div>
+          <p className={styles.billing} style={{ marginTop: "var(--tp-space-6)" }}>
+            {endpoint.billing}
+          </p>
 
-      <Section title="Parameters">
-        <ReferenceTable headers={["Name", "Type", "", "Description"]} rows={paramRows} />
-      </Section>
+          <Section title={endpoint.method === "GET" ? "Query parameters" : "Body"}>
+            {endpoint.params.map((param) => (
+              <div key={param.name} className={styles.paramCard}>
+                <div className={styles.paramHead}>
+                  <span className={styles.paramName}>{param.name}</span>
+                  <span className={styles.paramType}>{param.type}</span>
+                  <span className={param.required ? styles.paramRequired : styles.paramType}>
+                    {param.required ? "required" : "optional"}
+                  </span>
+                </div>
+                <p className={styles.paramDescription}>{param.description}</p>
+              </div>
+            ))}
+          </Section>
 
-      <Section title="Returns">
-        <ReferenceTable headers={["Field", "Type", "Description"]} rows={returnRows} />
-      </Section>
+          <Section title="Returns">
+            <ReferenceTable headers={["Field", "Type", "Description"]} rows={returnRows} />
+          </Section>
 
-      <Section title="Example">
-        <div className={styles.exampleGrid}>
-          <CodeBlock language="bash" source={endpoint.example.request} />
-          <CodeBlock language="json" source={endpoint.example.response} />
+          <Section title="Errors">
+            <ReferenceTable headers={["Status", "Code", "Meaning"]} rows={errorRows} />
+          </Section>
         </div>
-      </Section>
 
-      <Section title="Errors">
-        <ReferenceTable headers={["Status", "Type", "Meaning"]} rows={errorRows} />
-      </Section>
+        <aside className={styles.aside} aria-label="Worked example">
+          {endpoint.availability === "planned" ? null : (
+            <p className={styles.asideNote}>{ACCESS_NOTE}</p>
+          )}
+          <SnippetTabs snippets={buildSnippets(endpoint)} />
+          <CodeBlock language="Response · 200" source={endpoint.example.response} />
+        </aside>
+      </div>
     </article>
   );
 }

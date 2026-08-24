@@ -124,6 +124,28 @@ const apiKeyLimiter = (): RateLimiterRedis =>
 
 // Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
 // outage (shared helper).
+/**
+ * Is this thrown value a limiter REJECTION (the caller is out of points) rather than an infra failure?
+ *
+ * rate-limiter-flexible signals exhaustion by throwing a RateLimiterRes — a plain object carrying
+ * `msBeforeNext` — and signals a broken store by throwing an ordinary Error. The two must go opposite ways: a
+ * rejection has to throw RateLimitedError, and anything else has to FAIL OPEN so a Redis blip cannot brick
+ * authentication. Getting it backwards is silent in both directions — an outage that locks every user out, or
+ * an exhausted bucket that quietly lets a credential-stuffing run through.
+ *
+ * Exported so the discrimination can be tested without Redis. It is the only part of this module a unit test
+ * can reach; everything else needs a live store.
+ */
+export function isRateLimitRejection(e: unknown): e is { msBeforeNext: number } {
+  return typeof e === "object" && e !== null && "msBeforeNext" in e;
+}
+
+/** Seconds a caller must wait, from the rejection's millisecond budget. Rounded UP: reporting the floor would
+ *  invite a retry that is still inside the window. */
+export function retryAfterSeconds(rejection: { msBeforeNext: number }): number {
+  return Math.ceil(rejection.msBeforeNext / 1000);
+}
+
 async function consume(
   limiter: RateLimiterRedis,
   key: string,
@@ -133,8 +155,8 @@ async function consume(
   try {
     await limiter.consume(key, points);
   } catch (e) {
-    if (e && typeof e === "object" && "msBeforeNext" in e) {
-      throw new RateLimitedError(Math.ceil((e as { msBeforeNext: number }).msBeforeNext / 1000));
+    if (isRateLimitRejection(e)) {
+      throw new RateLimitedError(retryAfterSeconds(e));
     }
     // Infra error (e.g. Redis unavailable) — fail open so an outage can't brick the platform. Behavior
     // unchanged; it is no longer SILENT (audit 32 · C11). Throttled: during an outage this runs per request,
