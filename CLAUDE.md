@@ -115,6 +115,15 @@ news/social feeds. See 04-opportunity-scores.md.
   `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
   directive last; a wrapped comment between them makes it bind to nothing and biome says `suppressions/unused`
   while the rule keeps firing.
+  **`biome check --write` SILENTLY REFUSES the unsafe fixes, and `useTemplate` is one of them.** It prints
+  `× Some errors were emitted while applying fixes.` and changes nothing; only `--write --unsafe` rewrites
+  them. The two that bite here are `lint/style/useTemplate` (a `` `a` + `b` `` concatenation of template
+  literals — very easy to write in a multi-line error message) and `lint/style/noUnusedTemplateLiteral`. This
+  broke three branches at once on 2026-08-24: the safe `--write` was run, its output piped through `tail`, and
+  the SCRIPT's own `ok` line printed underneath was read as the formatter passing. **Never read a format check
+  through `tail` beside other output, and never assume `--write` finished the job** — run
+  `bunx biome check <file>` on its own line afterwards and require `No fixes applied.` Otherwise CI's `lint`
+  step is the only thing that catches it, i.e. after the push.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
