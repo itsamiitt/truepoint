@@ -110,18 +110,14 @@ if (usedButUndefined.length === 0 && definedButUnused.length === 0) {
 const parts = [];
 if (usedButUndefined.length > 0) {
   parts.push(
-    `${usedButUndefined.length} flag(s) the CODE gates on that NO migration defines:\n` +
-      usedButUndefined.map((k) => `  ${k}  (gated in ${used.get(k)})`).join("\n") +
-      `\n\nevaluateFlagForTenant treats an unknown flag as OFF (fail closed), so each of these is permanently
+    `${usedButUndefined.length} flag(s) the CODE gates on that NO migration defines:\n${usedButUndefined.map((k) => `  ${k}  (gated in ${used.get(k)})`).join("\n")}\n\nevaluateFlagForTenant treats an unknown flag as OFF (fail closed), so each of these is permanently
 disabled and cannot be turned on: it will not appear in the admin flag list, and an operator flipping the flag
 they CAN see will observe no change. Seed it in a migration, or fix the key to match the one that exists.`,
   );
 }
 if (definedButUnused.length > 0) {
   parts.push(
-    `${definedButUnused.length} flag(s) DEFINED in a migration that no code gates on:\n` +
-      definedButUnused.map((k) => `  ${k}  (defined in ${defined.get(k)})`).join("\n") +
-      `\n\nEach is a switch in the admin UI that changes nothing. Someone will toggle it, believe a capability
+    `${definedButUnused.length} flag(s) DEFINED in a migration that no code gates on:\n${definedButUnused.map((k) => `  ${k}  (defined in ${defined.get(k)})`).join("\n")}\n\nEach is a switch in the admin UI that changes nothing. Someone will toggle it, believe a capability
 is live, and be wrong. Gate something on it or remove the definition.`,
   );
 }
