@@ -306,9 +306,7 @@ for (const testCase of SANDBOX_CASES) {
     }
     if (!testCase.expect.test(result.output)) {
       failures.push(
-        `${testCase.gate} failed, but its output did not match ${testCase.expect} — so it failed for some\n` +
-          `    OTHER reason, and this case proved nothing about the planted shape.\n` +
-          `    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
+        `${testCase.gate} failed, but its output did not match ${testCase.expect} — so it failed for some\n    OTHER reason, and this case proved nothing about the planted shape.\n    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
       );
       continue;
     }
