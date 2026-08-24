@@ -51,6 +51,16 @@
 > + core's origin router/`linkedinSourceClient` (POST `/api/linkedin/{profile,company}`), the customer
 > account-refresh lane (`account_refresh` queue behind `LINKEDIN_ACCOUNT_REFRESH_ENABLED`), the
 > attributes/headcount read surfaces + prospect-drawer UI, and the admin **data-sources** console.
+> **Third amendment (classification-aware failover):** the chain walk (`walkOriginChain`) now classifies
+> every failure via `core/reliability/sourceErrorClassifier` (the expo proxy's error contract —
+> VALIDATION/REQUEST_ERROR/QUEUE_*/POOL_DEAD/SHUTDOWN/AUTH/… + the LINKEDIN_* capture family), honors
+> Retry-After (seconds AND HTTP-date) as a per-origin in-process cooldown (`sourceLanding/originCooldowns.ts`,
+> clamped by `ENRICH_ORIGIN_COOLDOWN_MAX_MS`), gives 502-class faults one cheap jittered same-origin retry
+> (`ENRICH_ORIGIN_TRANSIENT_RETRIES`), fails over on AUTH/FORBIDDEN instead of stopping the chain, and
+> surfaces the smallest horizon as `unavailable{retryAfterMs}` so `fetchAndLandUrl`, the link-fetch sweep
+> (hinted skip-flag), and `linkedinApiProvider` (→ `rate_limited` into the waterfall + breaker horizon)
+> defer instead of burning attempts. `[CLASSIFICATION] http N retry_after cid` lands in
+> `provider_origins.last_error` for the console.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -119,7 +129,8 @@ packages/                       # side-effect-free libraries, each exported via 
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
                                 #   data-health · scoring · activity · outreach · email · search · ai · home · prospect ·
-                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark) ·
+                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark; + originCooldowns for the failover chain) ·
+                                #   reliability (Retry-After parser · source-error classifier · capped backoff) ·
                                 #   customFields · pipelineStages · savedSearches · webhooks · featureFlags · auth · sales-navigator
   auth/    src/                 # self-built auth primitives (no HTTP): login/mfa/registration/invitations/password(+policy/breach) /
                                 #   sso/switchWorkspace + ipBinding/ipAllowlist + sessionTimeout + revocation + auditEvent + log
@@ -223,11 +234,22 @@ apps/                           # deployable processes (thin transport adapters)
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
+- **core (reliability — shared retry/wait primitives, consumed by enrichment + sourceLanding):** `reliability/` —
+  `retryAfter.ts` (the ONE Retry-After parser: delta-seconds AND HTTP-date, injected clock),
+  `sourceErrorClassifier.ts` (pure verdict table over the expo proxy's error contract — classification +
+  bare-status → permanent(request|origin) | provider_miss | throttled(retryAfterMs) | transient |
+  source_down(cooldownMs)), `backoff.ts` (capped exponential, moved from crm-sync/reliability.ts which
+  re-exports it)
 - **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal/linkedin_api (dark
   until DPA'd keys; linkedin_api's base URL is env-supplied and joins the host allowlist at config time)** VendorSpecs over
-  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap; injectable fetch. Status taxonomy:
+  429 → rate_limited + Retry-After via core's parser; a vendor-DECLARED no-match status
+  (`VendorSpec.noMatchStatuses` — 404 on PDL/Clearbit/Coresignal; never blanket, ZoomInfo/Apollo no-match
+  is a 200 body) → definitive zero-cost miss (answered, no breaker strike, no re-buy); other 4xx/5xx → error) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
-  `provider_configs`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
+  `provider_configs`; the breaker also holds the 429 HORIZON key `enrich:breaker:limited:{p}` — a vendor
+  Retry-After blocks the provider fleet-wide without an error strike, capped by
+  `ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
   `/authenticate` — PKI-signed assertion or username/password — cached and re-minted pre-expiry behind the
   VendorSpec `resolveApiKey` seam; unconfigured ⇒ the same zero-cost `miss` as an absent key)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
@@ -259,7 +281,9 @@ apps/                           # deployable processes (thin transport adapters)
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
   **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
-  (factory w/ Redis deps + throttle deferral) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
+  (factory w/ Redis deps + throttle deferral — jittered UP over the vendor delay, capped at
+  `ENRICH_MAX_DEFERRALS`, PARKED past `ENRICH_DEFER_MAX_DELAY_MS` so a daily-budget 86400s Retry-After
+  never piles up delayed jobs) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
   priority + verification knobs) · **admin:** provider stats block (30d hit/verified-valid/latency/cost per provider)
 
 #### enrichment-jobs — *bulk enrichment job UI* (web; ADR-0039)
@@ -939,10 +963,11 @@ flowchart TD
   (per-subject request budget charged post-verify; failed verifies billed to the IP backstop), `tenancy`,
   `error`, `rateLimit` (the unauthenticated per-IP backstop), `idempotency` (the DB uniques remain the real
   double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
-- **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
+- **`apps/auth`** — `instrumentation` (Sentry init per runtime, then `bootSelfTest` under Node only — Sentry
+  first so a signing self-test failure is reported rather than lost) + `bootSelfTest` + `middleware`; `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
-- **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `prospect`, `companies`,
+- **`apps/web`** — `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `prospect`, `companies`,
   `auth/callback` — the last three are one-release redirect pages from the search-consolidation cutover);
   `components/shell/*`
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
@@ -956,7 +981,7 @@ flowchart TD
   `isUnavailable` 404/501 predicate that tells a dark backend apart from a real failure. Both were private
   per-slice copies (24 and 11 of them) until audit 32 F4; a new slice's data layer should import these
   rather than re-declare them.
-- **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
+- **`apps/admin`** — `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
   Brandmark) + `ImpersonationBanner` + `EntityPicker`/`TenantPicker`/`UserPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
 - **`apps/workers`** — `index.ts` (entry + bounded graceful drain), `register.ts` (composition root + producers +
   `/metrics` collection), `leaderLock.ts` (single-runner election for scheduled ticks), `health` (liveness/readiness w/
@@ -964,6 +989,7 @@ flowchart TD
   `tuning`, `withDeadline`, `metrics`, `outboxRelay` — the leaderless ADR-0027 outbox drainer; see
   `docs/planning/worker-platform/`); queue processors bucketed to their feature (imports/enrichment/scoring/dsar/
   outreach) — see Notes for the undeclared queues. Queue itests in `apps/workers/test/`.
+- **`apps/forge`** — the operator console's app-root files: `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary).
 - **`apps/extension`** (MV3 browser extension, Vite + CRXJS; areas `apps/extension` · `…/background` · `…/content` ·
   `…/ui` · `…/shared` · `…/i18n`) — **`background/`** the service-worker hub (Zod message bus, `ApiClient` over `/api/v1`
   with RFC-9457 + Idempotency-Key, PKCE `AuthModule` with in-memory token, IndexedDB capture queue + alarm-driven
@@ -1008,9 +1034,10 @@ flowchart TD
   @electric-sql/pglite`, because cascade’s dependencies install under `cascade/`. That is the separation
   working, not a broken gate — run its suite with `cd cascade && bun install && bun test`. The monorepo’s
   own CI unit step globs `find packages apps`, so the two never collide there.
-- **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
-  — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
-  constraint, not a placement error.
+- **Framework-root files (5, NOT unassigned):** `apps/{admin,auth,web,forge}/next.config.mjs` +
+  `apps/auth/postcss.config.mjs` — framework-mandated app-root files that cannot live under `src/`. The
+  generator now buckets them into `shared["apps/<app>"]`, so they no longer appear in `unassigned[]`; this
+  note previously claimed they did. A framework constraint either way, never a placement error.
 - **Unmapped repositories (2, in `unassigned[]`):** `outcomeMetricsRepository`,
   `usageEventRepository` — the Phase-1 metering spine. (`provenanceBadgeRepository` and
   `entitlementRepository` were listed here and are no longer unassigned; `masterEducationRepository` never

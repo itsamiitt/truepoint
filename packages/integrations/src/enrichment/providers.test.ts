@@ -105,6 +105,43 @@ describe("enrichment provider contract (recorded fixtures)", () => {
     expect(result.costMicros).toBe(0);
   });
 
+  test("the HTTP-date Retry-After form parses too (the shared core parser)", async () => {
+    const soon = new Date(Date.now() + 60_000).toUTCString();
+    const fetch429: FetchJson = () =>
+      Promise.resolve({ status: 429, json: {}, headers: { "retry-after": soon } });
+    const result = await keyedVendor(fetch429).enrich(REQUEST);
+    expect(result.status).toBe("rate_limited");
+    expect(result.retryAfterMs).toBeGreaterThan(0);
+    expect(result.retryAfterMs).toBeLessThanOrEqual(60_000);
+  });
+
+  test("noMatchStatuses is a per-vendor OPT-IN: declared status → zero-cost miss; undeclared vendors keep 404 as an error", async () => {
+    const pdlShaped = (fetchJson: FetchJson) =>
+      vendorProvider(
+        {
+          name: "pdl",
+          trust: 0.75,
+          costMicrosPerCall: 40_000,
+          url: "https://recorded.fixture/person/enrich",
+          apiKey: "test-key",
+          headers: (key) => ({ "x-api-key": key }),
+          body: () => ({}),
+          extract: () => ({}),
+          noMatchStatuses: [404],
+        },
+        fetchJson,
+      );
+    // Declared: a definitive no-match — answered, zero cost, no breaker strike, no re-buy.
+    const notFound = await pdlShaped(fixtureFetch(404, { error: "no person" })).enrich(REQUEST);
+    expect(notFound.status).toBe("miss");
+    expect(notFound.costMicros).toBe(0);
+    // NOT declared (the Apollo/ZoomInfo shape — their no-match is a 200 body): a 404 is a route/config
+    // failure and must stay a breaker-striking, retryable error — a `miss` row is immutable in the
+    // ledger and would silence the request hash forever.
+    expect((await keyedVendor(fixtureFetch(404, {})).enrich(REQUEST)).status).toBe("error");
+    expect((await pdlShaped(fixtureFetch(403, {})).enrich(REQUEST)).status).toBe("error");
+  });
+
   test("a throwing transport becomes a zero-cost error — an adapter never throws", async () => {
     const boom: FetchJson = () => Promise.reject(new Error("socket hang up"));
     const result = await keyedVendor(boom).enrich(REQUEST);
@@ -367,6 +404,23 @@ describe("linkedin_api adapter contract (recorded fixtures)", () => {
     const err = await linkedinApiProvider(down).enrich(urlReq);
     expect(err.status).toBe("error");
     expect(err.costMicros).toBe(0);
+  });
+
+  test("unavailable WITH a fleet horizon surfaces as rate_limited + retryAfterMs (feeds the breaker horizon and deferral)", async () => {
+    const urlReq = {
+      ...REQUEST,
+      subject: { ...REQUEST.subject, linkedinUrl: "https://www.linkedin.com/in/wgates" },
+    };
+    const throttled = (() =>
+      Promise.resolve({
+        status: "unavailable",
+        retryAfterMs: 42_000,
+        reason: "throttled",
+      } as const)) as typeof fetchLinkedinProfile;
+    const result = await linkedinApiProvider(throttled).enrich(urlReq);
+    expect(result.status).toBe("rate_limited");
+    expect(result.retryAfterMs).toBe(42_000);
+    expect(result.costMicros).toBe(0);
   });
 
   test("a successful capture with NO extractable flat fields is a PAID miss carrying the payload", async () => {

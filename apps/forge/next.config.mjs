@@ -2,6 +2,8 @@
 // its own port (3004 — clear of web 5000, auth 3000, api 3001, admin 3003) and origin. Read-mostly; talks to
 // apps/forge-api over HTTP (never a privileged DB path of its own). transpilePackages: the workspace packages
 // ship TS source. No basePath: standalone host on its own subdomain.
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Edge (Caddy) owns compression — see apps/web/next.config.mjs for the full PA-7 reasoning.
@@ -56,4 +58,21 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// ── Sentry ──────────────────────────────────────────────────────────────────────────────────────────────
+// withSentryConfig wraps the build so server/edge bundles get instrumented and source maps can be uploaded.
+//
+// `tunnelRoute` is deliberately NOT set. It mounts a proxy API route to dodge ad-blockers, and this stack
+// fronts every app with Caddy (and auth runs under basePath "/auth" behind its own middleware matcher) — a
+// new top-level route there is a routing change to reason about, not a free win.
+//
+// Source-map upload is inert until SENTRY_AUTH_TOKEN is present in the build environment. Without it the
+// build still succeeds; production stack traces just stay minified.
+export default withSentryConfig(nextConfig, {
+  org: "truepoint",
+  project: "truepoint",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Upload a wider set of client files so frames resolve to real source rather than chunk offsets.
+  widenClientFileUpload: true,
+  // Keep the build log quiet outside CI.
+  silent: !process.env.CI,
+});

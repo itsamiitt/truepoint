@@ -27,6 +27,9 @@ export const CANONICAL_DOMAINS = [
   "workspaces",
   "import",
   "enrichment",
+  // Shared reliability primitives (packages/core/src/reliability): Retry-After parsing, the data-source
+  // error classifier, capped backoff — consumed by enrichment + sourceLanding, owned by neither.
+  "reliability",
   "sales-navigator",
   "search",
   "reveal",
@@ -197,6 +200,8 @@ export const QUEUE_DOMAIN = {
   "search-sync": "search",
   webhook: "api-public",
   dsar: "compliance",
+  // The DSAR statutory-deadline sweep (audit-sweep wave) — same compliance lane as the dsar queue.
+  dsarDeadlineSweep: "compliance",
   reverification: "data-health",
   reverificationSweep: "data-health",
   dataQualitySnapshotSweep: "data-health",

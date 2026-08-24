@@ -1,5 +1,7 @@
 // next.config.mjs — the auth.truepoint.in app. Transpiles the workspace packages (they ship TS source)
 // and disables the framework header that would leak the stack. Security headers are set in middleware.ts.
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // On Replit all services share one domain. basePath "/auth" puts every auth page and its
@@ -47,4 +49,21 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// ── Sentry ──────────────────────────────────────────────────────────────────────────────────────────────
+// withSentryConfig wraps the build so server/edge bundles get instrumented and source maps can be uploaded.
+//
+// `tunnelRoute` is deliberately NOT set. It mounts a proxy API route to dodge ad-blockers, and this stack
+// fronts every app with Caddy (and auth runs under basePath "/auth" behind its own middleware matcher) — a
+// new top-level route there is a routing change to reason about, not a free win.
+//
+// Source-map upload is inert until SENTRY_AUTH_TOKEN is present in the build environment. Without it the
+// build still succeeds; production stack traces just stay minified.
+export default withSentryConfig(nextConfig, {
+  org: "truepoint",
+  project: "truepoint",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Upload a wider set of client files so frames resolve to real source rather than chunk offsets.
+  widenClientFileUpload: true,
+  // Keep the build log quiet outside CI.
+  silent: !process.env.CI,
+});
