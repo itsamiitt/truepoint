@@ -11,8 +11,15 @@
 // The reverse is the other half: a flag DEFINED in a migration but checked by no code is a switch in the
 // admin UI that gates nothing. Someone toggles it, believes a capability is live, and nothing happens.
 //
-// One direction is clean (every key the code gates on IS defined); the other is not — `provenance_events` and
-// `usage_events` are defined and gated by nothing. See decisions.md #9.
+// One direction is clean (every key the code gates on IS defined). The other reports two keys defined and
+// gated by nothing — but only ONE of them is a defect, and this script cannot tell them apart:
+//   • usage_events    — a real gap. All four emitters gate on the env switch alone, though usage_event rows
+//                       carry tenant and workspace and 0088 calls the flag a per-tenant rollout gate.
+//   • provenance_events — NOT a gap. It gates OVERLAY events (contact|account) and no overlay writer exists
+//                       yet; every provenance_event writer today is Layer-0, which 0088 says rides the env
+//                       half alone. Seeded ahead of its consumer, deliberately.
+// A key with no gate is therefore a QUESTION, not a verdict — which is one more reason this stays an audit
+// rather than a gate. See decisions.md #9.
 //
 // This exists because the check was previously a thing somebody ran by hand, and that hand-run got it WRONG in
 // the permissive direction: it asked only whether each flag key appeared somewhere in the source, and both of
