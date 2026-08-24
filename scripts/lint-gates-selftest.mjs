@@ -84,7 +84,14 @@ const SANDBOX_CASES = [
       // on every run — noise in a check whose whole value is that its output is worth reading.
       execFileSync("git", ["init", "-q"], { cwd: dir });
       execFileSync("git", ["config", "core.autocrlf", "false"], { cwd: dir });
-      writeFileSync(join(dir, "leaked.ts"), 'export const key = "AKIAQQQQQQQQQQQQQQQQ";\n');
+      // ASSEMBLED, never written as a literal. The first version inlined the id, which made THIS file a
+      // tracked file containing an AKIA-shaped string — and lint:secrets flagged it. The gate caught its own
+      // test fixture, which is the gate working correctly. The other way out was a `lint-secrets-ok:`
+      // exemption, and that is the wrong trade for a synthetic value that can simply be built: an exemption
+      // is a hole someone later widens, while concatenation keeps the scanner strict and still hands the gate
+      // under test a string that matches.
+      const fakeAwsKeyId = `AKIA${"Q".repeat(16)}`;
+      writeFileSync(join(dir, "leaked.ts"), `export const key = "${fakeAwsKeyId}";\n`);
       execFileSync("git", ["add", "leaked.ts"], { cwd: dir });
     },
   },
