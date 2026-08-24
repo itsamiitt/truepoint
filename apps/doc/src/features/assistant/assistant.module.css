@@ -1,0 +1,146 @@
+/* assistant.module.css — the floating support assistant.
+ *
+ * A squared, hairline-ruled panel rather than a rounded chat bubble, matching the rest of the portal's flat
+ * surfaces. Every colour is a --tp-* token; the raw numbers are the panel's own dimensions, the 1px rules and
+ * the breakpoint, none of which the token scale covers. */
+
+.dock {
+  position: fixed;
+  right: var(--tp-space-5);
+  bottom: var(--tp-space-5);
+  z-index: var(--tp-z-sticky);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--tp-space-3);
+}
+
+.panel {
+  width: 380px;
+  max-width: calc(100vw - var(--tp-space-8));
+  height: 520px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: var(--tp-shadow-dialog);
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tp-space-3);
+  padding: var(--tp-space-3) var(--tp-space-4);
+  border-bottom: 1px solid var(--tp-hairline);
+  background: var(--tp-surface-2);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.panelSub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--tp-ink-3);
+}
+
+.log {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--tp-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-3);
+}
+
+.rowReader {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rowAssistant {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.bubbleReader,
+.bubbleAssistant {
+  max-width: 86%;
+  padding: var(--tp-space-2) var(--tp-space-3);
+  border-radius: var(--tp-radius-sm);
+}
+
+.bubbleReader {
+  background: var(--tp-btn);
+  color: var(--tp-on-fill);
+}
+
+.bubbleAssistant {
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline);
+  color: var(--tp-ink-2);
+}
+
+.bubbleText {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* Sources under an answer. Listed rather than run into the prose so the attribution is scannable — the
+   point of the panel is that every claim in it has a page behind it. */
+.sources {
+  list-style: none;
+  margin: var(--tp-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.source {
+  font-size: 11.5px;
+  color: var(--tp-cobalt-700);
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tp-space-2);
+  padding: 0 var(--tp-space-4) var(--tp-space-3);
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+  padding: var(--tp-space-3);
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.composerField {
+  flex: 1;
+  min-width: 0;
+}
+
+/* On a phone the panel is the page — full width, and taller, because a 380px box floating over a narrow
+   column reads as an overlay that has half-covered what you were reading. */
+@media (max-width: 640px) {
+  .dock {
+    right: var(--tp-space-3);
+    bottom: var(--tp-space-3);
+    left: var(--tp-space-3);
+  }
+  .panel {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100vh - 110px);
+  }
+}

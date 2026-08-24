@@ -90,6 +90,25 @@ const USED_PAIRS: readonly { fg: Token; bg: Token; where: string }[] = [
   },
   { fg: "--danger-ink", bg: "--tp-surface", where: "required-parameter annotation" },
   { fg: "--tp-on-fill", bg: "--danger-700", where: "playground error status pill" },
+  // The docs rail's current entry takes a quiet fill plus a cobalt edge indicator, so its label and its
+  // method glyph sit on surface-2 rather than on white.
+  { fg: "--tp-ink", bg: "--tp-surface-2", where: "docs rail current entry" },
+  { fg: "--tp-ink-2", bg: "--tp-surface-2", where: "docs rail GET glyph, on the current entry" },
+  {
+    fg: "--tp-cobalt-700",
+    bg: "--tp-surface-2",
+    where: "docs rail POST glyph, on the current entry",
+  },
+  // The support assistant: its own turns sit on a tinted bubble, the reader's on the ink fill.
+  { fg: "--tp-ink", bg: "--tp-surface-2", where: "assistant panel title" },
+  { fg: "--tp-ink-3", bg: "--tp-surface-2", where: "assistant panel subtitle" },
+  { fg: "--tp-ink-2", bg: "--tp-surface-2", where: "assistant answer text" },
+  {
+    fg: "--tp-cobalt-700",
+    bg: "--tp-surface-2",
+    where: "assistant source link, on the answer bubble",
+  },
+  { fg: "--tp-on-fill", bg: "--tp-btn", where: "assistant reader turn, on the ink fill" },
   { fg: "--blend-code-label", bg: "--tp-twilight", where: "code panel language label" },
   { fg: "--blend-code-copy", bg: "--tp-twilight", where: "playground idle status pill" },
   { fg: "--blend-code-label", bg: "--tp-twilight", where: "playground response meta line" },
