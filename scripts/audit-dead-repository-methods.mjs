@@ -139,6 +139,26 @@ const ADJUDICATED = [
       "the durable failure IS recorded — markReauthRequired has callers and is the state that needs surfacing. markError would flip status to a generic 'error' on a transient provider blip, and its CRM sibling documents exactly why that is undesirable. Whether transient failures should be visible at all is an ops question, not a missing call.",
   },
   {
+    match: "providerConfigRepository.listEnabled",
+    verdict:
+      "superseded by the sibling list(), which selects the enabled column and lets callers filter. Enablement is default-true column semantics, so a pre-filtered variant saves nothing a caller does not already have.",
+  },
+  {
+    match: "sessionRepository.findActiveById",
+    verdict:
+      "sessions are never looked up by id. Every path resolves one by findByRefreshTokenHash on the hashed lw_refresh cookie, which is the design: a merely-present cookie must never count as a valid session. A by-id lookup has no caller because it has no legitimate caller.",
+  },
+  {
+    match: "featureFlagRepository.overridesForFlag",
+    verdict:
+      "the shipped admin surfaces read overrides per TENANT (overridesForTenant, overrideFor) or all at once (allOverrides). A per-FLAG view of which tenants override it is not a screen that exists.",
+  },
+  {
+    match: "consentRepository.listForContact",
+    verdict:
+      "no per-contact consent HISTORY surface exists. The DSAR access report deliberately reports a footprint COUNT (assembleAccessReport's consentRecords is a number, from its own query), and contactMergeRepository counts rows the same way. Whether an access report should carry full consent detail is a legal/product question, not a missing call.",
+  },
+  {
     match: "crm*",
     verdict:
       "the CRM connector module is dark behind CRM_SYNC_ENABLED (9 tables). Uncalled methods are the expected state of an unshipped module, not rot.",
