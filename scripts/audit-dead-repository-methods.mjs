@@ -5,6 +5,26 @@
 //
 // Method-level, not module-level, because the repository objects themselves are all imported somewhere — the
 // dark part is always a method hanging off a live object.
+//
+// ── WHAT A FINDING HERE DOES *NOT* MEAN ────────────────────────────────────────────────────────────────────
+// This answers exactly one question: does this SYMBOL have a caller? It cannot answer "is this CAPABILITY
+// missing", and on 2026-08-24 two findings were written up as though it could. Both were wrong, both in the
+// same direction, and both were caught only by asking a second question this script never asks:
+//
+//   WHAT ELSE WRITES THIS TABLE, OR SERVES THIS NEED, UNDER A DIFFERENT NAME?
+//
+//   • `governance.addGlobalSuppression` has no caller — true. It was written up as "staff cannot suppress an
+//     individual address". False: `dsarFanoutRepository.addGlobalSuppression` writes exactly that row under a
+//     different name, and two compliance flows call it daily. The real gap was narrower — no STAFF-initiated
+//     address suppression — and a fix aimed at the wrong claim would have missed it.
+//   • The `provenance_events` tenant flag is read by nothing — true. It was written up as a broken dual gate.
+//     False: it gates OVERLAY events, no overlay writer exists yet, and migration 0088 states that Layer-0
+//     events ride the env half alone. It is seeded AHEAD of its consumer, deliberately.
+//
+// So treat every row below as a LEAD. Before concluding that anything is missing: grep the TABLE, grep the
+// COLUMN, and read the nearest migration's prose — this codebase routinely lands a writer ahead of its caller
+// and says so at the definition. The ADJUDICATED register exists so that judgement, once made, is recorded
+// rather than re-derived.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
