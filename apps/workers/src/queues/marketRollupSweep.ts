@@ -29,9 +29,12 @@ export function makeProcessMarketRollupSweep(redis: IORedis) {
     if (!env.MARKET_ROLLUPS_ENABLED) return;
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
       const started = Date.now();
-      const { rows } = await marketRollupRepository.rebuild(WINDOW_MONTHS);
+      // Destructured to `rowCount` deliberately: `rebuild()` returns a COUNT, and logging it as `{ rows }`
+      // reads like the rows themselves — both to a person skimming a log line and to the import-path PII
+      // tripwire, which flags bare `{ rows }` because that shorthand is how a real leak gets written.
+      const { rows: rowCount } = await marketRollupRepository.rebuild(WINDOW_MONTHS);
       log.info("market rollup sweep: rebuilt", {
-        rows,
+        rowCount,
         months: WINDOW_MONTHS,
         runtimeMs: Date.now() - started,
       });

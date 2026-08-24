@@ -144,6 +144,39 @@ export function resetAccountMetrics(): void {
   accountGauges.clear();
 }
 
+// Compliance family (09-compliance §DSAR, A-01; rendered as `leadwolf_compliance_<name>`): the hourly
+// leader-locked dsarDeadlineSweep overwrites `dsar_overdue` (requests past their 72h SLA and not finished)
+// and `dsar_oldest_overdue_seconds` (the worst one's age past due) each tick — INCLUDING zeroes, so "no
+// breaches" is an observation rather than an absent series. Same PII rule as every family above, and it
+// binds harder here: names are static strings, and the query behind them returns ids and timings only —
+// never the data subject.
+const complianceCounters = new Map<string, number>();
+const complianceGauges = new Map<string, number>();
+
+/** Add to a cumulative compliance counter (rendered as `leadwolf_compliance_<name>`). */
+export function incrementComplianceCounter(name: string, by = 1): void {
+  complianceCounters.set(name, (complianceCounters.get(name) ?? 0) + by);
+}
+
+/** Set a point-in-time compliance gauge (rendered as `leadwolf_compliance_<name>`) — overwritten per tick. */
+export function setComplianceGauge(name: string, value: number): void {
+  complianceGauges.set(name, value);
+}
+
+/** Snapshots for tests. */
+export function complianceCountersSnapshot(): ReadonlyMap<string, number> {
+  return complianceCounters;
+}
+export function complianceGaugesSnapshot(): ReadonlyMap<string, number> {
+  return complianceGauges;
+}
+
+/** Test seam — the compliance maps are module-global, so tests reset between cases. */
+export function resetComplianceMetrics(): void {
+  complianceCounters.clear();
+  complianceGauges.clear();
+}
+
 /** One queue's live depth reading (gathered by register.ts from its producer handles, bounded). */
 export interface QueueDepth {
   queue: string;
@@ -224,6 +257,16 @@ export function renderPromMetrics(input: WorkerMetricsInput): string {
   for (const [name, value] of accountGauges) {
     lines.push(`# TYPE leadwolf_account_${name} gauge`);
     lines.push(`leadwolf_account_${name} ${value}`);
+  }
+
+  // Compliance family (DSAR breach probe, A-01) — same module-global-map rendering.
+  for (const [name, value] of complianceCounters) {
+    lines.push(`# TYPE leadwolf_compliance_${name} counter`);
+    lines.push(`leadwolf_compliance_${name} ${value}`);
+  }
+  for (const [name, value] of complianceGauges) {
+    lines.push(`# TYPE leadwolf_compliance_${name} gauge`);
+    lines.push(`leadwolf_compliance_${name} ${value}`);
   }
 
   return `${lines.join("\n")}\n`;

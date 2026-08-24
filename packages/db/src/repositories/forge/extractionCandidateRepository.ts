@@ -6,6 +6,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import { extractionCandidates } from "../../schema/forge.ts";
+import { sliceForBindLimit } from "../bindLimit.ts";
 
 export interface ExtractionCandidateInsert {
   rawCaptureId: string;
@@ -23,34 +24,40 @@ export async function insertExtractionCandidates(
 ): Promise<{ written: number }> {
   if (rows.length === 0) return { written: 0 };
   const now = new Date();
-  const written = await tx
-    .insert(extractionCandidates)
-    .values(
-      rows.map((r) => ({
-        rawCaptureId: r.rawCaptureId,
-        path: r.path,
-        value: r.value ?? null,
-        confidence: r.confidence.toFixed(3),
-        band: r.band,
-        grounded: r.grounded,
-        extractSchemaVersion: r.extractSchemaVersion ?? null,
-        updatedAt: now,
-      })),
-    )
-    .onConflictDoUpdate({
-      target: [extractionCandidates.rawCaptureId, extractionCandidates.path],
-      set: {
-        value: sql`excluded.value`,
-        confidence: sql`excluded.confidence`,
-        band: sql`excluded.band`,
-        grounded: sql`excluded.grounded`,
-        extractSchemaVersion: sql`excluded.extract_schema_version`,
-        updatedAt: now,
-      },
-    })
-    .returning({ id: extractionCandidates.id });
+  // Sliced for the bind-parameter ceiling (bindLimit.ts): one candidate per extracted PATH per capture, so a
+  // rich capture fans out well past a per-statement limit this code cannot see.
+  const values = rows.map((r) => ({
+    rawCaptureId: r.rawCaptureId,
+    path: r.path,
+    value: r.value ?? null,
+    confidence: r.confidence.toFixed(3),
+    band: r.band,
+    grounded: r.grounded,
+    extractSchemaVersion: r.extractSchemaVersion ?? null,
+    updatedAt: now,
+  }));
 
-  return { written: written.length };
+  let written = 0;
+  for (const slice of sliceForBindLimit(values)) {
+    const inserted = await tx
+      .insert(extractionCandidates)
+      .values(slice)
+      .onConflictDoUpdate({
+        target: [extractionCandidates.rawCaptureId, extractionCandidates.path],
+        set: {
+          value: sql`excluded.value`,
+          confidence: sql`excluded.confidence`,
+          band: sql`excluded.band`,
+          grounded: sql`excluded.grounded`,
+          extractSchemaVersion: sql`excluded.extract_schema_version`,
+          updatedAt: now,
+        },
+      })
+      .returning({ id: extractionCandidates.id });
+    written += inserted.length;
+  }
+
+  return { written };
 }
 
 /** How many candidates a capture already has — the extract-stage idempotency guard (P-01.16): a redelivered job

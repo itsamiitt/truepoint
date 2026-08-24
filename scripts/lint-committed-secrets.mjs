@@ -129,10 +129,14 @@ if (findings.length === 0) {
 }
 
 process.stdout.write(
-  `${findings.length} finding(s) in tracked files:\n\n${findings.join("\n")}\n\n` +
-    "A tracked secret is not fixed by deleting it in a later commit — it stays in history. Rotate the\n" +
-    "credential FIRST, then remove it. A tracked PII file (.csv/.xlsx/.xls) should be deleted and the export\n" +
-    "re-run locally; .gitignore already covers those paths, so its presence means it was force-added.\n" +
-    "If a match is a genuine placeholder, make it obviously fake rather than loosening the pattern.\n",
+  `${findings.length} finding(s) in tracked files:
+
+${findings.join("\n")}
+
+A tracked secret is not fixed by deleting it in a later commit — it stays in history. Rotate the
+credential FIRST, then remove it. A tracked PII file (.csv/.xlsx/.xls) should be deleted and the export
+re-run locally; .gitignore already covers those paths, so its presence means it was force-added.
+If a match is a genuine placeholder, make it obviously fake rather than loosening the pattern.
+`,
 );
 process.exit(1);

@@ -85,12 +85,13 @@ describe("resolveIntel", () => {
       unblock = r;
     });
     const c = ctx();
-    (c.api as unknown as { lookupIntel: (u: string) => Promise<ProfileIntelResponse> }).lookupIntel =
-      async (url: string) => {
-        calls.lookupIntel.push(url);
-        await gate;
-        return INTEL;
-      };
+    (
+      c.api as unknown as { lookupIntel: (u: string) => Promise<ProfileIntelResponse> }
+    ).lookupIntel = async (url: string) => {
+      calls.lookupIntel.push(url);
+      await gate;
+      return INTEL;
+    };
 
     const both = Promise.all([
       resolveIntel(c, "jane-doe", "https://www.linkedin.com/in/jane-doe"),

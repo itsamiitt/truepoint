@@ -156,7 +156,9 @@ export function CompanyTab({
           )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+          <div
+            style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.15 }}
+          >
             {c.name}
           </div>
           <div style={{ fontSize: 12, color: ink2, marginTop: 3 }}>

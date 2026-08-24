@@ -62,12 +62,15 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2245 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2387 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
-> no domain by nature and are expected). **The two unregistered repositories** —
-> `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
-> generator. That is a registration gap, not misplaced code; fixing it is a generator edit, left as a
-> tracked follow-up rather than folded into an unrelated change. (`provenanceBadgeRepository` left this list
+> no domain by nature and are expected). **The two unbucketed repositories** —
+> `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
+> "Notes / unbucketed", not a registration backlog: `usageEventRepository` is written by three domains and
+> read by the entitlement gate, so any single home would be wrong, and `REPO_DOMAIN`'s own rule is that a
+> confidently wrong home is worse than an honest gap. *(This paragraph previously called them a registration
+> gap awaiting a generator edit, contradicting the section that explains why they are left alone. Corrected
+> 2026-08-22 — the reasoned entry is the one that holds.)* (`provenanceBadgeRepository` left this list
 > when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
 > when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
 > never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
@@ -977,11 +980,15 @@ flowchart TD
 - **`apps/doc`** (`@leadwolf/doc`, `doc.truepoint.in`, port 3007; areas `apps/doc/app` · `…/components` ·
   `…/content` · `…/features`) — the **public developer portal**: landing, `/pricing`, `/datasets`,
   `/docs` (quickstart + guides + a generated endpoint reference), `/trust`, `/changelog`. Anonymous and
-  fully prerendered — no session, and its one route handler (`app/llms.txt/route.ts`) is pinned
-  `force-static` so the build never opts into a server runtime. Its substance lives in typed content
+  fully prerendered — no session, and each of its three route handlers (`app/llms.txt/route.ts`,
+  `app/openapi.json/route.ts`, `app/changelog.xml/route.ts`) is pinned `force-static` so the build never
+  opts into a server runtime. Its substance lives in typed content
   modules under `src/content/` (endpoint specs, plan and credit tables, dataset field lists, the trust
   statement) which `src/features/*` render; there is no MDX and no `dangerouslySetInnerHTML` anywhere in the
-  app. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
+  app. **Site search is a fold over those same modules** (`content/searchIndex.ts` → `features/search`),
+  not a service: the app cannot reach `packages/search` (Postgres-backed, and the boundary rule forbids it)
+  and would not want to — a 24-document corpus scans faster in the browser than a round trip, and nothing a
+  prospect types leaves it. **Holds no data path at all** — it may import `@leadwolf/ui` and `@leadwolf/app-shell` (brand lockup)
   and nothing else from `packages/*`, enforced by the `doc-app-holds-no-data-path` dependency-cruiser rule,
   which is what lets it build with **zero environment** while every other Next app needs one. Deliberately
   absent from `APP_ORIGINS`: it has no session, so adding it would widen the CORS/token-audience surface for
@@ -1017,14 +1024,21 @@ flowchart TD
   header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
   (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
   `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
-- **Domain-vocabulary warnings (53):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the feature
-  families added since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
-  `data-sources` (the 0117 origin console),
-  `custom-fields`, `email`, `enrichment-jobs`, `feature-flags`, `import-mapping-templates`, `pipeline-stages`,
-  `provider-configs`, `saved-searches`, `scim`, the `settings-*` family, `staff`, `system-health`, `tags`, `tenants`,
-  `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical list can be
-  reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
-  Left as flagged warnings — the established handling — not papered over.
+- **Domain-vocabulary warnings (0, as of 2026-08-22 — previously 58).** The canonical list had fallen further behind
+  the code than it covered: 58 shipped folders were undeclared, more slugs than the declared list itself held. At that
+  ratio the channel stopped being a drift detector — 58 lines of "undeclared domain" on every run are
+  indistinguishable from none, and the one genuinely new folder tomorrow arrives as warning #59 where nobody looks.
+  All 58 are now declared in `CANONICAL_DOMAINS`, in a separate block below the planning-doc entries so the
+  provenance distinction survives: above the divider is *planned* vocabulary (docs/planning/05 + 11), below it is
+  *shipped* vocabulary. When a planning doc next enumerates modules, that block is the diff it owes.
+  Verified the channel still fires rather than assuming it: a throwaway `packages/core/src/zzProbeDomain/` produced
+  exactly one warning, and removing it returned the count to zero.
+  **One entry is a rename waiting to happen, not a declaration.** `packages/core/src/sourceLanding/` is the only
+  camelCase folder among ~40 in that directory — every sibling is kebab-case, so `source-landing` is the consistent
+  name. It is declared only so it stops drowning the other 57. The rename is 5 files and 11 import specifiers, but one
+  of them is `packages/core/src/prospect/profileIntel.ts`, which is live work on another branch as of 2026-08-22;
+  doing it underneath that session would trade a naming nit for a merge conflict. The generator comment says the same,
+  next to the entry, so whoever picks it up deletes the entry in the same commit.
   *(This entry previously listed `custom-fields`/`customFields`, `feature-flags`/`featureFlags`,
   `saved-searches`/`savedSearches` and `pipeline-stages`/`pipelineStages` as case-variant PAIRS. Checked against the
   JSON: no such pairs exist — every slug appears exactly once. The prose had gone stale against the generator.)*
@@ -1376,4 +1390,110 @@ flowchart TD
   base URL, get a 404 from a route that was never mounted. The access sentence now rides on every callable
   endpoint page, the docs facts strip and the landing status line, and `shippedContract.test.ts` reads the
   deployment template so the copy and the posture cannot drift apart. Recorded as ADR-0048 C7.
+  2026-08-22 refresh (portal search, 3ce92ae1): 2372 → 2376 files — `content/searchIndex.ts` and its test
+  into the existing `shared["apps/doc/content"]` area, `features/search/{index.ts,components/DocsSearch.tsx}`
+  into `shared["apps/doc/features"]`. No new domain and no new area. Unassigned holds at **2**.
+
+  The portal had no search at all, so a reader whose question did not match a nav label had to guess which
+  of four sections held the answer — "why did I get a 429" is Guides/Errors, "which field carries the
+  LinkedIn URL" is a returns table inside one endpoint page. The index is a fold over the same typed
+  constants the pages render from, so an endpoint added to `ENDPOINTS` becomes searchable in the commit
+  that gives it a route; `searchIndex.test.ts` asserts every href resolves to a real page, which is what
+  stops a renamed slug leaving a searchable link pointing at nothing. Note for anyone adding to this app:
+  the corpus is ~37 kB and the masthead lives in the root layout, so it is imported dynamically on first
+  focus rather than statically — a static import puts every guide's prose in the chunk that the landing
+  page loads. The a11y pattern is `aria-activedescendant` rather than roving tabindex, chosen because the
+  playground had just shipped the roving half without a key handler and made its own control unreachable
+  (`scripts/lint-roving-tabindex.mjs` now gates that class repo-wide).
+  2026-08-22 refresh (contrast guards, 256d54a4 + follow-ups): 2376 → 2380 files —
+  `apps/web/src/contrast.test.ts`, `apps/admin/src/contrast.test.ts`,
+  `packages/ui/src/inkFourContrast.test.ts` and `packages/ui/src/primitivesContrast.test.ts`, into the
+  existing `shared["apps/web"]`, `shared["apps/admin"]` and `shared["packages/ui"]` areas. Unassigned holds
+  at **2**.
+
+  2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
+  `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-22 refresh (bind-parameter ceiling, 80ffa065): 2385 → 2387 files —
+  `packages/db/src/repositories/bindLimit.{ts,test.ts}`, into the existing `shared["packages/db"]` area
+  (a util living beside the repositories, not an `<Entity>Repository`, so it is shared-area rather than a
+  domain slice).
+
+  **Read this before writing any multi-row INSERT in `packages/db`.** PostgreSQL addresses bind parameters
+  with a 16-bit count — 65,534 max per statement — and Drizzle emits ONE statement for `.values(array)`,
+  binding a parameter per present key per row. Four batch inserts sent a whole 10,000-row import band as a
+  single statement (`contacts` ~19 params/row = ~190,000; `source_imports` 8; `import_job_rows` 7;
+  `enrichment_job_rows`), so every bulk import of a chunk with more than ~3,400 new contacts threw
+  MAX_PARAMETERS_EXCEEDED. Route batch inserts through `sliceForBindLimit` — it derives the width from the
+  widest row rather than a hardcoded count, because a fixed limit breaks the day a column is added, and it
+  returns the array untouched when the batch already fits.
+
+  Why it survived this long: bulk import is dark behind `BULK_IMPORT_ENABLED`, and the soak suite written to
+  catch it gates on `NIGHTLY_SOAK`, which no workflow set — so it had never executed anywhere.
+  `.github/workflows/nightly.yml` now runs it (outside these roots, so it does not appear in the file count).
+
+  2026-08-22 refresh (rate-limiter discrimination, 1087694e): 2384 → 2385 files —
+  `packages/auth/src/rateLimit.test.ts`, into the existing `shared["packages/auth"]` area.
+
+  Two files now share the name `rateLimit.test.ts` and they cover different layers — worth knowing before
+  concluding either one is redundant. `apps/api/src/middleware/rateLimit.test.ts` (pre-existing) covers WHICH
+  bucket a request is charged to and the `X-Forwarded-For` resolver; the new `packages/auth` one covers the
+  limiter module's rejection-vs-outage discrimination — a limiter rejection must throw, an infra error must
+  fail OPEN, and both mistakes are silent. So "rate limiting was untested" would be wrong; the limiter module
+  was, the middleware that calls it was not. Most of that module still has no coverage and cannot get it here:
+  every limiter needs a live Redis.
+
+  2026-08-22 refresh (re-verification deadline contract, 807bff14): 2383 → 2384 files —
+  `packages/db/test/reverificationDeadline.itest.ts`, in the existing `shared["packages/db"]` area.
+
+  Pins the abort/checkpoint half of `runReverification`. Worth reading before changing that loop: `aborted`
+  is latched immediately AFTER the bounded verify fan-out (not only at the top of the batch loop), which is
+  what keeps the cursor from advancing past rows a killed wave never graded. Reading only the top-of-loop
+  check makes it look like a skip bug; it is not, and a probe said so before the claim was written.
+
+  2026-08-22 refresh (S-09 re-verification cover, 0f7a32a0): 2382 → 2383 files —
+  `packages/db/test/reverification.itest.ts`, into the existing `shared["packages/db"]` area. (Not
+  `features["data-health"].db`, which is where I first assumed it would land and where it reads like it
+  belongs: the bucketing rule keys on the file's own PATH, and `packages/db/test/**` is not a repository, so
+  every itest in that directory is shared-area regardless of the domain it exercises.)
+
+  `runReverification` had no test of any kind, and it is both the S-09 freshness loop and a money-spending
+  one. Two things a future session should know before seeding contacts in an itest, learned the hard way
+  here: `feature_flags`' primary key column is **`key`** (only the OVERRIDE table uses `flag_key`), and
+  `is_revealed = true` alone is REJECTED — `contacts_reveal_by` / `contacts_reveal_at` require
+  `revealed_by_user_id` and `revealed_at` to be non-null exactly when it is. Not covered, deliberately: the
+  deadline/abort + checkpoint-cursor contract, which wants its own file.
+
+  2026-08-22 refresh (title-taxonomy integrity, 091e9e44): 2381 → 2382 files —
+  `packages/core/src/search/titleTaxonomy.test.ts`, into the existing `features["search"].core` slice.
+
+  `titleTaxonomy.ts` is marked "Data only — no logic" and had no test of any kind. The data still has
+  invariants and every way of breaking them is silent: `canonicalizeTitle`'s `buildLookup()` states that
+  "first writer wins on collisions", so two titles sharing a normalized surface form do not error — the
+  earlier one takes the key and the other becomes unreachable through that spelling. Worth knowing before
+  extending the list (its header says the production taxonomy is backfilled from O*NET-SOC/ESCO): compare
+  aliases **normalized**, never raw. `normalizeTitle` expands tokens, so "chief exec" and "chief executive"
+  are different strings and the same key — a raw-duplicate check reports clean over exactly that collision.
+
+  Two guards on the tenancy wall landed together and are worth knowing about before touching
+  `packages/db`. `rlsCoverage.test.ts` no longer reads only `pgTable` — it reads the MIGRATIONS too, so a
+  tenant-keyed table that exists purely as hand-authored SQL must be policied, REVOKE'd, or listed with a
+  reason. And the raw owner handle (`db`, `client.ts:179` — **not** `leadwolf_app`, so RLS does not apply to
+  it) is now counted: audit 32 §9.3-2 recorded ~40 call sites across 18 repositories, and it had drifted to
+  **49 across 20** with nothing enforcing it. Adding one is still allowed and costs a deliberate budget bump.
+
+  apps/doc has had a WCAG contrast guard since its redesign and apps/web, apps/admin and apps/forge have
+  never had one — the three surfaces a paying user is actually in all day. This is the first of the three,
+  and it is a RATCHET rather than a wall because the first run measured something too big to fix as a side
+  effect: `--tp-ink-4` is the TEXT colour in **97** places across apps/web, apps/admin, apps/auth and
+  packages/ui, at 2.54:1 on white — below the AA floor for normal text (4.5) AND for large text (3.0), so no
+  text size rescues it. (First measured as 74: the scan matched only the stylesheet spelling `color:
+  var(--tp-ink-4)` and could not see `color: "var(--tp-ink-4)"`, the inline-JSX form, which is 23 more usages
+  and every one in admin and auth — those two apps had looked clean. The ratchet now matches both and lives in
+  `packages/ui/src/inkFourContrast.test.ts`, beside the token.) The
+  selectors are `.note`, `.footnote`, `.kpiLabel`, `.timelineTime`, `.sectionHint` and friends: informational
+  text, not decoration, though the set does contain genuinely exempt placeholder and icon-glyph cases. The
+  migration is a per-surface design decision rather than a find-and-replace, because ink-3 clears AA on white
+  and surface-2 but fails on surface-3 and nav-hover-fill. Worth knowing before styling anything in this app:
+  reach for `--tp-ink-3`, and if the surface underneath is tinted, check the pair rather than assuming.
 ```

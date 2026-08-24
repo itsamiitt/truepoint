@@ -5,8 +5,8 @@ import { describe, expect, it } from "bun:test";
 import {
   ageDays,
   contactSummary,
-  dateRange,
   datePoint,
+  dateRange,
   initials,
   joined,
   maskEmail,
@@ -31,7 +31,7 @@ describe("initials / monogram", () => {
 });
 
 describe("joined — the empty-string trap", () => {
-  it("returns null (not \"\") when nothing survives, so ?? fallbacks fire", () => {
+  it('returns null (not "") when nothing survives, so ?? fallbacks fire', () => {
     // This is the whole reason the helper exists. `[].filter(Boolean).join(" ")` is "", and
     // `"" ?? fallback` is "" — so the obvious one-liner renders a BLANK line exactly where the
     // "not on record" copy belongs, on records with no name or no location.

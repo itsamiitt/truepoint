@@ -1,0 +1,35 @@
+# Line endings — LF in the repository AND in every working copy, Windows included.
+#
+# WHY THIS EXISTS. `bun run lint` is `biome check .`, and Biome formats to LF. With no .gitattributes, a
+# Windows checkout under the default core.autocrlf=true writes CRLF to disk, so Biome sees 1,582 files that
+# "need to be formatted" — every tracked source file, none of them actually wrong. The gate that CLAUDE.md
+# lists first was therefore unusable locally on Windows while passing in CI (Linux, LF), which is the worst
+# shape a gate can have: green where nobody reads it, meaningless noise where somebody does. Anyone trying to
+# use it either learns to ignore 1,599 errors — and with them the ~17 real findings buried underneath — or
+# reformats 2,500 files and collides with everyone else.
+#
+# Safe to add at any time: `git grep -I --cached -l $'\r'` returns nothing, so no tracked file is stored with
+# CRLF and this renormalises nothing. It changes what git WRITES on checkout, not what it stores. Existing
+# working copies keep their CRLF until the file is next checked out or `git add --renormalize .` is run.
+* text=auto eol=lf
+
+# The one Windows-native script, which is invoked by cmd.exe and keeps the endings that shell expects.
+deploy/windows/run-service.cmd text eol=crlf
+
+# Binary assets: never touched, never diffed as text. `text=auto` detects most of these on content, but
+# saying it outright means a new asset cannot be corrupted by a heuristic that guessed wrong.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+
+# Lockfiles are generated, enormous, and reviewed by `bun run lint:lockfile` rather than by eye.
+bun.lock linguist-generated=true

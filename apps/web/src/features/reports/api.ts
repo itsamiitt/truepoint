@@ -5,7 +5,12 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
-import { type ReportsSummary, reportsSummarySchema } from "@leadwolf/types";
+import {
+  type ReportsSummary,
+  type RevealOutcomes,
+  reportsSummarySchema,
+  revealOutcomesSchema,
+} from "@leadwolf/types";
 import type { MaskedContact } from "@leadwolf/types";
 import type { UsageReveal } from "./types";
 
@@ -117,4 +122,21 @@ export async function fetchReportsSummary(
   const res = await fetchWithAuth(`${API_BASE}/api/v1/reports/summary?${params.toString()}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load reports"));
   return reportsSummarySchema.parse(await res.json());
+}
+
+/**
+ * GET /reports/reveal-outcomes — hit rate + p95 for the workspace.
+ *
+ * Parsed through the shared schema like the summary above, which matters more than usual here: `hitRate` and
+ * `p95ServerMs` are NULLABLE, and the null is meaningful ("nothing attempted yet"), so a lenient cast that
+ * turned them into 0 would report a 0% hit rate on an empty workspace — the exact reading that the roadmap's
+ * kill criterion would act on.
+ */
+export async function fetchRevealOutcomes(range: string): Promise<RevealOutcomes> {
+  const params = new URLSearchParams({ range });
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/reports/reveal-outcomes?${params.toString()}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load reveal outcomes"));
+  return revealOutcomesSchema.parse(await res.json());
 }

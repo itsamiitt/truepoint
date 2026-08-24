@@ -51,6 +51,13 @@
   --danger: #dc2626;
   /* Darker danger tone — destructive-button hover + error text on light surfaces. */
   --danger-700: #b91c1c;
+  /* Text-safe success/warning, added 2026-08-22 for the same reason --danger-700 exists: the base tones are
+     FILL colours and do not clear WCAG AA as text. --success is 3.30:1 on white and --warning 3.19:1, both
+     under the 4.5:1 normal-text floor — fine behind a 3:1 non-text graphic (a status dot, a check icon),
+     wrong for a number or a label. The 700 steps are 5.02:1 on white and ~4.8:1 on --tp-surface-2.
+     RULE: status colour on a FILL or an ICON → --success / --warning. Status colour on TEXT → the -700. */
+  --success-700: #15803d;
+  --warning-700: #b45309;
   /* Soft danger scale — the EXCLUSION/negation surface (the progressive-exclude filter block and its chips).
      Not for destructive actions (that stays --danger): these read as "this is a negative clause", not "danger".
      --danger-ink is the muted rose for supporting copy; it is darkened from the design's #a97a7a so 11px text

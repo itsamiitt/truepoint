@@ -7,10 +7,10 @@
 //
 // Every fetch is a message; the panel holds no token and makes no HTTP call (architecture rule 1).
 import { useCallback, useEffect, useState } from "react";
-import type { ViewedSubject } from "../../shared/linkedinUrl.ts";
 import { onBroadcast, send } from "../../shared/client.ts";
-import type { ErrorClass } from "../../shared/types.ts";
+import type { ViewedSubject } from "../../shared/linkedinUrl.ts";
 import type { IntelPayload } from "../../shared/messages.ts";
+import type { ErrorClass } from "../../shared/types.ts";
 
 /** Which subject the panel is showing, or null when the active tab is not a profile/company page. */
 export function usePanelSubject(): ViewedSubject | null {

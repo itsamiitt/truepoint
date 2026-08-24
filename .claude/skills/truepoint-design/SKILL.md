@@ -281,10 +281,43 @@ no-raw-hex adherence is **manual review** against `Guidelines/TruePoint Brand Ki
 and the live tokens in `packages/ui/src/tokens.css`. (`docs/planning/brand-identity.md`
 is superseded — trust only its header banner, never its legacy body.)
 
-> **Implementation status:** there is no custom design-lint yet — the token / a11y /
-> no-raw-hex / no-raw-element rules below are not automatically checked. They are
-> enforced by code review against the Brand Kit + tokens.css; Biome and
-> dependency-cruiser cover only formatting/lint and import boundaries.
+> **Implementation status (updated 2026-08-22):** two of these rules are now checked, the
+> rest still are not.
+>
+> - **no-raw-hex — CHECKED.** `bun run lint:design-tokens` (`scripts/lint-design-tokens.mjs`,
+>   a CI gate) flags a hex used as a colour value in a `.css` declaration or a `.tsx` style
+>   object. Deliberately narrow: `packages/ui/src/tokens.css`, `var(--token, #fallback)`
+>   (which `apps/extension` needs — a content script runs where tokens.css never loaded),
+>   Next's `themeColor` `<meta>` literal, and hexes inside comments are all excluded.
+>   Escape hatch: `// design-tokens-ok: <reason>`.
+> - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
+>   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
+>   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
+> - **contrast — CHECKED.** Each app asserts the token pairs it paints
+>   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`,
+>   `apps/admin/src/contrast.test.ts`), and `packages/ui/src/primitivesContrast.test.ts` covers
+>   the shared stylesheet by **deriving** its pairs from the CSS — so a new primitive with a bad
+>   pairing fails without anyone maintaining a list. `apps/forge` has no pair test on purpose:
+>   it paints exactly one token (`--tp-ink` on white, 21:1) through DS primitives, so there is
+>   nothing to enumerate yet. What none of them can see: colour-only rules (the background comes
+>   from an ancestor), composited alpha, and inline styles.
+> - **`--success` / `--warning` are FILL tones, not text tones.** 3.30:1 and 3.19:1 on white —
+>   fine behind a status dot or a check icon (WCAG 1.4.11 asks 3:1 of a meaningful graphic),
+>   under the 4.5:1 floor for a number or a label. Use **`--success-700`** / **`--warning-700`**
+>   (added 2026-08-22, 5.02:1) whenever the status colour IS the text, exactly as
+>   `--danger-700` has always been the text-safe half of `--danger`.
+> - **`--tp-ink-4` is NOT a text colour — ratcheted repo-wide.** It is 2.54:1 on white and
+>   worse on every tint, which is below the AA floor for normal text (4.5:1) *and* for large
+>   text (3.0:1) — no text size passes. It remains fine for placeholders, disabled controls
+>   (WCAG 1.4.3 exempts those) and icon glyphs. There are **97** existing text usages across
+>   `apps/web`, `apps/admin`, `apps/auth` and `packages/ui`;
+>   `packages/ui/src/inkFourContrast.test.ts` stops that number growing and must be tightened
+>   as usages come out. **Do not add a new one.** Reach for `--tp-ink-3` — but check the
+>   surface first: ink-3 clears AA on white and `--tp-surface-2` and FAILS on `--tp-surface-3`
+>   and `--nav-hover-fill`.
+> - **no-raw-element, and the rest below — NOT checked.** Still code review against the
+>   Brand Kit + tokens.css. Biome and dependency-cruiser cover only formatting/lint and
+>   import boundaries.
 
 - **No hardcoded hex.** `#2563c9` → `var(--tp-cobalt)`.
 - **No raw `<button>`/`<input>`/`<table>`/`<dialog>`** — use the DS equivalents.

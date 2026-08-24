@@ -75,7 +75,8 @@ news/social feeds. See 04-opportunity-scores.md.
 - **Gates:** `bun run lint` · `bun run typecheck` (runs `typecheck` AND `typecheck:tests` — test files
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
   `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
-  `bun run lint:secrets` · `bun run db:migrate`.
+  `bun run lint:secrets` · `bun run lint:roving-tabindex` · `bun run lint:design-tokens` ·
+  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run db:migrate`.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
@@ -86,6 +87,34 @@ news/social feeds. See 04-opportunity-scores.md.
   `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
   **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
   were listed here but never actually enforced. All of them are steps in the gates job now.
+  **`bun run lint` on a pre-2026-08-22 Windows checkout reports ~1,599 errors, and 1,582 of them are the
+  line endings, not the code.** Biome formats to LF; `core.autocrlf=true` wrote CRLF to disk; every tracked
+  source file therefore "needs to be formatted" while CI (Linux, LF) sees none of it. `.gitattributes` now
+  pins `eol=lf`, so a fresh checkout matches CI — an existing working copy keeps its CRLF until the files
+  are checked out again or `git add --renormalize .` is run. Do NOT "fix" this by reformatting the tree:
+  the content is already correct, and a 2,500-file rewrite collides with every other session. To read the
+  ~17 real findings before renormalising, scope the check (`bunx biome check apps/doc/src`) — a
+  freshly-written LF file passes cleanly, which is how the split was measured.
+  **To see exactly what CI sees, materialise the INDEX (which is LF) and check that:**
+  ```sh
+  rm -rf /tmp/lfview && mkdir -p /tmp/lfview && git archive HEAD | tar -x -C /tmp/lfview
+  cd /tmp/lfview && bunx --bun @biomejs/biome@1.9.4 check .
+  ```
+  Same 2,536 files and the same error count as the runner, with no writes to your working copy. This is the
+  only way to tell the ~20 real findings from the 1,582 line-ending ones — `bunx biome lint .` skips the
+  FORMATTER, so it reports zero while CI fails. Two classes hide there and nothing local will show you them:
+  genuine format drift in a file you edited after its last `--write`, and formatter-adjacent lint rules.
+  **`biome.json` takes no comments** (it validates against its own schema — a `//` key errors, and so does a
+  JSONC comment), so its one non-obvious entry is explained here: the `overrides` block turning `noConsoleLog`
+  off for `scripts/**`, the db seed, the extension packer, and the two logger modules. In those files the
+  console IS the output, not a stray debug line; the rule was 100% false positives there, and a check that is
+  always wrong trains you to skim past its output — which is how a real stray `console.log` ships. It stays a
+  warning everywhere else.
+  **Biome suppression placement, learned twice:** `// biome-ignore lint/x/Rule:` binds to the node the
+  diagnostic is REPORTED on and must be the **last line before it** — a11y rules often report on the
+  `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
+  directive last; a wrapped comment between them makes it bind to nothing and biome says `suppressions/unused`
+  while the rule keeps firing.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders

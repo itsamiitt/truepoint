@@ -22,10 +22,10 @@ import {
   createApiKeyRequestSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+import { mintKey } from "../../lib/apiKeySecret.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type OrgRoleVariables, requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
-import { mintKey } from "../../lib/apiKeySecret.ts";
 
 export const apiKeyRoutes = new Hono<{ Variables: OrgRoleVariables }>();
 

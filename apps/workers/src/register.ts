@@ -155,6 +155,11 @@ import {
 import { DEDUP_DLQ, DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
 import { DSAR_DLQ, DSAR_QUEUE, type DsarJobData, makeProcessDsar } from "./queues/dsar.ts";
 import {
+  DSAR_DEADLINE_SWEEP_QUEUE,
+  type DsarDeadlineSweepJobData,
+  makeProcessDsarDeadlineSweep,
+} from "./queues/dsarDeadlineSweep.ts";
+import {
   ENRICHMENT_DLQ,
   ENRICHMENT_QUEUE,
   type EnrichmentJobData,
@@ -389,6 +394,12 @@ export const sequenceTickQueue = tracedQueue<SequenceTickJobData>(EMAIL_SEQUENCE
 export const retentionSweepQueue = tracedQueue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
   connection,
 });
+// The hourly leader-locked DSAR breach probe (09-compliance §DSAR, A-01): publishes the overdue-request
+// gauges. Read-only — it detects a missed statutory deadline, it does not act on one.
+export const dsarDeadlineSweepQueue = tracedQueue<DsarDeadlineSweepJobData>(
+  DSAR_DEADLINE_SWEEP_QUEUE,
+  { connection },
+);
 // Freshness re-verification (ADR-0025): a per-workspace queue + the leader-locked daily sweep that fans out to it.
 export const reverificationQueue = tracedQueue<ReverificationJobData>(REVERIFICATION_QUEUE, {
   connection,
@@ -496,6 +507,7 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: ER_SWEEP_QUEUE, queue: erSweepQueue },
     { name: EMAIL_SEQUENCE_TICK_QUEUE, queue: sequenceTickQueue },
     { name: RETENTION_SWEEP_QUEUE, queue: retentionSweepQueue },
+    { name: DSAR_DEADLINE_SWEEP_QUEUE, queue: dsarDeadlineSweepQueue },
     { name: REVERIFICATION_SWEEP_QUEUE, queue: reverificationSweepQueue },
     { name: CRM_SYNC_SWEEP_QUEUE, queue: crmSyncSweepQueue },
     { name: CRM_SYNC_PULL_QUEUE, queue: crmPullQueue },
@@ -654,6 +666,13 @@ export async function scheduleRetentionSweep(): Promise<void> {
     "sweep",
     {},
   );
+}
+
+/** Register the hourly DSAR breach probe (09-compliance §DSAR, A-01). Scheduler-id keyed (see
+ *  upsertRepeatable). Hourly rather than daily: against a 72h clock, a daily probe can report a breach up to
+ *  24h after it happened — a quarter of the entire budget spent on detection latency. */
+export async function scheduleDsarDeadlineSweep(): Promise<void> {
+  await upsertRepeatable(dsarDeadlineSweepQueue, "dsar-deadline-sweep", 60 * 60_000, "sweep", {});
 }
 
 /** Register the repeatable OAuth token-refresh sweep (M12 P1). Scheduler-id keyed (see upsertRepeatable). */
@@ -1146,6 +1165,16 @@ export function startWorkers(): Worker[] {
         { connection, ...SWEEP_WORKER_TUNING },
       ),
       RETENTION_SWEEP_QUEUE,
+    ),
+    // The DSAR breach probe consumer (leader-locked hourly). A-01: the 72h SLA is only a promise if missing
+    // it is visible without somebody opening a page.
+    instrument(
+      tracedWorker<DsarDeadlineSweepJobData>(
+        DSAR_DEADLINE_SWEEP_QUEUE,
+        makeProcessDsarDeadlineSweep(connection),
+        { connection, ...SWEEP_WORKER_TUNING },
+      ),
+      DSAR_DEADLINE_SWEEP_QUEUE,
     ),
     // Freshness re-verification per-workspace consumer (ADR-0025): re-grades stale revealed contacts.
     instrument(
@@ -2317,6 +2346,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleRetentionSweep().catch((e) =>
     log.error("failed to schedule the retention sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleDsarDeadlineSweep().catch((e) =>
+    log.error("failed to schedule the dsar deadline sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

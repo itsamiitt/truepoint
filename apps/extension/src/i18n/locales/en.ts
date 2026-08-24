@@ -73,7 +73,8 @@ export const en = {
   "badge.verified": "Verified",
   "badge.unverified": "Unverified",
   "signals.label": "Signals",
-  "signals.footer": "Tap a signal for the field it came from. Nothing is inferred beyond the record.",
+  "signals.footer":
+    "Tap a signal for the field it came from. Nothing is inferred beyond the record.",
   "experience.label": "Experience",
   "experience.count": "{n} positions",
   "experience.untitled": "Title not on record",
@@ -89,7 +90,8 @@ export const en = {
   "company.window.6": "6 mo",
   "company.window.12": "1 yr",
   "company.window.24": "2 yr",
-  "company.read.flatAfterGrowth": "Flat for the last 30 days after {months} months of continuous growth.",
+  "company.read.flatAfterGrowth":
+    "Flat for the last 30 days after {months} months of continuous growth.",
   "company.read.growing": "Growing — up {pct}% over the last year.",
   "company.read.declining": "Shrinking — down {pct}% over the last year.",
   "company.read.steady": "Broadly steady over the last year.",

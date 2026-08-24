@@ -127,7 +127,9 @@ describe("deriveSignals", () => {
     );
 
     const decline = deriveSignals(
-      intel({ company: company([200, 190, 180, 170, 160, 150, 140, 130, 125, 120, 115, 110, 100]) }),
+      intel({
+        company: company([200, 190, 180, 170, 160, 150, 140, 130, 125, 120, 115, 110, 100]),
+      }),
       NOW,
     );
     // A decline is a caution, not a "growth" row with a minus sign.

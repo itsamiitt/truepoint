@@ -144,9 +144,20 @@ export const erRepository = {
   /**
    * Persons whose `block_key` is still NULL — the backfill queue for the populate pass.
    *
-   * The column has been RESERVED and unpopulated since the schema froze; 0106 indexed it, and nothing writes
-   * it yet. Until something does, `findCandidatesByBlockKey` correctly returns nothing for every seed, which
-   * is the safe failure but not a useful one.
+   * STALE COMMENT CORRECTED (2026-08-23): this used to say "nothing writes it yet". Something does.
+   * `erSweep` populates `block_key` inside its own cursor scan — it collects the seeds it passes that have no
+   * key and calls `setBlockKey` for each, reasoning at that call site that "a separate backfill would re-scan
+   * the same table to do strictly less". The populate pass this method was written for was folded into the
+   * sweep, which is why the method has no caller.
+   *
+   * Left in place rather than deleted: it is the natural entry point if the populate is ever separated from
+   * the sweep again — a bulk landing, say, where the sweep's per-tick budget is the wrong shape. What it must
+   * NOT become is a second populate path running beside the sweep's; two writers deriving the same key on
+   * different cadences is how implementations drift apart.
+   *
+   * The populate only runs while `ER_SHADOW_ENABLED` is on — with the flag off the sweep returns immediately,
+   * so the column does stay NULL and `findCandidatesByBlockKey` returns nothing for every seed. That is the
+   * safe failure, and the correct one while probabilistic ER is dark.
    */
   async listPersonsMissingBlockKey(
     tx: Tx,

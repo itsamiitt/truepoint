@@ -11,7 +11,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { type ReportsSource, fetchReportsSource, fetchReportsSummary } from "../api";
+import {
+  type ReportsSource,
+  fetchReportsSource,
+  fetchReportsSummary,
+  fetchRevealOutcomes,
+} from "../api";
 import { reportKeys } from "../keys";
 import {
   creditUsageFromBuckets,
@@ -49,6 +54,19 @@ export function useReports() {
     queryFn: () => fetchReportsSummary(range, member),
   });
   const summary = summaryQuery.data ?? null;
+
+  // Reveal outcomes carry their OWN loading/error rather than joining the page-level pair below. The other
+  // two queries are page-level because every dashboard depends on them; this one feeds a single panel, and a
+  // failure here should not blank the funnel, credits and health dashboards that loaded perfectly well.
+  const outcomesQuery = useQuery({
+    queryKey: reportKeys.outcomes(range),
+    queryFn: () => fetchRevealOutcomes(range),
+  });
+  const outcomesError = outcomesQuery.error
+    ? outcomesQuery.error instanceof Error
+      ? outcomesQuery.error.message
+      : "Failed to load reveal outcomes"
+    : null;
 
   // Either query failing is a page-level failure: the dashboards are meaningless without the counts, and the
   // balance tile without them is a number floating on an empty page.
@@ -111,6 +129,12 @@ export function useReports() {
     funnel,
     health,
     team,
+    outcomes: outcomesQuery.data ?? null,
+    outcomesLoading: outcomesQuery.isPending,
+    outcomesError,
+    reloadOutcomes: () => {
+      void outcomesQuery.refetch();
+    },
     memberOptions,
     range,
     setRange,

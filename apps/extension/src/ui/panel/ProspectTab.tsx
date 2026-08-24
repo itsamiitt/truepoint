@@ -174,9 +174,7 @@ function ContactCard({
               </Badge>
             </div>
           ) : null}
-          {phone ? (
-            <div style={{ ...mono, fontSize: 14, marginTop: 6 }}>{phone}</div>
-          ) : null}
+          {phone ? <div style={{ ...mono, fontSize: 14, marginTop: 6 }}>{phone}</div> : null}
           <div style={{ fontSize: 11, color: ink4, marginTop: 3 }}>{badgeText}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 11, flexWrap: "wrap" }}>
             {email ? (
@@ -357,7 +355,9 @@ export function ProspectTab({
           {initials(name)}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+          <div
+            style={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.15 }}
+          >
             {name ?? t("identity.unknownName")}
           </div>
           {title || company ? (
@@ -390,7 +390,12 @@ export function ProspectTab({
               // Employment rows carry no id of their own (Layer-0 ids never cross the boundary), so the
               // composite of what identifies a stint is the key.
               key={`${e.companyName ?? "?"}-${e.title ?? "?"}-${e.startedOn ?? i}`}
-              style={{ display: "flex", gap: 11, padding: "11px 0", borderBottom: `1px solid ${hairline}` }}
+              style={{
+                display: "flex",
+                gap: 11,
+                padding: "11px 0",
+                borderBottom: `1px solid ${hairline}`,
+              }}
             >
               <div
                 style={{

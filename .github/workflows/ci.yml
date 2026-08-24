@@ -108,6 +108,48 @@ jobs:
       # a rotation plus a history rewrite.
       - name: Committed secrets + PII formats
         run: bun run lint:secrets
+      # A composite ARIA role with tabIndex={-1} takes those options OUT of the tab order, so arrow keys are
+      # the only way to reach them; ship the roving half without a key handler and the control is unreachable
+      # by keyboard (WCAG 2.2 SC 2.1.1). apps/doc's playground shipped exactly that, and neither typecheck,
+      # biome's a11y rules, nor verify.mjs's accessibility-tree assertions saw it — the STRUCTURE was correct
+      # (two radios, right aria-checked) and structure is all they inspect. It took pressing ArrowRight in a
+      # real browser. This is the source-level half of that check, which is the half CI can run.
+      - name: Roving tabindex needs arrow keys
+        run: bun run lint:roving-tabindex
+      # A raw hex is a token that stopped tracking the design system: moving --tp-cobalt moves every surface
+      # using the token and none that froze its value. It also sits outside apps/doc's contrast.test.ts, which
+      # asserts TOKEN pairs, so a hardcoded colour can fail WCAG AA with nothing to notice. truepoint-design
+      # states this rule first and its own note says it is "enforced by code review" — the mechanism that had
+      # already failed for the three checks above it.
+      - name: Design tokens, not raw hex
+        run: bun run lint:design-tokens
+      # Feature slices must not import each other. dependency-cruiser HAS a rule for this and is blind to
+      # every real instance: the cruise runs without a per-app tsconfig, so the `@/*` alias never resolves
+      # (measured: 251 unresolved `@/` imports in apps/web, 0 resolved) and the rule cannot see the edge. It
+      # fires only for relative imports, which is not how this codebase writes them. This checks the alias
+      # text directly, and ratchets apps/web's 9 known imports so they cannot become 10.
+      - name: Cross-feature imports
+        run: bun run lint:cross-feature
+      # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
+      # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
+      # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every
+      # bulk import of a full chunk threw. Dark feature + a soak suite that had never run = nobody noticed.
+      - name: Batch inserts stay under the bind-parameter ceiling
+        run: bun run lint:batch-inserts
+      # Every gate above is a regex over source, and SEVEN of this repo's checks have been caught reporting a
+      # clean `ok` while blind to the exact defect they were written for — a resolver that never resolved, a
+      # lookahead defeated by backtracking, patterns blind to ES6 shorthand, comments counted as code. Each was
+      # found by planting a failure by hand. This step does that on every run: it writes a file that MUST trip
+      # each gate, requires a non-zero exit that names the plant, removes it, and requires green again. A gate
+      # that passes its own plant fails here, by name.
+      # A queue with a producer and no consumer fills Redis and never errors: the enqueue succeeds, the jobs
+      # sit there, and the only symptom is work that silently never happens. Adding a queue is two edits in two
+      # files; this fails the build when the second one is missing. *_DLQ is skipped — a dead-letter queue is a
+      # parking lot by design.
+      - name: Every queue has a consumer
+        run: bun run lint:queue-consumers
+      - name: Each gate can still fail (plant-and-check)
+        run: bun run lint:gates-selftest
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:

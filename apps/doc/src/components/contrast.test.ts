@@ -82,6 +82,12 @@ const USED_PAIRS: readonly { fg: Token; bg: Token; where: string }[] = [
   { fg: "--tp-on-fill", bg: "--tp-btn", where: "GET method pill" },
   { fg: "--tp-on-fill", bg: "--tp-cobalt", where: "POST method pill" },
   { fg: "--tp-ink-2", bg: "--tp-cobalt-50", where: "metered-cost chip" },
+  { fg: "--tp-ink", bg: "--tp-cobalt-50", where: "search result title, on the active row" },
+  {
+    fg: "--tp-ink-2",
+    bg: "--tp-cobalt-50",
+    where: "search result section label, on the active row",
+  },
   { fg: "--danger-ink", bg: "--tp-surface", where: "required-parameter annotation" },
   { fg: "--tp-on-fill", bg: "--danger-700", where: "playground error status pill" },
   { fg: "--blend-code-label", bg: "--tp-twilight", where: "code panel language label" },
@@ -104,6 +110,9 @@ describe("the math itself", () => {
   test("catches the pairs that actually shipped broken", () => {
     expect(contrast("--tp-ink-3", "--tp-surface-3")).toBeLessThan(AA_NORMAL);
     expect(contrast("--tp-ink-3", "--nav-hover-fill")).toBeLessThan(AA_NORMAL);
+    // Why docs-search.module.css switches the result's section label from ink-3 to ink-2 on the active row:
+    // the muted ink that is fine on white does NOT survive the cobalt tint under it.
+    expect(contrast("--tp-ink-3", "--tp-cobalt-50")).toBeLessThan(AA_NORMAL);
   });
 
   test("black on white is 21:1", () => {
@@ -113,7 +122,10 @@ describe("the math itself", () => {
 
 describe("--tp-ink-4 is never a text colour here", () => {
   // It is the design system's faintest ink — legitimate for placeholders and disabled states elsewhere, but
-  // it fails AA against every surface this app paints (2.9:1 even on pure white), and this app is prose.
+  // it fails AA against every surface this app paints, and this app is prose. **2.54:1 on pure white**, not
+  // the 2.9:1 this comment claimed until 2026-08-22; the real figure is below the 3.0 LARGE-text floor too,
+  // so no text size rescues it. Measured while building apps/web's contrast ratchet, which found 74 places
+  // where this token IS the text colour in the customer app — see apps/web/src/contrast.test.ts.
   function stylesheets(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);

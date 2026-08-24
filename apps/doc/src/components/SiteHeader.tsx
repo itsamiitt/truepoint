@@ -9,6 +9,7 @@
 // (truepoint-design: no meaning by colour alone).
 
 import { API_VERSION_STAMP, PRIMARY_NAV } from "@/content/site.ts";
+import { DocsSearch } from "@/features/search/index.ts";
 import { Logo } from "@leadwolf/app-shell";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +30,7 @@ export function SiteHeader() {
         </Link>
         <span className={styles.headerDivider} aria-hidden />
         <span className={styles.brandSuffix}>Developer Platform</span>
+        <DocsSearch />
         <nav className={styles.nav} aria-label="Primary">
           {PRIMARY_NAV.map((link) => (
             <Link

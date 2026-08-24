@@ -8,7 +8,7 @@
 // caller fires this without awaiting it, so it also never delays the listen. Idempotent: lazy singletons in
 // @leadwolf/db and @leadwolf/auth mean a second call is cheap. Redis is skipped (local container, negligible).
 import { log, verifyAccessToken } from "@leadwolf/auth";
-import { db } from "@leadwolf/db";
+import { pingDb } from "@leadwolf/db";
 
 // A STRUCTURALLY-VALID but unsigned throwaway JWT (header.payload.signature, all base64url). It must parse as
 // a JWS for jose to reach the JWKS lookup at all — a non-JWT string fails at JWS parsing FIRST and never
@@ -18,12 +18,23 @@ import { db } from "@leadwolf/db";
 const WARMUP_JWT =
   "eyJhbGciOiJFZERTQSIsImtpZCI6Indhcm11cCIsInR5cCI6IkpXVCJ9.eyJ3YXJtdXAiOnRydWV9.AA";
 
-/** Fill the postgres.js pool with a scope-free `SELECT 1` — no RLS/tenant context needed (03 §9): we go
- * through the base client (`db.$client`, the public Drizzle accessor) so no GUC/role is set. */
+/**
+ * Fill the postgres.js pools with a scope-free `SELECT 1` — no RLS/tenant context needed (03 §9).
+ *
+ * Uses `pingDb()` rather than a raw query on `db.$client`, and the reason is not tidiness (audit 32 §6.4-3
+ * asked for the helper; this is why it matters). `db` is the OWNER pool. Tenant traffic runs on the APP pool
+ * via `withTenantTx`, which is a completely separate postgres.js pool with its own lazy connect — so warming
+ * only `db` left the pool that actually serves customer requests cold, and the first real user after every
+ * restart still paid the TCP+TLS handshake this file exists to eliminate (perf root cause #8).
+ *
+ * `pingDb` already learned this lesson on the readiness side: its own comment records that probing only the
+ * owner pool "became a blind spot rather than a check" once the tenant pool was split out. The warmup had the
+ * same blind spot for the same reason. It pings both in parallel, so this costs no extra boot latency, and it
+ * stays unscoped — the question is "is the database reachable", not "may this caller read anything".
+ */
 async function warmDbPool(): Promise<void> {
   try {
-    // db.$client is the underlying postgres.js tagged-template client; this opens + caches a pooled socket.
-    await db.$client`SELECT 1`;
+    await pingDb();
     log.info("api.boot.warmup.db_ok");
   } catch (err) {
     log.warn("api.boot.warmup.db_failed", {

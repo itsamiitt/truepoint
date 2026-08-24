@@ -181,7 +181,7 @@
 
 .cta {
   background: var(--tp-cobalt);
-  color: #fff;
+  color: var(--tp-on-fill);
   border: 1px solid var(--tp-cobalt);
 }
 
