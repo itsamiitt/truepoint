@@ -585,26 +585,35 @@ pass silently if it falls — they demand the budget be tightened instead.
    gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
    repository-call-site audit — there is nowhere correct to call them from yet.
 
-8. **Global suppression has TWO writers, and the live one is the narrower.** (2026-08-24,
-   `packages/core/src/email/governance.ts` vs `apps/api/src/features/admin/compliance.ts:273`.) Found by
-   auditing `packages/core` for exported functions nothing references.
-   - **Live path:** `POST /admin/compliance/suppression` inlines `suppressionRepository.insert` with
+8. **Global suppression has THREE writers, and the STAFF one is the narrowest.** (2026-08-24.) Found by
+   auditing `packages/core` for exported functions nothing references. An earlier version of this entry said
+   "two writers" and implied address-level global suppression did not exist; both were wrong, and the
+   corrected picture is below.
+   - **Live, staff-initiated:** `POST /admin/compliance/suppression`
+     (`apps/api/src/features/admin/compliance.ts:273`) inlines `suppressionRepository.insert` with
      `matchType: "domain"` hardcoded, and its contract (`addGlobalSuppressionSchema`) rejects `@` outright.
-     Platform staff can therefore suppress a whole DOMAIN but not an individual ADDRESS — blocking one person
-     means blocking everyone at their employer.
-   - **Unused path:** `addGlobalSuppression` in core accepts exactly one of `{email, domain}`, and for an
-     email stores a **blind index** rather than the address — the PII-minimising form. It has no caller.
-   - **Two further asymmetries** that matter beyond the feature gap: the same logical operation writes two
-     different audit actions (`suppress.add.global` vs `email.global_suppression.add`), so the platform audit
-     log cannot be queried for "global suppressions" without knowing both strings; and the default reason
-     differs (`null` vs `global_dnc`).
-   - **Why it matters structurally:** two writers to a compliance-critical table is the drift hazard this
-     codebase names elsewhere in its own words (migration 0136 refused to duplicate the title taxonomy in SQL
-     for exactly this reason). A future fix to one path silently misses the other.
-   **Decide:** (a) wire the route to `addGlobalSuppression` and widen the contract to accept an email — one
-   writer, one audit action, address-level suppression becomes possible; or (b) confirm domain-only is the
-   intended product policy, delete the unused core function, and adopt its audit action name. Not changed
-   unilaterally: suppression is a compliance control and CLAUDE.md rule 3 applies.
+     Audit action `suppress.add.global`.
+   - **Live, automated:** `dsarFanoutRepository.addGlobalSuppression(tx, emailBlindIndex, reason)`
+     (`packages/db/src/repositories/dsarRepository.ts:236`) writes `scope='global', match_type='email'` with a
+     BLIND INDEX, and is called on consent withdrawal (`consent.ts:72`, reason `consent_withdrawn`) and on
+     DSAR delete (`deleteFanout.ts:112`, reason `dsar:<id>`). Audit action `suppression.add`.
+   - **Unused:** `addGlobalSuppression` in `packages/core/src/email/governance.ts` accepts exactly one of
+     `{email, domain}`, blind-indexes the email, and audits as `email.global_suppression.add`. No caller.
+   - **So the capability is NOT missing** — an individual address IS globally suppressible, and two compliance
+     flows do it every day. What is missing is a STAFF-INITIATED address-level suppression: the only surface a
+     human operator has is domain-only, so a staff member asked to suppress one person must either block their
+     whole employer or wait for a consent/DSAR event to do it.
+   - **Three audit actions for one logical operation** (`suppress.add.global`, `suppression.add`,
+     `email.global_suppression.add`), so the platform audit log cannot be queried for "global suppressions"
+     without knowing all three strings. That is the sharper half of this entry.
+   - **Why it matters structurally:** three code paths writing a compliance-critical table is the drift hazard
+     this codebase names in its own words (migration 0136 refused to duplicate the title taxonomy in SQL for
+     exactly this reason). A future fix to one path silently misses the others.
+   **Decide:** (a) point the admin route at the core verb and widen its contract to accept an email — staff
+   gain address-level suppression, and two of the three paths collapse into one audit action; or (b) confirm
+   domain-only is the intended STAFF policy, delete the unused core function, and reconcile the audit action
+   names so the log is queryable. Not changed unilaterally: suppression is a compliance control and CLAUDE.md
+   rule 3 applies.
 9. **`usage_events` has no tenant half in the code.** (2026-08-24,
    `scripts/audit-feature-flag-coherence.mjs`.) Migration 0088 seeds `provenance_events` and `usage_events`,
    describes them as "the per-tenant halves of three DUAL GATES", and
