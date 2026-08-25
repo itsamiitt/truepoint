@@ -25,6 +25,9 @@ function app(over: { overview?: () => Promise<unknown> } = {}) {
       parsers: async () => ({}),
       syncStatus: async () => ({}),
       captures: async () => ({ captures: [] }),
+      // Added to BffReaders for the extension-intelligence-loop; these doubles predate it. Nothing caught the
+      // drift because this file was never type-checked — see tsconfig.typecheck.json, added with this fix.
+      sourceFetches: async () => ({}),
       identity: async () => ({ email: null }),
     },
   };
