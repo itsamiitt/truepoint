@@ -51,9 +51,11 @@ on:
     # If you depend on these numbers (TP-2/TP-6 gate the 1M→2M published-ceiling raise), CHECK that a run
     # exists rather than assuming one did. A dispatch is always available:
     #     gh workflow run nightly.yml --ref main
-    # Closing it properly needs a monitor on a RELIABLE trigger — a push-triggered CI step reading this
-    # workflow's last-run age and complaining past ~48h. That needs `actions: read` in ci.yml and is a scope
-    # decision, not a drive-by edit.
+    # CLOSED 2026-08-25 by the "Nightly soak still firing?" step in ci.yml: push and pull_request fire
+    # reliably, so the reliable trigger watches the unreliable one. It reads this workflow's last-run age and
+    # WARNS past 48h — never fails, because a dropped run is GitHub's scheduling rather than a defect in the
+    # diff being tested, and a check that blames the wrong person gets deleted. It cost one permission —
+    # "actions: read" on ci.yml: read-only metadata about this repo's own runs, no writes, no secrets.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:

@@ -16,6 +16,11 @@ on:
 
 permissions:
   contents: read
+  # actions: read — for the "nightly still firing?" step in the gates job. Read-only metadata about THIS
+  # repository's own workflow runs: no write of any kind, no secrets, no other repository. It is here because
+  # a scheduled workflow cannot detect its own absence, and the triggers that fire RELIABLY are push and
+  # pull_request — so the reliable trigger has to watch the unreliable one.
+  actions: read
 
 # Supersede in-flight runs for the same ref.
 concurrency:
@@ -150,6 +155,37 @@ jobs:
         run: bun run lint:queue-consumers
       - name: Each gate can still fail (plant-and-check)
         run: bun run lint:gates-selftest
+      # Is the nightly still firing? A scheduled workflow cannot detect its own absence: if GitHub delays or
+      # DROPS a run — which it does under load, with no guarantee and no notification — the soak simply stops
+      # happening, and a nightly that silently stopped looks exactly like one that keeps passing. Observed
+      # 2026-08-25: state `active`, 03:17 UTC passed, no run 24 minutes later, nothing reported.
+      #
+      # WARNS, never fails. A dropped run is GitHub's scheduling, not a defect in the diff being tested, and
+      # turning every push red for it would get this step deleted within a week — the fate of any check that
+      # blames the wrong person. The annotation is loud enough to notice on a PR and harmless enough to
+      # ignore when a lapse is known.
+      #
+      # Fail-open on the API call itself for the same reason: a fork PR whose token cannot read Actions
+      # metadata must not turn red over a monitoring nicety.
+      - name: Nightly soak still firing?
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          STALE_HOURS=48
+          last="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/runs?per_page=1" \
+                    --jq '.workflow_runs[0].created_at // empty' 2>/dev/null || true)"
+          if [ -z "$last" ]; then
+            echo "::warning::No nightly run found at all. If the soak matters (TP-2/TP-6 gate the 1M→2M ceiling raise), dispatch one: gh workflow run nightly.yml --ref main"
+            exit 0
+          fi
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          echo "last nightly run: $last (${age_h}h ago)"
+          if [ "$age_h" -gt "$STALE_HOURS" ]; then
+            echo "::warning::The nightly soak has not run in ${age_h}h (>${STALE_HOURS}h). GitHub may have dropped the schedule — dispatch one: gh workflow run nightly.yml --ref main"
+          fi
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
