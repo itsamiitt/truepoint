@@ -273,9 +273,13 @@ jobs:
         run: |
           set -uo pipefail
           mapfile -t files < <(find packages apps -name '*.test.ts' -o -name '*.test.tsx' | sort)
+          # Zero is a BROKEN GLOB, not an empty repo: there are 320 of these files. A rename, a moved
+          # directory or a changed extension would otherwise pass a build that ran no tests at all — which is
+          # precisely what the nightly's own confirm step treats as an error, and CI should not disagree with
+          # it about that. (One line: a `::error::` annotation cannot span newlines.)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No *.test.ts found — nothing to run."
-            exit 0
+            echo "::error::No *.test.ts found — this repo has 320, so the glob broke. Refusing to report green on a build that ran no tests."
+            exit 1
           fi
           printf 'Found %d unit test file(s):\n' "${#files[@]}"
           status=0
@@ -349,8 +353,15 @@ jobs:
           for i in "${!all[@]}"; do
             if [ $((i % 4)) -eq ${{ matrix.shard }} ]; then files+=("${all[$i]}"); fi
           done
+          # The TOTAL, checked before sharding. A shard legitimately drawing nothing is possible only when the
+          # whole set is smaller than the shard count; with 131 files, an empty total means the glob broke and
+          # every shard would then pass green having run nothing.
+          if [ "${#all[@]}" -eq 0 ]; then
+            echo "::error::No *.itest.ts found at all — this repo has 131, so the glob broke. All four shards would otherwise report green on an empty set."
+            exit 1
+          fi
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No *.itest.ts found — nothing to run."
+            echo "Shard ${{ matrix.shard }}/4 drew no files from ${#all[@]} — fewer files than shards."
             exit 0
           fi
           printf 'Shard ${{ matrix.shard }}/4 — %d of %d integration test file(s):\n' "${#files[@]}" "${#all[@]}"
