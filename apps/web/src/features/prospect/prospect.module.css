@@ -60,6 +60,26 @@
   font-weight: 600;
   color: var(--tp-ink-2);
 }
+/* Groups a facet's label with its scope badge so the pair stays together when the head row justifies its
+   ends (the exclude toggle sits at the far end). */
+.facetLabelRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* "Workspace only" — this control cannot be answered by the platform database. Quiet by design: it is a
+   scope note, not a warning, and it sits on controls the user is expected to use. */
+.scopeBadge {
+  flex: 0 0 auto;
+  font-size: var(--tp-text-micro);
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-3);
+  border-radius: var(--tp-radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
 .chipWrap {
   display: flex;
   flex-wrap: wrap;

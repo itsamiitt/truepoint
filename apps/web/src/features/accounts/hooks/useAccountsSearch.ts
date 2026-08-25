@@ -9,7 +9,7 @@
 // state of its own beyond the derived database query.
 "use client";
 
-import { useAccountSearch } from "@/features/prospect/entries/accounts";
+import { accountWorkspaceOnlyFields, useAccountSearch } from "@/features/prospect/entries/accounts";
 import type { AccountQuery, DatabaseCompanyQuery, MaskedAccount } from "@leadwolf/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -37,6 +37,9 @@ export interface AccountsSearch {
   databaseCapped: boolean;
   /** True when the global half is switched off server-side (the gate), as opposed to failing. */
   databaseDisabled: boolean;
+  /** The active workspace-only filter fields that caused the database half to be skipped (empty when it
+   *  ran). The pane renders these as an explicit notice — the global half used to vanish in silence. */
+  databaseDroppedFields: string[];
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -56,11 +59,14 @@ export function useAccountsSearch(options: UseAccountsSearchOptions = {}): Accou
   const excludeOwned = options.excludeOwned ?? false;
   const owned = useAccountSearch();
 
-  // Skipped entirely when the query is inherently workspace-only (ICP score, technology, funding…).
-  const databaseQuery: DatabaseCompanyQuery | null = useMemo(
-    () => toDatabaseCompanyQuery(owned.query, PAGE_SIZE),
+  // Skipped entirely when the query is inherently workspace-only (ICP score, technology, funding…) — and
+  // the fields responsible come back with it, so the pane can say the global half was skipped instead of it
+  // silently vanishing.
+  const narrowing = useMemo(
+    () => toDatabaseCompanyQuery(owned.query, PAGE_SIZE, accountWorkspaceOnlyFields(owned.query)),
     [owned.query],
   );
+  const databaseQuery: DatabaseCompanyQuery | null = narrowing.query;
 
   const databaseSearch = useQuery({
     // excludeOwned is part of the KEY, not just the body: it changes which rows come back, so sharing a
@@ -107,6 +113,7 @@ export function useAccountsSearch(options: UseAccountsSearchOptions = {}): Accou
     databaseTotal: databaseCountQuery.data?.total,
     databaseCapped: databaseCountQuery.data?.capped ?? false,
     databaseDisabled: isCompanyDatabaseDisabled(databaseSearch.error),
+    databaseDroppedFields: narrowing.droppedFields,
     loading: owned.loading,
     // Only the OWNED half's failure is surfaced as an error. The global half contributing nothing is a
     // degraded result, not a broken screen — the same posture the People tab takes.

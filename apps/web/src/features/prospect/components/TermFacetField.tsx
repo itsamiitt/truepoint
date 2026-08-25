@@ -24,6 +24,7 @@ export function TermFacetField({
   onRemove,
   renderPicker,
   excludeNoun,
+  scopeNote,
 }: {
   label: string;
   /** Every applied condition on this facet, both directions (from `termConditions`). */
@@ -33,6 +34,8 @@ export function TermFacetField({
   renderPicker: (op: TermOp, autoFocus: boolean) => ReactNode;
   /** What gets dropped by an exclusion, for the block's explanatory note — "Contacts" or "Accounts". */
   excludeNoun: string;
+  /** Optional mark beside the label — the "Workspace only" scope badge. */
+  scopeNote?: ReactNode;
 }) {
   const blockId = useId();
   const included = conditions.filter((c) => c.op === "include");
@@ -55,7 +58,10 @@ export function TermFacetField({
   return (
     <div className={styles.facet}>
       <div className={styles.facetHead}>
-        <span className={styles.facetLabel}>{label}</span>
+        <span className={styles.facetLabelRow}>
+          <span className={styles.facetLabel}>{label}</span>
+          {scopeNote}
+        </span>
         {/* Stays a raw <button>: this is a DISCLOSURE, not an action button. Its expanded state is a
             danger-tinted treatment driven by `[aria-expanded="true"]` that no TpButton variant produces,
             and `tp-ui-btn`'s own height/padding/font-size would fight the module class. */}

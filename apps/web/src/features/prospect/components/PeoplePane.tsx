@@ -18,6 +18,7 @@
 
 import {
   AppliedFilterChips,
+  ScopeNotice,
   SearchDrawer,
   SearchDrawerOpener,
   type SearchShell,
@@ -41,7 +42,7 @@ import dynamic from "next/dynamic";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
-import { activeChips, clearAllFilters } from "../filterGroups";
+import { activeChips, clearAllFilters, facetLabel } from "../filterGroups";
 import {
   type BulkSelectionStore,
   useBulkSelection,
@@ -98,6 +99,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     hits,
     databaseCount,
     databaseHasMore,
+    databaseDroppedFields,
     loading,
     error,
     hasMore,
@@ -281,6 +283,12 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           query={query}
           onChange={setQuery}
           onClearAll={() => setQuery(clearAllFilters(query))}
+        />
+
+        {/* Only when workspace-only filters are actually suppressing the database half. */}
+        <ScopeNotice
+          fields={shell.workspace.includeDatabase ? databaseDroppedFields : []}
+          labelFor={facetLabel}
         />
 
         {

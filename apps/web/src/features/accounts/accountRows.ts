@@ -22,14 +22,9 @@ export type AccountRow = MaskedAccount & {
   databaseDomain?: string;
 };
 
-/** Account term fields the global graph can answer, mapped 1:1 by name. */
-const SHARED_TERM_FIELDS = new Set(["industry", "hq_country", "hq_city", "employee_band"]);
-/** Account range fields with a global equivalent. `revenue_range` is a workspace display string with no
- *  structured twin, so it is deliberately absent. */
-const SHARED_RANGE_FIELDS: Record<
-  string,
-  DatabaseCompanyQuery["filters"][number] extends never ? never : string
-> = {
+/** Account range fields with a global equivalent, by name. `revenue_range` is a workspace display string
+ *  with no structured twin, so it is deliberately absent — and is declared workspace-only in the registry. */
+const SHARED_RANGE_FIELDS: Record<string, "employee_count" | "founded_year"> = {
   employee_count: "employee_count",
   founded_year: "founded_year",
 };
@@ -45,19 +40,36 @@ const SORT_MAP: Record<AccountQuery["sort"], DatabaseCompanyQuery["sort"]> = {
 };
 
 /**
- * Reduce a workspace account query to a global company query — or null when the query is inherently
- * workspace-only. Null is the honest answer: silently dropping "ICP score ≥ 80" would show companies the
- * user explicitly did not ask for.
+ * Reduce a workspace account query to a global company query, reporting WHICH clauses (if any) forced the
+ * database half to be skipped.
+ *
+ * Skipping stays the honest answer — silently dropping "ICP score ≥ 80" would show companies the user
+ * explicitly did not ask for. Doing it invisibly was not: the whole global half of the grid disappeared with
+ * nothing to say a filter, rather than the dataset, was the reason. Which fields are answerable comes from
+ * `accountFacetScope`, the same metadata the sidebar badges read.
  */
+export interface DatabaseCompanyQueryNarrowing {
+  query: DatabaseCompanyQuery | null;
+  droppedFields: string[];
+}
+
 export function toDatabaseCompanyQuery(
   query: AccountQuery,
   limit: number,
-): DatabaseCompanyQuery | null {
+  /**
+   * The active fields the global graph cannot answer, from `accountFacetScope`. Passed IN rather than
+   * imported: the filter registry lives in the prospect slice (which owns the Accounts filter panel), and
+   * this module may not import another feature (lint:cross-feature). The caller already imports it.
+   */
+  workspaceOnlyFields: string[] = [],
+): DatabaseCompanyQueryNarrowing {
+  const droppedFields = workspaceOnlyFields;
+  if (droppedFields.length > 0) return { query: null, droppedFields };
+
   const filters: DatabaseCompanyQuery["filters"] = [];
 
   for (const clause of query.filters) {
     if (clause.kind === "term") {
-      if (!SHARED_TERM_FIELDS.has(clause.field)) return null;
       filters.push({
         kind: "term",
         field: clause.field as "industry" | "hq_country" | "hq_city" | "employee_band",
@@ -68,20 +80,25 @@ export function toDatabaseCompanyQuery(
     }
     if (clause.kind === "range") {
       const mapped = SHARED_RANGE_FIELDS[clause.field];
-      if (!mapped) return null;
+      // Unreachable while every `both` range facet is mapped above; a guard for the next one added.
+      if (!mapped) return { query: null, droppedFields: [clause.field] };
       filters.push({
         kind: "range",
-        field: mapped as "employee_count" | "founded_year",
+        field: mapped,
         ...(clause.gte !== undefined ? { gte: clause.gte } : {}),
         ...(clause.lte !== undefined ? { lte: clause.lte } : {}),
       });
       continue;
     }
-    // Bool clauses on accounts are all overlay signals (has contacts, is revealed…) — workspace-only.
-    return null;
+    // Bool clauses on accounts are all overlay signals (has contacts, is revealed…) — workspace-only, and
+    // the server drops them anyway, so they can never reach the global engine.
+    return { query: null, droppedFields: [clause.field] };
   }
 
-  return { text: query.text, filters, sort: SORT_MAP[query.sort], limit };
+  return {
+    query: { text: query.text, filters, sort: SORT_MAP[query.sort], limit },
+    droppedFields: [],
+  };
 }
 
 /**

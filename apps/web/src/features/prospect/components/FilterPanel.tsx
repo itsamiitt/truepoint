@@ -28,6 +28,7 @@ import {
 } from "../filterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
+import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
 import { TermOptionChips } from "./TermOptionChips";
@@ -156,9 +157,18 @@ function FacetControl({
   counts?: Map<string, number>;
   owners: OwnerOption[];
 }) {
+  // Every control carries its own scope mark, so "this filter will not search the database" is visible
+  // before the click rather than only in the notice above the grid afterwards.
+  const scopeNote = <FacetScopeBadge scope={facet.scope} />;
   if (facet.kind === "bool")
     return (
-      <BoolControl field={facet.field} label={facet.label} query={query} onChange={onChange} />
+      <BoolControl
+        field={facet.field}
+        label={facet.label}
+        query={query}
+        onChange={onChange}
+        scopeNote={scopeNote}
+      />
     );
   if (facet.kind === "range")
     return (
@@ -169,10 +179,18 @@ function FacetControl({
         unit={facet.unit}
         query={query}
         onChange={onChange}
+        scopeNote={scopeNote}
       />
     );
   return (
-    <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} owners={owners} />
+    <TermFacet
+      facet={facet}
+      query={query}
+      onChange={onChange}
+      counts={counts}
+      owners={owners}
+      scopeNote={scopeNote}
+    />
   );
 }
 
@@ -183,12 +201,14 @@ function TermFacet({
   onChange,
   counts,
   owners,
+  scopeNote,
 }: {
   facet: Extract<FacetDef, { kind: "term" }>;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
   counts?: Map<string, number>;
   owners: OwnerOption[];
+  scopeNote?: ReactNode;
 }) {
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
@@ -204,6 +224,7 @@ function TermFacet({
       label={facet.label}
       conditions={conditions}
       excludeNoun="Contacts"
+      scopeNote={scopeNote}
       onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
       renderPicker={(op, autoFocus) =>
         facet.input === "typeahead" ? (
@@ -261,11 +282,13 @@ function BoolControl({
   label,
   query,
   onChange,
+  scopeNote,
 }: {
   field: BoolFilterField;
   label: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  scopeNote?: ReactNode;
 }) {
   const current = getBool(query, field);
   const opt = (value: boolean | undefined, text: string) => (
@@ -275,7 +298,10 @@ function BoolControl({
   );
   return (
     <div className={styles.facetRow}>
-      <span className={styles.facetLabel}>{label}</span>
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>{label}</span>
+        {scopeNote}
+      </span>
       <span className={styles.opToggle}>
         {opt(undefined, "Any")}
         {opt(true, "Yes")}
@@ -292,6 +318,7 @@ function RangeControl({
   unit,
   query,
   onChange,
+  scopeNote,
 }: {
   field: string;
   label: string;
@@ -299,6 +326,7 @@ function RangeControl({
   unit?: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  scopeNote?: ReactNode;
 }) {
   const { gte, lte } = getRange(query, field);
   // Keystrokes land in a draft and commit after a quiet 400ms (or on blur) — the query is the cache key for
@@ -314,9 +342,12 @@ function RangeControl({
   };
   return (
     <div className={styles.facet}>
-      <span className={styles.facetLabel}>
-        {label}
-        {unit ? ` (${unit})` : ""}
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>
+          {label}
+          {unit ? ` (${unit})` : ""}
+        </span>
+        {scopeNote}
       </span>
       <div className={styles.rangeRow}>
         <TpInput

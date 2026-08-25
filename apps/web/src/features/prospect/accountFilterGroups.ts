@@ -17,16 +17,30 @@ export interface FacetOption {
   label: string;
 }
 
-export type AccountFacetDef =
+/**
+ * WHICH ENGINE a facet can be answered by — see the same type in filterGroups.ts for the full reasoning.
+ * `accountRows.toDatabaseCompanyQuery` derives its narrowing from these values, so the badge the sidebar
+ * shows and the query the client sends cannot drift apart.
+ */
+export type AccountFacetScope = "both" | "workspace-only";
+
+export type AccountFacetDef = { scope: AccountFacetScope } & (
   | {
       kind: "term";
       field: AccountTermField;
       label: string;
-      /** options = fixed enum chips; typeahead = high-cardinality (suggest). */
-      input: "options" | "typeahead";
+      /**
+       * options   = fixed enum chips
+       * typeahead = high-cardinality, server suggest
+       * counts    = options discovered from the live facet counts. For a field that is a free-text DISPLAY
+       *             string (revenue_range is built by revenueDisplay(), not an enum) and has no suggest
+       *             endpoint, the counts ARE the option list — and it can only offer values that exist.
+       */
+      input: "options" | "typeahead" | "counts";
       options?: FacetOption[];
     }
-  | { kind: "range"; field: string; label: string; valueKind: "number"; unit?: string };
+  | { kind: "range"; field: string; label: string; valueKind: "number"; unit?: string }
+);
 
 export interface AccountFilterGroup {
   id: string;
@@ -67,8 +81,14 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
     id: "industry",
     title: "Industry",
     facets: [
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
-      { kind: "term", field: "sub_industry", label: "Sub-industry", input: "typeahead" },
+      { kind: "term", field: "industry", label: "Industry", input: "typeahead", scope: "both" },
+      {
+        kind: "term",
+        field: "sub_industry",
+        label: "Sub-industry",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
     ],
   },
   {
@@ -80,20 +100,34 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
         field: "employee_count",
         label: "Employees",
         valueKind: "number",
+        scope: "both",
       },
       {
+        // This control was labelled "Revenue" but bound to `company_stage`, so picking "Enterprise" filtered
+        // by company stage under a Revenue heading — while `company_stage` ALSO appeared, correctly labelled,
+        // in "Funding & stage" below. Two controls wrote the same clause, the chip for either was labelled
+        // "Revenue" (facetLabel returns the first match), and the real revenue_range facet — supported by the
+        // server, and whose counts this pane was already requesting — had nothing to render them.
         kind: "term",
-        field: "company_stage",
+        field: "revenue_range",
         label: "Revenue",
-        input: "options",
-        options: optionsOf(COMPANY_STAGES),
+        input: "counts",
+        scope: "workspace-only",
       },
     ],
   },
   {
     id: "technographics",
     title: "Technographics",
-    facets: [{ kind: "term", field: "technology", label: "Technology", input: "typeahead" }],
+    facets: [
+      {
+        kind: "term",
+        field: "technology",
+        label: "Technology",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+    ],
   },
   {
     id: "funding",
@@ -105,6 +139,7 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
         label: "Funding stage",
         input: "options",
         options: optionsOf(FUNDING_STAGES),
+        scope: "workspace-only",
       },
       {
         kind: "term",
@@ -112,14 +147,22 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
         label: "Company stage",
         input: "options",
         options: optionsOf(COMPANY_STAGES),
+        scope: "workspace-only",
       },
-      { kind: "range", field: "founded_year", label: "Founded year", valueKind: "number" },
+      {
+        kind: "range",
+        field: "founded_year",
+        label: "Founded year",
+        valueKind: "number",
+        scope: "both",
+      },
       {
         kind: "range",
         field: "company_age",
         label: "Company age",
         valueKind: "number",
         unit: "yrs",
+        scope: "workspace-only",
       },
     ],
   },
@@ -127,11 +170,37 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
     id: "location",
     title: "Location",
     facets: [
-      { kind: "term", field: "hq_country", label: "HQ country", input: "typeahead" },
-      { kind: "term", field: "hq_city", label: "HQ city", input: "typeahead" },
+      { kind: "term", field: "hq_country", label: "HQ country", input: "typeahead", scope: "both" },
+      { kind: "term", field: "hq_city", label: "HQ city", input: "typeahead", scope: "both" },
     ],
   },
 ];
+
+/** Every account facet, flattened — the lookups below and the narrowing map both read this. */
+const ALL_ACCOUNT_FACETS: AccountFacetDef[] = ACCOUNT_FILTER_GROUPS.flatMap((g) => g.facets);
+
+/**
+ * Fields the global graph CAN answer that have no sidebar control of their own. A saved search, a shared URL
+ * or the AI parser can still produce them, and they must keep crossing: `employee_band` is the derived size
+ * band the global company search filters on directly (the sidebar offers the raw employee_count range).
+ */
+const EXTRA_SHARED_ACCOUNT_FIELDS = new Set(["employee_band"]);
+
+/** Which engines can answer this field. Unknown ⇒ workspace-only, the safe answer. */
+export function accountFacetScope(field: string): AccountFacetScope {
+  const declared = ALL_ACCOUNT_FACETS.find((f) => f.field === field);
+  if (declared) return declared.scope;
+  return EXTRA_SHARED_ACCOUNT_FIELDS.has(field) ? "both" : "workspace-only";
+}
+
+/** The fields on the ACTIVE query that the global company graph cannot answer, in sidebar order. */
+export function accountWorkspaceOnlyFields(query: AccountQuery): string[] {
+  const seen = new Set<string>();
+  for (const clause of query.filters) {
+    if (accountFacetScope(clause.field) === "workspace-only") seen.add(clause.field);
+  }
+  return ALL_ACCOUNT_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+}
 
 /** Flat label lookup for a facet field (term/range), for chips + headings. */
 export function facetLabel(field: string): string {

@@ -16,6 +16,7 @@ import type {
   MaskedContact,
   MaskedDatabasePerson,
 } from "@leadwolf/types";
+import { workspaceOnlyFields } from "./filterGroups";
 
 /** A grid row: a workspace contact, or a database person adapted to the same shape. */
 export type ProspectRow = MaskedContact & {
@@ -24,22 +25,32 @@ export type ProspectRow = MaskedContact & {
   databaseUrl?: string;
 };
 
-/** Facets the global graph can answer, mapped 1:1 from the contact search's own field names. */
-const SHARED_TERM_FIELDS = new Set(["title", "company", "location", "seniority", "industry"]);
-/** Bool facets the graph carries as precomputed columns. */
-const SHARED_BOOL_FIELDS = new Set(["has_email", "has_phone"]);
-
 /**
- * Reduce a workspace query to a database query — or null when the query is inherently workspace-only.
- * Null is the honest answer: silently dropping "owner = me" would show a stranger's record as if it
- * matched the user's own filter.
+ * Reduce a workspace query to a database query, reporting WHICH clauses (if any) forced the database half to
+ * be skipped.
+ *
+ * Skipping is still the honest answer — silently dropping "owner = me" would show a stranger's record as if
+ * it matched the user's own filter. What was NOT honest was doing it invisibly: 13 of the 20 sidebar controls
+ * made this return null, and the entire global half of the grid vanished with no indication that a filter,
+ * rather than the dataset, was the reason. The dropped fields come back with the result so the pane can say
+ * so. See `facetScope` in filterGroups.ts — this reads the same metadata the sidebar badges do, so the two
+ * cannot drift.
  */
-export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQuery | null {
+export interface DatabaseQueryNarrowing {
+  /** The query to run, or null when an active filter cannot be answered by the global graph. */
+  query: DatabaseQuery | null;
+  /** The workspace-only fields that caused `query` to be null, in sidebar order. Empty when it is not. */
+  droppedFields: string[];
+}
+
+export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQueryNarrowing {
+  const droppedFields = workspaceOnlyFields(query);
+  if (droppedFields.length > 0) return { query: null, droppedFields };
+
   const filters: DatabaseQuery["filters"] = [];
   for (const clause of query.filters) {
     if (clause.kind === "term") {
-      if (!SHARED_TERM_FIELDS.has(clause.field)) return null;
-      // EXCLUDE now crosses (the global contract gained `op` in stage 4). Before that it did not, and this
+      // EXCLUDE crosses (the global contract gained `op` in stage 4). Before that it did not, and this
       // returned null for ANY excluding query — one "not in Recruiting" clause and the database half of the
       // grid silently disappeared. Passing the sense through is the fix; dropping it would show the user
       // exactly the people they asked to hide.
@@ -52,7 +63,6 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
       continue;
     }
     if (clause.kind === "bool") {
-      if (!SHARED_BOOL_FIELDS.has(clause.field)) return null;
       filters.push({
         kind: "bool",
         field: clause.field as "has_email" | "has_phone",
@@ -60,10 +70,11 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
       });
       continue;
     }
-    // Ranges (created_at, score, headcount…) are overlay-only signals.
-    return null;
+    // Unreachable: every range facet is workspace-only, so `droppedFields` returned above. Kept as a guard
+    // in case a future range facet is declared `both` without a mapping being added here.
+    return { query: null, droppedFields: [clause.field] };
   }
-  return { text: query.text, filters, limit };
+  return { query: { text: query.text, filters, limit }, droppedFields: [] };
 }
 
 /** Adapt a database person to the grid row shape. Workspace-only fields take their empty state — the row

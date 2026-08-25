@@ -40,6 +40,9 @@ export interface ProspectSearch {
    *  infinite query only, so the global half is one capped page. Lets the header say "top matches" rather
    *  than presenting that page as everything the database holds. */
   databaseHasMore: boolean;
+  /** The active workspace-only filter fields that caused the database half to be skipped (empty when it
+   *  ran). The pane renders these as an explicit notice — the global half used to vanish in silence. */
+  databaseDroppedFields: string[];
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -133,10 +136,13 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   // filtered list of people; whether a row is already in the workspace is a property of the row, not a
   // different screen. The database half runs as its own query so a slow/failed global search can never
   // stall or break the workspace results — it simply contributes nothing.
-  const databaseQuery = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
+  const narrowing = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
+  const databaseQuery = narrowing.query;
   const databaseSearch = useQuery({
     queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
-    // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…).
+    // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…). Which filters
+    // caused that is reported through `databaseDroppedFields` so the pane can say so instead of the global
+    // half simply disappearing.
     enabled: enabled && includeDatabase && databaseQuery !== null,
     // Same no-blank treatment as the owned half above: a filter edit keeps the previous database rows on
     // screen while the fresh search lands, instead of the merged grid losing its bottom half per edit.
@@ -209,6 +215,8 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     // implying the list is everything the database holds. (Real pagination of the global half needs cursor
     // plumbing through the merge and is tracked separately.)
     databaseHasMore: Boolean(databaseSearch.data?.nextCursor),
+    // Non-empty ⇒ the database half was skipped because these filters only exist on the workspace overlay.
+    databaseDroppedFields: narrowing.droppedFields,
     // With keepPreviousData above, isPending is true only on the genuine cold load (no previous rows to
     // show) — a filter edit keeps the old rows on screen while fetching, and a "load more" is deliberately
     // not a full-grid loading state either.

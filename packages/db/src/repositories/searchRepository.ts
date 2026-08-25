@@ -216,8 +216,29 @@ function clauseCondition(
             ? (sql`(${emailChildExists} AND ${phoneChildExists} AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)` as SQL)
             : sql`(${contacts.emailEnc} IS NOT NULL AND ${contacts.phoneEnc} IS NOT NULL AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)`,
         );
+      case "do_not_contact":
+        // Suppression/DNC, matched on the SAME three rungs as suppressionRepository.suppressedContactIds —
+        // contact_id, email blind index, email domain. Matching all three matters: contact_id alone
+        // under-suppresses badly, because the common case is a person suppressed by EMAIL whose workspace
+        // copy carries no suppression row of its own.
+        //
+        // Scope comes from RLS, not from a predicate here: the suppression_read policy exposes exactly
+        // global + this tenant + this workspace, and this search always runs inside withTenantTx. The three
+        // partial indexes added in migration 0094 (idx_suppression_{email_blind_index,domain,contact}) exist
+        // for precisely this query — the schema comment names "enforcing suppression at search" as the case
+        // they were built for.
+        //
+        // Until now this fell through to `default` and returned undefined, so the shipped "Do not contact"
+        // control silently changed nothing: a user filtering FOR suppressed records to clean them up, or
+        // AGAINST them before an export, got the unfiltered list either way and no indication of it.
+        return is(sql`EXISTS (
+          SELECT 1 FROM suppression_list sl
+          WHERE sl.contact_id = ${contacts.id}
+             OR (sl.email_blind_index IS NOT NULL AND sl.email_blind_index = ${contacts.emailBlindIndex})
+             OR (sl.domain IS NOT NULL AND sl.domain = ${contacts.emailDomain})
+        )`);
       default:
-        return undefined; // do_not_contact — suppression matching is a documented follow-up
+        return undefined; // exhaustive — every boolFilterField above has a clause
     }
   }
   // range (epoch-ms for date fields)

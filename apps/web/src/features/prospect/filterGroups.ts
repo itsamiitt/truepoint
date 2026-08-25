@@ -24,7 +24,22 @@ export interface FacetOption {
   label: string;
 }
 
-export type FacetDef =
+/**
+ * WHICH ENGINE a facet can actually be answered by. The Search grid merges two engines — the workspace
+ * overlay and the global Layer-0 database — and most facets exist only on the overlay.
+ *
+ * This is not decoration. `databaseRows.toDatabaseQuery` DERIVES its narrowing from these values, so the
+ * badge the sidebar shows and the query the client actually sends can never disagree; and because the field
+ * is required, a new facet cannot be added without someone deciding which engines can serve it.
+ *
+ *   both           — the global graph carries this field too.
+ *   workspace-only — an overlay-only signal (owner, outreach state, verification dates, ranges…). Applying
+ *                    one means the user is interrogating their OWN pipeline, so the database half is
+ *                    dropped rather than answered wrongly — and the pane now SAYS so.
+ */
+export type FacetScope = "both" | "workspace-only";
+
+export type FacetDef = { scope: FacetScope } & (
   | {
       kind: "term";
       field: FacetKey;
@@ -34,7 +49,8 @@ export type FacetDef =
       options?: FacetOption[];
     }
   | { kind: "bool"; field: BoolFilterField; label: string }
-  | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string };
+  | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string }
+);
 
 export interface FilterGroup {
   id: string;
@@ -76,34 +92,66 @@ export const FILTER_GROUPS: FilterGroup[] = [
     id: "person",
     title: "Person",
     facets: [
-      { kind: "term", field: "title", label: "Title", input: "typeahead" },
+      { kind: "term", field: "title", label: "Title", input: "typeahead", scope: "both" },
       {
         kind: "term",
         field: "seniority",
         label: "Seniority",
         input: "options",
         options: optionsOf(seniorityLevel.options),
+        scope: "both",
       },
-      { kind: "term", field: "department", label: "Department", input: "typeahead" },
-      { kind: "term", field: "location", label: "Location", input: "typeahead" },
+      {
+        kind: "term",
+        field: "department",
+        label: "Department",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      { kind: "term", field: "location", label: "Location", input: "typeahead", scope: "both" },
     ],
   },
   {
     id: "company",
     title: "Company",
     facets: [
-      { kind: "term", field: "company", label: "Company", input: "typeahead" },
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
-      { kind: "term", field: "technology", label: "Technology", input: "typeahead" },
-      { kind: "term", field: "funding_stage", label: "Funding stage", input: "typeahead" },
-      { kind: "term", field: "company_stage", label: "Company stage", input: "typeahead" },
-      { kind: "range", field: "headcount", label: "Headcount", valueKind: "number" },
+      { kind: "term", field: "company", label: "Company", input: "typeahead", scope: "both" },
+      { kind: "term", field: "industry", label: "Industry", input: "typeahead", scope: "both" },
+      {
+        kind: "term",
+        field: "technology",
+        label: "Technology",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "term",
+        field: "funding_stage",
+        label: "Funding stage",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "term",
+        field: "company_stage",
+        label: "Company stage",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "range",
+        field: "headcount",
+        label: "Headcount",
+        valueKind: "number",
+        scope: "workspace-only",
+      },
       {
         kind: "range",
         field: "company_age",
         label: "Company age",
         valueKind: "number",
         unit: "yrs",
+        scope: "workspace-only",
       },
     ],
   },
@@ -117,11 +165,23 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Status",
         input: "options",
         options: optionsOf(outreachStatus.options),
+        scope: "workspace-only",
       },
-      { kind: "term", field: "owner", label: "Owner", input: "owner" },
-      { kind: "bool", field: "never_contacted", label: "Never contacted" },
-      { kind: "bool", field: "do_not_contact", label: "Do not contact" },
-      { kind: "range", field: "last_activity_at", label: "Last activity", valueKind: "date" },
+      { kind: "term", field: "owner", label: "Owner", input: "owner", scope: "workspace-only" },
+      {
+        kind: "bool",
+        field: "never_contacted",
+        label: "Never contacted",
+        scope: "workspace-only",
+      },
+      { kind: "bool", field: "do_not_contact", label: "Do not contact", scope: "workspace-only" },
+      {
+        kind: "range",
+        field: "last_activity_at",
+        label: "Last activity",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
     ],
   },
   {
@@ -134,12 +194,16 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Email status",
         input: "options",
         options: optionsOf(emailStatus.options),
+        scope: "workspace-only",
       },
-      { kind: "bool", field: "has_email", label: "Has email" },
-      { kind: "bool", field: "has_phone", label: "Has phone" },
-      { kind: "bool", field: "has_linkedin", label: "Has LinkedIn" },
-      { kind: "bool", field: "complete", label: "Complete record" },
-      { kind: "bool", field: "duplicate", label: "Likely duplicate" },
+      { kind: "bool", field: "has_email", label: "Has email", scope: "both" },
+      { kind: "bool", field: "has_phone", label: "Has phone", scope: "both" },
+      { kind: "bool", field: "has_linkedin", label: "Has LinkedIn", scope: "workspace-only" },
+      { kind: "bool", field: "complete", label: "Complete record", scope: "workspace-only" },
+      { kind: "bool", field: "duplicate", label: "Likely duplicate", scope: "workspace-only" },
+      // Supported by the search repository since the reveal work landed, but never offered in the sidebar —
+      // "which of these have I already paid to reveal" is a question users had no way to ask.
+      { kind: "bool", field: "is_revealed", label: "Already revealed", scope: "workspace-only" },
     ],
   },
   {
@@ -152,12 +216,45 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Source",
         input: "options",
         options: SOURCE_FACET_OPTIONS,
+        scope: "workspace-only",
       },
-      { kind: "range", field: "created_at", label: "Created", valueKind: "date" },
-      { kind: "range", field: "score", label: "Score", valueKind: "number" },
+      {
+        kind: "range",
+        field: "created_at",
+        label: "Created",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      {
+        kind: "range",
+        field: "score",
+        label: "Score",
+        valueKind: "number",
+        scope: "workspace-only",
+      },
     ],
   },
 ];
+
+/** Every facet, flattened — the lookups below and the narrowing map both read this. */
+const ALL_FACETS: FacetDef[] = FILTER_GROUPS.flatMap((g) => g.facets);
+
+/**
+ * Which engines can answer this field. Unknown fields are treated as workspace-only: the safe answer is to
+ * drop the database half rather than to send a filter the global graph would ignore.
+ */
+export function facetScope(field: string): FacetScope {
+  return ALL_FACETS.find((f) => f.field === field)?.scope ?? "workspace-only";
+}
+
+/** The fields on the ACTIVE query that the global database cannot answer, in sidebar order. */
+export function workspaceOnlyFields(query: ContactQuery): string[] {
+  const seen = new Set<string>();
+  for (const clause of query.filters) {
+    if (facetScope(clause.field) === "workspace-only") seen.add(clause.field);
+  }
+  return ALL_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+}
 
 /** Flat label lookup for a facet field (term/bool/range), for chips + headings. */
 export function facetLabel(field: string): string {

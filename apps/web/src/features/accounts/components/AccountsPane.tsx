@@ -15,6 +15,7 @@
 import {
   AppliedFilterChips,
   ColumnChooser,
+  ScopeNotice,
   SearchDrawer,
   SearchDrawerOpener,
   type SearchShell,
@@ -26,6 +27,7 @@ import {
   ACCOUNT_TOGGLEABLE_COLUMNS,
   AccountFilterPanel,
   AccountsTable,
+  accountFacetLabel,
   activeChips,
   clearAllFilters,
   useAccountFacetCounts,
@@ -139,6 +141,12 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
           query={search.query}
           onChange={search.setQuery}
           onClearAll={() => search.setQuery(clearAllFilters(search.query))}
+        />
+
+        {/* Only when workspace-only filters are actually suppressing the database half. */}
+        <ScopeNotice
+          fields={shell.workspace.includeDatabase ? search.databaseDroppedFields : []}
+          labelFor={accountFacetLabel}
         />
 
         <div className={styles.resultCount}>
