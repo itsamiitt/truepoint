@@ -35,6 +35,12 @@
 // it to `lint:*` the moment those two are resolved: the check itself is cheap and the failure it catches is
 // silent.
 //
+// Those two are held in the KNOWN register below and reported APART from anything new, because a report whose
+// output never changes stops being read — and the reader who has learned to skim two familiar lines is the one
+// who will skim the third. "No NEW finding" is the healthy state; the register is what makes that sentence
+// mean something. It also self-expires: a key that stops being a finding is announced as RESOLVED with an
+// instruction to delete it, so the register cannot quietly outlive the decision it stands in for.
+//
 // Run: `node scripts/audit-feature-flag-coherence.mjs` (wired as `bun run audit:feature-flags`).
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -104,10 +110,48 @@ for (const file of readdirSync(MIGRATION_DIR).filter((f) => f.endsWith(".sql")))
   }
 }
 
+// Findings already triaged and awaiting a HUMAN decision, not undiscovered ones. They are listed apart
+// because a report that prints the same two lines forever teaches its reader to skim — and the next reader to
+// skim is the one who misses finding number three. Keep this register as small as the truth allows: an entry
+// here is a promise that a human is deciding, so delete it when they do.
+const KNOWN = new Map([
+  [
+    "usage_events",
+    "decisions.md #9 — env-gated only (USAGE_EVENTS_ENABLED); the per-tenant half was seeded by 0088 with no dual gate behind it. Decision pending: add the tenant half, or drop the row.",
+  ],
+  [
+    "provenance_events",
+    "decisions.md #9 — gates OVERLAY provenance events, and no overlay writer exists yet; 0088 states Layer-0 events ride the env half alone. Seeded ahead of its consumer, deliberately.",
+  ],
+]);
+
 const usedButUndefined = [...used.keys()].filter((k) => !defined.has(k) && !exempt.has(k)).sort();
-const definedButUnused = [...defined.keys()].filter((k) => !used.has(k) && !exempt.has(k)).sort();
+const allDefinedButUnused = [...defined.keys()]
+  .filter((k) => !used.has(k) && !exempt.has(k))
+  .sort();
+const definedButUnused = allDefinedButUnused.filter((k) => !KNOWN.has(k));
+const knownPending = allDefinedButUnused.filter((k) => KNOWN.has(k));
+
+// A key that leaves the register on its own — because someone finally gated it, or deleted the row — should
+// not keep claiming a pending decision. Say so rather than carrying a stale promise.
+const staleKnown = [...KNOWN.keys()].filter((k) => !allDefinedButUnused.includes(k)).sort();
 
 if (usedButUndefined.length === 0 && definedButUnused.length === 0) {
+  if (knownPending.length > 0 || staleKnown.length > 0) {
+    const lines = [
+      `ok   ${used.size} flag(s) gated in code, ${defined.size} defined in migrations — no NEW finding`,
+    ];
+    for (const k of knownPending) {
+      lines.push(`     known, decision pending: ${k}`, `       ${KNOWN.get(k)}`);
+    }
+    for (const k of staleKnown) {
+      lines.push(
+        `     RESOLVED: ${k} is no longer a finding — remove it from KNOWN in this script`,
+      );
+    }
+    process.stdout.write(`${lines.join("\n")}\n`);
+    process.exit(0);
+  }
   process.stdout.write(
     `ok   ${used.size} flag(s) gated in code, ${defined.size} defined in migrations, both directions agree\n`,
   );
@@ -126,6 +170,20 @@ if (definedButUnused.length > 0) {
   parts.push(
     `${definedButUnused.length} flag(s) DEFINED in a migration that no code gates on:\n${definedButUnused.map((k) => `  ${k}  (defined in ${defined.get(k)})`).join("\n")}\n\nEach is a switch in the admin UI that changes nothing. Someone will toggle it, believe a capability
 is live, and be wrong. Gate something on it or remove the definition.`,
+  );
+}
+if (knownPending.length > 0) {
+  parts.push(
+    `Also present, already triaged — NOT new:\n${knownPending
+      .map((k) => `  ${k}  (defined in ${defined.get(k)})\n    ${KNOWN.get(k)}`)
+      .join("\n")}`,
+  );
+}
+if (staleKnown.length > 0) {
+  parts.push(
+    `RESOLVED since this register was written — remove from KNOWN in this script:\n${staleKnown
+      .map((k) => `  ${k}`)
+      .join("\n")}`,
   );
 }
 
