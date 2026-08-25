@@ -125,6 +125,24 @@ async function seedWorkspaceActivity(args: {
     rows: ROWS,
   });
 
+  // PIN THE CSV'S PROVENANCE ROWS INTO ONE MINUTE. `recentBatches` groups by
+  // `date_trunc('minute', imported_at)` and runImport stamps each row with real wall-clock `now()`. The three
+  // rows are written sub-second apart so they normally share a bucket — but a run that straddles a minute
+  // boundary splits them, and "one CSV collapses into one batch" fails with 2. Not hypothetical: it failed
+  // exactly that way in CI at 13:55:00.4 while the SAME commit passed on its other run — same tree, opposite
+  // results, which is the signature of a clock-dependent test rather than a code change.
+  //
+  // Pinned rather than mocked, and pinned by truncating the value Postgres already wrote, so the timestamp
+  // stays one the database itself would produce. The assertion keeps its meaning — rows sharing
+  // (file, source, minute) fold into one batch — and stops depending on which second the suite starts.
+  await admin`
+    UPDATE source_imports
+       SET imported_at = (
+             SELECT date_trunc('minute', min(imported_at))
+               FROM source_imports
+              WHERE workspace_id = ${args.workspaceId} AND source_file = ${args.sourceFile})
+     WHERE workspace_id = ${args.workspaceId} AND source_file = ${args.sourceFile}`;
+
   // Two paid reveals → two contact_reveals rows + two `reveal` audit rows + 2 credits of burn.
   await core.revealContact({
     scope,

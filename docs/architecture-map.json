@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2428,
-  "fileSetHash": "sha256:1f10b6e7d5b7d78de3352e36e85e9af888bc79ee8d957a94693e57b2fd670872",
+  "fileCount": 2447,
+  "fileSetHash": "sha256:bbddc7c4666420a4e20bac0e7b81ff9249cf40fcdd673f65f7050f06525edf59",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1185,6 +1185,7 @@
         "apps/api/src/features/import/legacyStatus.ts",
         "apps/api/src/features/import/malwareScan.test.ts",
         "apps/api/src/features/import/malwareScan.ts",
+        "apps/api/src/features/import/pollConditional.test.ts",
         "apps/api/src/features/import/queue.ts",
         "apps/api/src/features/import/queueBackpressure.ts",
         "apps/api/src/features/import/routes.ts",
@@ -1322,6 +1323,7 @@
         "apps/api/src/features/ingest/routes.ts"
       ],
       "core": [
+        "packages/core/src/ingestion/captureConsent.test.ts",
         "packages/core/src/ingestion/connectors/adminUpload.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.ts",
@@ -2521,6 +2523,8 @@
     "apps/api/lib": [
       "apps/api/src/lib/apiKeySecret.test.ts",
       "apps/api/src/lib/apiKeySecret.ts",
+      "apps/api/src/lib/conditionalJson.test.ts",
+      "apps/api/src/lib/conditionalJson.ts",
       "apps/api/src/lib/csvDownload.ts",
       "apps/api/src/lib/gateMemo.test.ts",
       "apps/api/src/lib/gateMemo.ts",
@@ -2679,6 +2683,7 @@
     ],
     "apps/doc": [
       "apps/doc/next.config.mjs",
+      "apps/doc/scripts/routes.mjs",
       "apps/doc/scripts/verify.mjs"
     ],
     "apps/doc/app": [
@@ -2703,6 +2708,7 @@
       "apps/doc/src/app/trust/page.tsx"
     ],
     "apps/doc/components": [
+      "apps/doc/src/components/AssistantContext.tsx",
       "apps/doc/src/components/AvailabilityBadge.tsx",
       "apps/doc/src/components/ButtonLink.tsx",
       "apps/doc/src/components/CodeBlock.tsx",
@@ -2740,6 +2746,7 @@
       "apps/doc/src/content/openapi.test.ts",
       "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
+      "apps/doc/src/content/routeCoverage.test.ts",
       "apps/doc/src/content/searchIndex.test.ts",
       "apps/doc/src/content/searchIndex.ts",
       "apps/doc/src/content/shippedContract.test.ts",
@@ -2754,9 +2761,19 @@
       "apps/doc/src/features/api-reference/components/DocsShell.tsx",
       "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
       "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
+      "apps/doc/src/features/api-reference/components/GuideBody.tsx",
       "apps/doc/src/features/api-reference/components/GuidePage.tsx",
       "apps/doc/src/features/api-reference/components/SnippetTabs.tsx",
+      "apps/doc/src/features/api-reference/guideSections.test.ts",
+      "apps/doc/src/features/api-reference/guideSections.ts",
       "apps/doc/src/features/api-reference/index.ts",
+      "apps/doc/src/features/api-reference/sidebarEntries.ts",
+      "apps/doc/src/features/assistant/answer.test.ts",
+      "apps/doc/src/features/assistant/answer.ts",
+      "apps/doc/src/features/assistant/components/AssistantMessage.tsx",
+      "apps/doc/src/features/assistant/components/SupportAssistant.tsx",
+      "apps/doc/src/features/assistant/index.ts",
+      "apps/doc/src/features/assistant/intents.ts",
       "apps/doc/src/features/changelog/components/ChangelogPage.tsx",
       "apps/doc/src/features/changelog/index.ts",
       "apps/doc/src/features/datasets/components/DatasetPage.tsx",
@@ -2784,6 +2801,7 @@
       "apps/extension/manifest.config.ts",
       "apps/extension/scripts/gen-icons.mjs",
       "apps/extension/scripts/pack-zip.mjs",
+      "apps/extension/src/manifest.test.ts",
       "apps/extension/vite.config.ts"
     ],
     "apps/extension/background": [
@@ -3412,6 +3430,7 @@
       "packages/db/test/migrationSeedLengths.test.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/partitionMaintenance.itest.ts",
+      "packages/db/test/partitionRls.itest.ts",
       "packages/db/test/partitioningFeasibility.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",

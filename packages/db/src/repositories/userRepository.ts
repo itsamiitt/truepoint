@@ -547,12 +547,27 @@ export const sessionRepository = {
     return rows[0] ? { userId: rows[0].userId } : null;
   },
 
-  /** Revoke a single session inside a caller-provided tx (so it commits with its audit row). */
-  async revokeInTx(tx: Tx, sessionId: string): Promise<void> {
+  /**
+   * Revoke a single session inside a caller-provided tx (so it commits with its audit row).
+   *
+   * SCOPED BY workspaceId, not by session id alone. RLS does not gate user_sessions — rls/auth.sql records
+   * why: the table is auth-service-owned and read pre-tenant, before any tenant GUC exists — so there is no
+   * database backstop under this UPDATE and the predicate here IS the boundary. Keyed on the id alone, this
+   * method would revoke any session in any tenant for whoever called it; its one caller is safe today only
+   * because it happens to call findActiveInWorkspace first in the same tx. That is a property of the caller,
+   * not of this method, and the next caller inherits none of it.
+   */
+  async revokeInTx(tx: Tx, workspaceId: string, sessionId: string): Promise<void> {
     await tx
       .update(userSessions)
       .set({ revokedAt: new Date() })
-      .where(and(eq(userSessions.id, sessionId), isNull(userSessions.revokedAt)));
+      .where(
+        and(
+          eq(userSessions.id, sessionId),
+          eq(userSessions.workspaceId, workspaceId),
+          isNull(userSessions.revokedAt),
+        ),
+      );
   },
 
   /**
