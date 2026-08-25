@@ -10,11 +10,22 @@ outside the specific exceptions noted below.
 
 The tokens are defined once in `packages/ui/src/tokens.css` (the `--tp-*` custom
 properties); `packages/ui/src/theme.css` maps the Tailwind theme onto them via
-`@theme inline`; the root `colors.css` is legacy. Raw-hex / raw-px adherence is a
-manual review rule, not an automated check.
+`@theme inline`; the root `colors.css` is legacy.
 
-> **Implementation status:** there is no automated lint for raw hex / raw px — it is
-> enforced by code review against the tokens in `packages/ui/src/tokens.css`.
+> **Implementation status (corrected 2026-08-25).** Raw HEX is now an automated gate:
+> `bun run lint:design-tokens` (`scripts/lint-design-tokens.mjs`), a step in the CI gates
+> job, currently scanning 523 stylesheets and components. Raw PX remains a review rule —
+> the gate deliberately checks colour values only. This note previously said there was no
+> automated lint for either, which stopped being true on 2026-08-24.
+>
+> The gate is narrow on purpose, because a design lint that cries wolf is deleted faster
+> than any other kind: a hex counts only in a declaration value (`color: #fff`) or a
+> colour-ish TSX context (a style object, a `fill`/`stroke`/`background` prop).
+>
+> Why it stopped being a review rule: a frozen `#2563c9` does not follow `--tp-cobalt`
+> when the token moves, and the drift is invisible until two pages are screenshotted side
+> by side. Worse, `contrast.test.ts` asserts TOKEN PAIRS — so a raw hex sits outside that
+> check by construction and can fail WCAG AA silently.
 
 > **Tokens are a single shared source across both frontend apps.** The customer
 > (`@leadwolf/web`) and internal (`@leadwolf/admin`) apps may diverge in *components*,
