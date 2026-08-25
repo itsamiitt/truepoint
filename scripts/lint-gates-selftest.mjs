@@ -180,6 +180,25 @@ const CASES = [
   );
 }
 `,
+    // The COMPLIANT form: the same composite role and the same tabIndex={-1}, with arrow-key handling on the
+    // GROUP rather than on each option. The gate is deliberately permissive about where the handler sits — a
+    // container that moves selection for its children is as correct as per-option handlers — so a version
+    // that demanded the handler on the element carrying tabIndex would flag this, and every correctly-built
+    // radiogroup in the app with it.
+    extra: {
+      name: "Ok.tsx",
+      content: `export function Ok() {
+  return (
+    <div role="radiogroup" onKeyDown={() => {}}>
+      <button type="button" role="radio" aria-checked={false} tabIndex={-1} onClick={() => {}}>
+        one
+      </button>
+    </div>
+  );
+}
+`,
+    },
+    reject: /Ok\.tsx/,
   },
   {
     gate: "lint:design-tokens",
@@ -224,10 +243,27 @@ const CASES = [
     dir: `apps/doc/src/${TAG}`,
     name: "probeA.ts",
     content: 'import { b } from "./probeB";\nexport const a = (): string => b();\n',
-    extra: {
-      name: "probeB.ts",
-      content: `import { a } from "@/${TAG}/probeA";\nexport const b = (): string => a();\n`,
-    },
+    extra: [
+      {
+        name: "probeB.ts",
+        content: `import { a } from "@/${TAG}/probeA";\nexport const b = (): string => a();\n`,
+      },
+      // A DIAMOND, which is not a cycle and must never be reported as one. dagRoot reaches dagLeaf by two
+      // different paths — one relative, one aliased — so dagLeaf is VISITED TWICE in a single traversal.
+      // That revisit is exactly what a naive depth-first search mistakes for a back-edge, and diamonds are
+      // ordinary in a React app (two components importing the same helper). A cycle detector that cried wolf
+      // on them would be abandoned within a week, so the fixture pins that it does not.
+      {
+        name: "dagRoot.ts",
+        content: `import { mid } from "./dagMid";\nimport { leaf } from "@/${TAG}/dagLeaf";\nexport const root = (): string => mid() + leaf();\n`,
+      },
+      {
+        name: "dagMid.ts",
+        content: 'import { leaf } from "./dagLeaf";\nexport const mid = (): string => leaf();\n',
+      },
+      { name: "dagLeaf.ts", content: 'export const leaf = (): string => "leaf";\n' },
+    ],
+    reject: /dag(Root|Mid|Leaf)\.ts/,
   },
   {
     gate: "lint:batch-inserts",
@@ -416,10 +452,16 @@ for (const testCase of CASES) {
   try {
     created = mkdirSync(dir, { recursive: true });
     writeFileSync(planted, testCase.content);
-    // A second file, for a gate whose violation needs a PAIR — an import cycle is not expressible in one
-    // module. It lands in the same tag directory, which `cleanup` already removes recursively, so it needs no
-    // separate teardown and cannot outlive the run.
-    if (testCase.extra) writeFileSync(join(dir, testCase.extra.name), testCase.extra.content);
+    // Further files in the same fixture, one object or an array of them. Needed in two shapes: a violation
+    // that cannot be expressed in a single module (an import cycle needs a pair), and a COMPLIANT look-alike
+    // the gate must stay quiet about (see `reject`). They land in the same tag directory, which `cleanup`
+    // already removes recursively, so they need no separate teardown and cannot outlive the run.
+    const extras = Array.isArray(testCase.extra)
+      ? testCase.extra
+      : testCase.extra
+        ? [testCase.extra]
+        : [];
+    for (const extra of extras) writeFileSync(join(dir, extra.name), extra.content);
 
     const withPlant = runGate(testCase.script);
     if (withPlant.code === 0) {
