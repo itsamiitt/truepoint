@@ -31,6 +31,10 @@ export const facetKey = z.enum([
   "source",
   "funding_stage",
   "company_stage",
+  // The carrier line-type classification (never the number). Mobile-vs-landline is the dial-risk signal a
+  // rep needs BEFORE spending a reveal, and it is TCPA-relevant — [S-04]. It rides on contacts.phone_line_type,
+  // which the masked row has always returned and nothing could filter on.
+  "phone_line_type",
 ]);
 export type FacetKey = z.infer<typeof facetKey>;
 

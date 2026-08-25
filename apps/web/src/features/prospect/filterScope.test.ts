@@ -65,6 +65,27 @@ describe("people filter scopes", () => {
     expect(facetScope("something_invented")).toBe("workspace-only");
   });
 
+  test("the outcome-driven filters are all offered", () => {
+    const fields = peopleFacets.map((f) => f.field);
+    // Each is a named target outcome that had no control at all before.
+    expect(fields).toContain("phone_line_type"); // [S-04] mobile-vs-landline, pre-reveal, TCPA-relevant
+    expect(fields).toContain("last_verified_at"); // [S-10] verification recency
+    expect(fields).toContain("job_change_at"); // [S-13] who has moved recently
+    expect(fields).toContain("do_not_contact"); // compliance — shipped, but did nothing until now
+    expect(fields).toContain("is_revealed");
+  });
+
+  test("the job-change filter is a job-change filter, not a signal filter", () => {
+    // intent_signals also holds web_visit / keyword_search / content_engagement — third-party behavioural
+    // intent, which is X-04, a DEFERRED NON-GOAL. This facet reads only job-change detections, and the
+    // repository's subquery is scoped to signal_type='job_change' to match. If a general "signal recency"
+    // facet ever appears here, it needs a recorded decision first — not a quiet widening of this one.
+    const signalish = peopleFacets.filter(
+      (f) => f.field.includes("signal") || f.field.includes("intent"),
+    );
+    expect(signalish).toEqual([]);
+  });
+
   test("the fields the global people search actually accepts are the ones declared `both`", () => {
     // These five terms + two bools are what masterPersonSearchRepository can answer. If a facet is declared
     // `both` without the global engine supporting it, the client would send a filter that silently does

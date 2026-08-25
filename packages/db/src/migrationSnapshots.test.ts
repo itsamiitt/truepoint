@@ -199,8 +199,15 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  came and the table had no journal entry, which is the one place a reader looks to find out when it
  *  appeared. So the deficit grows by one to close a worse gap than the one it opens. `IF NOT EXISTS`
  *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
- *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 98;
+ *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  98 → 99 for 0140_search_recency_filter_indexes — the cheapest category of widening: INDEXES ONLY, no
+ *  schema change at all, so there is nothing for a snapshot to carry and nothing `generate` could have
+ *  emitted. Same reason as 0132: drizzle-kit produces only plain blocking CREATE INDEX, and all three of
+ *  these are PARTIAL and must be CONCURRENTLY on hot tables (contacts, intent_signals). The alternative —
+ *  shipping the filters they serve without them — makes a verification-recency or job-change filter scan
+ *  the RLS-visible workspace slice on the product's busiest read. Absorbed by the next rebaseline. */
+const EXPECTED_DEFICIT = 99;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

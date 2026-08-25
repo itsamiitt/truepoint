@@ -76,6 +76,20 @@ const optionsOf = (values: readonly string[]): FacetOption[] =>
  *    Which vendor the platform buys from is internal, so these are deliberately NOT offered as separate
  *    filter values; a record sourced that way reads as the TruePoint database, which is what it is.
  */
+/**
+ * The carrier line types worth offering as a filter [S-04]. The enum has fourteen values; these are the four
+ * that change what a rep DOES — a mobile can be texted and is the TCPA-sensitive case, a landline usually
+ * reaches a desk or switchboard, and VoIP is the one most likely to be a dead number. The rest (pager, uan,
+ * voicemail, premium_rate…) are real values the server still accepts and round-trips; they are simply not
+ * worth a chip in a sidebar nobody would use them from.
+ */
+const PHONE_LINE_TYPE_FACET_OPTIONS: FacetOption[] = [
+  { value: "mobile", label: "Mobile" },
+  { value: "landline", label: "Landline" },
+  { value: "voip", label: "VoIP" },
+  { value: "personal", label: "Personal" },
+];
+
 const SOURCE_FACET_OPTIONS: FacetOption[] = [
   { value: "manual", label: "Manual entry" },
   { value: "chrome_extension", label: "Browser extension" },
@@ -198,6 +212,16 @@ export const FILTER_GROUPS: FilterGroup[] = [
       },
       { kind: "bool", field: "has_email", label: "Has email", scope: "both" },
       { kind: "bool", field: "has_phone", label: "Has phone", scope: "both" },
+      // The carrier classification, filterable pre-reveal — "mobile only" is the dial-risk question, and it
+      // is TCPA-relevant [S-04]. The value was already on every masked row and nothing could filter it.
+      {
+        kind: "term",
+        field: "phone_line_type",
+        label: "Phone line type",
+        input: "options",
+        options: PHONE_LINE_TYPE_FACET_OPTIONS,
+        scope: "workspace-only",
+      },
       { kind: "bool", field: "has_linkedin", label: "Has LinkedIn", scope: "workspace-only" },
       { kind: "bool", field: "complete", label: "Complete record", scope: "workspace-only" },
       { kind: "bool", field: "duplicate", label: "Likely duplicate", scope: "workspace-only" },
@@ -222,6 +246,26 @@ export const FILTER_GROUPS: FilterGroup[] = [
         kind: "range",
         field: "created_at",
         label: "Created",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      // "How stale is this record" — the verification-recency question the Data health column answers at a
+      // glance and this answers in bulk [S-10]. A bounded range excludes never-verified records, which is
+      // the honest reading: an unverified record cannot satisfy "verified since <date>".
+      {
+        kind: "range",
+        field: "last_verified_at",
+        label: "Last verified",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      // "Who has moved recently" — the job-change question [S-13]. Reads ONLY job-change detections, never
+      // the behavioural signal types that share their table (those are X-04 intent data, a deferred
+      // non-goal); see the rangeSpec entry in searchRepository for why that scoping is load-bearing.
+      {
+        kind: "range",
+        field: "job_change_at",
+        label: "Job change detected",
         valueKind: "date",
         scope: "workspace-only",
       },

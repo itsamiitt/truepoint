@@ -103,6 +103,7 @@ const FACET_EXPR: Partial<Record<FacetKey, SQL>> = {
   email_status: sql`${contacts.emailStatus}`,
   funding_stage: sql`${accounts.fundingStage}`,
   company_stage: sql`${accounts.companyStage}`,
+  phone_line_type: sql`${contacts.phoneLineType}`,
 };
 
 /** ILIKE-any across the given values for one column (case-insensitive contains). */
@@ -181,6 +182,10 @@ function clauseCondition(
         return inv(inArray(accounts.fundingStage, clause.values));
       case "company_stage":
         return inv(inArray(accounts.companyStage, clause.values));
+      case "phone_line_type":
+        // Exact IN, not ILIKE: this is a closed carrier classification (mobile | landline | voip | …), so a
+        // contains-match would let "voip" also select "fixed_voip" and "non_fixed_voip". [S-04]
+        return inv(inArray(contacts.phoneLineType, clause.values));
       default:
         return undefined; // skill — no column on the overlay
     }
@@ -280,6 +285,24 @@ function rangeSpec(field: string): { col: SQL; kind: "number" | "timestamp" } | 
       return { col: sql`${contacts.createdAt}`, kind: "timestamp" };
     case "last_activity_at":
       return { col: sql`${contacts.lastActivityAt}`, kind: "timestamp" };
+    case "last_verified_at":
+      // How recently the record's PII was verified — the "is this still good?" question [S-10]. NULL means
+      // never verified, and a bounded range excludes those, which is the honest reading: an unverified
+      // record cannot satisfy "verified since <date>".
+      return { col: sql`${contacts.lastVerifiedAt}`, kind: "timestamp" };
+    case "job_change_at":
+      // When we last DETECTED that this person changed job [S-13]. Correlated rather than joined so the
+      // row count is unaffected (a contact can carry several job-change signals over time).
+      //
+      // SCOPED TO signal_type='job_change' ON PURPOSE. intent_signals also holds web_visit,
+      // keyword_search and content_engagement — third-party behavioural intent, which is X-04, a DEFERRED
+      // NON-GOAL. This filter is deliberately not a general "signal recency" filter, and must not be
+      // widened into one without a recorded decision.
+      return {
+        col: sql`(SELECT max(s.detected_at) FROM intent_signals s
+                   WHERE s.contact_id = ${contacts.id} AND s.signal_type = 'job_change')`,
+        kind: "timestamp",
+      };
     default:
       return undefined;
   }
