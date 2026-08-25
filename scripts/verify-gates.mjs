@@ -42,7 +42,14 @@ const GATES = [
 ];
 
 if (withTypecheck) {
-  GATES.push({ name: "typecheck (all workspaces)", cmd: ["bun", "run", "typecheck"] });
+  // The root script is `turbo run typecheck typecheck:tests`, so this DOES cover out-of-src test files —
+  // the gap CLAUDE.md warns about (packages/db keeps 100+ itests outside src, and a wrong signature there once
+  // passed typecheck and lint before failing in CI). The label says so, because a reader who sees bare
+  // "typecheck" reasonably wonders whether tests were included and should not have to go and check.
+  GATES.push({
+    name: "typecheck + typecheck:tests",
+    cmd: ["bun", "run", "typecheck"],
+  });
 }
 
 const width = Math.max(...GATES.map((g) => g.name.length));
