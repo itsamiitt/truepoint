@@ -231,6 +231,36 @@ describe("G-AUTH-2 admin session management DoD", () => {
     expect(await auditCount("session.revoked")).toBe(before); // no audit on a no-op
   });
 
+  // The test above proves the CALLER refuses an out-of-scope session. This one proves the repository method
+  // refuses it too, called directly with no caller-side check in front of it. The distinction matters because
+  // user_sessions has no RLS (rls/auth.sql — auth-service-owned, read pre-tenant), so nothing in the database
+  // sits underneath this UPDATE: keyed on the session id alone it would revoke a session in another workspace
+  // for anyone who called it without checking first, and the guarantee would live entirely in one caller's
+  // habit of calling findActiveInWorkspace first.
+  test("revokeInTx will not revoke a session outside the workspace it is given", async () => {
+    const wsBOnly = await auth.createSession({
+      userId: member1,
+      tenantId: tenant1,
+      workspaceId: wsB,
+      appOrigin: AUDIENCE,
+    });
+    const { withTenantTx, sessionRepository } = await import("@leadwolf/db");
+
+    await withTenantTx({ tenantId: tenant1, workspaceId: wsA }, async (tx) => {
+      // ws-A is the scope; the session lives in ws-B. This does not throw — an UPDATE matching no row is not
+      // an error — which is precisely why the assertion reads the row back instead of trusting the call.
+      await sessionRepository.revokeInTx(tx, wsA, wsBOnly.sessionId);
+    });
+    expect((await sessionRow(wsBOnly.sessionId))?.revoked_at).toBeNull();
+
+    // …and it still revokes when the workspace DOES match, so what is being asserted is a scope check and not
+    // a method that quietly stopped working.
+    await withTenantTx({ tenantId: tenant1, workspaceId: wsB }, async (tx) => {
+      await sessionRepository.revokeInTx(tx, wsB, wsBOnly.sessionId);
+    });
+    expect((await sessionRow(wsBOnly.sessionId))?.revoked_at).not.toBeNull();
+  });
+
   test("a non-admin (viewer) caller is rejected and nothing is revoked/audited", async () => {
     const before = await auditCount("session.revoked");
     const target = await auth.createSession({
