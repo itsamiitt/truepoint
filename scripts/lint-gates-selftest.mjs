@@ -187,6 +187,15 @@ const CASES = [
     dir: `apps/doc/src/${TAG}`,
     name: "probe.module.css",
     content: ".probe {\n  color: #ff00aa;\n}\n",
+    // The COMPLIANT form, in the same directory: a rule whose colours come from tokens. If the gate names this
+    // file too, it is matching "is a stylesheet" rather than "contains a raw hex", and its clean run over 523
+    // stylesheets would mean nothing.
+    extra: {
+      name: "probeOk.module.css",
+      content:
+        ".probeOk {\n  color: var(--tp-text-primary);\n  background: var(--tp-surface-1);\n}\n",
+    },
+    reject: /probeOk\.module\.css/,
   },
   {
     gate: "lint:cross-feature",
@@ -225,8 +234,15 @@ const CASES = [
     script: "scripts/lint-batch-insert-bounds.mjs",
     dir: `packages/db/src/repositories/${TAG}`,
     name: "probeRepository.ts",
+    // THE HELPER IMPORT IS IN THE PLANT ON PURPOSE. The gate decides "bounded" by looking for the helper's
+    // NAME in a twelve-line window around the insert, and an import mentions the name without applying it —
+    // so in a short file, where the import block is within twelve lines of everything, a file that bounded
+    // one insert silently exempted every other insert near its imports. Demonstrated with exactly this shape:
+    // it was counted as bounded and the run exited 0. The gate now drops import lines from that window, and
+    // keeping the import here is what stops the hole reopening.
     content: `import type { Tx } from "../../client.ts";
 import { contacts } from "../../schema/contacts.ts";
+import { sliceForBindLimit } from "../bindLimit.ts";
 
 export const probeRepository = {
   async insertMany(tx: Tx, rows: Array<{ tenantId: string }>): Promise<void> {
@@ -234,6 +250,33 @@ export const probeRepository = {
   },
 };
 `,
+    // The COMPLIANT forms, and this gate needs them more than any other here: its first version matched
+    // `\.values\(\s*(?!\{)` — where `\s*` backtracks, so the lookahead passed on every multi-line object
+    // literal — and produced 40 findings, nearly all false. A gate can be "proven able to fail" and still be
+    // useless if it fails on everything. Both shapes below must stay unreported: a multi-row insert routed
+    // through sliceForBindLimit, and the single-row object literal that is the common case and exempt.
+    extra: {
+      name: "probeOkRepository.ts",
+      content: `import type { Tx } from "../../client.ts";
+import { contacts } from "../../schema/contacts.ts";
+import { sliceForBindLimit } from "../bindLimit.ts";
+
+export const probeOkRepository = {
+  async insertManyBounded(tx: Tx, rows: Array<{ tenantId: string }>): Promise<void> {
+    for (const slice of sliceForBindLimit(rows)) {
+      await tx.insert(contacts).values(slice.map((r) => ({ tenantId: r.tenantId })));
+    }
+  },
+
+  async insertOne(tx: Tx, tenantId: string): Promise<void> {
+    await tx.insert(contacts).values({
+      tenantId,
+    });
+  },
+};
+`,
+    },
+    reject: /probeOkRepository\.ts/,
   },
   {
     gate: "lint:queue-consumers",
@@ -273,6 +316,20 @@ export function probe(rows: unknown[], jobId: string): void {
   log.info("probe", { jobId, rows });
 }
 `,
+    // The COMPLIANT form: same logger, same module, same ES6 shorthand — carrying a job id and a COUNT rather
+    // than the rows. Telling `{ jobId, rows }` from `{ jobId, rowCount }` is this gate's entire job, and the
+    // shorthand is exactly where it was once blind: `{ rows }` passed while `{ rows: parsed }` failed. A gate
+    // that flagged every log line in an import module would pass a plain plant while being unusable.
+    extra: {
+      name: "probeOk.ts",
+      content: `import { log } from "@leadwolf/auth";
+export function probeOk(rows: unknown[], jobId: string): void {
+  const rowCount = rows.length;
+  log.info("probeOk", { jobId, rowCount });
+}
+`,
+    },
+    reject: /probeOk\.ts/,
   },
 ];
 
@@ -377,6 +434,20 @@ for (const testCase of CASES) {
       failures.push(
         `${testCase.gate} failed, but did not NAME the planted file — a failure nobody can act on.\n` +
           `    expected the output to mention: ${TAG}`,
+      );
+      continue;
+    }
+    // The other half of a plant. "Can it fail?" is only half of "is it worth anything?" — a gate that reports
+    // EVERYTHING passes a plain plant while being worthless, and this repo has shipped exactly that: the first
+    // lint:batch-inserts produced 40 findings, nearly all false. Where a fixture also plants a LOOK-ALIKE —
+    // the COMPLIANT form the gate must stay quiet about — `reject` asserts the gate told them apart. Set only
+    // where there is a distinction worth making.
+    if (testCase.reject && testCase.reject.test(withPlant.output)) {
+      failures.push(
+        `${testCase.gate} failed for the right reason but ALSO reported ${testCase.reject}, which the fixture\n` +
+          "    planted as a COMPLIANT look-alike it must ignore. The gate does not distinguish the two, so its\n" +
+          "    findings cannot be trusted even when it is right.\n" +
+          `    output : ${withPlant.output.trim().split("\n").slice(0, 3).join(" | ")}`,
       );
       continue;
     }
