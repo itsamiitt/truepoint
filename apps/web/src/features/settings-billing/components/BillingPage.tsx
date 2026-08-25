@@ -6,7 +6,7 @@
 "use client";
 
 import { isWorkspaceAdmin, useSessionRole } from "@/lib/useSessionRole";
-import { StateSwitch, Tabs } from "@leadwolf/ui";
+import { PageHeader, StateSwitch, Tabs } from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 import styles from "../billing.module.css";
 import { useBilling } from "../hooks/useBilling";
@@ -46,7 +46,7 @@ export function BillingPage() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Billing &amp; credits</h1>
+      <PageHeader title="Billing & credits" />
 
       <Tabs
         items={TAB_ITEMS}

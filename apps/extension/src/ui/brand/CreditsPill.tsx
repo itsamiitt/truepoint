@@ -10,7 +10,8 @@ const monoLabel: React.CSSProperties = {
   fontSize: 11,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
-  color: "var(--tp-ink-4, #9ca3af)",
+  // "CREDITS" is a LABEL, not decoration — --tp-ink-4 is 2.54:1 and fails AA at any size, let alone 11px.
+  color: "var(--tp-ink-3, #6b7280)",
 };
 
 export function CreditsPill({
@@ -21,7 +22,9 @@ export function CreditsPill({
   compact?: boolean;
 }): React.ReactElement {
   const low = typeof credits === "number" && credits <= LOW_BALANCE;
-  const valueColor = low ? "var(--warning, #d97706)" : "var(--tp-ink, #111827)";
+  // --warning-700, not --warning: this is the balance NUMBER and the hint under it — text, not a fill.
+  // --warning is 3.19:1 on white, below the 4.5:1 floor; the -700 half is 5.02:1 and exists for this.
+  const valueColor = low ? "var(--warning-700, #b45309)" : "var(--tp-ink, #111827)";
   const value = typeof credits === "number" ? credits.toLocaleString() : "—";
 
   if (compact) {
@@ -61,7 +64,7 @@ export function CreditsPill({
       <div>
         <div style={monoLabel}>{t("popup.credits")}</div>
         {low ? (
-          <div style={{ ...monoLabel, color: "var(--warning, #d97706)", marginTop: 4 }}>
+          <div style={{ ...monoLabel, color: "var(--warning-700, #b45309)", marginTop: 4 }}>
             {t("popup.lowBalance")}
           </div>
         ) : null}

@@ -128,7 +128,7 @@ export function ImportJobDrawer({
           {summary ? (
             <div>
               <span className={styles.sectionLabel}>Results</span>
-              <div className={styles.statGrid} style={{ marginTop: 8 }}>
+              <div className={styles.statGrid} style={{ marginTop: "var(--tp-space-2)" }}>
                 <Stat label="Created" value={summary.created.toLocaleString()} />
                 <Stat label="Updated" value={summary.updated.toLocaleString()} />
                 <Stat label="Duplicates" value={summary.duplicates.toLocaleString()} />
@@ -142,7 +142,7 @@ export function ImportJobDrawer({
           {fresh?.mergeMode ? (
             <div>
               <span className={styles.sectionLabel}>Strategy</span>
-              <div className={styles.statGrid} style={{ marginTop: 8 }}>
+              <div className={styles.statGrid} style={{ marginTop: "var(--tp-space-2)" }}>
                 <Stat label="Merge mode" value={MERGE_LABEL[fresh.mergeMode] ?? fresh.mergeMode} />
                 <Stat
                   label="Existing values"
@@ -154,7 +154,7 @@ export function ImportJobDrawer({
 
           <div>
             <span className={styles.sectionLabel}>Timeline</span>
-            <div className={styles.statGrid} style={{ marginTop: 8 }}>
+            <div className={styles.statGrid} style={{ marginTop: "var(--tp-space-2)" }}>
               <Stat label="Started" value={formatDateTime(createdAt)} />
               <Stat label="Processing began" value={formatDateTime(startedAt)} />
               <Stat label="Finished" value={formatDateTime(completedAt)} />

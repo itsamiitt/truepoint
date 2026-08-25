@@ -326,6 +326,9 @@ export function BulkActionBar({
           {count.toLocaleString()} selected{allMatching ? " (all matching)" : ""}
         </span>
         {!allMatching && !hideSelectAllMatching ? (
+          // NOT TpButton variant="link". This bar's background IS --tp-ink, and .tp-ui-btn--link paints
+          // color: var(--tp-ink) — the same colour, 1:1 contrast, an invisible control. .bulkLink is the
+          // on-fill (white) equivalent. See the note on the ghost buttons below.
           <button
             type="button"
             className={styles.bulkLink}
@@ -338,6 +341,10 @@ export function BulkActionBar({
           Balance <strong>{balance === null ? "—" : balance.toLocaleString()}</strong>
         </span>
         <span className={styles.bulkSep} aria-hidden />
+        {/* Every ghost/link button below wears styles.bulkOnFill. This bar paints background: var(--tp-ink),
+            and the DS variants assume a LIGHT surface — untouched, --ghost is --tp-ink-2 on --tp-ink
+            (1.72:1) and --link is --tp-ink on --tp-ink (1:1, literally invisible). The class re-colours the
+            label AND the hover fill; see the rule in prospect.module.css for why both halves are needed. */}
         <div className={styles.bulkActions}>
           <TpButton
             variant="primary"
@@ -359,6 +366,7 @@ export function BulkActionBar({
           <TpButton
             variant="ghost"
             size="sm"
+            className={styles.bulkOnFill}
             leftIcon={<ListPlus size={15} />}
             onClick={() => void openListDialog()}
           >
@@ -367,14 +375,22 @@ export function BulkActionBar({
           <TpButton
             variant="ghost"
             size="sm"
+            className={styles.bulkOnFill}
             leftIcon={<Send size={15} />}
             onClick={() => void openSequenceDialog()}
           >
             Enroll
           </TpButton>
           <DropdownMenu
-            trigger={({ toggle }) => (
-              <TpButton variant="ghost" size="sm" onClick={toggle} aria-label="More bulk actions">
+            trigger={({ toggle, props }) => (
+              <TpButton
+                {...props}
+                variant="ghost"
+                size="sm"
+                className={styles.bulkOnFill}
+                onClick={toggle}
+                aria-label="More bulk actions"
+              >
                 <MoreHorizontal size={15} />
               </TpButton>
             )}
@@ -382,7 +398,7 @@ export function BulkActionBar({
             items={moreItems}
           />
           {extraActions}
-          <TpButton variant="link" size="sm" onClick={clear}>
+          <TpButton variant="link" size="sm" className={styles.bulkOnFill} onClick={clear}>
             Clear
           </TpButton>
         </div>

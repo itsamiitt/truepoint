@@ -22,6 +22,7 @@ export const en = {
   "card.noMatchHint": "We couldn't find this profile.",
   // Lookup-ladder states (extension-intelligence-loop): the card always says which stage the lookup is in.
   "card.checking": "Checking TruePoint…",
+  "card.dismiss": "Dismiss TruePoint card",
   "card.inTruePoint": "In TruePoint",
   "card.updatedToday": "Found in TruePoint · updated today",
   "card.updatedDaysAgo": "Found in TruePoint · updated {n} days ago",
@@ -50,6 +51,8 @@ export const en = {
   "panel.errorTitle": "Couldn't load this profile",
   "panel.signedOut": "Sign in to see prospect intel",
   "panel.signedOutHint": "TruePoint shows what it holds about the person on this page.",
+  // The tablist's accessible name — announced before the tabs themselves, so it says what they switch between.
+  "panel.tabsLabel": "Panel sections",
   "tab.prospect": "Prospect",
   "tab.company": "Company",
   "prospect.emptyOnCompany": "No person on this page",

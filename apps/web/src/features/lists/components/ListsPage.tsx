@@ -11,6 +11,7 @@ import {
   DropdownMenu,
   EmptyState,
   type MenuItem,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TableSkeleton,
@@ -144,8 +145,8 @@ export function ListsPage() {
             >
               <DropdownMenu
                 align="end"
-                trigger={({ toggle }) => (
-                  <TpIconButton label={`Actions for ${l.name}`} onClick={toggle}>
+                trigger={({ toggle, props }) => (
+                  <TpIconButton {...props} label={`Actions for ${l.name}`} onClick={toggle}>
                     <MoreHorizontal size={16} />
                   </TpIconButton>
                 )}
@@ -161,21 +162,19 @@ export function ListsPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.head}>
-        <div className={styles.headMeta}>
-          <h1 className={styles.title}>
+      <PageHeader
+        title={
+          <>
             <ListChecks size={20} aria-hidden /> Lists
-          </h1>
-          <span className={styles.subtitle}>
-            Curated, workspace-shared collections of prospects.
-          </span>
-        </div>
-        <div className={styles.headActions}>
+          </>
+        }
+        subtitle="Curated, workspace-shared collections of prospects."
+        actions={
           <TpButton variant="primary" size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
             New list
           </TpButton>
-        </div>
-      </div>
+        }
+      />
 
       <div className={styles.toolbar}>
         <TpInput

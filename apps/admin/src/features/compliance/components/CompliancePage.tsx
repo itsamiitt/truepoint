@@ -204,7 +204,7 @@ export function CompliancePage() {
         description="Recorded with your reason in the audit log. Rejection closes the request; it does not delete any data."
         maxWidth={480}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setRejecting(null)} disabled={!!busyId}>
               Cancel
             </TpButton>

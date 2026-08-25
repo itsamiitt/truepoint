@@ -84,15 +84,59 @@ packages/ui/src/
 ├── index.ts             # Public API (re-exports)
 ├── cn.ts                # className helper
 ├── tokens.css           # the single shared --tp-* token source (not forked)
-├── theme.css            # Tailwind @theme mapping onto the tokens
-├── primitives.css       # .tp-ui-* classes
-└── components/          # Card, DataTable, controls.tsx, ui/* (shadcn), …
+├── theme.css            # Tailwind @theme mapping onto the tokens (apps/auth loads Tailwind)
+├── primitives.css       # .tp-ui-* classes — BOTH component families style from here
+└── components/          # PageHeader, PageContainer, Card, DataTable, controls.tsx,
+                         #   overlay.tsx + overlayStack.ts, floating.tsx, ui/* (shadcn), …
 ```
 
 Simpler components never import more complex ones — dependencies flow downward.
 The shared tokens (the `--tp-*` namespace) are defined once (in `tokens.css`); the
 components build on them. Keep the shared package minimal and generic; app-specific
 components stay in the app (see `internal-repo.md`).
+
+`PageHeader` and `PageContainer` are the page scaffolding — the one destination header
+and the one page container, shared by `apps/web`, `apps/admin` and `apps/forge`. A
+feature must not hand-roll either.
+
+---
+
+## `@leadwolf/app-shell` — the Shared Next.js Chrome
+
+`packages/app-shell` is the authenticated frame itself, consumed by `apps/web`,
+`apps/admin` and `apps/forge`. Before it existed each app carried its own
+near-identical shell, which is precisely how the three surfaces drifted apart.
+
+```
+packages/app-shell/src/
+├── index.ts             # AppShellFrame, Sidebar, TopBar (+ DensityToggle,
+│                        #   ShortcutsButton), NavItem, UserRow, ShortcutsDialog,
+│                        #   Logo/Brandmark/Wordmark, DensityProvider, useSidebarPin,
+│                        #   nav.ts helpers
+├── entries/palette.ts   # CommandPalette on its own subpath — cmdk (~17.3kB gz) must
+│                        #   stay off every route's first load
+└── shell.css            # imported once per app, AFTER the @leadwolf/ui sheets
+```
+
+**The split is the point.** The package owns the frame; each app keeps only what is
+genuinely its own — the auth/staff gate, the destination list, and its own top-bar
+widgets — and composes them in its own `src/components/shell/AppShell.tsx`. Adding an
+app-specific widget to the package is the mistake; adding a third copy of the rail is
+the worse one.
+
+---
+
+## `@leadwolf/auth-client` — the Browser Token Client
+
+`packages/auth-client` is the **frontend** half of auth: `createAuthClient` (PKCE
+redirect, in-memory access token, silent refresh, cross-tab refresh election).
+`apps/web`, `apps/admin` and `apps/forge` each instantiate it in their own
+`src/lib/authClient.ts` and add only what is app-specific (for `apps/web`, multi-org /
+multi-workspace switching). That file used to be a ~280-line copy in all three, with
+drift.
+
+Do not confuse it with `@leadwolf/auth` above — that one is server-side and must never
+reach a browser bundle.
 
 ---
 

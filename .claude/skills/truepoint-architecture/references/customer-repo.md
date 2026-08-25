@@ -2,7 +2,8 @@
 
 Serves `app.truepoint.in`. This is the only surface end customers interact with. It is
 one app inside the one Bun monorepo (root package `leadwolf`), alongside `apps/admin`,
-`apps/auth`, `apps/api`, and `apps/workers`.
+`apps/auth`, `apps/api`, `apps/workers`, `apps/doc`, `apps/forge`, `apps/forge-api`,
+`apps/forge-worker` and `apps/extension`.
 
 ---
 
@@ -27,15 +28,20 @@ apps/
         │   └── globals.css
         ├── features/                # Feature modules (see below)
         ├── components/              # Shared UI components (this app only; incl. shell/)
+        │                            #   shell/AppShell.tsx composes @leadwolf/app-shell
+        │                            #   with this app's auth gate, navConfig and widgets
         ├── hooks/                   # Shared hooks (this app only)
-        └── lib/                     # App-level setup (query client, helpers)
+        └── lib/                     # App-level setup (query client, authClient, helpers)
     # (Next.js middleware, if added, is apps/web/src/middleware.ts — none exists today.)
 
-packages/                           # shared @leadwolf/* workspace packages
-├── ui/                             # @leadwolf/ui — design system (--tp-* tokens)
+packages/                           # 13 shared @leadwolf/* workspace packages
+├── ui/                             # @leadwolf/ui — design system (--tp-* tokens, PageHeader/PageContainer)
+├── app-shell/                      # @leadwolf/app-shell — the shared Next.js chrome (web+admin+forge)
+├── auth-client/                    # @leadwolf/auth-client — browser PKCE/token client (web+admin+forge)
 ├── types/                          # @leadwolf/types — shared Zod schemas (API contract)
-├── auth/                           # @leadwolf/auth — auth primitives (backend-consumed)
-└── core/                           # @leadwolf/core — shared pure helpers
+├── auth/                           # @leadwolf/auth — backend IdP/verification (never imported by a frontend)
+└── core/                           # @leadwolf/core — SERVER-side domain layer (never imported by a frontend)
+#   also: config, db, identity, integrations, search, forge-core, forge-capture-sdk — all server-side
 
 # repo root: turbo.json, biome.json, package.json (workspaces), .env.example,
 # .github/workflows/ci.yml
@@ -90,10 +96,13 @@ import { ContactList } from '@/features/contacts/components/ContactList'
 | Feature components, hooks, API | `src/features/[feature-name]/` |
 | A component used by 3+ features | `src/components/` |
 | A hook used by 3+ features | `src/hooks/` |
-| A pure helper (formatting, parsing) | `packages/core/src/` |
-| A reusable UI primitive (button, input) | `packages/ui/src/` |
+| A pure helper (formatting, parsing) used by one feature | that feature's own `lib/` |
+| A pure helper shared across features **in this app** | `src/lib/` |
+| A pure helper shared across **apps** | `packages/types/src/` if it belongs with the contract shapes, else a new focused package. **Not `@leadwolf/core`** — that is the server-side domain layer (it depends on `@leadwolf/db` and `@leadwolf/config`) and importing it into `apps/web` drags a database client into the browser bundle. `lint:boundaries` enforces this |
+| A reusable UI primitive (button, input, page header) | `packages/ui/src/` |
+| A piece of the app chrome (sidebar, top bar, palette) | `packages/app-shell/src/` — shared with `apps/admin` and `apps/forge` |
 | A server action or route handler (BFF) | `src/app/api/` (none exist today — create only if genuinely needed) |
-| An auth check / redirect (rendering gate) | `src/lib/authClient.ts` + the `AppShell` gate — there is no Next.js middleware (see `auth.md`) |
+| An auth check / redirect (rendering gate) | `src/lib/authClient.ts` (a thin instantiation of `@leadwolf/auth-client`) + the `AppShell` gate — there is no Next.js middleware (see `auth.md`) |
 | A request/response type (the API contract) | `packages/types/src/` (shared Zod schemas) |
 
 If you are unsure, ask: does this code know about the customer product? If yes,
@@ -129,9 +138,19 @@ handling optimistic updates, split it:
 ```
 hooks/
 ├── useContacts.ts        # fetching + caching only (react-query)
-├── useContactForm.ts     # form state only (react-hook-form)
+├── useContactForm.ts     # form state only (controlled React state)
 └── useContactOptimistic.ts  # optimistic updates only
 ```
+
+> **There is no form library.** `react-hook-form` is not installed in any workspace —
+> do not reach for it, and do not add it mid-feature. In `apps/web` a form is
+> **controlled component state** in a client component, submitting through the
+> feature's `api/` folder. (`apps/auth` is the one app that uses the other shape —
+> Server Components posting to `"use server"` actions, so its flows work with
+> JavaScript disabled; that is why the DS ships native no-JS `Input`/`Checkbox`/
+> `RadioOption`.) Validation shapes come from the shared `@leadwolf/types` Zod
+> schemas either way; the client check is UX and the server re-validates (see
+> **truepoint-security**).
 
 A hook file should never import from another hook file in the same directory
 in a way that creates a chain. If two hooks depend on each other, they belong

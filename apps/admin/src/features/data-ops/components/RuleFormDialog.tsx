@@ -30,8 +30,8 @@ const CANONICAL_FIELDS = canonicalField.options;
 function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (
     // biome-ignore lint/a11y/noLabelWithoutControl: the wrapped control arrives as children
-    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
+    <label style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}>
+      <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
     </label>
   );
@@ -108,7 +108,7 @@ export function RuleFormDialog({
       title={editing ? "Edit rule" : "New validation rule"}
       description="Imported rows that fail an enabled rule are rejected (reject-on-fail). Changes are audited."
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
           <TpButton variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </TpButton>
@@ -118,7 +118,7 @@ export function RuleFormDialog({
         </div>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
         <Labeled label="Name">
           <TpInput
             value={name}
@@ -183,13 +183,13 @@ export function RuleFormDialog({
             />
           </Labeled>
         ) : null}
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
           <TpSwitch
             checked={enabled}
             disabled={busy}
             onChange={(e) => setEnabled(e.currentTarget.checked)}
           />
-          <span style={{ fontSize: 13 }}>Enabled</span>
+          <span style={{ fontSize: "var(--tp-text-body)" }}>Enabled</span>
         </label>
       </div>
     </Dialog>

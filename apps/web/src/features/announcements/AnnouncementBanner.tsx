@@ -4,6 +4,7 @@
 "use client";
 
 import { sharedKeys } from "@/lib/queryKeys";
+import { TpIconButton } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { type CSSProperties, useState } from "react";
 import { fetchActiveAnnouncements } from "./api";
@@ -77,9 +78,9 @@ export function AnnouncementBanner() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
-            padding: "10px 16px",
-            fontSize: 14,
+            gap: "var(--tp-space-3)",
+            padding: "10px var(--tp-space-4)", // 10px is off the spacing scale — left as a literal
+            fontSize: "var(--tp-text-label)",
             borderBottom: "1px solid var(--tp-hairline-2)",
             ...toneStyle(a.level),
           }}
@@ -88,22 +89,15 @@ export function AnnouncementBanner() {
             <strong>{a.title}</strong> {a.body}
           </span>
           {a.type === "maintenance" ? null : (
-            <button
-              type="button"
-              aria-label="Dismiss announcement"
+            // TpIconButton is this control: 32px square, ghost, ink-3 with the DS hover — and a hit
+            // target the bare glyph never had.
+            <TpIconButton
+              label="Dismiss announcement"
               onClick={() => dismiss(a.id)}
-              style={{
-                flex: "0 0 auto",
-                border: "none",
-                background: "transparent",
-                color: "var(--tp-ink-3)",
-                cursor: "pointer",
-                fontSize: 16,
-                lineHeight: 1,
-              }}
+              style={{ flex: "0 0 auto", fontSize: "var(--tp-text-title)", lineHeight: 1 }}
             >
               ✕
-            </button>
+            </TpIconButton>
           )}
         </div>
       ))}

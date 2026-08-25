@@ -114,7 +114,7 @@ export function AiUsagePage() {
               display: "inline-flex",
               alignItems: "center",
               gap: "var(--tp-space-2)",
-              fontSize: 13,
+              fontSize: "var(--tp-text-body)",
               color: "var(--tp-ink-3)",
             }}
           >
@@ -130,7 +130,18 @@ export function AiUsagePage() {
         }
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !(data && totals)}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No AI usage recorded"
+            description="Nothing has been logged for this window yet."
+          />
+        }
+      >
         {data && totals ? (
           <>
             <div className="tp-stat-grid">

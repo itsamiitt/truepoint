@@ -6,6 +6,7 @@
 import {
   type Column,
   DataTable,
+  EmptyState,
   PageContainer,
   PageHeader,
   StatTile,
@@ -118,7 +119,7 @@ export function BillingEconomicsPage() {
       <PageHeader
         title="Billing economics"
         subtitle="Gross credits sold vs consumed, revenue vs metered provider spend, cost-per-reveal and margin — across all tenants."
-        actions=<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        actions=<div style={{ display: "flex", gap: "var(--tp-space-2)", alignItems: "center" }}>
           <TpSelect
             aria-label="Period"
             value={String(sinceDays)}
@@ -140,14 +141,25 @@ export function BillingEconomicsPage() {
         </div>
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !summary}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No economics in this window"
+            description="No revenue, spend or credit movement was recorded."
+          />
+        }
+      >
         {summary ? (
           <>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: 12,
+                gap: "var(--tp-space-3)",
               }}
             >
               <StatTile
@@ -181,17 +193,20 @@ export function BillingEconomicsPage() {
             </div>
             {trend ? <EconomicsTrend trend={trend} /> : null}
             {tenants && tenants.length > 0 ? (
-              <div style={{ marginTop: 24 }}>
+              <div style={{ marginTop: "var(--tp-space-6)" }}>
                 <h3 className="tp-section-title">Top tenants by provider spend</h3>
                 <DataTable columns={tenantColumns} rows={tenants} rowKey={(t) => t.tenantId} />
               </div>
             ) : tenants ? (
-              <p className="app-muted" style={{ marginTop: 24, fontSize: 13 }}>
+              <p
+                className="app-muted"
+                style={{ marginTop: "var(--tp-space-6)", fontSize: "var(--tp-text-body)" }}
+              >
                 No tenant activity in this window.
               </p>
             ) : null}
             {lowBalance && lowBalance.length > 0 ? (
-              <div style={{ marginTop: 24 }}>
+              <div style={{ marginTop: "var(--tp-space-6)" }}>
                 <h3 className="tp-section-title">Low credit balance (≤ 100)</h3>
                 <DataTable
                   columns={lowBalanceColumns}
@@ -200,7 +215,10 @@ export function BillingEconomicsPage() {
                 />
               </div>
             ) : lowBalance ? (
-              <p className="app-muted" style={{ marginTop: 24, fontSize: 13 }}>
+              <p
+                className="app-muted"
+                style={{ marginTop: "var(--tp-space-6)", fontSize: "var(--tp-text-body)" }}
+              >
                 No tenants with low credit balance.
               </p>
             ) : null}

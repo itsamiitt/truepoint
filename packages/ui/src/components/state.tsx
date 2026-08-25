@@ -47,11 +47,17 @@ export function LoadingState({
       role="status"
       aria-label={label}
       aria-busy="true"
-      style={{ display: "flex", flexDirection: "column", gap: 12, padding: "4px 0", ...style }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--tp-space-3)",
+        padding: "4px 0",
+        ...style,
+      }}
     >
       {Array.from({ length: rows }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder rows have no stable id
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-3)" }}>
           <Skeleton width={28} height={28} radius="50%" />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
             <Skeleton width={`${70 - i * 6}%`} height={11} />
@@ -93,7 +99,7 @@ export function TableSkeleton({
       <div
         style={{
           display: "flex",
-          gap: 16,
+          gap: "var(--tp-space-4)",
           padding: "8px 12px",
           borderBottom: "1px solid var(--tp-hairline-2)",
         }}
@@ -110,7 +116,7 @@ export function TableSkeleton({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            gap: "var(--tp-space-4)",
             padding: "0 12px",
             minHeight: "var(--tp-row-h, 44px)",
             borderBottom: "1px solid var(--tp-hairline-2)",
@@ -147,7 +153,7 @@ export function EmptyState({
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
-        gap: 8,
+        gap: "var(--tp-space-2)",
         padding: "40px 24px",
         color: "var(--tp-ink-3)",
         ...style,
@@ -156,16 +162,24 @@ export function EmptyState({
       {icon != null ? (
         <span
           aria-hidden
-          style={{ color: "var(--tp-ink-4)", display: "inline-flex", marginBottom: 4 }}
+          style={{
+            color: "var(--tp-ink-4)",
+            display: "inline-flex",
+            marginBottom: "var(--tp-space-1)",
+          }}
         >
           {icon}
         </span>
       ) : null}
-      <div style={{ color: "var(--tp-ink)", fontSize: 14, fontWeight: 600 }}>{title}</div>
+      <div style={{ color: "var(--tp-ink)", fontSize: "var(--tp-text-label)", fontWeight: 600 }}>
+        {title}
+      </div>
       {description != null ? (
-        <div style={{ fontSize: 13, lineHeight: 1.5, maxWidth: 380 }}>{description}</div>
+        <div style={{ fontSize: "var(--tp-text-body)", lineHeight: 1.5, maxWidth: 380 }}>
+          {description}
+        </div>
       ) : null}
-      {action != null ? <div style={{ marginTop: 8 }}>{action}</div> : null}
+      {action != null ? <div style={{ marginTop: "var(--tp-space-2)" }}>{action}</div> : null}
     </div>
   );
 }
@@ -192,14 +206,23 @@ export function ErrorState({
         flexDirection: "column",
         alignItems: "center",
         textAlign: "center",
-        gap: 8,
+        gap: "var(--tp-space-2)",
         padding: "40px 24px",
         ...style,
       }}
     >
-      <div style={{ color: "var(--tp-ink)", fontSize: 14, fontWeight: 600 }}>{title}</div>
+      <div style={{ color: "var(--tp-ink)", fontSize: "var(--tp-text-label)", fontWeight: 600 }}>
+        {title}
+      </div>
       {detail != null ? (
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--tp-ink-3)", maxWidth: 380 }}>
+        <div
+          style={{
+            fontSize: "var(--tp-text-body)",
+            lineHeight: 1.5,
+            color: "var(--tp-ink-3)",
+            maxWidth: 380,
+          }}
+        >
           {detail}
         </div>
       ) : null}
@@ -208,7 +231,7 @@ export function ErrorState({
           type="button"
           onClick={onRetry}
           className="tp-ui-btn tp-ui-btn--ghost tp-ui-btn--sm"
-          style={{ marginTop: 8 }}
+          style={{ marginTop: "var(--tp-space-2)" }}
         >
           {retryLabel}
         </button>

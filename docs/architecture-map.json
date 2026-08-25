@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2428,
-  "fileSetHash": "sha256:1f10b6e7d5b7d78de3352e36e85e9af888bc79ee8d957a94693e57b2fd670872",
+  "fileCount": 2435,
+  "fileSetHash": "sha256:526611f9340913401772705a45b7217b9b8ec4ad6421192187d11f63bf3aa34c",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1778,7 +1778,9 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/marketRollupRepository.ts",
-        "packages/db/src/repositories/reportsRepository.ts"
+        "packages/db/src/repositories/outcomeMetricsRepository.ts",
+        "packages/db/src/repositories/reportsRepository.ts",
+        "packages/db/src/repositories/usageEventRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/marketRollupSweep.ts"
@@ -2556,6 +2558,7 @@
       "apps/auth/next.config.mjs",
       "apps/auth/postcss.config.mjs",
       "apps/auth/src/bootSelfTest.ts",
+      "apps/auth/src/contrast.test.ts",
       "apps/auth/src/instrumentation-client.ts",
       "apps/auth/src/instrumentation.ts",
       "apps/auth/src/middleware.ts",
@@ -2707,7 +2710,6 @@
       "apps/doc/src/components/ButtonLink.tsx",
       "apps/doc/src/components/CodeBlock.tsx",
       "apps/doc/src/components/Note.tsx",
-      "apps/doc/src/components/PageIntro.tsx",
       "apps/doc/src/components/Prose.tsx",
       "apps/doc/src/components/ReferenceTable.tsx",
       "apps/doc/src/components/SiteChrome.tsx",
@@ -2825,6 +2827,7 @@
       "apps/extension/src/content/extract/guards.test.ts",
       "apps/extension/src/content/extract/guards.ts",
       "apps/extension/src/content/hovercard/index.ts",
+      "apps/extension/src/content/hovercard/shadowTokens.test.ts",
       "apps/extension/src/content/index.ts",
       "apps/extension/src/content/observer.test.ts",
       "apps/extension/src/content/observer.ts"
@@ -3642,6 +3645,7 @@
       "packages/types/src/workerQueues.ts"
     ],
     "packages/ui": [
+      "packages/ui/src/classCoverage.test.ts",
       "packages/ui/src/cn.ts",
       "packages/ui/src/components/Avatar.tsx",
       "packages/ui/src/components/Card.tsx",
@@ -3660,7 +3664,10 @@
       "packages/ui/src/components/controls.tsx",
       "packages/ui/src/components/floating.tsx",
       "packages/ui/src/components/form.tsx",
+      "packages/ui/src/components/keyboard.domtest.tsx",
+      "packages/ui/src/components/overlay.domtest.tsx",
       "packages/ui/src/components/overlay.tsx",
+      "packages/ui/src/components/overlayStack.ts",
       "packages/ui/src/components/state.tsx",
       "packages/ui/src/components/ui/alert.tsx",
       "packages/ui/src/components/ui/badge.tsx",
@@ -3674,13 +3681,12 @@
       "packages/ui/src/components/virtualWindow.ts",
       "packages/ui/src/index.ts",
       "packages/ui/src/inkFourContrast.test.ts",
-      "packages/ui/src/primitivesContrast.test.ts"
+      "packages/ui/src/primitivesContrast.test.ts",
+      "packages/ui/src/rawPxBudget.test.ts",
+      "packages/ui/src/test/dom.ts"
     ]
   },
-  "unassigned": [
-    "packages/db/src/repositories/outcomeMetricsRepository.ts",
-    "packages/db/src/repositories/usageEventRepository.ts"
-  ],
+  "unassigned": [],
   "warnings": [],
   "dependencies": {
     "types": [],

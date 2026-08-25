@@ -16,8 +16,21 @@
 //
 // The rule those tokens encode, asserted below so it cannot quietly rot: status colour on a FILL or an ICON
 // uses the base tone; status colour on TEXT uses the -700.
+//
+// AND THE TOKEN THE HEADER WAS ABOUT. The paragraph above says the first scan reported ZERO `--tp-ink-4` text
+// usages when the real number was four — and then the TOKEN map below omitted `--tp-ink-4`, so this file could
+// not measure the very token whose absence it was written to explain. It is in the map now, with the ratio
+// asserted (2.54:1 on white: below the 4.5:1 normal-text floor AND the 3.0:1 large-text one, so there is no
+// text size at which it passes) and with a scan that keeps this app at zero ink-4 TEXT usages.
+//
+// All four were in components/EntityPicker.tsx: a "Searching…" line, a "no matches" line, and the option
+// hints. They went with the hand-rolled combobox that file used to be — the DS <Combobox> paints those in
+// --tp-ink-3. ink-4 is still correct where it is NOT text: a placeholder, a disabled control, a decorative
+// glyph beside its own label. The scan below only looks at `color:`, so those stay legal.
 
 import { describe, expect, test } from "bun:test";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 /** Copied literals from packages/ui/src/tokens.css — on purpose, so a change to either the token or a usage
  *  is caught. A test that reads the same source as the code cannot do that. */
@@ -25,6 +38,8 @@ const TOKEN = {
   "--tp-ink": "#111827",
   "--tp-ink-2": "#374151",
   "--tp-ink-3": "#6b7280",
+  /** NOT a text tone. In the map so the assertions below can prove that rather than assume it. */
+  "--tp-ink-4": "#9ca3af",
   "--tp-surface": "#ffffff",
   "--tp-surface-2": "#f9fafb",
   "--tp-surface-3": "#f4f5f7",
@@ -63,6 +78,8 @@ function contrast(fg: Token, bg: Token): number {
 }
 
 const AA_NORMAL = 4.5;
+/** WCAG 1.4.3: 18.66px bold / 24px text clears at 3:1. Also WCAG 1.4.11's floor for a meaningful graphic. */
+const AA_LARGE = 3.0;
 /** WCAG 1.4.11: a graphic that carries meaning needs 3:1, not 4.5:1. */
 const NON_TEXT = 3.0;
 
@@ -105,5 +122,51 @@ describe("the status tones are fills, not text", () => {
   test("the -700 variants are strictly darker than their base tone", () => {
     expect(luminance(TOKEN["--success-700"])).toBeLessThan(luminance(TOKEN["--success"]));
     expect(luminance(TOKEN["--warning-700"])).toBeLessThan(luminance(TOKEN["--warning"]));
+  });
+});
+
+/**
+ * `color:` only, and both spellings — the stylesheet form and the inline-JSX one this app writes everywhere.
+ * The scan the file's header describes missed the second because the quote sits between `color:` and `var(`,
+ * which is how four real usages read as zero. A `background`/`borderColor`/placeholder use of ink-4 is fine
+ * and deliberately not matched.
+ */
+const INK4_AS_TEXT = /color:\s*"?var\(--tp-ink-4\)"?/g;
+
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      if (entry === "node_modules" || entry === ".next") continue;
+      sourceFiles(full, out);
+      // This file quotes the pattern it searches for; scanning itself would make the count self-fulfilling.
+    } else if ((full.endsWith(".tsx") || full.endsWith(".css")) && !full.includes(".test.")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+describe("--tp-ink-4 is a non-text token", () => {
+  test("it fails AA at every text size, on every surface this console paints", () => {
+    for (const bg of ["--tp-surface", "--tp-surface-2", "--tp-surface-3"] as const) {
+      expect(contrast("--tp-ink-4", bg)).toBeLessThan(AA_LARGE);
+      expect(contrast("--tp-ink-4", bg)).toBeLessThan(AA_NORMAL);
+    }
+  });
+
+  test("...so apps/admin paints no TEXT with it", () => {
+    const offenders = sourceFiles(import.meta.dir)
+      .map((f) => [f, readFileSync(f, "utf8").match(INK4_AS_TEXT)?.length ?? 0] as const)
+      .filter(([, n]) => n > 0)
+      .map(([f, n]) => `${f.replace(/\\/g, "/").split("/apps/")[1]} ×${n}`);
+    expect(offenders).toEqual([]);
+  });
+
+  test("the scan sees both spellings (the bug that made four usages read as zero)", () => {
+    expect("color: var(--tp-ink-4);".match(INK4_AS_TEXT)?.length).toBe(1);
+    expect('style={{ color: "var(--tp-ink-4)" }}'.match(INK4_AS_TEXT)?.length).toBe(1);
+    // A non-text use of the same token is NOT a finding.
+    expect('style={{ borderColor: "var(--tp-ink-4)" }}'.match(INK4_AS_TEXT)).toBeNull();
   });
 });

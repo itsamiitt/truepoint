@@ -4,7 +4,7 @@
 // useToast(). We never fake prefs — a failing load shows ErrorState with retry.
 "use client";
 
-import { FormSection, StateSwitch, TpButton, TpSwitch, useToast } from "@leadwolf/ui";
+import { FormSection, PageHeader, StateSwitch, TpButton, TpSwitch, useToast } from "@leadwolf/ui";
 import { useEffect, useMemo, useState } from "react";
 import { saveNotificationPrefs } from "../api";
 import { useNotificationPrefs } from "../hooks/useNotificationPrefs";
@@ -58,7 +58,7 @@ export function NotificationsPanel() {
 
   return (
     <section className={styles.panel}>
-      <h1 className="tp-settings-title">Notifications</h1>
+      <PageHeader title="Notifications" />
 
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {draft ? (

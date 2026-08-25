@@ -224,7 +224,7 @@ export function PlansPage() {
       align: "right",
       cell: (t) =>
         canManage ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="ghost"
               size="sm"
@@ -278,7 +278,7 @@ export function PlansPage() {
         onClose={() => (busy ? undefined : setDraft(null))}
         title={draft?.editingKey ? "Edit plan template" : "New plan template"}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -289,7 +289,7 @@ export function PlansPage() {
         }
       >
         {draft ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
             <Field label="Key (stable id)" htmlFor="plan-key">
               <TpInput
                 id="plan-key"
@@ -308,7 +308,7 @@ export function PlansPage() {
                 onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })}
               />
             </Field>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-3)" }}>
               <Field label="Seat limit" htmlFor="plan-seats" grow>
                 <TpInput
                   id="plan-seats"
@@ -329,7 +329,7 @@ export function PlansPage() {
                 />
               </Field>
             </div>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-3)" }}>
               <Field label="Monthly credit grant (blank = none)" htmlFor="plan-grant" grow>
                 <TpInput
                   id="plan-grant"
@@ -385,7 +385,7 @@ export function PlansPage() {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setRetireTarget(null)}>
               Cancel
             </TpButton>
@@ -419,9 +419,14 @@ function Field({
   return (
     <label
       htmlFor={htmlFor}
-      style={{ display: "flex", flexDirection: "column", gap: 4, flex: grow ? "1 1 0" : undefined }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--tp-space-1)",
+        flex: grow ? "1 1 0" : undefined,
+      }}
     >
-      <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
+      <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
     </label>
   );

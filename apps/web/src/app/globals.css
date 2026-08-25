@@ -162,7 +162,7 @@
   height: 32px;
   min-width: 200px;
   padding: 0 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   background: var(--tp-surface-2);
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
@@ -216,7 +216,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .tp-settings-link {
   padding: 7px 10px;
@@ -243,11 +243,12 @@
   padding: var(--tp-page-pad-y) var(--tp-page-pad-x);
   overflow-y: auto; /* the panel is the scroll region — the scope nav and top bar stay fixed */
 }
-.tp-settings-title {
-  margin: 0 0 20px;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+/* Settings panels render <PageHeader> (@leadwolf/ui), not a bespoke title. This restores the one thing the
+   retired `.tp-settings-title` carried that PageHeader does not: the gap under the title. PageHeader's own
+   margin is 0 by design — a shared header cannot assume its page's rhythm — so the rhythm is set here, once,
+   for every panel inside the settings scope shell. */
+.tp-settings-panel .tp-ui-page-header {
+  margin-bottom: var(--tp-space-5);
 }
 @media (max-width: 768px) {
   /* Mobile: stack the scope nav above the panel and let .tp-content scroll the whole shell naturally. */

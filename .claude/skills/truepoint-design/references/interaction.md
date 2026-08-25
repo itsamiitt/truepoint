@@ -25,10 +25,17 @@ or directs attention (a new item appearing). It is never movement for its own sa
   and accepted).
 - Keep durations short. Anything over ~300ms feels sluggish in a tool people use
   all day. Fast and subtle beats slow and showy.
-- Every decorative animation respects `prefers-reduced-motion` (see
-  `accessibility.md`). Wrap keyframes in `@media (prefers-reduced-motion: no-preference)`.
+- `prefers-reduced-motion` is handled **globally**: `tokens.css` ends with a
+  kill-switch that zeroes every `animation-duration` and `transition-duration`, and
+  every app inherits it by importing that stylesheet. So a CSS animation needs no
+  per-animation wrapper — `@media (prefers-reduced-motion: no-preference)` around
+  your keyframes is fine but is not what makes the surface compliant. **JS-driven**
+  motion (a `requestAnimationFrame` loop, a scroll tween, a chart transition) is
+  outside its reach and must read `window.matchMedia('(prefers-reduced-motion:
+  reduce)')` itself. See `accessibility.md`.
 - Hover transitions are fine on desktop but must never be the *only* way to
-  reveal something — keyboard focus must reveal it too.
+  reveal something — keyboard focus must reveal it too (`:focus-within` on the row,
+  not just `:hover`).
 
 When in doubt, less motion. A still interface that responds instantly often
 feels better than one that animates every change.
@@ -79,6 +86,12 @@ Match the feedback mechanism to the weight and location of the event.
 | A destructive action needs confirmation first | `Dialog` — block until the user confirms or cancels |
 | A whole data surface failed to load | `ErrorState` inside `StateSwitch` (not a toast) |
 | Persistent context the user needs to keep seeing | `Alert` — stays in place, not transient |
+| A component **threw** while rendering | A Next.js App Router error boundary — `apps/web` has `app/(shell)/error.tsx` for a route crash (the shell survives, the content is replaced) and `app/global-error.tsx` for a crash above it |
+
+The error boundary is the last line, not a substitute for the others: a failed *fetch*
+is `ErrorState` with a retry, because the surface still knows what it was showing. A
+boundary catches the case where render itself blew up and there is no surface left. It
+gets copy and a recovery action like any other state — never a bare stack trace.
 
 **Rules:**
 - A toast confirms; it does not ask. Anything requiring a decision is a `Dialog`,
@@ -104,9 +117,35 @@ Loading states keep the user oriented while data is in flight.
   data arrives. Use `LoadingState rows={n}` sized to the expected result.
 - A spinner (`Spinner`) is for a small in-flight action — a button submitting, a
   section refreshing — not for a full page or list.
+- **Match the skeleton to the component, not just the content.** `TableSkeleton` in
+  front of a `DataTable`, `LoadingState` in front of a card or list. `LoadingState`
+  is the avatar-and-two-lines *card* shape; using it before a grid made every table's
+  first paint lie about what was coming.
 - Avoid loading flashes for fast responses. If data usually returns in under
   ~200ms, a skeleton that appears and vanishes instantly is worse than a brief
   blank — react-query's cached data avoids most of this.
+
+---
+
+## Optimistic Updates
+
+When a mutation is near-certain and the user is waiting on a list they can see, apply
+the change immediately and reconcile after.
+
+- **Show the pending row, don't hide it.** Render it at reduced opacity (and
+  `aria-busy` where it is a whole region) so it reads as "in flight", not as done.
+  Never remove a row and re-add it — that reflows the list twice and loses scroll
+  position.
+- **Roll back visibly.** On failure, restore the previous state *and* fire an error
+  toast saying what did not happen ("Couldn't add to list — try again"). A silent
+  revert is worse than no optimism: the user saw it work, then saw it un-work, with
+  no explanation.
+- **Don't be optimistic about things you can't predict.** A create that the server
+  assigns an ID, a value the server computes, an action that can be rejected by a
+  quota or an entitlement — wait for the response. Optimism is for a toggle, a
+  rename, a membership add: changes whose outcome you already know.
+- Disable the control while the mutation is in flight anyway, so a double-click does
+  not queue a second write.
 
 ---
 

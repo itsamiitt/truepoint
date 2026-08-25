@@ -2,22 +2,62 @@
 // its pinned extension id (the value EXTENSION_ORIGINS must carry), and the zip download.
 // The zip + metadata are produced by the packaging step into public/downloads/ — this page
 // only presents them; nothing here talks to /api/v1.
+//
+// The page sits in the DS PageContainer under a DS PageHeader like every other staff destination (it used to
+// hand-roll its title as an <h2 style={{fontSize:15}}>, which is neither the page's heading level nor the
+// page's title size), and renders its async states through the State Kit rather than an early-return ladder.
 "use client";
 
-import { Card, ErrorState, LoadingState, StatusBadge, TpButton } from "@leadwolf/ui";
+import {
+  Card,
+  EmptyState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+} from "@leadwolf/ui";
 import { extensionZipHref } from "../api";
 import { useExtensionMeta } from "../hooks/useExtensionMeta";
+import type { ExtensionMeta } from "../types";
 
-const FACT_LABEL: React.CSSProperties = { color: "var(--tp-ink-3)", fontSize: 12 };
-const FACT_VALUE: React.CSSProperties = { fontFamily: "var(--font-mono)", fontSize: 13 };
+const FACT_LABEL: React.CSSProperties = {
+  color: "var(--tp-ink-3)",
+  fontSize: "var(--tp-text-caption)",
+};
+const FACT_VALUE: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--tp-text-body)",
+};
 
 export function ExtensionPage() {
   const { meta, loading, error, reload } = useExtensionMeta();
 
-  if (loading) return <LoadingState label="Loading extension build…" />;
-  if (error || !meta)
-    return <ErrorState detail={error ?? "Extension metadata unavailable"} onRetry={reload} />;
+  return (
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Chrome extension"
+        subtitle="TruePoint — Prospect Capture. The zip below is the current production build; every install of it resolves to the pinned extension ID, which the API's extension allow-list (EXTENSION_ORIGINS) is configured to trust."
+      />
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && meta === null}
+        onRetry={reload}
+        emptyState={
+          <EmptyState
+            title="No packaged build"
+            description="Nothing has been published to public/downloads yet — run the extension packaging step."
+          />
+        }
+      >
+        {meta ? <BuildDetails meta={meta} /> : null}
+      </StateSwitch>
+    </PageContainer>
+  );
+}
 
+function BuildDetails({ meta }: { meta: ExtensionMeta }) {
   const facts: Array<[string, string]> = [
     ["Extension version", meta.version],
     ["Minimum Chrome version", meta.minimumChromeVersion],
@@ -26,19 +66,17 @@ export function ExtensionPage() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
-      <div>
-        <h2 style={{ fontSize: 15, fontWeight: 600 }}>Chrome extension</h2>
-        <p style={{ color: "var(--tp-ink-3)", fontSize: 13 }}>
-          TruePoint — Prospect Capture. The zip below is the current production build; every install
-          of it resolves to the pinned extension ID, which the API's extension allow-list
-          (EXTENSION_ORIGINS) is configured to trust.
-        </p>
-      </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
       <Card>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: "var(--tp-space-1)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
             <span style={{ fontWeight: 600 }}>truepoint-extension {meta.version}</span>
             <StatusBadge tone="success">current</StatusBadge>
           </div>
@@ -46,7 +84,7 @@ export function ExtensionPage() {
             style={{
               display: "grid",
               gridTemplateColumns: "max-content 1fr",
-              gap: "6px 16px",
+              gap: "6px var(--tp-space-4)",
               margin: 0,
             }}
           >
@@ -66,8 +104,23 @@ export function ExtensionPage() {
       </Card>
 
       <section>
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Install (unpacked)</h3>
-        <ol style={{ color: "var(--tp-ink-3)", fontSize: 13, paddingLeft: 18, margin: 0 }}>
+        <h2
+          style={{
+            fontSize: "var(--tp-text-title)",
+            fontWeight: 600,
+            marginBottom: "var(--tp-space-1)",
+          }}
+        >
+          Install (unpacked)
+        </h2>
+        <ol
+          style={{
+            color: "var(--tp-ink-3)",
+            fontSize: "var(--tp-text-body)",
+            paddingLeft: 18,
+            margin: 0,
+          }}
+        >
           <li>Unzip the download into a folder.</li>
           <li>
             Open <span style={FACT_VALUE}>chrome://extensions</span>, turn on Developer mode.

@@ -39,7 +39,7 @@ export function AuthShell({
           id="auth-title"
           style={{
             margin: "0 0 var(--tp-space-1)",
-            fontSize: 22,
+            fontSize: "var(--tp-text-display)",
             fontWeight: 600,
             lineHeight: 1.2,
           }}
@@ -50,7 +50,7 @@ export function AuthShell({
           <p
             style={{
               margin: "0 0 var(--tp-space-5)",
-              fontSize: 14,
+              fontSize: "var(--tp-text-label)",
               color: "var(--tp-ink-3)",
             }}
           >
@@ -59,7 +59,13 @@ export function AuthShell({
         ) : null}
         {children}
         {footer ? (
-          <div style={{ marginTop: "var(--tp-space-4)", fontSize: 13, color: "var(--tp-ink-3)" }}>
+          <div
+            style={{
+              marginTop: "var(--tp-space-4)",
+              fontSize: "var(--tp-text-body)",
+              color: "var(--tp-ink-3)",
+            }}
+          >
             {footer}
           </div>
         ) : null}

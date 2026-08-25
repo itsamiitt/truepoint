@@ -25,8 +25,8 @@ export function InvoicesTab() {
   };
 
   return (
-    <Card style={{ padding: 24 }}>
-      <p className="app-muted" style={{ fontSize: 13, marginTop: 0 }}>
+    <Card style={{ padding: "var(--tp-space-6)" }}>
+      <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", marginTop: 0 }}>
         Your invoices and receipts live in the billing portal, where you can download PDFs and
         update your payment method. Your in-app credit movements are on the Credit history tab.
       </p>

@@ -95,7 +95,7 @@ export function ImportDraftFlow({
             key={s}
             aria-current={s === step ? "step" : undefined}
             style={{
-              fontSize: 13,
+              fontSize: "var(--tp-text-body)",
               color: s === step ? "var(--tp-ink)" : "var(--tp-ink-3)",
               fontWeight: s === step ? 600 : 400,
             }}

@@ -25,6 +25,9 @@ export function BrandLockup() {
         <path d="M22 60 L50 45 L78 60" stroke="var(--tp-ink)" />
         <path d="M22 77 L50 62 L78 77" stroke="var(--tp-ink)" />
       </svg>
+      {/* 20px is off the --tp-text-* ladder on purpose: this is the WORDMARK, sized to the 24px chevron beside
+          it, not a UI text size. The ladder's neighbours (18 heading / 22 display) would each break the lockup's
+          optical balance with the mark. */}
       <span style={{ fontSize: 20, letterSpacing: "-0.02em" }}>
         <span style={{ fontWeight: 400 }}>True</span>
         <span style={{ fontWeight: 800 }}>Point</span>

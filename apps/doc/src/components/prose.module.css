@@ -39,9 +39,15 @@
    copy control, then the sample. The wrapper scrolls, not the page — a curl example with a long bearer header
    is wider than a phone, and a page that scrolls sideways as a whole is unusable, so overflow binds here.
 
-   Text on twilight is white at measured alphas, asserted in contrast.test.ts: the label runs at 0.62 (5.2:1
-   over #0c0e1a needs ≥0.55 — 0.62 gives ~6.7:1) and the sample at 0.92 (~17:1). The design's 0.5 label fails
-   the AA floor and is deliberately not reproduced. */
+   Text on twilight is --tp-on-fill at measured alphas, asserted in contrast.test.ts: the label runs at 0.62
+   (5.2:1 over #0c0e1a needs ≥0.55 — 0.62 gives ~6.7:1) and the sample at 0.92 (~17:1). The design's 0.5
+   label fails the AA floor and is deliberately not reproduced.
+
+   The alphas are the DESIGN and cannot move (contrast.test.ts pins each composited result over
+   --tp-twilight), so the token is mixed down rather than replaced — the same `color-mix(in srgb,
+   var(--tp-on-fill) N%, transparent)` form apps/web uses for white-on-dark. What was hardcoded here was the
+   base colour, and that is what moves off a literal: this panel is now the twilight token and the on-fill
+   token, so retinting either one carries the whole surface with it. */
 .codeWrap {
   border-radius: var(--radius);
   background: var(--tp-twilight);
@@ -54,7 +60,7 @@
   justify-content: space-between;
   gap: var(--tp-space-3);
   padding: var(--tp-space-2) var(--tp-space-4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--tp-on-fill) 9%, transparent);
 }
 
 .codeLang {
@@ -62,7 +68,7 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
+  color: color-mix(in srgb, var(--tp-on-fill) 62%, transparent);
 }
 
 /* The copy control. A one-off dark-surface button (see CodeBlock.tsx for why it is not TpButton); the
@@ -71,8 +77,8 @@
   font-family: var(--font-sans);
   font-size: 11.5px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.08);
+  color: color-mix(in srgb, var(--tp-on-fill) 85%, transparent);
+  background: color-mix(in srgb, var(--tp-on-fill) 8%, transparent);
   border: 0;
   border-radius: var(--tp-radius-sm);
   padding: var(--tp-space-1) var(--tp-space-2);
@@ -80,7 +86,7 @@
   transition: background var(--tp-duration-fast) var(--tp-ease);
 }
 .codeCopy:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--tp-on-fill) 16%, transparent);
   color: var(--tp-on-fill);
 }
 
@@ -92,7 +98,7 @@
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.92);
+  color: color-mix(in srgb, var(--tp-on-fill) 92%, transparent);
   tab-size: 2;
 }
 

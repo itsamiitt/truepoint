@@ -7,10 +7,9 @@
 
 import { CodeBlock } from "@/components/CodeBlock.tsx";
 import { Note } from "@/components/Note.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import { MACHINE_REFERENCE_PATH, buildMachineReference } from "@/content/machineReference.ts";
 import { OPENAPI_PATH, callableEndpoints, withheldEndpoints } from "@/content/openapi.ts";
-import { StatusBadge } from "@leadwolf/ui";
+import { PageHeader, StatusBadge } from "@leadwolf/ui";
 import styles from "../machine-reference.module.css";
 
 export function MachineReferencePage() {
@@ -20,11 +19,11 @@ export function MachineReferencePage() {
 
   return (
     <article>
-      <PageIntro
+      <PageHeader
         eyebrow="Documentation"
         title="Machine reference"
-        lede="The whole published contract as one plain-text document: every endpoint, parameter, return field, error code and worked example, plus the rules an integration most often gets wrong. Paste it into an assistant, or fetch it in a build step."
-        badge={
+        subtitle="The whole published contract as one plain-text document: every endpoint, parameter, return field, error code and worked example, plus the rules an integration most often gets wrong. Paste it into an assistant, or fetch it in a build step."
+        actions={
           <StatusBadge tone="success">Generated from the same source as these pages</StatusBadge>
         }
       />

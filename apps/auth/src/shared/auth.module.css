@@ -6,7 +6,10 @@
  * This replaces the Tailwind utility classes that used to carry the auth UI in app JSX — banned by
  * truepoint-design — and, with them, the four repeats of a hardcoded shadow literal and the type scale
  * expressed as arbitrary px (text-[12px], text-[13px], text-[17px], text-[22px], text-[26px]).
- * Structure and colour only; every value is a --tp-* token.
+ * Structure and colour only; every value is a --tp-* token. The sizes below finally are too: tokens.css now
+ * carries the --tp-text-* ladder that did not exist when this file was written, so the raw 12/13/14/18px that
+ * survived the Tailwind removal are gone. A size still spelled in px anywhere in this app is off the ladder
+ * on purpose (see AccountShell's 26px title) — not a leftover.
  */
 
 /* Visually hidden but reachable by screen readers — the <caption> and label pattern the tables rely on. */
@@ -33,7 +36,7 @@
 }
 
 .linkDanger {
-  font-size: 13px;
+  font-size: var(--tp-text-body);
   color: var(--danger);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -51,11 +54,11 @@
 .table {
   width: 100%;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--tp-text-label);
   border-collapse: collapse;
 }
 .table thead tr {
-  font-size: 12px;
+  font-size: var(--tp-text-caption);
   color: var(--tp-ink-3);
 }
 .table th {
@@ -69,12 +72,12 @@
   border-top: 1px solid var(--tp-hairline-2);
 }
 .cellMuted {
-  font-size: 12px;
+  font-size: var(--tp-text-caption);
   color: var(--tp-ink-3);
 }
 .cellMono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--tp-text-caption);
   color: var(--tp-ink-3);
 }
 .cellRight {
@@ -86,7 +89,7 @@
   user-select: all;
   word-break: break-all;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--tp-text-body);
 }
 .selectableBox {
   user-select: all;
@@ -109,23 +112,11 @@
   margin-bottom: var(--tp-space-5);
 }
 
-/* A link that looks like a secondary button — needs :hover, so it cannot be an inline style. */
-.buttonLink {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  height: 36px;
-  padding: 0 var(--tp-space-3);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tp-ink);
-  text-decoration: none;
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-}
-.buttonLink:hover {
-  background: var(--tp-surface-2);
-}
+/* `.buttonLink` — a hand-rolled "link that looks like a secondary button" — lived here, and does not any more.
+   The DS Button supports `asChild`, so <Button variant="outline" asChild><a …></Button> puts the REAL button's
+   classes on the anchor (MfaSection's "Set a password"): same 36px, same tokens, same hover, and it tracks
+   .tp-ui-btn--secondary instead of drifting from it. A lookalike in an app stylesheet is exactly the kind of
+   near-miss the primitives exist to delete. */
 
 /* The one-time-code field: a wide, centred, letter-spaced mono input. Needs ::placeholder and :focus-visible. */
 .otpInput {
@@ -133,7 +124,7 @@
   height: 48px;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: var(--tp-text-heading);
   letter-spacing: 0.5em;
   color: var(--tp-ink);
   background: var(--tp-surface);

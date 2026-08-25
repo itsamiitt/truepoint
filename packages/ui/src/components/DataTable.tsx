@@ -125,14 +125,35 @@ export function DataTable<T>({
   );
 
   const renderRow = (row: T, index: number, virtual?: VirtualItem) => (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: row click is a pointer convenience; the row's focusable controls carry the keyboard path
     <tr
       key={rowKey(row, index)}
       data-index={index}
       ref={virtual ? virtualizer.measureElement : undefined}
       className={cn(onRowClick && "tp-ui-tr-clickable")}
-      aria-selected={isSelected ? isSelected(row) : undefined}
+      // An activatable row is a control: it takes focus and answers Enter/Space. The old comment here
+      // claimed "the row's focusable controls carry the keyboard path" — most rows have none, so opening a
+      // record was mouse-only (WCAG 2.2 SC 2.1.1).
+      tabIndex={onRowClick ? 0 : undefined}
+      // data-selected, not aria-selected: aria-selected on a <tr> outside a grid/treegrid is invalid ARIA.
+      data-selected={isSelected ? isSelected(row) : undefined}
+      // aria-rowindex is 1-based and counts the header row, so body row 0 is row 2. Only meaningful while
+      // windowing, when most rows are absent from the DOM and a screen reader would otherwise be told the
+      // table has ~24 rows.
+      aria-rowindex={virtualize ? index + 2 : undefined}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
+      onKeyDown={
+        onRowClick
+          ? (e) => {
+              // Ignore keys that bubbled up from a control inside the row (a menu button, a checkbox) —
+              // Enter there means "press me", not "open the record".
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick(row);
+              }
+            }
+          : undefined
+      }
     >
       {columns.map((col) => (
         <td key={col.key} style={{ textAlign: col.align ?? "left" }}>
@@ -151,29 +172,42 @@ export function DataTable<T>({
 
   return (
     <div className={cn("tp-ui-table-wrap", className)}>
-      <table className="tp-ui-table">
+      <table
+        className="tp-ui-table"
+        // The true row count while windowing (+1 for the header row); without it the accessibility tree
+        // reports only the rows currently rendered.
+        aria-rowcount={virtualize ? sorted.length + 1 : undefined}
+      >
         <thead>
           <tr>
             {columns.map((col) => {
               const sortable = !!col.sortValue;
               const active = sort?.key === col.key;
               return (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: header click-sort is a pointer convenience; a keyboard sort control is design-backlog work
                 <th
                   key={col.key}
-                  className={cn(sortable && "tp-ui-th-sortable")}
+                  scope="col"
                   style={{ width: col.width, textAlign: col.align ?? "left" }}
-                  onClick={sortable ? () => toggleSort(col.key) : undefined}
                   aria-sort={
                     active ? (sort?.dir === "asc" ? "ascending" : "descending") : undefined
                   }
                 >
-                  {col.header}
                   {sortable ? (
-                    <span className="tp-ui-th-arrow" aria-hidden>
-                      {active ? (sort?.dir === "asc" ? "↑" : "↓") : "↕"}
-                    </span>
-                  ) : null}
+                    // A real button, not a click handler on the <th>: the header has to be reachable and
+                    // pressable from the keyboard, and only an interactive element announces itself as one.
+                    <button
+                      type="button"
+                      className="tp-ui-th-btn"
+                      onClick={() => toggleSort(col.key)}
+                    >
+                      {col.header}
+                      <span className="tp-ui-th-arrow" aria-hidden>
+                        {active ? (sort?.dir === "asc" ? "↑" : "↓") : "↕"}
+                      </span>
+                    </button>
+                  ) : (
+                    col.header
+                  )}
                 </th>
               );
             })}

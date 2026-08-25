@@ -9,11 +9,11 @@
 
 import { AvailabilityBadge } from "@/components/AvailabilityBadge.tsx";
 import { CodeBlock } from "@/components/CodeBlock.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
 import { ACCESS_NOTE } from "@/content/access.ts";
 import { buildSnippets } from "@/content/snippets.ts";
 import type { Endpoint } from "@/content/types.ts";
+import { PageHeader } from "@leadwolf/ui";
 import type { ReactNode } from "react";
 import styles from "../api-reference.module.css";
 import { SnippetTabs } from "./SnippetTabs.tsx";
@@ -61,11 +61,11 @@ export function EndpointPage({ endpoint }: { endpoint: Endpoint }) {
         )}
       </div>
 
-      <PageIntro
+      <PageHeader
         eyebrow="API reference"
         title={endpoint.title}
-        lede={endpoint.summary}
-        badge={<AvailabilityBadge availability={endpoint.availability} />}
+        subtitle={endpoint.summary}
+        actions={<AvailabilityBadge availability={endpoint.availability} />}
       />
 
       <div className={styles.split}>

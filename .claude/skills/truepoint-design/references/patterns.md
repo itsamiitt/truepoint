@@ -4,7 +4,7 @@ Exact specifications for every repeating surface in TruePoint CRM.
 These are fixed contracts — not suggestions. Deviating from them creates
 inconsistency that multiplies as the product grows.
 
-> **Contents:** Page Shell · Sidebar · Topbar · Contact/Prospect Drawer ·
+> **Contents:** Page Shell · Sidebar · Topbar · Density · Contact/Prospect Drawer ·
 > Filter Bar/Smart Search · List Row · ScorePill · Responsive Breakpoints ·
 > Stat Grid · Forms · Toasts · Page Content Padding
 
@@ -12,8 +12,26 @@ inconsistency that multiplies as the product grows.
 
 ## Page Shell
 
-The shell is the shared `AppShell` (`apps/web/src/components/shell/`) — reuse it,
-never re-implement it.
+The chrome is a **package**: `packages/app-shell` (`@leadwolf/app-shell`), shared by
+`apps/web`, `apps/admin` and `apps/forge`. Before it existed each app carried its own
+near-identical shell, which is how the three surfaces drifted apart.
+
+It exports `AppShellFrame`, `Sidebar`, `TopBar` (plus `DensityToggle` and
+`ShortcutsButton`), `NavItem`, `UserRow`, `Logo`/`Brandmark`/`Wordmark`,
+`ShortcutsDialog`, `DensityProvider`/`useDensity`, `useSidebarPin`, the `nav.ts`
+helpers, and `shell.css`. The `CommandPalette` component lives on its own subpath
+(`@leadwolf/app-shell/palette`) so `cmdk` stays off every route's first load.
+
+Each app **composes** those into its own `AppShell` — for the customer app,
+`apps/web/src/components/shell/AppShell.tsx`. What stays per-app is what is genuinely
+the app's: the auth/staff gate, the destination list (`navConfig.ts`), and the
+app-specific top-bar widgets (`GlobalSearch`, `NotificationsBell`, `CreditPill`,
+`OrgSwitcher`/`WorkspaceSwitcher`/`TeamSwitcher`).
+
+Reuse both layers — never re-implement either.
+
+Consume the stylesheet once per app, **after** the `@leadwolf/ui` sheets:
+`@import "@leadwolf/app-shell/shell.css";`
 
 ```
 Desktop / Tablet (≥ 769px)
@@ -51,13 +69,14 @@ Mobile (≤ 768px)
 > renderer in the app root". That single-file client-side view switcher is superseded by
 > file-based routing: a surface is a route in the authed group, and the shared shell
 > lives in that group's `layout.tsx` once (see the design skill SKILL.md, "Shell and
-> Navigation"). Detail still opens in `ContactDrawer` rather than navigating away.
+> Navigation"). Detail still opens in a drawer rather than navigating away.
 
 ---
 
 ## Sidebar
 
-Fixed — do not modify. Reuse the shared app-shell `Sidebar` (`apps/web/src/components/shell/`); do not redefine.
+Fixed — do not modify. Reuse `Sidebar` from `@leadwolf/app-shell`
+(`packages/app-shell/src/Sidebar.tsx`); do not redefine.
 
 - The rail is an **in-flow grid column** of `.tp-shell` (`grid-template-columns:
   var(--tp-rail-w) 1fr`) — not an absolutely-positioned overlay
@@ -69,27 +88,54 @@ Fixed — do not modify. Reuse the shared app-shell `Sidebar` (`apps/web/src/com
 - Labels/badges: `opacity` transition `var(--tp-duration-fast)` (120ms), no delay;
   the column width rides `var(--tp-duration)` (180ms)
 - Mobile (≤768px): the sidebar becomes a fixed off-canvas overlay behind a scrim
-  (`box-shadow: var(--tp-shadow-rail)`), toggled by the TopBar hamburger
+  (`box-shadow: var(--tp-shadow-rail)`), toggled by the TopBar hamburger. This is
+  the ONE place `--tp-z-drawer` (40) applies — the desktop rail has no z-index at
+  all, because it is an in-flow column rather than an overlay
 
 ---
 
 ## Topbar
 
-Fixed — do not modify. Reuse the shared app-shell `TopBar` (`apps/web/src/components/shell/`); do not redefine.
+Fixed — do not modify. Reuse `TopBar` from `@leadwolf/app-shell`
+(`packages/app-shell/src/TopBar.tsx`); do not redefine.
 
 - Height: `56px`, sticky, `background: var(--tp-surface)`
 - Bottom: `1px solid var(--tp-hairline-2)`
 - Left: sidebar pin toggle / mobile hamburger, then page title (`16px, 600`) +
-  optional subtitle (`12px, ink-4`)
-- Right: `GlobalSearch` | `DensityToggle` | keyboard-shortcuts `TpIconButton` |
-  `NotificationsBell` | `CreditPill`
+  optional subtitle (`var(--tp-text-caption)`, `--tp-ink-3` — **not** ink-4, which
+  fails contrast as text at every size)
+- Right: `GlobalSearch` | `DensityToggle` | `ShortcutsButton` |
+  `NotificationsBell` | `CreditPill`. `DensityToggle` and `ShortcutsButton` are
+  exports of `@leadwolf/app-shell` (from `TopBar.tsx`) — do not hand-roll either as
+  a bare `TpIconButton`. The other three are `apps/web`'s own
 - `z-index: var(--tp-z-sticky)` = `30`
+
+---
+
+## Density
+
+The shell's `DensityProvider` sets `data-density` on a wrapper; `primitives.css`
+reads it for row height and cell padding.
+
+- **44px (`--tp-row-h`) is the default and the design target** — the standard
+  interactive row height, comfortably above every touch-target guideline.
+- **32px (`--tp-row-h-compact`) is the user's own choice**, made by pressing the
+  `DensityToggle`, and it still clears WCAG 2.2 SC 2.5.8's 24px minimum target size.
+- Compact is never the default and is never hardcoded on a surface. Read the
+  density, do not pick it for the user.
 
 ---
 
 ## Contact / Prospect Drawer
 
 Open on any list row click. Never navigate away from the list.
+
+There is no `ContactDrawer` component anywhere — the detail drawer is **composed
+per feature from the DS `Drawer`**. The shipped example is `apps/web`'s
+`QuickViewDrawer` (`src/features/prospect/components/QuickViewDrawer.tsx`); read it
+before building another. The DS `Drawer` already handles the portal, the focus trap,
+focus return, top-most-Escape and the scroll lock — you supply content, not
+behaviour.
 
 ```
 <Drawer open={!!contact} onClose={() => setContact(null)}
@@ -145,20 +191,30 @@ Default state: compact `TpInput` (height `40px`). No filter chrome shown.
 **Chip row:**
 ```jsx
 {hasActiveFilters && (
-  <div style={{ padding:'8px var(--tp-space-6)', borderTop:'1px solid var(--tp-hairline)',
+  <div style={{ padding:'var(--tp-space-2) var(--tp-space-6)',
+                borderTop:'1px solid var(--tp-hairline)',
                 display:'flex', gap:'var(--tp-space-2)', flexWrap:'wrap', alignItems:'center' }}>
     {activeChips.map(chip => (
-      <TpChip key={chip.key+chip.value} active onRemove={() => removeFilter(chip)}>
+      <TpChip
+        key={chip.key+chip.value}
+        active
+        onRemove={() => removeFilter(chip)}
+        // Name every remove control. The default is "Remove", which is fine for a lone
+        // chip and wrong for a ROW: eight identical "Remove" buttons tell a screen-reader
+        // user nothing about which filter they are about to drop.
+        removeLabel={`Remove filter ${chip.cat}: ${chip.value}`}
+      >
         {chip.cat}: {chip.value}
       </TpChip>
     ))}
-    <button onClick={clearAll} style={{ fontSize:12, color:'var(--tp-cobalt-700)',
-      background:'none', border:'none', cursor:'pointer', padding:'0 4px' }}>
-      Clear all
-    </button>
+    <TpButton variant="link" size="sm" onClick={clearAll}>Clear all</TpButton>
   </div>
 )}
 ```
+
+"Clear all" is a `TpButton variant="link"` — not a raw `<button>` with inline colour.
+The DS variant already carries the link treatment, the focus ring and the hit area,
+and a raw `<button>` where a DS equivalent exists is a hard-rule violation.
 
 ---
 
@@ -171,27 +227,37 @@ Avatar (28–32px) | Name (600) + subtitle (ink-3, 11–12px)
 | Company | StatusBadge | ScorePill | Value (tabular-nums, 600)
 ```
 
-- Row height: `44px` via `--tp-row-h`
+- Row height: `44px` via `--tp-row-h` (`--tp-row-h-compact`, 32px, when the user has
+  chosen compact density — see **Density** above)
 - Hover actions: positioned right side, `opacity: 0 → 1` on row hover
   ```jsx
   // Inside a DataTable column's cell (icons: lucide-react via the DS Icon wrapper)
   cell: (row) => (
-    <div style={{ display:'flex', gap:4, opacity: isHovered ? 1 : 0, transition:'opacity 120ms' }}>
+    <div style={{ display:'flex', gap:'var(--tp-space-1)',
+                  opacity: revealed ? 1 : 0,
+                  transition:'opacity var(--tp-duration-fast) var(--tp-ease)' }}>
       <TpIconButton label="Call" onClick={...}><Icon icon={Phone} size={15}/></TpIconButton>
       <TpIconButton label="Email" onClick={...}><Icon icon={Mail} size={15}/></TpIconButton>
     </div>
   )
   ```
-- Row click: opens `ContactDrawer` — never navigates away
+  **`revealed` must be hover OR focus.** Actions that appear on `:hover` alone do not
+  exist for a keyboard user — pair the CSS selector with `:focus-within`, or include
+  focus in the state that drives the opacity.
+- Row click: opens the detail drawer (a `Drawer` composition — see above) — never
+  navigates away. `DataTable` makes a row with `onRowClick` focusable and activates
+  it on Enter/Space for you; do not add your own `<tr>` key handler
 
 ---
 
 ## ScorePill (Recipe)
 
 ScorePill is a *recipe*, not a component: today it is inlined in the lists
-Data-Health cell (`apps/web/src/features/lists/components/ListDetailPage.tsx`).
-Follow the recipe below verbatim; extract it to a shared component on second use
-rather than redefining variants:
+Data-Health cell (`apps/web/src/features/lists/components/ListDetailPage.tsx`), where
+it is written with a **CSS module** (`../lists.module.css`) and paired with a
+freshness `StatusBadge`. **Match the shipped recipe** — read that cell before writing
+a new one — and extract it to a shared component on second use rather than redefining
+variants. The sketch below is the shape, not a file to copy verbatim:
 
 ```jsx
 function ScorePill({ score }) {
@@ -199,25 +265,41 @@ function ScorePill({ score }) {
              : score >= 50 ? 'var(--warning)'
              : 'var(--tp-ink-4)';
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:5,
-                   fontVariantNumeric:'tabular-nums', fontWeight:600, fontSize:13 }}>
-      <span style={{ width:6, height:6, borderRadius:99, background:tone, flexShrink:0 }} />
+    <span style={{ display:'inline-flex', alignItems:'center', gap:'var(--tp-space-1)',
+                   fontVariantNumeric:'tabular-nums', fontWeight:600,
+                   fontSize:'var(--tp-text-body)' }}>
+      <span style={{ width:6, height:6, borderRadius:999, background:tone, flexShrink:0 }} />
       {score}
     </span>
   );
 }
 ```
 
-Always: dot + number, tabular-nums, `fontWeight: 600`, `fontSize: 13`.
+Always: dot + number, tabular-nums, `fontWeight: 600`, `var(--tp-text-body)` (13px).
+The tone tokens are correct here because they colour a **dot** — a non-text graphic.
+If a variant ever puts the status colour on the *number*, it must switch to
+`--success-700` / `--warning-700` (see tokens.md).
 
 ---
 
 ## Responsive Breakpoints
 
-Responsive behaviour is driven by **CSS media queries** in the app's `globals.css`, not a
-shared JS hook — there is no `useBreakpoint` in the codebase. If a client component genuinely
-needs the current breakpoint in JS, read it with `window.matchMedia(...)` inside an effect.
-The app's real breakpoints (from `apps/web/src/app/globals.css`):
+Responsive behaviour is driven by **CSS media queries**, not a shared JS hook — there
+is no `useBreakpoint` in the codebase. If a client component genuinely needs the
+current breakpoint in JS, read it with `window.matchMedia(...)` inside an effect
+(never `window.innerWidth`).
+
+Where the queries live:
+- **Shell breakpoints** — `packages/app-shell/src/shell.css`. That file owns when the
+  rail collapses to an off-canvas overlay and when the topbar tightens. Do not
+  re-declare shell behaviour in an app stylesheet.
+- **Feature breakpoints** — each app's own stylesheet (`apps/web/src/app/globals.css`
+  and the feature `*.module.css` files) carries its own `@media` rules.
+- **`--tp-bp-*` are documentation tokens.** CSS cannot interpolate a `var()` into a
+  media query, so every rule spells the number out; the tokens exist so a fourth
+  value never gets invented. Use 769 / 768 / 480 and nothing else.
+
+The three documented viewports:
 
 | Breakpoint | Layout changes |
 |---|---|
@@ -282,14 +364,21 @@ Use `FormSection` → `FormRow` → `FieldGroup` → control.
 Wrap the app root once in `<ToastProvider>`. Call from any component:
 
 ```jsx
-const { toast } = useToast();
+const { toast, success, error } = useToast();
 
-// Success
-toast({ title: 'Contact saved', description: 'Changes applied.' });
+// Shorthands for the two common tones
+success('Contact saved', 'Changes applied.');
+error('Save failed', err.message);
 
-// Error
-toast({ title: 'Save failed', description: error.message, tone: 'error' });
+// The full form — `duration` in ms; 0 keeps it until dismissed (default 4000)
+toast({ title: 'Import running', description: 'We will tell you when it finishes.',
+        duration: 0 });
 ```
+
+The live region is mounted always (empty or not), so the *first* toast is announced —
+a region created in the same commit as its first content is the classic reason first
+toasts go unheard. Every toast also carries a real "Dismiss notification" close
+button, which is what makes a sticky (`duration: 0`) toast removable without a mouse.
 
 Never use `alert()` or custom inline error states for transient feedback.
 
@@ -297,10 +386,20 @@ Never use `alert()` or custom inline error states for transient feedback.
 
 ## Page Content Padding
 
-Standard page content:
+Use the DS primitives — both are `@leadwolf/ui` exports, and both are the reason ten
+different per-feature max-widths stopped accumulating:
+
 ```jsx
-<div style={{ padding: 'var(--tp-space-6)' }}>
+<PageContainer width="fluid">            {/* tables, lists, search — no cap */}
+  <PageHeader title="Prospects" subtitle="…" actions={<TpButton>Refresh</TpButton>} />
+  …
+</PageContainer>
 ```
+
+`PageContainer` always centres; only the cap varies (`fluid` | `default` 1280px |
+`narrow` 880px) and its padding is responsive. Do **not** hand-roll a page wrapper
+with a `max-width` — that is how the flush-left dead-gutter bug came back the first
+five times.
 
 For sections within a page that need vertical separation:
 ```jsx

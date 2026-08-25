@@ -14,28 +14,9 @@
   margin-bottom: 20px;
 }
 
-.headerMain {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.name {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 650;
-}
-
-.domain {
-  color: var(--tp-text-muted);
-  font-size: 13px;
-}
-
-.headerActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
+/* .headerMain/.name/.domain/.headerActions are gone — the company title, its domain and the Watch / View-
+   contacts pair are now the title/subtitle/actions of the shared <PageHeader>. .header stays: it is the
+   hairline rule that closes the header block under the attributes grid. */
 
 .fieldGrid {
   display: grid;
@@ -172,38 +153,10 @@
   margin: 0 0 8px;
 }
 
-/* ── Markets board ── */
-
-.boardWrap {
-  overflow-x: auto;
-  border: 1px solid var(--tp-hairline);
-  border-radius: var(--radius);
-}
-
-.board {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.board th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--tp-text-muted);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--tp-hairline);
-}
-
-.board td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--tp-hairline);
-}
-
-.board tbody tr:last-child td {
-  border-bottom: none;
-}
+/* ── Markets board ──
+   The hand-rolled <table> (.boardWrap/.board/.board th/.board td) is gone. It was this app's only raw table
+   and its rows.map() was unbounded; it is now a <DataTable>, which windows above 100 rows and brings the
+   shared header/row/density chrome with it. */
 
 .marketsLink {
   flex-shrink: 0;

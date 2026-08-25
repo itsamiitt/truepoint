@@ -9,7 +9,7 @@
 .optionHint {
   display: block;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .formActions {
   display: flex;
@@ -19,7 +19,7 @@
 }
 .note {
   font-size: 13px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* Provider priority (0111): ordered per-field lists with arrow-button reorder. */
@@ -44,7 +44,7 @@
 .providerPosition {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   min-width: 16px;
   text-align: right;
 }
@@ -55,7 +55,7 @@
 .providerNameDisabled {
   flex: 1;
   font-size: 14px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   text-decoration: line-through;
 }
 .providerRowActions {

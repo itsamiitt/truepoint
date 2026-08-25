@@ -8,6 +8,7 @@ import {
   Card,
   type Column,
   DataTable,
+  EmptyState,
   PageContainer,
   PageHeader,
   StateSwitch,
@@ -97,13 +98,26 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
         <ArrowLeft size={14} /> Tenants
       </Link>
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !detail}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="Tenant not found"
+            description="No tenant matches this id — it may have been deleted."
+          />
+        }
+      >
         {detail ? (
           <>
             <PageHeader
               title={detail.tenant.name}
               subtitle={detail.tenant.slug}
-              actions=<div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              actions=<div
+                style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-4)" }}
+              >
                 <StatusBadge tone={statusTone(detail.tenant.status)}>
                   {detail.tenant.status === "suspended" && detail.tenant.suspensionReason
                     ? `suspended (${detail.tenant.suspensionReason === "dunning" ? "non-payment" : detail.tenant.suspensionReason})`
@@ -113,7 +127,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               </div>
             />
 
-            <Card style={{ marginBottom: 24 }}>
+            <Card style={{ marginBottom: "var(--tp-space-6)" }}>
               <div className="tp-meta-grid">
                 <MetaField label="Plan" value={detail.tenant.plan} />
                 <MetaField label="Seat limit" value={formatInt(detail.tenant.seatLimit)} />
@@ -144,7 +158,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               rows={detail.workspaces}
               rowKey={(w) => w.id}
               empty={
-                <p className="app-muted" style={{ padding: 16 }}>
+                <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
                   No workspaces.
                 </p>
               }
@@ -158,7 +172,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               rows={detail.members}
               rowKey={(m) => m.userId}
               empty={
-                <p className="app-muted" style={{ padding: 16 }}>
+                <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
                   No members.
                 </p>
               }

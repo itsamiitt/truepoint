@@ -88,8 +88,10 @@ This is fixed, so there is one answer:
 - The frontends — `apps/web` (`@leadwolf/web`, `app.truepoint.in`, the customer
   surface) and `apps/admin` (`@leadwolf/admin`, the internal/platform-admin surface;
   its subdomain is TBD) — are **Next.js App Router**
-  applications. They use file-based routing, route groups, server components, and
-  middleware. They are **pure presentation layers**: no business logic, no direct
+  applications. They use file-based routing, route groups and server components.
+  (**No Next.js middleware exists in either app** — the auth gate is a rendering gate
+  in each app's `AppShell.tsx`; see `auth.md` and `customer-repo.md`.)
+  They are **pure presentation layers**: no business logic, no direct
   database access, no provider secrets. All of that is the backend
   (truepoint-platform; the real service is `apps/api`, `@leadwolf/api`). Next.js route
   handlers (`app/api/`), if ever added, do only BFF aggregation, auth-cookie
@@ -102,7 +104,8 @@ This is fixed, so there is one answer:
   (see the design skill). Do not build new work as a single file or against a window
   global; build features in `features/` and import the design system. Where the
   design skill still references `crm-app.jsx` as a source of truth for a shared atom,
-  treat the equivalent `@leadwolf/ui` component as the real source.
+  the real source is the `@leadwolf/ui` component — or, for a piece of the app
+  **chrome** (sidebar, top bar, logo, command palette, density), `@leadwolf/app-shell`.
 
 This resolves the prior contradiction between file-based routing and a single-file
 view switcher: it is Next.js App Router, with shared chrome via layouts, not a
@@ -130,10 +133,19 @@ that surprises the next reader.
 
 ## The Two Frontend Apps
 
-Both live in the one Bun monorepo (root package `leadwolf`) under `apps/`, alongside
-`apps/auth` (`@leadwolf/auth-app`, the IdP), `apps/api` (`@leadwolf/api`), and
-`apps/workers` (`@leadwolf/workers`). Shared code is in `packages/*` under the
-`@leadwolf/*` scope.
+Both live in the one Bun monorepo (root package `leadwolf`) under `apps/`. The full
+app list is **ten**: `web`, `admin`, `auth`, `api`, `workers`, `doc`, `forge`,
+`forge-api`, `forge-worker`, `extension`. Shared code is in `packages/*` under the
+`@leadwolf/*` scope — **thirteen** of them: `app-shell`, `auth`, `auth-client`,
+`config`, `core`, `db`, `forge-capture-sdk`, `forge-core`, `identity`,
+`integrations`, `search`, `types`, `ui`.
+
+This skill governs the two Next.js frontends. The others in one line each:
+`apps/auth` (`@leadwolf/auth-app`) is the IdP, `apps/api` (`@leadwolf/api`) the Hono
+API, `apps/workers` the BullMQ consumers, `apps/doc` the public docs/pricing site at
+`doc.truepoint.in` (no auth, no data client, zero-env build — ADR-0048), the three
+`forge*` apps the operator surface and its backend, and `apps/extension` the MV3
+browser extension (its own three `truepoint-extension-*` skills).
 
 | App | Serves | Audience |
 |---|---|---|
@@ -218,19 +230,41 @@ Both apps consume shared **internal Bun-workspace** packages from the `@leadwolf
 scope under `packages/` (not published to a registry — resolved via the workspace).
 The full discipline is in `references/shared-packages.md`. Key points:
 
-- `@leadwolf/auth` — **one internal package consumed by both apps**, not copied
-  per app (a copy is not a single source of truth and lets auth logic drift — a
-  security risk). The dedicated `apps/auth` IdP (`@leadwolf/auth-app`) backs it.
+- `@leadwolf/ui` — the design system (`packages/ui`). Components, the `--tp-*` tokens,
+  `primitives.css`. **Design tokens (brand) are a single shared source**; only the
+  *components* may diverge between customer and internal. Tokens must not fork (see
+  the design skill). Also home to the page scaffolding — `PageHeader`, `PageContainer`.
+- `@leadwolf/app-shell` — the shared Next.js app **chrome** (`packages/app-shell`),
+  consumed by `apps/web`, `apps/admin` and `apps/forge`: `AppShellFrame`, `Sidebar`,
+  `TopBar` (+ `DensityToggle`, `ShortcutsButton`), `NavItem`, `UserRow`,
+  `Logo`/`Brandmark`/`Wordmark`, `ShortcutsDialog`, `DensityProvider`,
+  `useSidebarPin`, the `nav.ts` helpers and `shell.css` (`CommandPalette` sits on the
+  `/palette` subpath so `cmdk` stays off first load). Before it existed each app
+  carried its own near-identical shell, which is exactly how the three surfaces
+  drifted. Each app composes it in its own `AppShell.tsx` and keeps only what is
+  genuinely its own: the auth/staff gate, the destination list, its top-bar widgets.
+- `@leadwolf/auth-client` — the browser-side auth client (`packages/auth-client`):
+  `createAuthClient` (PKCE, in-memory access token, silent refresh, cross-tab refresh
+  election). Consumed by `apps/web`, `apps/admin` and `apps/forge`, each of which
+  instantiates it in its own `src/lib/authClient.ts` and adds only what is app-specific
+  (for `apps/web`, the multi-org / multi-workspace switching). That file was a ~280-line
+  copy in all three, with drift, before the package existed. Distinct from
+  `@leadwolf/auth` below, which is the **server** package.
+- `@leadwolf/auth` — the **backend** IdP/verification package, consumed by `apps/auth`
+  and `apps/api` and **never** by the frontends. One internal package, not copied per
+  consumer (a copy is not a single source of truth and lets auth logic drift — a
+  security risk).
 - `@leadwolf/types` — the shared Zod schemas that are the single source of truth for
   request/response types, imported by both the API (`apps/api`) and the web/worker
   clients; never hand-edited away from the schema. (There is no OpenAPI-generated
   client.)
-- `@leadwolf/ui` — the design system. **Design tokens (brand) are a single shared
-  source**; only the *components* may diverge between customer and internal. Tokens
-  must not fork (see the design skill).
 - `@leadwolf/core` — the shared **server-side** domain layer (it depends on
   `@leadwolf/db`/`@leadwolf/config`; never import it into `apps/web`/`apps/admin`).
   There is no `utils` package.
+
+The rest are server-side and out of scope here: `config`, `db`, `identity`,
+`integrations`, `search`, plus the forge trio (`forge-core`, `forge-capture-sdk`, and
+the operator surface's own deps).
 
 ---
 

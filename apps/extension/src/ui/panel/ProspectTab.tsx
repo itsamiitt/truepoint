@@ -33,7 +33,6 @@ import {
   hairline,
   ink2,
   ink3,
-  ink4,
   mono,
   surface3,
 } from "./primitives.tsx";
@@ -55,7 +54,8 @@ function IdentitySkeleton(): React.ReactElement {
           <Skeleton width="80%" height={11} />
         </div>
       </div>
-      <Skeleton width="100%" height={104} radius={12} />
+      {/* Radius tracks the Well it stands in (--tp-radius-card), so nothing reflows when the data lands. */}
+      <Skeleton width="100%" height={104} radius={14} />
     </div>
   );
 }
@@ -175,7 +175,7 @@ function ContactCard({
             </div>
           ) : null}
           {phone ? <div style={{ ...mono, fontSize: 14, marginTop: 6 }}>{phone}</div> : null}
-          <div style={{ fontSize: 11, color: ink4, marginTop: 3 }}>{badgeText}</div>
+          <div style={{ fontSize: 11, color: ink3, marginTop: 3 }}>{badgeText}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 11, flexWrap: "wrap" }}>
             {email ? (
               <Button variant="secondary" onClick={() => copy(email)}>
@@ -218,7 +218,7 @@ function ContactCard({
         <Muted>{t("card.nothingOnFile")}</Muted>
       ) : (
         <div>
-          <div style={{ fontSize: 15, color: ink4, marginTop: 9, letterSpacing: "0.04em" }}>
+          <div style={{ fontSize: 15, color: ink3, marginTop: 9, letterSpacing: "0.04em" }}>
             {maskEmail(contact?.emailDomain ?? null) ?? t("contact.noEmail")}
           </div>
           <div style={{ marginTop: 12 }}>
@@ -240,7 +240,7 @@ function ContactCard({
       )}
 
       {error ? (
-        <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger-ink, #b91c1c)" }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger-700, #b91c1c)" }}>
           {error}
         </div>
       ) : null}
@@ -259,6 +259,9 @@ function SignalsList({ payload }: { payload: IntelPayload }): React.ReactElement
       <SectionLabel>{t("signals.label")}</SectionLabel>
       {signals.map((s) => (
         <div key={s.id}>
+          {/* A full-bleed disclosure ROW, not a Button: it spans the list, has no fill and no border, and
+              carries aria-expanded. The primitive would have to grow three props to become this. Still a
+              real <button type="button"> with the DS :focus-visible ring from brand.css. */}
           <button
             type="button"
             aria-expanded={open === s.id}
@@ -279,7 +282,7 @@ function SignalsList({ payload }: { payload: IntelPayload }): React.ReactElement
             }}
           >
             <span style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.35 }}>{s.title}</span>
-            <span style={{ fontSize: 11, color: ink4, whiteSpace: "nowrap" }}>{s.kind}</span>
+            <span style={{ fontSize: 12, color: ink3, whiteSpace: "nowrap" }}>{s.kind}</span>
           </button>
           {open === s.id ? (
             <div
@@ -290,8 +293,10 @@ function SignalsList({ payload }: { payload: IntelPayload }): React.ReactElement
                 display: "flex",
                 flexDirection: "column",
                 gap: 3,
-                fontSize: 11,
-                color: ink4,
+                // The provenance a signal claim rests on. It is the evidence, not a footnote — it reads at
+                // the same weight as the rest of the body copy, and at a contrast that passes AA.
+                fontSize: 12,
+                color: ink3,
                 lineHeight: 1.55,
               }}
             >
@@ -302,7 +307,7 @@ function SignalsList({ payload }: { payload: IntelPayload }): React.ReactElement
           ) : null}
         </div>
       ))}
-      <div style={{ marginTop: 9, fontSize: 11, color: ink4, lineHeight: 1.5 }}>
+      <div style={{ marginTop: 9, fontSize: 12, color: ink3, lineHeight: 1.5 }}>
         {t("signals.footer")}
       </div>
     </div>
@@ -349,7 +354,10 @@ export function ProspectTab({
             flex: "none",
             fontSize: 13,
             fontWeight: 600,
-            color: ink4,
+            // The initials ARE the avatar, not a watermark behind one, so they owe AA as text. ink2, not the
+            // ink3 the rest of the muted copy takes: this disc is --tp-surface-3, where ink3 measures 4.43:1
+            // and lands just under the 4.5 floor (ink4 was 2.33:1). On surface-3 the muted ink runs out.
+            color: ink2,
           }}
         >
           {initials(name)}
@@ -361,11 +369,11 @@ export function ProspectTab({
             {name ?? t("identity.unknownName")}
           </div>
           {title || company ? (
-            <div style={{ fontSize: 12.5, color: ink2, marginTop: 3 }}>
+            <div style={{ fontSize: 13, color: ink2, marginTop: 3 }}>
               {[title, company].filter(Boolean).join(" · ")}
             </div>
           ) : null}
-          <div style={{ fontSize: 11, color: ink4, marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: ink3, marginTop: 2 }}>
             {joined(
               [location, inSeat ? t("identity.tenureInRole").replace("{tenure}", inSeat) : null],
               " · ",
@@ -408,7 +416,9 @@ export function ProspectTab({
                   display: "grid",
                   placeItems: "center",
                   fontSize: 11,
-                  color: ink4,
+                  // ink2 for the same reason as the avatar above: the tile is --tp-surface-3, where ink3 is
+                  // 4.43:1 — under AA, and at 11px there is no large-text allowance to fall back on.
+                  color: ink2,
                 }}
               >
                 {monogram(e.companyName)}
@@ -418,7 +428,7 @@ export function ProspectTab({
                   {e.title ?? t("experience.untitled")}
                 </div>
                 <div style={{ fontSize: 12, color: ink3, marginTop: 1 }}>{e.companyName}</div>
-                <div style={{ fontSize: 11, color: ink4, marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: ink3, marginTop: 2 }}>
                   {dateRange(e) ?? t("education.noDates")}
                 </div>
               </div>
@@ -436,7 +446,7 @@ export function ProspectTab({
                 <div style={{ fontSize: 13, fontWeight: 600 }}>
                   {[e.degree, e.schoolName].filter(Boolean).join(" · ")}
                 </div>
-                <div style={{ fontSize: 11, color: ink4, marginTop: 1 }}>
+                <div style={{ fontSize: 12, color: ink3, marginTop: 1 }}>
                   {dateRange({ ...e, startPrecision: null, endPrecision: null }) ??
                     t("education.noDates")}
                 </div>

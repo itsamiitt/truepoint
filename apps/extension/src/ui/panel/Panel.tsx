@@ -7,7 +7,7 @@
 //
 // The panel is a THIN CLIENT (architecture rule 1): it holds no token, makes no HTTP call, and owns no
 // business logic. It sends bus messages and renders the typed result, with all four states wired.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { t } from "../../i18n/index.ts";
 import { onBroadcast, send } from "../../shared/client.ts";
 import { ENV } from "../../shared/env.ts";
@@ -25,6 +25,7 @@ import {
   hairline2,
   ink,
   ink2,
+  ink3,
   ink4,
   surface,
   surface3,
@@ -32,6 +33,9 @@ import {
 import { useIntel, usePanelSubject } from "./useIntel.ts";
 
 type Tab = "prospect" | "company";
+
+/** Tab order is the keyboard order: ArrowLeft/Right walk this array, Home/End jump to its ends. */
+const TABS: readonly Tab[] = ["prospect", "company"] as const;
 
 const shell: React.CSSProperties = {
   fontFamily: "var(--font-sans, system-ui)",
@@ -50,7 +54,8 @@ function tabStyle(active: boolean): React.CSSProperties {
     background: active ? surface3 : "transparent",
     border: "none",
     borderRadius: 999,
-    color: active ? ink : ink4,
+    // The inactive label is TEXT, not decoration: --tp-ink-4 is 2.54:1 and fails AA, so it reads ink3.
+    color: active ? ink : ink3,
     fontSize: 12,
     fontWeight: 600,
     fontFamily: "inherit",
@@ -58,7 +63,23 @@ function tabStyle(active: boolean): React.CSSProperties {
   };
 }
 
-/** The add-to-list picker: opened on demand, so a panel that never uses it never fetches lists. */
+/** The list fetch, as a state a render can read. `null` conflated "not asked yet" with "failed" — see below. */
+type ListsState =
+  | { phase: "loading" }
+  | { phase: "ready"; lists: ListSummary[] }
+  | { phase: "error" };
+
+/**
+ * The add-to-list picker: opened on demand, so a panel that never uses it never fetches lists.
+ *
+ * It is a real MENU, not a div that appears. The popover owns the focus while it is open (focus enters on
+ * open, ArrowUp/Down walk the items, Escape closes it and puts focus back on the trigger it came from), a
+ * pointerdown anywhere else dismisses it, and the trigger announces both what it opens and whether it is
+ * open. Without that a keyboard user could open this and have no way back out of it.
+ *
+ * The fetch has a .catch. `send()` is `chrome.runtime.sendMessage`, which REJECTS when the service worker
+ * is not there to answer — and an unhandled rejection left this pinned on "Loading…" with no way to retry.
+ */
 function AddToList({
   contactId,
   onDone,
@@ -67,16 +88,84 @@ function AddToList({
   onDone: () => void;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
-  const [lists, setLists] = useState<ListSummary[] | null>(null);
+  const [lists, setLists] = useState<ListsState>({ phase: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const labelId = useId();
 
+  const load = useCallback((): void => {
+    setLists({ phase: "loading" });
+    void send({ type: "LIST_LISTS" })
+      .then((r) => setLists({ phase: "ready", lists: r.lists ?? [] }))
+      .catch(() => setLists({ phase: "error" }));
+  }, []);
+
+  /** Closing always hands focus back: a popover that swallows the caret is a keyboard dead end. */
+  const close = useCallback((): void => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+
+  // pointerdown, not click, and on the capture phase: a press that starts outside dismisses the menu without
+  // first activating whatever it landed on.
   useEffect(() => {
-    if (!open || lists) return;
-    void send({ type: "LIST_LISTS" }).then((r) => setLists(r.lists));
-  }, [open, lists]);
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent): void => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (popoverRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open]);
+
+  const rowCount = lists.phase === "ready" ? lists.lists.length : 0;
+
+  // Focus enters on open, and again when the rows finally arrive — at the moment of opening there is nothing
+  // to focus yet, so the container takes it and Escape still has somewhere to fire from.
+  useEffect(() => {
+    if (!open) return;
+    const first =
+      rowCount > 0
+        ? itemsRef.current.find((el): el is HTMLButtonElement => el !== null)
+        : undefined;
+    (first ?? popoverRef.current)?.focus();
+  }, [open, rowCount]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+      return;
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+    const focusable = itemsRef.current.filter((el): el is HTMLButtonElement => el !== null);
+    if (focusable.length === 0) return;
+    // preventDefault so ArrowUp/Down move the selection instead of scrolling the panel behind the menu.
+    e.preventDefault();
+    const last = focusable.length - 1;
+    const at = focusable.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      e.key === "Home"
+        ? 0
+        : e.key === "End"
+          ? last
+          : at === -1
+            ? e.key === "ArrowDown"
+              ? 0
+              : last
+            : e.key === "ArrowDown"
+              ? (at + 1) % focusable.length
+              : (at + last) % focusable.length;
+    focusable[next]?.focus();
+  };
 
   const add = async (listId: string): Promise<void> => {
+    if (busy !== null) return;
     setBusy(listId);
     setError(null);
     const res = await send({ type: "ADD_TO_LIST", listId, contactId });
@@ -86,79 +175,116 @@ function AddToList({
       setError(t(`error.${res.errorClass ?? "unexpected"}` as Parameters<typeof t>[0]));
       return;
     }
-    setOpen(false);
+    close();
     onDone();
   };
 
-  if (!open) {
-    return (
-      <Button variant="ghost" onClick={() => setOpen(true)}>
+  return (
+    <>
+      <Button
+        variant="ghost"
+        buttonRef={triggerRef}
+        hasPopup="menu"
+        expanded={open}
+        onClick={() => {
+          if (open) {
+            close();
+            return;
+          }
+          setOpen(true);
+          if (lists.phase !== "ready") load();
+        }}
+      >
         {t("footer.addToList")}
       </Button>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 52,
-        left: 12,
-        right: 12,
-        background: surface,
-        border: `1px solid ${hairline2}`,
-        borderRadius: "var(--radius, 8px)",
-        boxShadow: "var(--tp-shadow-popover, 0 8px 24px rgba(0,0,0,0.12))",
-        padding: 10,
-        maxHeight: 240,
-        overflowY: "auto",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{t("footer.addToList")}</span>
-        <Button variant="ghost" onClick={() => setOpen(false)}>
-          {t("footer.close")}
-        </Button>
-      </div>
-      {lists === null ? (
-        <Muted>{t("state.loading")}</Muted>
-      ) : lists.length === 0 ? (
-        <Muted>{t("footer.noLists")}</Muted>
-      ) : (
-        lists.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void add(l.id)}
-            style={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 8,
-              minHeight: 44,
-              padding: "8px 0",
-              background: "none",
-              border: "none",
-              borderBottom: `1px solid ${hairline}`,
-              fontFamily: "inherit",
-              fontSize: 12.5,
-              color: ink2,
-              textAlign: "left",
-              cursor: busy ? "default" : "pointer",
-            }}
-          >
-            <span>{l.name}</span>
-            <span style={{ color: ink4 }}>{l.memberCount}</span>
-          </button>
-        ))
-      )}
-      {error ? (
-        <div style={{ marginTop: 8, fontSize: 12, color: "var(--danger-ink, #b91c1c)" }}>
-          {error}
+      {open ? (
+        <div
+          ref={popoverRef}
+          // The container is the key surface AND the focus of last resort while the rows are still in flight.
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          style={{
+            position: "absolute",
+            bottom: 52,
+            left: 12,
+            right: 12,
+            background: surface,
+            border: `1px solid ${hairline2}`,
+            borderRadius: "var(--radius, 8px)",
+            boxShadow:
+              "var(--tp-shadow-popover, 0 4px 16px rgba(17,24,39,0.08), 0 1px 3px rgba(17,24,39,0.06))",
+            padding: 10,
+            maxHeight: 240,
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span id={labelId} style={{ fontSize: 12, fontWeight: 600 }}>
+              {t("footer.addToList")}
+            </span>
+            <Button variant="ghost" onClick={close}>
+              {t("footer.close")}
+            </Button>
+          </div>
+          {lists.phase === "loading" ? (
+            <Muted>{t("state.loading")}</Muted>
+          ) : lists.phase === "error" ? (
+            // The whole point of the .catch: a failed fetch is a state with a way out of it.
+            <ErrorBlock
+              title={t("error.unexpected")}
+              onRetry={load}
+              retryLabel={t("panel.retry")}
+            />
+          ) : lists.lists.length === 0 ? (
+            <Muted>{t("footer.noLists")}</Muted>
+          ) : (
+            <div role="menu" aria-labelledby={labelId}>
+              {lists.lists.map((l, i) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  ref={(el) => {
+                    itemsRef.current[i] = el;
+                  }}
+                  // aria-disabled rather than `disabled`: a disabled button drops out of the focus order, and
+                  // losing focus mid-menu would strand the caret while the request is in flight.
+                  aria-disabled={busy !== null}
+                  onClick={() => void add(l.id)}
+                  // Roving tabindex — the menu itself is what the caret entered, and arrows walk the rows.
+                  tabIndex={-1}
+                  role="menuitem"
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    minHeight: 44,
+                    padding: "8px 0",
+                    background: "none",
+                    border: "none",
+                    borderBottom: `1px solid ${hairline}`,
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    color: ink2,
+                    textAlign: "left",
+                    opacity: busy !== null && busy !== l.id ? 0.5 : 1,
+                    cursor: busy !== null ? "default" : "pointer",
+                  }}
+                >
+                  <span>{l.name}</span>
+                  <span style={{ color: ink3 }}>{l.memberCount}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {error ? (
+            <div style={{ marginTop: 8, fontSize: 12, color: "var(--danger-700, #b91c1c)" }}>
+              {error}
+            </div>
+          ) : null}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -169,6 +295,31 @@ export function Panel(): React.ReactElement {
   const [saved, setSaved] = useState(false);
   const subject = usePanelSubject();
   const { state: intelState, recapture, refresh } = useIntel(subject);
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const panelId = useId();
+  const tabId = (name: Tab): string => `${panelId}-${name}`;
+
+  // The other half of a roving tabindex. Taking the inactive tab out of the tab order is only correct if the
+  // arrow keys can still reach it; ship the tabindex alone and the second tab becomes unreachable by keyboard
+  // entirely (WCAG 2.2 SC 2.1.1). Selection FOLLOWS focus, which is the pattern for a small set of tabs whose
+  // content is already in hand — nothing is fetched by moving between them.
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>): void => {
+    const at = TABS.indexOf(tab);
+    const next =
+      e.key === "ArrowRight"
+        ? TABS[(at + 1) % TABS.length]
+        : e.key === "ArrowLeft"
+          ? TABS[(at + TABS.length - 1) % TABS.length]
+          : e.key === "Home"
+            ? TABS[0]
+            : e.key === "End"
+              ? TABS[TABS.length - 1]
+              : undefined;
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    tabRefs.current[next]?.focus();
+  };
 
   useEffect(() => {
     void send({ type: "GET_STATE" }).then(setState);
@@ -284,7 +435,9 @@ export function Panel(): React.ReactElement {
               border: "none",
               background: "none",
               borderRadius: "var(--tp-radius-sm, 6px)",
-              color: ink4,
+              // An ENABLED icon is the control's only visual, so it owes 3:1 (SC 1.4.11) and ink4 is 2.54:1.
+              // Disabled controls are exempt from that minimum, and this is the one place ink4 belongs.
+              color: subject ? ink3 : ink4,
               cursor: subject ? "pointer" : "default",
               fontSize: 13,
             }}
@@ -294,20 +447,40 @@ export function Panel(): React.ReactElement {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 2, padding: "0 18px 12px", flex: "none" }}>
-        <button
-          type="button"
-          style={tabStyle(tab === "prospect")}
-          onClick={() => setTab("prospect")}
-        >
-          {t("tab.prospect")}
-        </button>
-        <button type="button" style={tabStyle(tab === "company")} onClick={() => setTab("company")}>
-          {t("tab.company")}
-        </button>
+      <div
+        role="tablist"
+        aria-label={t("panel.tabsLabel")}
+        style={{ display: "flex", gap: 2, padding: "0 18px 12px", flex: "none" }}
+      >
+        {TABS.map((name) => (
+          <button
+            key={name}
+            type="button"
+            id={tabId(name)}
+            ref={(el) => {
+              tabRefs.current[name] = el;
+            }}
+            onClick={() => setTab(name)}
+            onKeyDown={onTabKeyDown}
+            style={tabStyle(tab === name)}
+            tabIndex={tab === name ? 0 : -1}
+            aria-controls={panelId}
+            aria-selected={tab === name}
+            role="tab"
+          >
+            {t(`tab.${name}` as Parameters<typeof t>[0])}
+          </button>
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 18px 20px" }}>{body()}</div>
+      <div
+        id={panelId}
+        aria-labelledby={tabId(tab)}
+        role="tabpanel"
+        style={{ flex: 1, overflowY: "auto", padding: "4px 18px 20px" }}
+      >
+        {body()}
+      </div>
 
       <div
         style={{
@@ -321,7 +494,7 @@ export function Panel(): React.ReactElement {
         }}
       >
         {!canSave && !saved ? (
-          <span style={{ flex: 1, fontSize: 12, color: ink4 }}>
+          <span style={{ flex: 1, fontSize: 12, color: ink3 }}>
             {subject?.kind === "company" ? t("footer.companyNote") : ""}
           </span>
         ) : saved ? (
@@ -330,7 +503,7 @@ export function Panel(): React.ReactElement {
               flex: 1,
               fontSize: 12,
               fontWeight: 600,
-              color: "var(--success, #059669)",
+              color: "var(--success, #16a34a)",
             }}
           >
             {/* "Saved · <Company> linked" only when we can SEE the link — the from-database response carries

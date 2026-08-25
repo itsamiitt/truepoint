@@ -96,8 +96,8 @@ export function TenantsPage() {
       <div
         style={{
           display: "flex",
-          gap: 8,
-          marginBottom: 16,
+          gap: "var(--tp-space-2)",
+          marginBottom: "var(--tp-space-4)",
           alignItems: "center",
           flexWrap: "wrap",
         }}
@@ -108,7 +108,7 @@ export function TenantsPage() {
             e.preventDefault();
             applySearch(query.trim());
           }}
-          style={{ display: "flex", gap: 8, maxWidth: 420, flex: "1 1 320px" }}
+          style={{ display: "flex", gap: "var(--tp-space-2)", maxWidth: 420, flex: "1 1 320px" }}
         >
           <TpInput
             value={query}
@@ -156,12 +156,14 @@ export function TenantsPage() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 8,
-              marginTop: 16,
+              gap: "var(--tp-space-2)",
+              marginTop: "var(--tp-space-4)",
             }}
           >
             {loadMoreError ? (
-              <span style={{ color: "var(--danger)", fontSize: 13 }}>{loadMoreError}</span>
+              <span style={{ color: "var(--danger)", fontSize: "var(--tp-text-body)" }}>
+                {loadMoreError}
+              </span>
             ) : null}
             <TpButton variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
               {loadingMore ? "Loading…" : loadMoreError ? "Retry" : "Load more"}

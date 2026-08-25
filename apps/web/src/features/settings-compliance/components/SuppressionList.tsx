@@ -6,6 +6,7 @@
 "use client";
 
 import type { SuppressionListItem } from "@leadwolf/types";
+import { TpButton } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import { listSuppressions, removeSuppression } from "../api";
 import styles from "../compliance.module.css";
@@ -93,14 +94,16 @@ export function SuppressionList() {
                   {new Date(e.created_at).toLocaleDateString()}
                 </span>
                 <span className={styles.listScope}>{SCOPE_LABEL[e.scope] ?? e.scope}</span>
-                <button
-                  className={styles.removeButton}
-                  type="button"
+                {/* TpButton's `loading` renders the Spinner AND sets disabled — the hand-rolled
+                    "Removing…" label swap and the manual `disabled` are its job, not this file's. */}
+                <TpButton
+                  variant="danger"
+                  size="sm"
+                  loading={removingId === e.id}
                   onClick={() => void onRemove(e.id)}
-                  disabled={removingId === e.id}
                 >
-                  {removingId === e.id ? "Removing…" : "Remove"}
-                </button>
+                  Remove
+                </TpButton>
               </div>
             </li>
           ))}

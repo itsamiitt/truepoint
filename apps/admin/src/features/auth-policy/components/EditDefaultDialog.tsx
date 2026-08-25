@@ -154,7 +154,7 @@ export function EditDefaultDialog({
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
         <FieldGroup label="Policy key" htmlFor="pp-key">
           <TpSelect id="pp-key" value={key} onChange={(e) => onKeyChange(e.currentTarget.value)}>
             {KEYS.map((k) => (
@@ -199,7 +199,9 @@ export function EditDefaultDialog({
         </FieldGroup>
 
         {spec.help ? (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--tp-ink-3)" }}>{spec.help}</p>
+          <p style={{ margin: 0, fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            {spec.help}
+          </p>
         ) : null}
       </div>
     </Dialog>

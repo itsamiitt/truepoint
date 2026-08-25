@@ -63,8 +63,8 @@ export function SupportNotes({ tenantId }: { tenantId: string }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 8,
-          margin: "8px 0 16px",
+          gap: "var(--tp-space-2)",
+          margin: "var(--tp-space-2) 0 var(--tp-space-4)",
           maxWidth: 640,
         }}
       >
@@ -76,7 +76,7 @@ export function SupportNotes({ tenantId }: { tenantId: string }) {
           disabled={adding}
           onChange={(e) => setBody(e.currentTarget.value)}
         />
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
           <TpInput
             value={ticketUrl}
             placeholder="Ticket URL (optional)"
@@ -96,18 +96,29 @@ export function SupportNotes({ tenantId }: { tenantId: string }) {
         empty={!!notes && notes.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No support notes yet.
           </p>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 640 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-2)",
+            maxWidth: 640,
+          }}
+        >
           {(notes ?? []).map((n) => (
             <Card key={n.id}>
               <div style={{ whiteSpace: "pre-wrap", color: "var(--tp-ink)" }}>{n.body}</div>
               <div
                 className="tp-cell-mono"
-                style={{ marginTop: 6, fontSize: 12, color: "var(--tp-ink-3)" }}
+                style={{
+                  marginTop: 6,
+                  fontSize: "var(--tp-text-caption)",
+                  color: "var(--tp-ink-3)",
+                }}
               >
                 {shortDate(n.createdAt)} · {n.staffUserId.slice(0, 8)}
                 {n.ticketUrl ? (

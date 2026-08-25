@@ -26,13 +26,19 @@ export default async function SentryCheckPage({
   }
 
   return (
-    <main style={{ padding: 32, fontFamily: "system-ui, sans-serif", maxWidth: 640 }}>
-      <h1 style={{ fontSize: 18, fontWeight: 600 }}>Sentry verification</h1>
-      <p style={{ fontSize: 14, lineHeight: 1.6 }}>
+    <main
+      style={{
+        padding: "var(--tp-space-8)",
+        fontFamily: "system-ui, sans-serif",
+        maxWidth: 640,
+      }}
+    >
+      <h1 style={{ fontSize: "var(--tp-text-heading)", fontWeight: 600 }}>Sentry verification</h1>
+      <p style={{ fontSize: "var(--tp-text-label)", lineHeight: 1.6 }}>
         Temporary page. Each control raises a real error so it travels the same path a production
         fault would. Nothing here reports contact data — PII is off in the SDK config.
       </p>
-      <ul style={{ fontSize: 14, lineHeight: 1.8 }}>
+      <ul style={{ fontSize: "var(--tp-text-label)", lineHeight: 1.8 }}>
         <li>
           <a href={`/sentry-check?throw=server&token=${TOKEN}`}>Throw a server error</a> — Server
           Component render, captured by <code>onRequestError</code>.

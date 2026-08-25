@@ -129,7 +129,7 @@ export function PasskeySection(): React.JSX.Element {
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "var(--tp-space-3)",
-                fontSize: 14,
+                fontSize: "var(--tp-text-label)",
               }}
             >
               <span>
@@ -151,7 +151,13 @@ export function PasskeySection(): React.JSX.Element {
           ))}
         </ul>
       ) : (
-        <p style={{ marginBottom: "var(--tp-space-4)", fontSize: 14, color: "var(--tp-ink-3)" }}>
+        <p
+          style={{
+            marginBottom: "var(--tp-space-4)",
+            fontSize: "var(--tp-text-label)",
+            color: "var(--tp-ink-3)",
+          }}
+        >
           You haven&apos;t added any passkeys yet.
         </p>
       )}

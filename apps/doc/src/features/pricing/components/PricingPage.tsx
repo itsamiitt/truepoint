@@ -5,7 +5,6 @@
 // never something a contribution earns (CLAUDE.md rule 7; content/pricing.ts carries the full reasoning).
 
 import { Note } from "@/components/Note.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
 import intro from "@/components/page-intro.module.css";
 import {
@@ -15,7 +14,7 @@ import {
   PRICING_REVIEWED,
   ROLLOVER_NOTE,
 } from "@/content/pricing.ts";
-import { PageContainer } from "@leadwolf/ui";
+import { PageContainer, PageHeader } from "@leadwolf/ui";
 import styles from "../pricing.module.css";
 import { PlanCard } from "./PlanCard.tsx";
 
@@ -28,10 +27,10 @@ const ACTION_ROWS = CREDIT_ACTIONS.map((action) => [
 export function PricingPage() {
   return (
     <PageContainer width="default">
-      <PageIntro
+      <PageHeader
         eyebrow="Pricing"
         title="What a call costs, in full."
-        lede="Every per-action price and every self-serve plan is on this page. There is no demo wall below the enterprise tier, and nothing here is quote-only."
+        subtitle="Every per-action price and every self-serve plan is on this page. There is no demo wall below the enterprise tier, and nothing here is quote-only."
       />
 
       <h2 className={intro.sectionTitle}>Per action</h2>

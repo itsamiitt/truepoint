@@ -12,12 +12,27 @@
 //     call log has no duration column.
 //   • Filled status pills carry the numeral in ink/cobalt/danger-700 rather than the mock's success and
 //     warning fills, which fail the AA contrast floor under white type (contrast.test.ts).
+//
+// EVERY CONTROL HERE IS A DS COMPONENT NOW. This page had hand-rolled four of them beside DS equivalents it
+// was already importing: a second segmented control (role="radiogroup" + a bespoke roving-tabindex handler)
+// while SnippetTabs in the same app used the DS SegmentedControl; a raw <table> for the call log while
+// components/ReferenceTable.tsx wrapped DataTable; raw <button>s for the domain samples; and a text-link
+// "Reset sandbox" <button> sitting next to a real TpButton. The DS SegmentedControl is a radiogroup with the
+// full arrow/Home/End model built in, so the local key handler was a duplicate of it, not an addition.
 
 import { CodeBlock } from "@/components/CodeBlock.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import prose from "@/components/prose.module.css";
-import { StatusBadge, TpButton, TpInput } from "@leadwolf/ui";
-import { type KeyboardEvent, useMemo, useRef, useState } from "react";
+import {
+  type Column,
+  DataTable,
+  PageHeader,
+  SegmentedControl,
+  StatusBadge,
+  TpButton,
+  TpChip,
+  TpInput,
+} from "@leadwolf/ui";
+import { useMemo, useState } from "react";
 import styles from "../playground.module.css";
 import type { SandboxEndpoint, SandboxOutcome, StoredReplay } from "../sandbox.ts";
 import { buildCurl, simulate } from "../sandbox.ts";
@@ -54,6 +69,39 @@ function statusClass(status: number, credits: number): string {
   return (credits > 0 ? styles.statusBilled : styles.statusOk) ?? "";
 }
 
+/** The call log's columns. Module-level because they close over nothing but `statusClass`. */
+const HISTORY_COLUMNS: Column<HistoryEntry>[] = [
+  {
+    key: "status",
+    header: "Status",
+    width: 90,
+    cell: (entry) => (
+      <span className={`${styles.statusPill} ${statusClass(entry.status, entry.credits)}`}>
+        {entry.status}
+      </span>
+    ),
+  },
+  {
+    key: "endpoint",
+    header: "Endpoint",
+    cell: (entry) => `${entry.endpoint}${entry.replayed ? " · replayed" : ""}`,
+  },
+  {
+    key: "domain",
+    header: "Domain",
+    cell: (entry) => <span className={styles.historyDomain}>{entry.domain}</span>,
+  },
+  {
+    key: "credits",
+    header: "Credits",
+    align: "right",
+    width: 90,
+    cell: (entry) => (
+      <span className={styles.historyCredits}>{entry.credits ? `-${entry.credits}` : "0"}</span>
+    ),
+  },
+];
+
 export function PlaygroundPage() {
   const [endpoint, setEndpoint] = useState<SandboxEndpoint>("match");
   const [apiKey, setApiKey] = useState("");
@@ -66,41 +114,6 @@ export function PlaygroundPage() {
 
   const isEnrich = endpoint === "enrich";
 
-  // Roving tabindex means only the SELECTED radio is in the tab order, so without arrow keys the other
-  // endpoint is unreachable by keyboard entirely — Tab skips tabIndex={-1}, and nothing else selects it. This
-  // shipped that way and was caught by driving the page in a browser: ArrowRight moved neither selection nor
-  // focus. The WAI-ARIA radiogroup pattern is what makes the roving tabindex legitimate rather than a trap.
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  const ARROW_DELTA: Record<string, number> = {
-    ArrowRight: 1,
-    ArrowDown: 1,
-    ArrowLeft: -1,
-    ArrowUp: -1,
-  };
-
-  function selectByKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const delta = ARROW_DELTA[event.key];
-    const target =
-      delta === undefined
-        ? event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? ENDPOINT_TABS.length - 1
-            : null
-        : (index + delta + ENDPOINT_TABS.length) % ENDPOINT_TABS.length;
-    if (target === null) return;
-
-    // preventDefault so ArrowUp/ArrowDown select rather than scrolling the page out from under the reader.
-    event.preventDefault();
-    const next = ENDPOINT_TABS[target];
-    if (!next) return;
-    setEndpoint(next.value);
-    setOutcome(null);
-    // Focus follows selection — the pattern's other half. Without it the roving tabindex would move the tab
-    // stop to a radio the user cannot see they are on.
-    tabRefs.current[target]?.focus();
-  }
   const curl = useMemo(
     () => buildCurl({ endpoint, apiKey, domain, idempotencyKey }),
     [endpoint, apiKey, domain, idempotencyKey],
@@ -151,48 +164,36 @@ export function PlaygroundPage() {
 
   return (
     <article>
-      <PageIntro
+      <PageHeader
         eyebrow="Documentation"
         title="Playground"
-        lede="Fire both company endpoints and see what your integration will receive: the status code, the response body, what it charged, and the cURL you would ship. Every response is simulated against fabricated sample records — no live data, no real spend, and no key you enter here leaves the page."
-        badge={<StatusBadge tone="warning">Simulated — nothing is sent</StatusBadge>}
+        subtitle="Fire both company endpoints and see what your integration will receive: the status code, the response body, what it charged, and the cURL you would ship. Every response is simulated against fabricated sample records — no live data, no real spend, and no key you enter here leaves the page."
+        actions={<StatusBadge tone="warning">Simulated — nothing is sent</StatusBadge>}
       />
 
       <div className={styles.split}>
         <div className={styles.formColumn}>
           <div className={styles.panel}>
-            <div className={styles.panelLabel} id="playground-endpoint-label">
-              Endpoint
-            </div>
-            <div
-              className={styles.endpointTabs}
-              role="radiogroup"
-              aria-labelledby="playground-endpoint-label"
-            >
-              {ENDPOINT_TABS.map((tab, index) => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  // biome-ignore lint/a11y/useSemanticElements: a native radio cannot carry this segmented
-                  // control's label markup, and swapping it would change the keyboard contract below.
-                  role="radio"
-                  aria-checked={endpoint === tab.value}
-                  tabIndex={endpoint === tab.value ? 0 : -1}
-                  ref={(node) => {
-                    tabRefs.current[index] = node;
-                  }}
-                  className={styles.endpointTab}
-                  onKeyDown={(event) => selectByKey(event, index)}
-                  onClick={() => {
-                    setEndpoint(tab.value);
-                    setOutcome(null);
-                  }}
-                >
-                  <span className={styles.endpointMethod}>{tab.method}</span>
-                  <span className={styles.endpointPath}>{tab.path}</span>
-                  <span className={styles.endpointCost}>{tab.cost}</span>
-                </button>
-              ))}
+            <div className={styles.panelLabel}>Endpoint</div>
+            <div className={styles.endpointChooser}>
+              <SegmentedControl
+                aria-label="Endpoint"
+                items={ENDPOINT_TABS.map((tab) => ({
+                  value: tab.value,
+                  label: (
+                    <span className={styles.endpointTabLabel}>
+                      <span className={styles.endpointMethod}>{tab.method}</span>
+                      <span className={styles.endpointPath}>{tab.path}</span>
+                      <span className={styles.endpointCost}>{tab.cost}</span>
+                    </span>
+                  ),
+                }))}
+                value={endpoint}
+                onChange={(value) => {
+                  setEndpoint(value as SandboxEndpoint);
+                  setOutcome(null);
+                }}
+              />
             </div>
 
             <div className={styles.field}>
@@ -235,14 +236,14 @@ export function PlaygroundPage() {
               />
               <div className={styles.samples}>
                 {SANDBOX_SAMPLES.map((sample) => (
-                  <button
+                  <TpChip
                     key={sample}
-                    type="button"
                     className={styles.sampleChip}
+                    active={domain === sample}
                     onClick={() => setDomain(sample)}
                   >
                     {sample}
-                  </button>
+                  </TpChip>
                 ))}
               </div>
               <p className={styles.fieldHint} id="playground-domain-hint">
@@ -289,9 +290,9 @@ export function PlaygroundPage() {
                 <span className={styles.balanceValue}>{balance.toLocaleString("en-US")}</span>{" "}
                 credits
               </span>
-              <button type="button" className={styles.resetButton} onClick={reset}>
+              <TpButton variant="link" className={styles.resetButton} onClick={reset}>
                 Reset sandbox
-              </button>
+              </TpButton>
             </div>
           </div>
 
@@ -318,37 +319,12 @@ export function PlaygroundPage() {
             </div>
             {history.length ? (
               <div className={styles.historyWrap}>
-                <table className={styles.history}>
-                  <thead>
-                    <tr>
-                      <th scope="col">Status</th>
-                      <th scope="col">Endpoint</th>
-                      <th scope="col">Domain</th>
-                      <th scope="col">Credits</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>
-                          <span
-                            className={`${styles.statusPill} ${statusClass(entry.status, entry.credits)}`}
-                          >
-                            {entry.status}
-                          </span>
-                        </td>
-                        <td>
-                          {entry.endpoint}
-                          {entry.replayed ? " · replayed" : ""}
-                        </td>
-                        <td className={styles.historyDomain}>{entry.domain}</td>
-                        <td className={styles.historyCredits}>
-                          {entry.credits ? `-${entry.credits}` : "0"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable
+                  className={styles.history}
+                  columns={HISTORY_COLUMNS}
+                  rows={[...history]}
+                  rowKey={(entry) => String(entry.id)}
+                />
               </div>
             ) : null}
           </section>

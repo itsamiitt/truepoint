@@ -43,7 +43,7 @@ export function ProspectToolbar({
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Sort</span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>Sort</span>
         <TpSelect
           value={query.sort}
           onChange={(e) => onChange({ ...query, sort: e.target.value as ContactQuery["sort"] })}
@@ -59,8 +59,8 @@ export function ProspectToolbar({
 
       <DropdownMenu
         align="end"
-        trigger={({ toggle }) => (
-          <TpIconButton label="Choose columns" onClick={toggle}>
+        trigger={({ toggle, props }) => (
+          <TpIconButton {...props} label="Choose columns" onClick={toggle}>
             <Columns3 size={16} />
           </TpIconButton>
         )}

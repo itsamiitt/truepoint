@@ -873,8 +873,21 @@ flowchart TD
   Tp-prefixed form `controls.tsx` + `form.tsx`, `Tabs`, overlays (`overlay.tsx` Dialog/Drawer; `floating.tsx` Popover/DropdownMenu/Tooltip),
   `Toast`, `DataTable`, `Combobox`, the page-scaffolding pair `PageHeader` (the one destination header) +
   `PageContainer` (the one page container — `width="fluid"|"default"|"narrow"`, always centred, so no surface can
-  re-invent its own max-width), and shadcn-pattern `components/ui/*` (now used by ALL four frontends: the auth
-  screens moved onto the shared tokens + primitives and no longer carry Tailwind utilities in app JSX).
+  re-invent its own max-width), and shadcn-pattern `components/ui/*` — which are styled from `primitives.css`,
+  **not** Tailwind utilities, because utilities only resolved in `apps/auth` and those components therefore
+  rendered unstyled in the other three apps.
+  `overlayStack.ts` is the module-level layer registry every overlay joins while open: it is what makes Escape
+  close only the top-most layer and the body-scroll lock reference-counted, neither of which a component can
+  decide alone. The overlays and composite widgets own their focus management and keyboard models (focus
+  trap + return, arrow/Home/End navigation, `aria-activedescendant`), so a hand-rolled one in an app is a
+  violation rather than a workaround.
+  **Tests** — `primitivesContrast.test.ts` / `inkFourContrast.test.ts` (colour), `classCoverage.test.ts` (every
+  `.tp-ui-*` a component references exists, and no component regresses to Tailwind utilities),
+  `rawPxBudget.test.ts` (no raw px where a `--tp-space-*` / `--tp-text-*` token exists — a gate at zero, not a
+  ratchet), `virtualWindow.test.ts`, plus the **behavioural** suite `components/*.domtest.tsx` with its
+  `test/dom.ts` harness. The `.domtest.tsx` suffix is deliberate: happy-dom replaces global
+  `ReadableStream`/`Request`/`Response` and bun shares one process across a run, so these must stay out of the
+  default `bun test` discovery — they run via `bun run test:dom` (a CI step), the same split as `*.itest.ts`.
 - **`packages/app-shell`** — the **shared Next.js app chrome** consumed by `apps/web`, `apps/admin` and
   `apps/forge`: `AppShellFrame` (rail column + sticky top bar + internally-scrolling content, owning mobile
   sidebar state, the desktop rail pin and the density context), `Sidebar`/`NavItem`/`UserRow`, `TopBar` (+
@@ -1523,4 +1536,26 @@ flowchart TD
   migration is a per-surface design decision rather than a find-and-replace, because ink-3 clears AA on white
   and surface-2 but fails on surface-3 and nav-hover-fill. Worth knowing before styling anything in this app:
   reach for `--tp-ink-3`, and if the surface underneath is tinted, check the pair rather than assuming.
-```
+
+  2026-08-25 refresh (UI remediation — design-system rewrite + app sweeps): 2428 → 2435 files, and
+  **unassigned 2 → 0**. New files, all into existing shared areas: `packages/ui/src/components/overlayStack.ts`
+  (the overlay layer registry), `packages/ui/src/test/dom.ts` plus `components/overlay.domtest.tsx` and
+  `components/keyboard.domtest.tsx` (the package's first behavioural tests),
+  `packages/ui/src/classCoverage.test.ts`, `packages/ui/src/rawPxBudget.test.ts`,
+  `apps/auth/src/contrast.test.ts` (the one app that had no pair test — which is why its four illegible
+  `--tp-ink-4` usages went unnoticed) and
+  `apps/extension/src/content/hovercard/shadowTokens.test.ts`. One deletion:
+  `apps/doc/src/components/PageIntro.tsx`, a fork of `PageHeader` that had 12 callers to the DS component's
+  zero.
+
+  The two long-standing `unassigned` entries were never a placement violation — `usageEventRepository` and
+  `outcomeMetricsRepository` simply had no `REPO_DOMAIN` entry, so the map could not name their domain. Both
+  are the `usage_event` outcome-metric substrate and are now registered under `reports`, the destination that
+  reads them. Registering rather than renaming is the same call the `crm-sync` block above records: the file
+  names already follow the one-entity-per-repository rule.
+
+  What a reader should take from this beyond the file list: the audit behind it found that every rule with an
+  automated gate sat at 100% compliance and every rule enforced only by review had drifted — raw pixels 350+,
+  `--tp-ink-4` as text 93, nine exported components rendering unstyled outside `apps/auth`. The response was
+  to give the load-bearing ones gates (`classCoverage`, `rawPxBudget`, the `.domtest.tsx` suite) rather than
+  to restate them in prose. If you are about to write a UI rule down, write a check instead.

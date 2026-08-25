@@ -35,6 +35,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   SegmentedControl,
   StateSwitch,
   StatusBadge,
@@ -345,47 +346,51 @@ export function ListDetailPage({ listId }: { listId: string }) {
         <ArrowLeft size={15} aria-hidden /> Back to lists
       </Link>
 
-      <div className={styles.head}>
-        <div className={styles.headMeta}>
-          <h1 className={styles.title}>
+      <PageHeader
+        title={
+          <>
             <ListChecks size={20} aria-hidden /> {list?.name ?? (listLoading ? "…" : "List")}
-          </h1>
-          <span className={styles.subtitle}>
+          </>
+        }
+        subtitle={
+          <>
             {list?.description ? `${list.description} · ` : ""}
             {list
               ? `${list.memberCount.toLocaleString()} member${list.memberCount === 1 ? "" : "s"}`
               : ""}
             {list ? ` · ${list.isOwner ? "Owned by you" : "Shared"}` : ""}
-          </span>
-        </div>
-        <div className={styles.headActions}>
-          <SegmentedControl
-            items={DENSITIES}
-            value={density}
-            onChange={setDensity}
-            aria-label="Row density"
-          />
-          <TpButton
-            variant="secondary"
-            size="sm"
-            leftIcon={<Upload size={15} />}
-            disabled={!list}
-            onClick={() => setImportOpen(true)}
-          >
-            Import into list
-          </TpButton>
-          {list?.isOwner ? (
-            <>
-              <TpButton variant="secondary" size="sm" onClick={() => setRenameOpen(true)}>
-                Rename
-              </TpButton>
-              <TpButton variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
-                Delete
-              </TpButton>
-            </>
-          ) : null}
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <SegmentedControl
+              items={DENSITIES}
+              value={density}
+              onChange={setDensity}
+              aria-label="Row density"
+            />
+            <TpButton
+              variant="secondary"
+              size="sm"
+              leftIcon={<Upload size={15} />}
+              disabled={!list}
+              onClick={() => setImportOpen(true)}
+            >
+              Import into list
+            </TpButton>
+            {list?.isOwner ? (
+              <>
+                <TpButton variant="secondary" size="sm" onClick={() => setRenameOpen(true)}>
+                  Rename
+                </TpButton>
+                <TpButton variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
+                  Delete
+                </TpButton>
+              </>
+            ) : null}
+          </>
+        }
+      />
 
       <StateSwitch
         loading={loading}

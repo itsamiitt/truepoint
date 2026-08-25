@@ -124,8 +124,10 @@
 .tp-ui-field::placeholder {
   color: var(--tp-ink-4);
 }
+/* Border darkens on focus — but the global :focus-visible ring in tokens.css is NOT suppressed. The old rule
+   here was `:focus { outline: none }`, which at specificity (0,2,0) beat the ring and left every field in the
+   product with a 1px border shift as its only focus indicator, visibly weaker than every button beside it. */
 .tp-ui-field:focus {
-  outline: none;
   border-color: var(--tp-ink-3);
 }
 .tp-ui-field:disabled {
@@ -133,7 +135,8 @@
   color: var(--tp-ink-3);
   cursor: not-allowed;
 }
-.tp-ui-field--invalid {
+.tp-ui-field--invalid,
+.tp-ui-field[aria-invalid="true"] {
   border-color: var(--danger);
 }
 textarea.tp-ui-field {
@@ -162,7 +165,10 @@ select.tp-ui-field {
   font-size: 14px;
   color: var(--tp-ink);
 }
-.tp-ui-checkbox input {
+/* Two entry points, one look: nested inside the TpCheckbox label, or applied directly to a bare <input>
+   (the shadcn-pattern Checkbox, which composes its own label). */
+.tp-ui-checkbox input,
+.tp-ui-checkbox-box {
   appearance: none;
   -webkit-appearance: none;
   width: 16px;
@@ -177,11 +183,13 @@ select.tp-ui-field {
   transition: background var(--tp-duration-fast) var(--tp-ease), border-color
     var(--tp-duration-fast) var(--tp-ease);
 }
-.tp-ui-checkbox input:checked {
+.tp-ui-checkbox input:checked,
+.tp-ui-checkbox-box:checked {
   background: var(--tp-btn);
   border-color: var(--tp-btn);
 }
-.tp-ui-checkbox input:checked::after {
+.tp-ui-checkbox input:checked::after,
+.tp-ui-checkbox-box:checked::after {
   content: "";
   position: absolute;
   left: 5px;
@@ -205,9 +213,40 @@ select.tp-ui-field {
   background: var(--tp-btn);
   border-color: var(--tp-btn);
 }
-.tp-ui-checkbox input:disabled {
+.tp-ui-checkbox input:disabled,
+.tp-ui-checkbox-box:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Windows High Contrast Mode paints its own colours and DROPS backgrounds — with `appearance: none` the
+   tick and the switch thumb are painted with background/border, so both controls vanished entirely and a
+   checked box looked identical to an unchecked one. Redraw the state with system colours instead. */
+@media (forced-colors: active) {
+  .tp-ui-checkbox input,
+  .tp-ui-checkbox-box,
+  .tp-ui-switch {
+    border: 1px solid CanvasText;
+    forced-color-adjust: none;
+    background: Canvas;
+  }
+  .tp-ui-checkbox input:checked,
+  .tp-ui-checkbox-box:checked,
+  .tp-ui-switch:checked {
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .tp-ui-checkbox input:checked::after,
+  .tp-ui-checkbox-box:checked::after {
+    border-color: HighlightText;
+  }
+  .tp-ui-checkbox input:indeterminate::after,
+  .tp-ui-switch::after {
+    background: HighlightText;
+  }
+  .tp-ui-switch:not(:checked)::after {
+    background: CanvasText;
+  }
 }
 
 /* ── Switch (token toggle) ───────────────────────────────────────────────────────────────────────────── */
@@ -270,12 +309,30 @@ select.tp-ui-field {
   cursor: pointer;
   transition: background var(--tp-duration-fast) var(--tp-ease);
 }
-.tp-ui-chip--button:hover {
+.tp-ui-chip--button:hover,
+.tp-ui-chip:has(.tp-ui-chip-body:hover) {
   background: var(--nav-hover-fill);
 }
+/* The chip's label when it is pressable — a plain button that inherits the pill's own type and colour, so
+   the chip looks unchanged now that the body and the × are siblings rather than nested. */
+.tp-ui-chip-body {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
 .tp-ui-chip-x {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
   display: inline-flex;
   margin-right: -2px;
+  font: inherit;
   color: var(--tp-ink-4);
   cursor: pointer;
 }
@@ -328,8 +385,11 @@ select.tp-ui-field {
   line-height: 1.4;
 }
 .tp-ui-field-error {
-  font-size: 12px;
-  color: var(--danger);
+  font-size: var(--tp-text-caption);
+  /* danger-700, not danger: this is TEXT. --danger is 3.99:1 on white — a fill tone, under the 4.5:1 floor.
+     The -700 half exists for exactly this and tokens.css says so; the form error was the rule's own
+     counter-example, on every form in the product. */
+  color: var(--danger-700);
   line-height: 1.4;
 }
 .tp-ui-form-row {
@@ -398,17 +458,19 @@ select.tp-ui-field {
 .tp-ui-segmented-item:hover {
   color: var(--tp-ink);
 }
-.tp-ui-segmented-item[aria-selected="true"] {
+/* aria-checked, not aria-selected: SegmentedControl is a radiogroup (a value picker), not a tablist. */
+.tp-ui-segmented-item[aria-checked="true"] {
   background: var(--tp-surface);
   color: var(--tp-ink);
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+  box-shadow: var(--tp-shadow-card);
 }
 
 /* ── Scrim + overlays (Dialog / Drawer) ──────────────────────────────────────────────────────────────── */
 .tp-ui-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(17, 24, 39, 0.32);
+  /* The token exists for this and was going unused while the value sat inline at a DIFFERENT alpha. */
+  background: var(--tp-scrim);
   z-index: var(--tp-z-overlay);
   animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
 }
@@ -575,8 +637,14 @@ select.tp-ui-field {
 .tp-ui-menu-item:hover {
   background: var(--nav-hover-fill);
 }
+/* The Combobox's aria-activedescendant highlight — DOM focus stays on the search input, so the active
+   option is marked with a class, not :focus. */
+.tp-ui-menu-item--active {
+  background: var(--nav-hover-fill);
+}
 .tp-ui-menu-item--danger {
-  color: var(--danger);
+  /* Text tone — see .tp-ui-field-error. */
+  color: var(--danger-700);
 }
 .tp-ui-menu-sep {
   height: 1px;
@@ -648,9 +716,30 @@ select.tp-ui-field {
   color: var(--tp-ink);
 }
 .tp-ui-toast-desc {
-  font-size: 13px;
+  font-size: var(--tp-text-body);
   color: var(--tp-ink-3);
   line-height: 1.4;
+}
+/* Real dismiss control. Click-anywhere-to-dismiss stays, but it was the ONLY way to clear a sticky toast
+   (duration: 0), which put a keyboard user in front of a message they could not remove. */
+.tp-ui-toast-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin-left: auto;
+  align-self: flex-start;
+  color: var(--tp-ink-3);
+  font-size: var(--tp-text-caption);
+  line-height: 1;
+  cursor: pointer;
+}
+.tp-ui-toast-close:hover {
+  color: var(--tp-ink);
+}
+/* The live region is always mounted (see Toast.tsx) — it must occupy no space while empty. */
+.tp-ui-toaster:empty {
+  display: none;
 }
 
 /* ── DataTable ───────────────────────────────────────────────────────────────────────────────────────── */
@@ -685,15 +774,27 @@ select.tp-ui-field {
   border-bottom: 1px solid var(--tp-hairline-2);
   white-space: nowrap;
 }
-.tp-ui-table th.tp-ui-th-sortable {
+/* Sort control: a REAL button inside the th. A `<th onClick>` is invisible to the keyboard — the header
+   was mouse-only on every sortable table in the product (WCAG 2.2 SC 2.1.1). The button inherits the
+   header's type so the change is purely structural. */
+.tp-ui-th-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
   user-select: none;
 }
-.tp-ui-table th.tp-ui-th-sortable:hover {
+.tp-ui-th-btn:hover {
   color: var(--tp-ink);
 }
 .tp-ui-th-arrow {
-  margin-left: 4px;
   color: var(--tp-ink-4);
 }
 .tp-ui-table td {
@@ -711,7 +812,18 @@ select.tp-ui-field {
 .tp-ui-table tbody tr.tp-ui-tr-clickable:hover td {
   background: var(--tp-surface-2);
 }
-.tp-ui-table tbody tr[aria-selected="true"] td {
+/* The row is focusable when it is activatable — the ring is drawn on the CELLS because a <tr> is not a
+   painted box, so an outline on it is clipped or invisible depending on border-collapse. */
+.tp-ui-table tbody tr.tp-ui-tr-clickable:focus {
+  outline: none;
+}
+.tp-ui-table tbody tr.tp-ui-tr-clickable:focus-visible td {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+/* data-selected, not aria-selected: aria-selected on a plain <tr> outside a grid/treegrid is invalid ARIA
+   (it made screen readers announce a selection state the table never claimed to have). */
+.tp-ui-table tbody tr[data-selected="true"] td {
   background: var(--tp-cobalt-50);
 }
 [data-density="compact"] .tp-ui-table td {
@@ -811,9 +923,14 @@ select.tp-ui-field {
 }
 .tp-ui-page-header-subtitle {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--tp-text-label);
   font-weight: 400;
   color: var(--tp-ink-3);
+  /* Cap the measure. On a `default`/`fluid` PageContainer the subtitle would otherwise run the full 1280px,
+     which is roughly 160 characters — far past the ~75 where the eye starts losing its place on the return
+     sweep. It showed up when apps/doc's marketing pages moved off their own PageIntro, which had capped at
+     68ch; a header on a narrow form never revealed it. `ch` rather than px so it tracks the font. */
+  max-width: 72ch;
 }
 /* Right-aligned actions slot (e.g. a Refresh button) — never shrinks. */
 .tp-ui-page-header-actions {
@@ -861,6 +978,105 @@ select.tp-ui-field {
   max-width: var(--tp-page-max-narrow);
 }
 /* data-width="fluid" intentionally sets no max-width — margin-inline:auto is then a no-op. */
+
+/* ── Label / Alert / Badge / Separator / Radio (the shadcn-pattern family) ───────────────────────────── */
+/* These are styled HERE, not with Tailwind utility classes, because the utilities only resolved in
+   apps/auth — the one app that loads tailwindcss + theme.css. Everywhere else (web, admin, forge) the class
+   names landed in the DOM with no CSS behind them, so a documented DS component rendered as unstyled markup
+   and nothing — typecheck, biome, or the contrast tests — could see it. Moving them onto .tp-ui-* makes the
+   whole exported surface render identically in every app, which is what "same look, same tokens" claimed. */
+.tp-ui-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--tp-text-body);
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+.tp-ui-alert {
+  font-size: var(--tp-text-body);
+  line-height: 1.5;
+}
+.tp-ui-alert--default {
+  display: block;
+  padding: 8px 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-2);
+}
+/* danger-700: this is error TEXT on a light surface, not a fill (see .tp-ui-field-error). */
+.tp-ui-alert--destructive {
+  color: var(--danger-700);
+}
+.tp-ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 999px;
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-2);
+  font-size: var(--tp-text-body);
+}
+/* Success reads GREEN. The Tailwind version tinted it cobalt, so the product shipped two exported
+   "success" badges in two different hues (this one and StatusBadge). */
+.tp-ui-badge--success {
+  border-color: transparent;
+  background: var(--success-50);
+  color: var(--success-700);
+}
+.tp-ui-separator {
+  height: 1px;
+  margin: 16px 0;
+  background: var(--tp-hairline);
+}
+.tp-ui-separator-labeled {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  font-size: var(--tp-text-caption);
+  /* ink-3, not ink-4: this is the "or" between two sign-in paths — running text. */
+  color: var(--tp-ink-3);
+}
+.tp-ui-separator-labeled::before,
+.tp-ui-separator-labeled::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--tp-hairline);
+}
+.tp-ui-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tp-ui-radio-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  font-size: var(--tp-text-label);
+  color: var(--tp-ink);
+  cursor: pointer;
+}
+/* :has(:checked) keeps the selected-row highlight working with NO JavaScript — these pickers submit as
+   plain forms on the auth origin. */
+.tp-ui-radio-option:has(:checked) {
+  border-color: var(--tp-ink);
+  background: var(--tp-surface-3);
+}
+.tp-ui-radio {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--tp-btn);
+  cursor: pointer;
+}
 
 @media (max-width: 768px) {
   .tp-ui-page-container {

@@ -137,17 +137,24 @@ export function StaffPage() {
       <div
         style={{
           display: "flex",
-          gap: 8,
+          gap: "var(--tp-space-2)",
           alignItems: "flex-end",
           flexWrap: "wrap",
-          marginBottom: 16,
+          marginBottom: "var(--tp-space-4)",
         }}
       >
+        {/* No htmlFor: UserPicker renders the DS Combobox, whose trigger button it owns and gives no id, so
+            the association is this WRAPPING label. `id` still lands on the read-only disabled field. */}
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the DS Combobox nested inside UserPicker — a component boundary the rule cannot follow */}
         <label
-          htmlFor="staff-grant-user"
-          style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 280px" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-1)",
+            flex: "1 1 280px",
+          }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>User</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>User</span>
           <UserPicker
             id="staff-grant-user"
             value={userId}
@@ -161,9 +168,9 @@ export function StaffPage() {
         </label>
         <label
           htmlFor="staff-grant-role"
-          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Role</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>Role</span>
           <TpSelect
             id="staff-grant-role"
             value={role}
@@ -208,7 +215,7 @@ export function StaffPage() {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="secondary"
               onClick={() => setConfirmRevoke(null)}

@@ -140,7 +140,7 @@
 }
 
 .barConv {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* The off-ramp statuses (disqualified · nurture · unsubscribed), visually demoted. */
@@ -153,7 +153,7 @@
 .secondaryLabel {
   margin: 0 0 8px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Data health ───────────────────────────────────────────────────────────────────────────────── */
@@ -235,7 +235,7 @@
 
 .rateSub {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Quiet states ──────────────────────────────────────────────────────────────────────────────── */
@@ -263,7 +263,7 @@
 .footnote {
   margin: 12px 0 0;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Dashboard switcher + filter row ───────────────────────────────────────────────────────────── */

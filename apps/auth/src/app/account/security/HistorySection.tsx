@@ -8,10 +8,21 @@
 import { AccountSectionCard } from "@/shared/AccountShell";
 import styles from "@/shared/auth.module.css";
 import { StatusBadge } from "@leadwolf/ui";
-import type { SessionView } from "./data";
+import { type SessionView, moreRowsNote } from "./data";
 
-export function HistorySection({ history }: { history: SessionView[] }) {
+export function HistorySection({
+  history,
+  total,
+  atSourceLimit,
+}: {
+  /** Already capped by the data layer (SECURITY_LIST_PAGE_SIZE) — this JSX renders whatever it is given. */
+  history: SessionView[];
+  /** Recent sessions in total, so the cap can be disclosed rather than silently swallowing rows. */
+  total: number;
+  atSourceLimit: boolean;
+}) {
   const now = Date.now();
+  const more = moreRowsNote(history.length, total, atSourceLimit);
   return (
     <AccountSectionCard
       id="history"
@@ -19,38 +30,53 @@ export function HistorySection({ history }: { history: SessionView[] }) {
       description="Recent sign-ins on your account. This shows session activity; the full event log is a follow-up."
     >
       {history.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 14, color: "var(--tp-ink-3)" }}>No recent sign-ins.</p>
+        <p style={{ margin: 0, fontSize: "var(--tp-text-label)", color: "var(--tp-ink-3)" }}>
+          No recent sign-ins.
+        </p>
       ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <caption className={styles.srOnly}>Recent sign-ins</caption>
-            <thead>
-              <tr>
-                <th scope="col">Device</th>
-                <th scope="col">IP address</th>
-                <th scope="col">Signed in</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((s) => {
-                const active = s.expiresAt.getTime() > now;
-                return (
-                  <tr key={s.id}>
-                    <td>{s.device}</td>
-                    <td className={styles.cellMono}>{s.ipAddress ?? "—"}</td>
-                    <td className={styles.cellMuted}>{s.createdAt.toLocaleString()}</td>
-                    <td>
-                      <StatusBadge tone={active ? "success" : "muted"}>
-                        {active ? "Active" : "Ended"}
-                      </StatusBadge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <caption className={styles.srOnly}>Recent sign-ins</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Device</th>
+                  <th scope="col">IP address</th>
+                  <th scope="col">Signed in</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((s) => {
+                  const active = s.expiresAt.getTime() > now;
+                  return (
+                    <tr key={s.id}>
+                      <td>{s.device}</td>
+                      <td className={styles.cellMono}>{s.ipAddress ?? "—"}</td>
+                      <td className={styles.cellMuted}>{s.createdAt.toLocaleString()}</td>
+                      <td>
+                        <StatusBadge tone={active ? "success" : "muted"}>
+                          {active ? "Active" : "Ended"}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {more ? (
+            <p
+              style={{
+                margin: "var(--tp-space-2) 0 0",
+                fontSize: "var(--tp-text-caption)",
+                color: "var(--tp-ink-3)",
+              }}
+            >
+              {more}
+            </p>
+          ) : null}
+        </>
       )}
     </AccountSectionCard>
   );

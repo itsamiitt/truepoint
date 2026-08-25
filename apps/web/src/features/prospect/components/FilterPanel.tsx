@@ -8,7 +8,7 @@
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
-import { TpButton, TpInput } from "@leadwolf/ui";
+import { TpButton, TpChip, TpInput } from "@leadwolf/ui";
 import { type ReactNode, useState } from "react";
 import {
   FILTER_GROUPS,
@@ -107,6 +107,9 @@ function GroupSection({
 
   return (
     <section className={styles.group}>
+      {/* Raw <button>: an accordion section header, not an action button — full-bleed, justified, carrying a
+          count badge and a chevron. No TpButton variant is that shape, and `tp-ui-btn` would impose its own
+          height/padding. Accessible name comes from the visible title + badge. */}
       <button
         type="button"
         aria-expanded={open}
@@ -227,6 +230,16 @@ function TermFacet({
   );
 }
 
+/**
+ * The Any/Yes/No pill for a bool facet — now the DS chip rather than a hand-rolled `.miniToggle`.
+ *
+ * TpChip and not SegmentedControl, even though a three-way single-select is what a radiogroup is for:
+ * SegmentedControl swaps the keyboard model (roving tabindex, arrows move AND select) for one that these
+ * pills never had, and `.tp-ui-segmented-item` paints --tp-ink-3 on --tp-surface-3 — 4.43:1, below AA, which
+ * would be a new contrast failure introduced by the pass that exists to remove them. TpChip keeps the current
+ * behaviour exactly (three independent tab stops, click to set) and its inactive pill is ink-2 on surface-3
+ * at 9.45:1.
+ */
 function MiniToggle({
   active,
   onClick,
@@ -237,14 +250,9 @@ function MiniToggle({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={styles.miniToggle}
-      data-active={active ? "true" : undefined}
-    >
+    <TpChip active={active} onClick={onClick}>
       {children}
-    </button>
+    </TpChip>
   );
 }
 

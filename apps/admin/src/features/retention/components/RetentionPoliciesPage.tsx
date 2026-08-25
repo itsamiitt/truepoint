@@ -79,8 +79,15 @@ export function RetentionPoliciesPage() {
   ];
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={{ color: "var(--tp-ink-3)", fontSize: 13, maxWidth: 640, margin: 0 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
+      <p
+        style={{
+          color: "var(--tp-ink-3)",
+          fontSize: "var(--tp-text-body)",
+          maxWidth: 640,
+          margin: 0,
+        }}
+      >
         One global policy per data class: its time-to-live and its mode. Shadow counts and audits
         but deletes nothing; enforce permanently deletes aged rows for tenants with the retention
         engine enabled.{" "}

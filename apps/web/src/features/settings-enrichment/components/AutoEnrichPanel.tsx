@@ -9,6 +9,7 @@ import type { EnrichField, EnrichTrigger } from "@leadwolf/types";
 import {
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpCheckbox,
@@ -90,7 +91,7 @@ export function AutoEnrichPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Auto-enrich</h1>
+      <PageHeader title="Auto-enrich" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         <FormSection
           title="Auto-enrich policy"

@@ -3,7 +3,7 @@
 // support context. Read-only PII-free aggregate from the audited api. Renders async state through the State Kit.
 "use client";
 
-import { StatTile, StateSwitch } from "@leadwolf/ui";
+import { EmptyState, StatTile, StateSwitch } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import { fetchTenantOverview } from "../api";
 import { shortDate } from "../format";
@@ -31,17 +31,28 @@ export function TenantOverview({ tenantId }: { tenantId: string }) {
   }, [reload]);
 
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h3 className="tp-section-title" style={{ marginBottom: 12 }}>
+    <div style={{ marginBottom: "var(--tp-space-6)" }}>
+      <h3 className="tp-section-title" style={{ marginBottom: "var(--tp-space-3)" }}>
         Overview
       </h3>
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !data}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No activity yet"
+            description="This tenant has no reveals, credit burn or imports on record."
+          />
+        }
+      >
         {data ? (
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 12,
+              gap: "var(--tp-space-3)",
             }}
           >
             <StatTile label="Reveals (30d)" value={data.reveals30d.toLocaleString()} />

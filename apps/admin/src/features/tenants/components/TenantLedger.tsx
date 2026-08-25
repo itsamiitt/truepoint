@@ -126,14 +126,16 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
         empty={!loading && entries.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No ledger entries yet.
           </p>
         }
       >
         <DataTable columns={columns} rows={entries} rowKey={(e) => e.id} />
         {cursor ? (
-          <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
+          <div
+            style={{ marginTop: "var(--tp-space-3)", display: "flex", justifyContent: "center" }}
+          >
             <TpButton
               variant="secondary"
               size="sm"

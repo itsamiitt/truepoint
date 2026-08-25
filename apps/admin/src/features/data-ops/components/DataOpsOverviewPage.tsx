@@ -7,7 +7,7 @@
 // through the shared State Kit.
 "use client";
 
-import { PageContainer, PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
+import { EmptyState, PageContainer, PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
 import Link from "next/link";
 import { formatInt } from "../format";
 import { useDataOpsOverview } from "../hooks/useDataOpsOverview";
@@ -22,13 +22,24 @@ export function DataOpsOverviewPage() {
         subtitle="Cross-tenant data-operations overview — pipeline jobs, bulk-import outcomes and retention shadow runs at a glance. Read-only; counts and tallies only."
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !overview}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No overview available"
+            description="The data-operations overview returned nothing for this environment."
+          />
+        }
+      >
         {overview ? (
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: 16,
+              gap: "var(--tp-space-4)",
             }}
           >
             <StatTile
@@ -60,7 +71,14 @@ export function DataOpsOverviewPage() {
         ) : null}
       </StateSwitch>
 
-      <div style={{ marginTop: 24, display: "flex", gap: 20, flexWrap: "wrap" }}>
+      <div
+        style={{
+          marginTop: "var(--tp-space-6)",
+          display: "flex",
+          gap: "var(--tp-space-5)",
+          flexWrap: "wrap",
+        }}
+      >
         <Link href="/imports" style={{ fontWeight: 500 }}>
           Bulk imports monitor →
         </Link>

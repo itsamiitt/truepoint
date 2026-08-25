@@ -93,6 +93,7 @@ function GroupSection({
   );
   return (
     <section className={styles.group}>
+      {/* Raw <button>: the same accordion section header as FilterPanel's — see the note there. */}
       <button
         type="button"
         aria-expanded={open}

@@ -6,6 +6,7 @@
 // carries an include AND an exclude clause at once, so both directions coexist).
 "use client";
 
+import { TpIconButton } from "@leadwolf/ui";
 import { type ReactNode, useId, useState } from "react";
 import type { TermOp } from "../filterGroups";
 import styles from "../prospect.module.css";
@@ -55,6 +56,9 @@ export function TermFacetField({
     <div className={styles.facet}>
       <div className={styles.facetHead}>
         <span className={styles.facetLabel}>{label}</span>
+        {/* Stays a raw <button>: this is a DISCLOSURE, not an action button. Its expanded state is a
+            danger-tinted treatment driven by `[aria-expanded="true"]` that no TpButton variant produces,
+            and `tp-ui-btn`'s own height/padding/font-size would fight the module class. */}
         <button
           type="button"
           className={styles.excToggle}
@@ -83,14 +87,11 @@ export function TermFacetField({
               <span aria-hidden className={styles.dashMark} />
               Exclude
             </span>
-            <button
-              type="button"
-              className={styles.excClose}
-              aria-label={`Close exclude ${label}`}
-              onClick={() => setOpen(false)}
-            >
+            {/* The DS icon button, not a hand-rolled ×: it also lifts the hit target from ~18px to the
+                32px square WCAG 2.2 SC 2.5.8 asks for, which the bespoke version missed. */}
+            <TpIconButton label={`Close exclude ${label}`} onClick={() => setOpen(false)}>
               ×
-            </button>
+            </TpIconButton>
           </div>
           {renderPicker("exclude", focusOnOpen)}
           <ChipRow conditions={excluded} facetLabel={label} onRemove={onRemove} />
@@ -121,6 +122,10 @@ function ChipRow({
   onRemove: (op: TermOp, value: string) => void;
 }) {
   if (conditions.length === 0) return null;
+  // Deliberately NOT TpChip: the include/exclude treatment (cobalt vs rose, plus the minus rule so negation
+  // is never carried by colour alone) rides on `data-op`, and TpChip takes no data-* passthrough. Its own
+  // surface-3 pill would erase the distinction. The remove × is a legal <button> here because the chip
+  // wrapper is a <span>, not a button — unlike TagChip, which has to use role="button".
   return (
     <div className={styles.termChips}>
       {conditions.map((c) => (

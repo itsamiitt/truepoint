@@ -16,8 +16,12 @@ export function Card({
       style={{
         background: "var(--tp-surface-2)",
         border: "1px solid var(--tp-hairline-2)",
-        borderRadius: "var(--radius)",
-        padding: 20,
+        // The card tokens exist for the card. --tp-radius-card (14px) and --tp-shadow-card were defined for
+        // the Brand Kit's "cards float" and then never applied by the component they were named after, so
+        // the shipped card sat at the generic 8px --radius with no elevation at all.
+        borderRadius: "var(--tp-radius-card)",
+        boxShadow: "var(--tp-shadow-card)",
+        padding: "var(--tp-space-5)",
         ...style,
       }}
     >

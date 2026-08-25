@@ -392,6 +392,14 @@ export const REPO_DOMAIN = {
   // it is a usage COUNTER for the customer dashboard, and the credit ledger remains the money's source of
   // truth. Filing it under billing would encode in the map the exact conflation the code refuses to make.
   apiUsage: "api-public",
+  // The `usage_event` outcome-metric substrate (08-architecture § Instrumentation): usageEvent WRITES the
+  // events from the reveal/list/resolve paths, outcomeMetrics READS them back as the Phase 1 metrics. One
+  // subsystem, two entities, and `reports` is the destination that exists to surface them — apps/api's
+  // reports routes and apps/web's RevealOutcomesSection are the only readers. Deliberately NOT `billing`:
+  // usage_event records what was ATTEMPTED, and the credit ledger stays the money's source of truth — the
+  // same distinction apiUsage draws above. Both sat in `unassigned` because neither was registered.
+  usageEvent: "reports",
+  outcomeMetrics: "reports",
   purchase: "billing",
   notification: "notifications",
   aiRequest: "ai",

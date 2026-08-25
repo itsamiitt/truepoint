@@ -10,11 +10,26 @@
 "use client";
 
 import type { AccountAlumniResponse, AccountDisplacementResponse } from "@leadwolf/types";
-import { StatusBadge, TpChip } from "@leadwolf/ui";
+import { ErrorState, StatusBadge, TpChip } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAccountAlumni, fetchAccountDisplacement } from "../accountIntelligenceApi";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
+
+/**
+ * Self-hiding sections still have to distinguish "nothing to say" from "we could not ask".
+ *
+ * Reading only `query.data` collapses three different situations into one blank region: the feature is dark,
+ * the answer is genuinely empty, and the request failed. The first two are the silence this file is built
+ * around; the third is a 500 that the user is never told about and can never retry. So the error branch runs
+ * FIRST, keeps the heading so it is clear WHAT failed, and offers the retry — and only then does the
+ * dark/empty check return null exactly as before.
+ */
+const INLINE_ERROR_STYLE = {
+  padding: "var(--tp-space-4) 0",
+  alignItems: "flex-start",
+  textAlign: "left",
+} as const;
 
 function monthsAgo(iso: Date | string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -36,8 +51,25 @@ export function AccountDisplacementSection({ accountId }: { accountId: string | 
     queryFn: () => fetchAccountDisplacement(accountId as string),
   });
 
-  const removed = query.data?.removed ?? [];
-  if (removed.length === 0) return null;
+  if (query.error) {
+    return (
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <h3 className={styles.sectionTitle}>Recently dropped</h3>
+        </div>
+        <ErrorState
+          title="Couldn't load recently dropped technology"
+          detail={query.error instanceof Error ? query.error.message : undefined}
+          onRetry={() => void query.refetch()}
+          style={INLINE_ERROR_STYLE}
+        />
+      </section>
+    );
+  }
+
+  const data = query.data;
+  const removed = data?.removed ?? [];
+  if (!data || !data.resolved || removed.length === 0) return null;
 
   return (
     <section className={styles.section}>
@@ -73,8 +105,26 @@ export function AccountAlumniSection({ accountId }: { accountId: string | null }
     queryFn: () => fetchAccountAlumni(accountId as string),
   });
 
-  const alumni = query.data?.alumni ?? [];
-  if (!query.data?.is_school || alumni.length === 0) return null;
+  if (query.error) {
+    return (
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <h3 className={styles.sectionTitle}>Your alumni here</h3>
+        </div>
+        <ErrorState
+          title="Couldn't load alumni"
+          detail={query.error instanceof Error ? query.error.message : undefined}
+          onRetry={() => void query.refetch()}
+          style={INLINE_ERROR_STYLE}
+        />
+      </section>
+    );
+  }
+
+  const data = query.data;
+  const alumni = data?.alumni ?? [];
+  // Unchanged self-hide: not resolved (dark), not a school, or no matching contacts → silence, not "0 alumni".
+  if (!data || !data.resolved || !data.is_school || alumni.length === 0) return null;
 
   return (
     <section className={styles.section}>

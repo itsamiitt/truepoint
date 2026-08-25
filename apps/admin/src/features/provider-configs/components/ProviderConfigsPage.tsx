@@ -9,10 +9,12 @@ import {
   type Column,
   DataTable,
   EmptyState,
-  ErrorState,
-  LoadingState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
   StatusBadge,
   type StatusTone,
+  TableSkeleton,
   TpButton,
   TpInput,
   TpSwitch,
@@ -100,7 +102,14 @@ export function ProviderConfigsPage() {
       header: "API key",
       width: 140,
       cell: (p) => (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: "var(--tp-text-caption)",
+          }}
+        >
           <KeyRound size={13} aria-hidden />
           <span style={{ fontFamily: "var(--font-mono)" }}>{p.keyHint ?? "not set"}</span>
         </span>
@@ -140,38 +149,41 @@ export function ProviderConfigsPage() {
   ];
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Data providers</h1>
-        <p style={{ color: "var(--tp-ink-3)", fontSize: 13 }}>
-          Manage enrichment providers — enable/disable, rate limits and cost budgets. API keys are
-          stored encrypted and shown only as a masked hint; secrets never reach this screen.
-        </p>
-      </header>
+    // PageContainer + PageHeader, not a hand-rolled <main>: AppShellFrame already renders the page's <main>,
+    // so this one was a second, nested one — and its 20px title matched no other destination in the console.
+    <PageContainer width="fluid">
+      <PageHeader
+        title="Data providers"
+        subtitle="Manage enrichment providers — enable/disable, rate limits and cost budgets. API keys are stored encrypted and shown only as a masked hint; secrets never reach this screen."
+      />
 
-      {loading && providers.length === 0 ? (
-        <LoadingState label="Loading providers…" />
-      ) : unavailable ? (
-        <EmptyState
-          title="Provider configuration not available yet"
-          description="The admin provider-config API is part of the broader admin track. This screen will populate once those endpoints are mounted."
-          action={
-            <TpButton variant="secondary" size="sm" onClick={reload}>
-              Retry
-            </TpButton>
-          }
-        />
-      ) : error ? (
-        <ErrorState detail={error} onRetry={reload} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={providers}
-          rowKey={(p) => p.provider}
-          empty={<EmptyState title="No providers configured" />}
-        />
-      )}
-    </main>
+      <StateSwitch
+        loading={loading && providers.length === 0}
+        error={error}
+        empty={unavailable || (!loading && providers.length === 0)}
+        onRetry={reload}
+        skeleton={
+          <TableSkeleton rows={6} columns={[8, 4, 6, 4, 8, 5, 5]} label="Loading providers" />
+        }
+        emptyState={
+          unavailable ? (
+            <EmptyState
+              title="Provider configuration not available yet"
+              description="The admin provider-config API is part of the broader admin track. This screen will populate once those endpoints are mounted."
+              action={
+                <TpButton variant="secondary" size="sm" onClick={reload}>
+                  Retry
+                </TpButton>
+              }
+            />
+          ) : (
+            <EmptyState title="No providers configured" />
+          )
+        }
+      >
+        <DataTable columns={columns} rows={providers} rowKey={(p) => p.provider} />
+      </StateSwitch>
+    </PageContainer>
   );
 }
 

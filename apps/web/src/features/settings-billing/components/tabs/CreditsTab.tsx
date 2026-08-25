@@ -45,7 +45,7 @@ export function CreditsTab({
   };
 
   return (
-    <Card style={{ padding: 24 }}>
+    <Card style={{ padding: "var(--tp-space-6)" }}>
       <div className={styles.cardHead}>
         <span className={styles.cardLabel}>
           <Wallet size={14} aria-hidden />

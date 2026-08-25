@@ -30,11 +30,11 @@ export function RecentSearches({
     >
       <span
         style={{
-          fontSize: 11,
+          fontSize: "var(--tp-text-micro)",
           fontWeight: 600,
           letterSpacing: "0.02em",
           textTransform: "uppercase",
-          color: "var(--tp-ink-4)",
+          color: "var(--tp-ink-3)",
         }}
       >
         Recent

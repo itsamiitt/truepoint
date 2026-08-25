@@ -92,7 +92,11 @@ export function PasswordSection({
             />
             <p
               id="new_password_hint"
-              style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}
+              style={{
+                marginTop: "var(--tp-space-1)",
+                fontSize: "var(--tp-text-caption)",
+                color: "var(--tp-ink-3)",
+              }}
             >
               At least {PASSWORD_MIN_LENGTH} characters. Avoid passwords used elsewhere.
             </p>
@@ -112,7 +116,7 @@ export function PasswordSection({
           </div>
         </form>
       ) : (
-        <p style={{ fontSize: 14, color: "var(--tp-ink-3)" }}>
+        <p style={{ fontSize: "var(--tp-text-label)", color: "var(--tp-ink-3)" }}>
           Your account signs in without a password (single sign-on or a passkey). There is no
           password to change here.
         </p>

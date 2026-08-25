@@ -10,10 +10,12 @@ import {
   type Column,
   DataTable,
   EmptyState,
-  ErrorState,
-  LoadingState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
   StatusBadge,
   type StatusTone,
+  TableSkeleton,
   TpButton,
   TpInput,
   TpSwitch,
@@ -105,7 +107,9 @@ export function DataSourceOriginsPage() {
       cell: (o) => (
         <span style={{ display: "inline-flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 600 }}>{o.label}</span>
-          <span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{o.baseUrl}</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", fontFamily: "var(--font-mono)" }}>
+            {o.baseUrl}
+          </span>
         </span>
       ),
     },
@@ -138,7 +142,14 @@ export function DataSourceOriginsPage() {
       header: "API key",
       width: 130,
       cell: (o) => (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: "var(--tp-text-caption)",
+          }}
+        >
           <KeyRound size={13} aria-hidden />
           <span style={{ fontFamily: "var(--font-mono)" }}>{o.apiKeyHint ?? "not set"}</span>
         </span>
@@ -188,33 +199,21 @@ export function DataSourceOriginsPage() {
     },
   ];
 
-  if (loading) return <LoadingState label="Loading data sources…" />;
-  if (unavailable)
-    return (
-      <EmptyState
-        icon={<Plug size={24} />}
-        title="Data sources not available"
-        description="The /admin/data-sources endpoint is not mounted in this environment."
-      />
-    );
-  if (error) return <ErrorState detail={error} onRetry={() => void reload()} />;
-
   return (
-    <div>
-      <h1 style={{ margin: "0 0 4px", fontSize: 20 }}>Data sources — linkedin_api origins</h1>
-      <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--tp-ink-3)" }}>
-        Failover chain, priority ascending. Keys are sealed on save and never shown again. Pausing
-        an origin takes effect fleet-wide within a minute.
-      </p>
+    <PageContainer width="fluid">
+      <PageHeader
+        title="Data sources — linkedin_api origins"
+        subtitle="Failover chain, priority ascending. Keys are sealed on save and never shown again. Pausing an origin takes effect fleet-wide within a minute."
+      />
 
-      {canManage ? (
+      {canManage && !unavailable ? (
         <div
           style={{
             display: "flex",
-            gap: 8,
+            gap: "var(--tp-space-2)",
             alignItems: "flex-end",
             flexWrap: "wrap",
-            marginBottom: 16,
+            marginBottom: "var(--tp-space-4)",
           }}
         >
           <TpInput
@@ -255,15 +254,32 @@ export function DataSourceOriginsPage() {
         </div>
       ) : null}
 
-      {origins.length === 0 ? (
-        <EmptyState
-          icon={<Plug size={24} />}
-          title="No origins registered"
-          description="The linkedin_api fleet is dark until an origin is added (env fallback aside)."
-        />
-      ) : (
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={unavailable || origins.length === 0}
+        onRetry={() => void reload()}
+        skeleton={
+          <TableSkeleton rows={5} columns={[14, 4, 4, 6, 6, 7, 7]} label="Loading origins" />
+        }
+        emptyState={
+          unavailable ? (
+            <EmptyState
+              icon={<Plug size={24} />}
+              title="Data sources not available"
+              description="The /admin/data-sources endpoint is not mounted in this environment."
+            />
+          ) : (
+            <EmptyState
+              icon={<Plug size={24} />}
+              title="No origins registered"
+              description="The linkedin_api fleet is dark until an origin is added (env fallback aside)."
+            />
+          )
+        }
+      >
         <DataTable columns={columns} rows={origins} rowKey={(o) => o.id} />
-      )}
-    </div>
+      </StateSwitch>
+    </PageContainer>
   );
 }

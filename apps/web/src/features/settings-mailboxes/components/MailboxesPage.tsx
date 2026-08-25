@@ -4,6 +4,7 @@
 // connect/add/verify refreshes the sibling list. Composition only.
 "use client";
 
+import { PageHeader } from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 import { fetchSendQuota } from "../api";
 import { useMailboxes } from "../hooks/useMailboxes";
@@ -28,12 +29,14 @@ export function MailboxesPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Email & mailboxes</h1>
-        <p className={styles.subtitle}>
-          Connect a sending identity and authenticate a domain. Credentials are encrypted
-          server-side and never shown again.
-        </p>
+      {/* The DS PageHeader owns the title + description; the quota is a LIVE METRIC, not page copy, so it
+          stays its own line. `.header` is kept purely as the grouping box (column, 6px gap) that holds the
+          metric tight under the header instead of letting the page's 24px rhythm orphan it. */}
+      <div className={styles.header}>
+        <PageHeader
+          title="Email & mailboxes"
+          subtitle="Connect a sending identity and authenticate a domain. Credentials are encrypted server-side and never shown again."
+        />
         {quota && (
           <p className={styles.quota}>
             Send quota this period:{" "}
@@ -43,7 +46,7 @@ export function MailboxesPage() {
             </strong>
           </p>
         )}
-      </header>
+      </div>
 
       <ConnectMailboxForm domains={domains.domains} onConnected={mailboxes.reload} />
       <MailboxList

@@ -128,7 +128,11 @@ ONLY way to reach them. Without a key handler they are unreachable by keyboard â
 
 Add the pattern's other half: Arrow keys move (with wrap-around), Home/End jump to the ends,
 preventDefault so ArrowUp/Down do not scroll the page, and focus follows selection.
-apps/doc/src/features/playground/components/PlaygroundPage.tsx is a worked example.
+packages/ui/src/components/Tabs.tsx is a worked example (Tabs + SegmentedControl share one handler), and
+packages/ui/src/components/keyboard.domtest.tsx asserts what "correct" means for it.
+
+Before writing one: the design system already implements this for tabs, segmented controls, menus and
+comboboxes. Reach for @leadwolf/ui first â€” a hand-rolled composite is how these gaps keep appearing.
 
 If the element genuinely needs no key handling, say why:  // roving-tabindex-ok: <reason>
 `,

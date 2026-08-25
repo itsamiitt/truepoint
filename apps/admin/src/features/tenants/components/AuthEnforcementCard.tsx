@@ -60,13 +60,13 @@ export function AuthEnforcementCard({
   const copy = confirmTo == null ? null : confirmCopy(confirmTo, tenantName);
 
   return (
-    <Card style={{ marginBottom: 24 }}>
+    <Card style={{ marginBottom: "var(--tp-space-6)" }}>
       <div
         style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 16,
+          gap: "var(--tp-space-4)",
         }}
       >
         <div>
@@ -86,7 +86,14 @@ export function AuthEnforcementCard({
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {isSuperAdmin ? (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 16 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: "var(--tp-space-4)",
+            }}
+          >
             <TpSwitch
               checked={enforcementEnabled}
               disabled={pending}
@@ -98,7 +105,7 @@ export function AuthEnforcementCard({
             </span>
           </div>
         ) : (
-          <p className="app-muted" style={{ marginTop: 16 }}>
+          <p className="app-muted" style={{ marginTop: "var(--tp-space-4)" }}>
             Only a super admin can change auth enforcement for a tenant.
           </p>
         )}

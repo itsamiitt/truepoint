@@ -13,10 +13,13 @@ import {
   Card,
   type Column,
   DataTable,
+  EmptyState,
+  PageContainer,
   PageHeader,
   StatTile,
   StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
 } from "@leadwolf/ui";
 import { classifyConnection, fmtDateTime, needsAttention } from "../format";
@@ -83,7 +86,9 @@ export function CrmSyncMonitorPage() {
   ];
 
   return (
-    <StateSwitch loading={loading} error={error} onRetry={reload} empty={false}>
+    // The header sits OUTSIDE the StateSwitch: inside it, the page lost its title and its Refresh button in
+    // exactly the two states where an operator most wants them (still loading, or failed to load).
+    <PageContainer width="fluid">
       <PageHeader
         title="CRM sync"
         subtitle="Cross-tenant view — every load is recorded in the platform audit log."
@@ -93,27 +98,42 @@ export function CrmSyncMonitorPage() {
           </TpButton>
         }
       />
-      <Card>
-        <StatTile label="Connections" value={list.length.toLocaleString()} />
-        <StatTile label="Needs attention" value={attention.length.toLocaleString()} />
-        <StatTile
-          label="Syncing"
-          value={list
-            .filter((c) => classifyConnection(c, now).label === "Syncing")
-            .length.toLocaleString()}
-        />
-        <StatTile
-          label="Preview only"
-          value={list
-            .filter((c) => classifyConnection(c, now).label === "Preview")
-            .length.toLocaleString()}
-        />
-      </Card>
-      <Card>
-        <DataTable columns={columns} rows={list} rowKey={(c) => c.id} />
-      </Card>
-      {/* Poison jobs — exhausted retries only, so a row here always needs a human. */}
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && list.length === 0}
+        onRetry={reload}
+        skeleton={<TableSkeleton rows={6} columns={[5, 6, 3, 8, 8, 7, 7, 10]} />}
+        emptyState={
+          <EmptyState
+            title="No CRM connections"
+            description="No workspace has connected a CRM in this environment yet."
+          />
+        }
+      >
+        <Card>
+          <StatTile label="Connections" value={list.length.toLocaleString()} />
+          <StatTile label="Needs attention" value={attention.length.toLocaleString()} />
+          <StatTile
+            label="Syncing"
+            value={list
+              .filter((c) => classifyConnection(c, now).label === "Syncing")
+              .length.toLocaleString()}
+          />
+          <StatTile
+            label="Preview only"
+            value={list
+              .filter((c) => classifyConnection(c, now).label === "Preview")
+              .length.toLocaleString()}
+          />
+        </Card>
+        <Card>
+          <DataTable columns={columns} rows={list} rowKey={(c) => c.id} />
+        </Card>
+      </StateSwitch>
+      {/* Poison jobs — exhausted retries only, so a row here always needs a human. It loads independently
+          and renders its own states, so it stays outside the connections StateSwitch. */}
       <DeadLetterQueue />
-    </StateSwitch>
+    </PageContainer>
   );
 }

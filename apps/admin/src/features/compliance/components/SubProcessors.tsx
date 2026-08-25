@@ -133,7 +133,7 @@ export function SubProcessors() {
       cell: (p) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{p.name}</span>
-          <span className="app-muted" style={{ fontSize: 12 }}>
+          <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
             {p.location}
           </span>
         </div>
@@ -172,7 +172,7 @@ export function SubProcessors() {
       align: "right",
       cell: (p) =>
         canManage ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="ghost"
               size="sm"
@@ -199,12 +199,20 @@ export function SubProcessors() {
   return (
     <div style={{ marginTop: 28 }}>
       <div
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "var(--tp-space-3)",
+        }}
       >
         <h3 className="tp-section-title">Sub-processors</h3>
         {canManage ? <TpButton onClick={openNew}>New sub-processor</TpButton> : null}
       </div>
-      <p className="app-muted" style={{ margin: "4px 0 12px", fontSize: 13 }}>
+      <p
+        className="app-muted"
+        style={{ margin: "var(--tp-space-1) 0 var(--tp-space-3)", fontSize: "var(--tp-text-body)" }}
+      >
         The third parties that process data on TruePoint's behalf (GDPR Art. 28). A removed entry is
         kept for the disclosure history.
       </p>
@@ -215,7 +223,7 @@ export function SubProcessors() {
         empty={!!rows && rows.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No sub-processors recorded.
           </p>
         }
@@ -228,7 +236,7 @@ export function SubProcessors() {
         onClose={() => (busy ? undefined : setDraft(null))}
         title={draft?.id ? "Edit sub-processor" : "New sub-processor"}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -239,9 +247,14 @@ export function SubProcessors() {
         }
       >
         {draft ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <label htmlFor="sp-name" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Name</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
+            <label
+              htmlFor="sp-name"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+            >
+              <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                Name
+              </span>
               <TpInput
                 id="sp-name"
                 value={draft.name}
@@ -252,9 +265,11 @@ export function SubProcessors() {
             </label>
             <label
               htmlFor="sp-purpose"
-              style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
             >
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Purpose</span>
+              <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                Purpose
+              </span>
               <TpInput
                 id="sp-purpose"
                 value={draft.purpose}
@@ -265,9 +280,11 @@ export function SubProcessors() {
             </label>
             <label
               htmlFor="sp-location"
-              style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
             >
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Processing location</span>
+              <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                Processing location
+              </span>
               <TpInput
                 id="sp-location"
                 value={draft.location}
@@ -276,8 +293,13 @@ export function SubProcessors() {
                 onChange={(e) => setDraft({ ...draft, location: e.currentTarget.value })}
               />
             </label>
-            <label htmlFor="sp-dpa" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>DPA link (optional)</span>
+            <label
+              htmlFor="sp-dpa"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+            >
+              <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                DPA link (optional)
+              </span>
               <TpInput
                 id="sp-dpa"
                 type="url"
@@ -287,8 +309,13 @@ export function SubProcessors() {
                 onChange={(e) => setDraft({ ...draft, dpaUrl: e.currentTarget.value })}
               />
             </label>
-            <label htmlFor="sp-sort" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Sort order</span>
+            <label
+              htmlFor="sp-sort"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+            >
+              <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                Sort order
+              </span>
               <TpInput
                 id="sp-sort"
                 type="number"

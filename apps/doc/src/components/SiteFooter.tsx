@@ -14,7 +14,14 @@ export function SiteFooter() {
       <div className="tp-ui-page-container" data-width="default">
         <div className={styles.footerGrid}>
           <div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--tp-ink)" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--tp-text-label)",
+                fontWeight: 600,
+                color: "var(--tp-ink)",
+              }}
+            >
               TruePoint Data
             </p>
             <p className={styles.footerNote}>{SITE_TAGLINE}</p>

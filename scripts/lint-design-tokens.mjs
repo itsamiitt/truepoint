@@ -40,8 +40,22 @@ import { join, sep } from "node:path";
 const ROOTS = ["apps", "packages"];
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage", ".turbo"]);
 
-/** The definitions themselves. */
-const EXEMPT_FILES = ["packages/ui/src/tokens.css"];
+/**
+ * Files where a token CANNOT resolve, so a literal is the only correct answer.
+ *
+ * - tokens.css is the definitions themselves.
+ * - `global-error.tsx` is Next's last-resort boundary: it renders OUTSIDE the root layout and owns its own
+ *   <html>/<body>, so the layout's globals.css — and with it tokens.css — never loads. A var(--tp-*) there
+ *   resolves to nothing and the crash page renders unstyled, which is the exact failure the branded page
+ *   exists to prevent. These are whole-file exemptions rather than per-line hatches because every colour in
+ *   them is literal for the same single reason, and 8 copies of the same note is worse than one here.
+ */
+const EXEMPT_FILES = [
+  "packages/ui/src/tokens.css",
+  "apps/forge/src/app/global-error.tsx",
+  "apps/web/src/app/global-error.tsx",
+  "apps/admin/src/app/global-error.tsx",
+];
 
 const HEX = String.raw`#[0-9a-fA-F]{3,8}\b`;
 

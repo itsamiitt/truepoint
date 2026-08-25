@@ -1,6 +1,11 @@
-// controls.tsx — the TruePoint token form-control family for apps/web. Tp-prefixed so they never clash with the
-// auth-only shadcn Button/Input/Checkbox (those stay Tailwind-class based; these are token + primitives.css).
+"use client";
+// controls.tsx — the TruePoint token form-control family. Tp-prefixed so they never clash with the
+// shadcn-pattern Button/Input/Checkbox (which now render from the same primitives.css, in every app).
 // Thin, typed wrappers over the .tp-ui-* classes — behavior is native; styling lives in primitives.css.
+//
+// "use client" is load-bearing: every control here takes an event handler, so a Server Component importing
+// one and passing onClick would fail at runtime with no compile-time signal. It worked only because every
+// consumer happened to already sit inside a client boundary.
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -126,20 +131,39 @@ export function TpSelect({ invalid, className, children, ...rest }: TpSelectProp
 export interface TpCheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
   label?: ReactNode;
 }
-export function TpCheckbox({ label, className, ...rest }: TpCheckboxProps) {
+/**
+ * `children` is accepted as an alias for `label` — the documented API offered both, and passing children
+ * used to CRASH: they were spread onto the `<input>`, which React rejects as a void element. Either spelling
+ * now renders the same label text.
+ */
+export function TpCheckbox({ label, children, className, ...rest }: TpCheckboxProps) {
+  const text = label ?? children;
   return (
     <label className={cn("tp-ui-checkbox", className)}>
       <input type="checkbox" {...rest} />
-      {label != null ? <span>{label}</span> : null}
+      {text != null ? <span>{text}</span> : null}
     </label>
   );
 }
 
-export type TpSwitchProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
-export function TpSwitch({ className, ...rest }: TpSwitchProps) {
-  return (
+export interface TpSwitchProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+  /** Optional trailing label. Without it, give the switch an `aria-label`. */
+  label?: ReactNode;
+}
+/** Same children-vs-label story as TpCheckbox — passing children used to crash the void `<input>`. */
+export function TpSwitch({ label, children, className, ...rest }: TpSwitchProps) {
+  const text = label ?? children;
+  const input = (
     // biome-ignore lint/a11y/useAriaPropsForRole: the native checkbox supplies checkedness; a hardcoded aria-checked would desync uncontrolled usage
     <input type="checkbox" role="switch" className={cn("tp-ui-switch", className)} {...rest} />
+  );
+  if (text == null) return input;
+  return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: the control is `input` above — a variable the rule cannot follow
+    <label className="tp-ui-checkbox">
+      {input}
+      <span>{text}</span>
+    </label>
   );
 }
 
@@ -167,50 +191,34 @@ export function TpChip({
   removeLabel,
   className,
 }: TpChipProps) {
+  // A real <button>, and a SIBLING of the chip body rather than a child of it. The previous shape put a
+  // role="button" span INSIDE the chip's own <button> — interactive content nested in a button is invalid
+  // HTML with undefined assistive-tech behaviour (some ATs never expose the inner control at all). The
+  // wrapper is now always a <span>, so both controls are peers.
   const remove =
     onRemove != null ? (
-      <span
+      <button
+        type="button"
         className="tp-ui-chip-x"
-        // biome-ignore lint/a11y/useSemanticElements: renders inside the chip's <button>; a nested <button> is invalid HTML
-        role="button"
         aria-label={removeLabel ?? "Remove"}
-        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           onRemove();
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            onRemove();
-          }
-        }}
       >
         ×
-      </span>
+      </button>
     ) : null;
 
-  if (onClick != null) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "tp-ui-chip",
-          "tp-ui-chip--button",
-          active && "tp-ui-chip--active",
-          className,
-        )}
-      >
-        {children}
-        {remove}
-      </button>
-    );
-  }
   return (
     <span className={cn("tp-ui-chip", active && "tp-ui-chip--active", className)}>
-      {children}
+      {onClick != null ? (
+        <button type="button" onClick={onClick} className="tp-ui-chip-body">
+          {children}
+        </button>
+      ) : (
+        children
+      )}
       {remove}
     </span>
   );

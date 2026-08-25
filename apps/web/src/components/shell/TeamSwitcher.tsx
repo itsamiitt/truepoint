@@ -5,7 +5,7 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import { sharedKeys } from "@/lib/queryKeys";
-import { DropdownMenu, Icon } from "@leadwolf/ui";
+import { DropdownMenu, Icon, TpButton } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -59,11 +59,13 @@ export function TeamSwitcher() {
     <DropdownMenu
       align="start"
       side="top"
-      trigger={({ toggle, open }) => (
-        <button type="button" className="tp-ws-switcher" onClick={toggle} aria-expanded={open}>
+      // `props` is spread rather than re-deriving aria-expanded by hand: the DS also supplies
+      // aria-haspopup="menu" and aria-controls, both of which the hand-written trigger dropped.
+      trigger={({ toggle, props }) => (
+        <TpButton variant="secondary" className="tp-ws-switcher" onClick={toggle} {...props}>
           <span className="tp-ws-name">{active?.name ?? "Team"}</span>
           <Icon icon={ChevronsUpDown} size={14} className="tp-ws-caret" />
-        </button>
+        </TpButton>
       )}
       items={teams.map((t) => ({ label: t.name, onSelect: () => choose(t.id) }))}
     />

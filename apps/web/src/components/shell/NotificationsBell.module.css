@@ -50,7 +50,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   border-bottom: 1px solid var(--tp-hairline);
 }
 
@@ -130,7 +130,7 @@
   font: inherit;
   font-size: 15px;
   line-height: 1;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   background: transparent;
   border: 0;
   border-radius: 7px;

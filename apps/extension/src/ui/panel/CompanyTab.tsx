@@ -22,7 +22,7 @@ import {
   hairline,
   ink,
   ink2,
-  ink4,
+  ink3,
   mono,
   surface3,
 } from "./primitives.tsx";
@@ -37,8 +37,9 @@ function CompanySkeleton(): React.ReactElement {
           <Skeleton width="70%" height={11} />
         </div>
       </div>
-      <Skeleton width="100%" height={96} radius={12} />
-      <Skeleton width="100%" height={120} radius={12} />
+      {/* Radii track the cards these stand in (--tp-radius-card), so nothing reflows when data lands. */}
+      <Skeleton width="100%" height={96} radius={14} />
+      <Skeleton width="100%" height={120} radius={14} />
     </div>
   );
 }
@@ -80,8 +81,8 @@ function Sparkline({ payload }: { payload: IntelPayload }): React.ReactElement |
           display: "flex",
           justifyContent: "space-between",
           marginTop: 6,
-          fontSize: 10.5,
-          color: ink4,
+          fontSize: 11,
+          color: ink3,
         }}
       >
         <span>{`${monthLabel(first?.month) ?? ""} · ${first?.count ?? ""}`}</span>
@@ -136,7 +137,10 @@ export function CompanyTab({
             placeItems: "center",
             fontSize: 15,
             fontWeight: 600,
-            color: ink4,
+            // The monogram IS the logo when there is none — text on a tile, not a watermark. ink2 rather
+            // than the ink3 the rest of the muted copy takes: this tile is --tp-surface-3, where ink3
+            // measures 4.43:1 and falls under AA's 4.5 (ink4 was 2.33:1).
+            color: ink2,
           }}
         >
           {/* A company logo IS mapped into the record (unlike a person's photo), so it can be shown. It
@@ -174,14 +178,14 @@ export function CompanyTab({
               <span style={{ fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", ...mono }}>
                 {series.at(-1)?.employeeCount ?? c.employeeCount}
               </span>
-              <span style={{ fontSize: 12, color: ink4, marginLeft: 7 }}>
+              <span style={{ fontSize: 12, color: ink3, marginLeft: 7 }}>
                 {t("company.employees")}
               </span>
             </div>
             {oneYear?.pct !== null && oneYear?.pct !== undefined ? (
               <div style={{ fontSize: 13, fontWeight: 600, color: cobalt }}>
                 {signedPct(oneYear.pct)}{" "}
-                <span style={{ fontWeight: 500, color: ink4 }}>{t("company.twelveMonths")}</span>
+                <span style={{ fontWeight: 500, color: ink3 }}>{t("company.twelveMonths")}</span>
               </div>
             ) : null}
           </div>
@@ -203,27 +207,29 @@ export function CompanyTab({
                 borderBottom: `1px solid ${hairline}`,
               }}
             >
-              <span style={{ width: 42, flex: "none", fontSize: 12.5, fontWeight: 600 }}>
+              <span style={{ width: 42, flex: "none", fontSize: 13, fontWeight: 600 }}>
                 {t(`company.window.${w.months}` as Parameters<typeof t>[0])}
               </span>
-              <span style={{ flex: 1, fontSize: 11.5, color: ink4 }}>
+              <span style={{ flex: 1, fontSize: 12, color: ink3 }}>
                 {w.from === null ? t("company.noBaseline") : `${w.from} → ${w.to}`}
               </span>
               {/* Tone is an emphasis, never the message: the signed percentage is the meaning, and it is
                   present in text for every row. */}
               <span
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 600,
                   ...mono,
-                  color: w.strength === "strong" ? cobalt : w.strength === "mild" ? ink : ink4,
+                  // The signed percentage IS the message (the tone only emphasises it), so even the quietest
+                  // grade has to be legible: ink4 is 2.54:1 and fails AA.
+                  color: w.strength === "strong" ? cobalt : w.strength === "mild" ? ink : ink3,
                 }}
               >
                 {signedPct(w.pct) ?? "—"}
               </span>
             </div>
           ))}
-          <div style={{ marginTop: 9, fontSize: 11, color: ink4, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 9, fontSize: 12, color: ink3, lineHeight: 1.5 }}>
             {read.key === "flatAfterGrowth"
               ? t("company.read.flatAfterGrowth").replace("{months}", String(read.months))
               : read.key === "growing"
@@ -240,7 +246,7 @@ export function CompanyTab({
       {c.description ? (
         <div>
           <SectionLabel>{t("company.about")}</SectionLabel>
-          <div style={{ fontSize: 12.5, color: ink2, lineHeight: 1.6, textWrap: "pretty" }}>
+          <div style={{ fontSize: 13, color: ink2, lineHeight: 1.6, textWrap: "pretty" }}>
             {c.description}
           </div>
         </div>
@@ -273,7 +279,7 @@ export function CompanyTab({
           <KeyValue label={t("company.detail.revenue")}>
             {c.revenueDisplay}
             {revenueStale ? (
-              <span style={{ color: ink4 }}> · {t("company.detail.likelyStale")}</span>
+              <span style={{ color: ink3 }}> · {t("company.detail.likelyStale")}</span>
             ) : null}
           </KeyValue>
         ) : null}
@@ -289,13 +295,13 @@ export function CompanyTab({
               <Chip key={s}>{s}</Chip>
             ))}
           </div>
-          <div style={{ marginTop: 9, fontSize: 11, color: ink4, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 9, fontSize: 12, color: ink3, lineHeight: 1.5 }}>
             {t("company.specialtiesNote")}
           </div>
         </div>
       ) : null}
 
-      <div style={{ ...mono, fontSize: 10.5, color: ink4, lineHeight: 1.7 }}>
+      <div style={{ ...mono, fontSize: 11, color: ink3, lineHeight: 1.7 }}>
         {/* URL-shaped identity only. The numeric LinkedIn company id is internal link metadata and never
             appears in a customer-facing surface. */}
         {c.primaryDomain}

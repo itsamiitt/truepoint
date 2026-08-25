@@ -347,3 +347,10 @@ jobs:
         run: bun run --filter '*' typecheck
       - name: Acceptance + API contract tests
         run: bun test
+
+      # The design system's behavioural suite: overlay focus management and the composite-widget keyboard
+      # models. Separate because happy-dom replaces global ReadableStream/Request/Response and bun shares one
+      # process across a run, so these files are named *.domtest.tsx to stay out of the default discovery
+      # above (the same split as *.itest.ts). See packages/ui/src/test/dom.ts.
+      - name: Design-system DOM tests
+        run: bun run test:dom
