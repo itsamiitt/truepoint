@@ -29,6 +29,10 @@ export const databaseFacetKey = z.enum([
   "language",
   "school",
   "field_of_study",
+  // "has EVER worked at X" — ANY stint, not just the current one. Distinct from `company` above, which is
+  // the person's CURRENT employer via master_persons.current_company_id; this is the employment history,
+  // and it is what makes "ex-Stripe people" askable. Indexed by 0141.
+  "past_company",
 ]);
 export type DatabaseFacetKey = z.infer<typeof databaseFacetKey>;
 

@@ -2,9 +2,22 @@
 
 **Outcomes advanced:** [S-09] [S-10] [S-13] [S-04] [S-08] [A-01]. No new services or search engines — everything extends the existing SearchPort/repository dispatch tables and the declarative filter-group model.
 
-> **Status (2026-08-25):** Phases 1, 2, 3a, 3b and 3c are **implemented and pushed** on
-> `claude/search-tab-improvements-plan-6l2jp1`. Phase **3d remains unstarted** — it is gated on decision
-> **D3** below. Decisions **D1** (global-half pagination) and **D2** (null-cliff semantics) shipped with
+> **Status (2026-08-25):** Phases 1, 2, 3a, 3b, 3c **and 3d** are implemented and pushed on
+> `claude/search-tab-improvements-plan-6l2jp1`.
+>
+> **3d shipped four of its five filters** — skill, language, school, field of study, and "worked at X"
+> (past employers). It also introduced the `database-only` facet scope: these are Layer-0 satellite facts,
+> and the workspace search role is REVOKEd from every `master_*` table, so applying one skips the WORKSPACE
+> half — the mirror of the null cliff. Contacts you already hold still appear, marked. A new
+> `GET /search/database/suggest` supplies the values (the workspace suggest aggregates the caller's own
+> contacts, which store none of this). Migration 0141 adds the three reverse-lookup indexes "worked at X"
+> needed; the other four were already indexed by 0135, which shipped ahead of the query side.
+>
+> **`is_hiring` was dropped, and should stay dropped until D-6 lands.** `master_job_postings` has no
+> producer ("gated on D-6, licensed postings feed"), no person link, and no index for cross-company
+> filtering — the filter would return zero rows for every query on every workspace. It is blocked on a data
+> decision, not on engineering: when the feed lands, the table already has its writer and read routes, and
+> the filter is a small follow-up. Decisions **D1** (global-half pagination) and **D2** (null-cliff semantics) shipped with
 > their documented defaults. **D5** was resolved in a way that removes the question: the group key is a
 > per-response `dense_rank` computed in SQL, so no Layer-0 id and no hash of one crosses the API boundary.
 > **D4** stands with one narrow exception now in the code, flagged for review: a "Job change detected"

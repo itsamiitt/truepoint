@@ -255,6 +255,15 @@ export const FILTER_GROUPS: FilterGroup[] = [
         scope: "database-only",
       },
       {
+        // "has EVER worked at X" — distinct from the Company facet above, which is the CURRENT employer.
+        // This is what makes "ex-Stripe people" askable.
+        kind: "term",
+        field: "past_company",
+        label: "Past employer",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
         kind: "term",
         field: "school",
         label: "School",

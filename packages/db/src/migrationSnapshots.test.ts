@@ -206,8 +206,15 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  emitted. Same reason as 0132: drizzle-kit produces only plain blocking CREATE INDEX, and all three of
  *  these are PARTIAL and must be CONCURRENTLY on hot tables (contacts, intent_signals). The alternative —
  *  shipping the filters they serve without them — makes a verification-recency or job-change filter scan
- *  the RLS-visible workspace slice on the product's busiest read. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 99;
+ *  the RLS-visible workspace slice on the product's busiest read. Absorbed by the next rebaseline.
+ *
+ *  99 → 100 for 0141_past_employer_filter_indexes — same category as 0140: INDEXES ONLY, no schema change,
+ *  nothing `generate` could have emitted (all three are PARTIAL and must be CONCURRENTLY on Layer-0 tables
+ *  sized for billions). They are the reverse-lookup direction over master_employment, which every existing
+ *  index on that table misses: the two that touch a company are partial on `is_current` and on
+ *  `master_company_id IS NULL` respectively, so "has EVER worked at X" was served by neither. Absorbed by
+ *  the next rebaseline. */
+const EXPECTED_DEFICIT = 100;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

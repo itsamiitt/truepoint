@@ -95,9 +95,17 @@ describe("people filter scopes", () => {
     // Declaring one `both` would send it to the workspace engine, which has no clause for it and would
     // silently return the unfiltered list — the exact defect class the scope model exists to prevent.
     const byField = new Map(peopleFacets.map((f) => [f.field, f.scope]));
-    for (const field of ["skill", "school", "field_of_study", "language"]) {
+    for (const field of ["skill", "school", "field_of_study", "language", "past_company"]) {
       expect(byField.get(field)).toBe("database-only");
     }
+  });
+
+  test("past employer is distinct from the current-employer facet", () => {
+    // `company` reads master_persons.current_company_id; `past_company` walks the whole employment history.
+    // Collapsing them would silently turn "ex-Stripe people" into "people at Stripe now".
+    const byField = new Map(peopleFacets.map((f) => [f.field, f.scope]));
+    expect(byField.get("company")).toBe("both");
+    expect(byField.get("past_company")).toBe("database-only");
   });
 
   test("the outcome-driven filters are all offered", () => {
@@ -165,7 +173,7 @@ describe("people filter scopes", () => {
   test("every database-only field is one masterPersonSearchRepository can answer", () => {
     // The mirror of the `both` check above: a database-only facet the global engine has no clause for
     // would send a field its Zod contract rejects, turning a filter into a 400.
-    const supported = new Set(["skill", "language", "school", "field_of_study"]);
+    const supported = new Set(["skill", "language", "school", "field_of_study", "past_company"]);
     for (const facet of peopleFacets.filter((f) => f.scope === "database-only")) {
       expect(supported.has(facet.field)).toBe(true);
     }

@@ -43,6 +43,7 @@ export const facetKey = z.enum([
   "language",
   "school",
   "field_of_study",
+  "past_company",
 ]);
 export type FacetKey = z.infer<typeof facetKey>;
 

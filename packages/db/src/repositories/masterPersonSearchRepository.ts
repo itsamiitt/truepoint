@@ -74,6 +74,25 @@ function termCondition(field: DatabaseFacetKey, values: string[]): SQL {
       return satelliteExists(sql`master_person_languages`, sql`sat.name`, values);
     case "school":
       return satelliteExists(sql`master_education`, sql`sat.school_name_normalized`, values);
+    case "past_company":
+      // "has EVER worked at X", across the whole employment history — the filter `company` above cannot
+      // express, because that one reads master_persons.current_company_id.
+      //
+      // TWO LEGS, and both are load-bearing. The live import path mints a BARE edge carrying only
+      // (person, company, is_current, is_primary) — no name at all — so a name-only match would miss most
+      // stints in the graph. A stint whose employer ER never resolved carries the reverse: a normalized
+      // name and no company id. Matching either leg is what makes the filter cover both populations.
+      //
+      // Written as an IN-subquery rather than a join so the outer row count is untouched, and so the
+      // company lookup is evaluated once per query rather than once per candidate person.
+      return sql`EXISTS (
+        SELECT 1 FROM master_employment sat
+         WHERE sat.master_person_id = p.id
+           AND (${inList(sql`sat.company_name_normalized`, values)}
+                OR sat.master_company_id IN (
+                     SELECT mcx.id FROM master_companies mcx
+                      WHERE ${inList(sql`mcx.name_normalized`, values)}))
+      )`;
     case "field_of_study":
       // Array containment (`&&` = overlaps), served by 0135's GIN. Mirrors the company repo's
       // `specialtyCondition`. `fields_of_study` is nullable — "absent" is not "empty" — and `&&` is
