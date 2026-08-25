@@ -9,9 +9,15 @@
 - **Detail:** `docs/planning/chrome-extension/12-extension-auth-gap-analysis-and-remediation.md`.
 - **As-built (2026-07-21, dark):** shipped. Decision 3's refresh token lives in memory-backed
   `chrome.storage.session` (no disk, no key material) — **not** the encrypted `chrome.storage.local` this
-  ADR specifies; the as-built choice is arguably safer, so amend Decision 3 to match. Decision 1's visible
-  popup **window** vs the shipped silent background **tab** (`companionTab.ts`) is tracked as X16 (interactive
-  login for signed-out users). Status truth:
+  ADR specifies; the as-built choice is arguably safer, so amend Decision 3 to match.
+- **Decision 1 amended (2026-08-24) — activate-on-demand, not a popup window.** The as-built opens the
+  handoff page in a background **tab** and brings that same tab to the foreground only when the page reports
+  it needs interactive login (`AUTH_STATUS phase:"interactive"` → `activatePendingTab()` → `active:true` +
+  window focus). This SATISFIES the requirement behind Decision 1 — MFA/WebAuthn need a visible,
+  user-activated context, which an activated tab is — while keeping the common case silent. A popup window
+  cannot: it would interrupt every already-signed-in user with a page that immediately closes itself, and
+  that interruption is the cost this mechanism exists to avoid. X16 (which tracked this as a suspected gap)
+  is **verified built**, both halves cited in doc 14's X16 row. Status truth:
   [`../chrome-extension/14-implementation-audit.md`](../chrome-extension/14-implementation-audit.md).
 
 ## Context
@@ -33,11 +39,20 @@ auth. Implementation + testing proved it **cannot work** against the real IdP, w
 
 ## Decision
 
-1. **Interactive login is a companion window.** The extension opens the **real web login** in a popup window
-   — `chrome.windows.create({ type: "popup", url: "https://app.truepoint.in/auth/extension?state=<nonce>&ext_id=<id>" })`.
-   The full normal flow (identifier → password → MFA → **WebAuthn/passkey** → SSO → workspace) runs
-   first-party in the user's profile, so it all works and reuses any existing `truepoint.in` session. This
-   opens a real window (the product requirement) and needs no surgery on the core login redirect.
+1. **Interactive login happens in a companion SURFACE the user can see and act in.** The extension opens the
+   **real web login** at `https://app.truepoint.in/auth/extension?state=<nonce>&ext_id=<id>`. The full normal
+   flow (identifier → password → MFA → **WebAuthn/passkey** → SSO → workspace) runs first-party in the user's
+   profile, so it all works and reuses any existing `truepoint.in` session, with no surgery on the core login
+   redirect.
+
+   **As-built (amended 2026-08-24): a background tab, activated on demand — not `chrome.windows.create({type:"popup"})`.**
+   `openCompanionTab` creates the tab with `active:false`; if the page finds no session it posts
+   `AUTH_STATUS phase:"interactive"`, and the service worker foregrounds that same tab and focuses its
+   window. The requirement this decision encodes is that MFA/WebAuthn have a **visible, user-activated
+   context**, and an activated tab is one. The popup spelling was never the requirement, and it is strictly
+   worse here: it interrupts every already-signed-in user with a window that immediately closes itself,
+   whereas the silent-until-needed tab is invisible in exactly that common case. Verified end to end as X16
+   (doc 14).
 
 2. **Token handoff via `externally_connectable` + `onMessageExternal`, verified.** After login, the
    `/auth/extension` page mints an extension-scoped credential and `chrome.runtime.sendMessage`s it to the
