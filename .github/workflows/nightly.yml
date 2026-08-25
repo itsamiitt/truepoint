@@ -36,6 +36,26 @@ on:
   schedule:
     # 03:17 UTC — off the hour on purpose. GitHub's scheduler queues heavily at :00 and a cron that competes
     # with every other repo's midnight job is the one that silently starts skipping runs.
+    #
+    # AND OFF-THE-HOUR IS NOT ENOUGH: a scheduled run can still be delayed indefinitely or DROPPED entirely
+    # under load, and GitHub guarantees nothing about when — or whether — one fires. Observed 2026-08-25: this
+    # workflow was `state: active` on the default branch, 03:17 came and went, and 22 minutes later no run
+    # existed. Nothing anywhere reported that.
+    #
+    # SO HERE IS THE HOLE THIS FILE DOES NOT CLOSE, stated rather than left to be discovered: the "Confirm the
+    # suites actually RAN" step proves the soaks executed WHEN THIS WORKFLOW RUNS. It cannot prove the workflow
+    # ran. A nightly that silently stops firing reports nothing, looks exactly like a nightly that keeps
+    # passing, and its first symptom is a performance regression nobody caught — the same failure this file was
+    # written to fix, one level up.
+    #
+    # If you depend on these numbers (TP-2/TP-6 gate the 1M→2M published-ceiling raise), CHECK that a run
+    # exists rather than assuming one did. A dispatch is always available:
+    #     gh workflow run nightly.yml --ref main
+    # CLOSED 2026-08-25 by the "Nightly soak still firing?" step in ci.yml: push and pull_request fire
+    # reliably, so the reliable trigger watches the unreliable one. It reads this workflow's last-run age and
+    # WARNS past 48h — never fails, because a dropped run is GitHub's scheduling rather than a defect in the
+    # diff being tested, and a check that blames the wrong person gets deleted. It cost one permission —
+    # "actions: read" on ci.yml: read-only metadata about this repo's own runs, no writes, no secrets.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
@@ -107,23 +127,90 @@ jobs:
         # Each file in its OWN process: the db client is a module singleton, which is why the itest sweep in
         # ci.yml does the same. --timeout so a hung await fails with the test's name instead of eating the
         # job's ceiling in silence.
-        run: bun test --timeout 3600000 ./packages/db/test/importSoak.nightly.itest.ts
+        #
+        # `tee` so the confirm step below can INSPECT this run instead of repeating it. pipefail makes the
+        # pipeline carry bun's exit status rather than tee's, so a failing soak still fails this step.
+        run: |
+          set -o pipefail
+          bun test --timeout 3600000 ./packages/db/test/importSoak.nightly.itest.ts 2>&1 \
+            | tee /tmp/soak-throughput.log
 
       - name: Soak — fast-lane fairness under whale load
         env:
           SOAK_WHALE_ROWS: ${{ inputs.soak_rows || 20000 }}
-        run: bun test --timeout 3600000 ./apps/workers/test/importSoak.fairness.nightly.itest.ts
+        run: |
+          set -o pipefail
+          bun test --timeout 3600000 ./apps/workers/test/importSoak.fairness.nightly.itest.ts 2>&1 \
+            | tee /tmp/soak-fairness.log
 
       - name: Confirm the suites actually RAN
         # The whole point of this workflow. Both files skip themselves when NIGHTLY_SOAK is unset, and a
         # skipped bun test still exits 0 — so a green job above proves nothing on its own. If the gate ever
         # regresses (a renamed variable, a dropped env block), this step is what says so out loud instead of
         # letting the workflow report success over a suite that never executed.
+        #
+        # `always()` because this question matters MOST when a soak failed: "did it fail, or did it never
+        # run?" are different incidents, and a skipped step cannot tell you which.
+        if: always()
+        # It INSPECTS the logs the steps above produced. It used to re-run the throughput suite, which was
+        # wrong twice over. It paid for a second 20,000-row soak — the most expensive thing in this job — and
+        # it re-ran WITHOUT SOAK_ROWS, so the re-run used the suite's own 10,000-row default, which the header
+        # of this file explains at length is the one size where TP-6's plateau assertion cannot hold. This
+        # workflow's first real run therefore failed for a reason its own documentation predicted, in a step
+        # that then swallowed the evidence: it captured bun's output into a variable under `set -e`, so the
+        # shell aborted at the assignment and the echo never ran. "Process completed with exit code 1", no
+        # diagnostic. A check that hides its own evidence is the failure it exists to prevent.
         run: |
-          set -euo pipefail
-          out="$(bun test --timeout 3600000 ./packages/db/test/importSoak.nightly.itest.ts 2>&1)"
-          echo "$out" | tail -5
-          if echo "$out" | grep -qiE "^\s*0 pass|\(skip\)"; then
-            echo "::error::the soak suite reported no executed tests — NIGHTLY_SOAK gating has regressed"
-            exit 1
-          fi
+          set -uo pipefail
+          failed=0
+          for log in /tmp/soak-throughput.log /tmp/soak-fairness.log; do
+            if [ ! -s "$log" ]; then
+              echo "::error::$log is missing or empty — the soak step did not get far enough to produce output"
+              failed=1
+              continue
+            fi
+            if grep -qiE "^[[:space:]]*0 pass|\(skip\)" "$log"; then
+              echo "::error::$log reports no executed tests — NIGHTLY_SOAK gating has regressed"
+              echo "--- last 40 lines of $log ---"
+              tail -40 "$log"
+              failed=1
+            else
+              echo "ok  $log — the suite executed"
+            fi
+          done
+          exit "$failed"
+
+      # The numbers this workflow exists to produce, on the run page instead of buried in a log nobody
+      # downloads. The suites already print them as `[TP-n] …` lines; this lifts those lines verbatim rather
+      # than re-deriving anything, so the summary cannot disagree with the run that produced it.
+      #
+      # `always()` for the same reason as the step above: a FAILED soak is when these numbers are most worth
+      # reading, and a summary that only appears on success is a summary you cannot use to diagnose.
+      #
+      # No thresholds are re-asserted here. The suites own their budgets and fail on them; a second copy of a
+      # bound in a shell script is a number that drifts from the one that matters.
+      # tee, not a bare redirect: the summary renders on the run page AND stays in the job log. A step whose
+      # output goes only to the summary cannot be read back from the API, so its content is unverifiable
+      # except by eye in the UI — and this file has already been bitten once by a step that hid its output.
+      - name: Summarise the soak numbers
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "## Nightly soak"
+            echo
+            echo "\`SOAK_ROWS=${{ inputs.soak_rows || 20000 }}\` · commit \`${GITHUB_SHA:0:8}\`"
+            echo
+            found=0
+            for log in /tmp/soak-throughput.log /tmp/soak-fairness.log; do
+              [ -s "$log" ] || continue
+              # The suites' own instrumentation lines. -h so the filename never leaks into the table.
+              while IFS= read -r line; do
+                echo "- \`${line}\`"
+                found=1
+              done < <(grep -hoE "\[TP-[0-9]+\].*" "$log" || true)
+            done
+            if [ "$found" -eq 0 ]; then
+              echo "_No \`[TP-n]\` lines found — the suites did not reach their instrumentation._"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"

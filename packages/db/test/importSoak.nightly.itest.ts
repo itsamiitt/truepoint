@@ -34,9 +34,12 @@
 //   TP-4 : the poll fingerprint — the exact ETag basis 12 §8 names, (status, counters, completed_chunks) —
 //          is STABLE between chunk completions (byte-identical fingerprint ⇒ a conditional GET would 304)
 //          and CHANGES after one (⇒ 200 with a new ETag); poll read = one PK read, latency sampled.
-//          The HTTP half (real ETag header / If-None-Match → 304 / Cache-Control: private, max-age=2 /
-//          the per-route rate limiter) is NOT SHIPPED yet on GET /imports/:id — test.todo below marks it;
-//          16's drift log carries it. Fairness (TP-3) lives in apps/workers/test/ (it extends T-Q4's rig).
+//          The HTTP half — real ETag header / If-None-Match → 304 / Cache-Control: private, max-age=2 — IS
+//          SHIPPED as of 2026-08-24 (apps/api/src/lib/conditionalJson.ts, wired into both branches of
+//          GET /imports/:jobId) and is asserted over the route in
+//          apps/api/src/features/import/pollConditional.test.ts. The per-route rate limiter half of 12 §8 is
+//          still unasserted — it is a deployed-rig measurement, not something this file can reach.
+//          Fairness (TP-3) lives in apps/workers/test/ (it extends T-Q4's rig).
 //
 // NO pipeline code is touched — this composes the real entry points (runBulkImport / bulkProcessChunk /
 // finalizeIfLastChunk) exactly like bulkImport.pipeline.itest.ts, at parameterized scale. Rows are
@@ -378,9 +381,14 @@ soakDescribe("S-P4 nightly soak — TP-4 (poll fingerprint probe)", () => {
   // (12 §8) — is NOT SHIPPED on the route yet (no ETag/Cache-Control writer exists in apps/api). The probe
   // above proves the fingerprint SEMANTICS the header will carry. Wire the header, then turn this into a
   // real HTTP itest against the route. 16's drift log tracks it.
-  // The empty body is required by bun's types (test.todo takes 2-3 args); the todo still reports as skipped.
-  test.todo(
-    "TP-4 (HTTP): ETag/304 + Cache-Control: private, max-age=2 on GET /imports/:id — route header not shipped yet",
-    () => {},
-  );
+  // SHIPPED 2026-08-24, so the todo that stood here is gone rather than left to accumulate. The header is
+  // apps/api/src/lib/conditionalJson.ts, wired into BOTH branches of GET /imports/:jobId, and the HTTP
+  // behaviour is asserted over the real route in apps/api/src/features/import/pollConditional.test.ts —
+  // 200 + ETag + `Cache-Control: private, max-age=2`, If-None-Match ⇒ 304 carrying the same validator, and a
+  // moved job ⇒ 200 with a new tag. That test is a unit test on the route because it needs no database; this
+  // probe stays here because the SEMANTICS it proves — identical payload between chunk completions, changed
+  // payload after one — are what make the ETag worth having, and only a real soak can demonstrate them.
+  //
+  // The rate-limiter half of 12 §8 (per-route limiting engaging before measurable DB load) is still not
+  // asserted anywhere; it is a deployed-rig measurement, not something this file can reach.
 });
