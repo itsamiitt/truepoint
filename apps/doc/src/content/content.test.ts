@@ -1,5 +1,8 @@
 // content.test.ts — the compliance rules for this site, as assertions.
 //
+// earned-currency-ok: this file DEFINES the rule-7 copy patterns as regexes; lint:earned-currency scans for
+// the same shapes repo-wide and would otherwise report the guard it complements.
+//
 // The rules ADR-0048 sets are not the kind that survive on comments alone. A future edit adding a real
 // contact row to a sample table, or a marketing line about earning credits, would look completely reasonable
 // in review — the reason it is forbidden lives three documents away. So the rules are encoded here, where

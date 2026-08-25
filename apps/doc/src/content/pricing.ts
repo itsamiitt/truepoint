@@ -1,5 +1,8 @@
 // pricing.ts — the published credit costs and plans.
 //
+// earned-currency-ok: quotes the strategy pack's own sentence rejecting a points/bounty economy. Naming the
+// rejected thing in order to reject it is not implying it.
+//
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 // A credit here is a PURCHASED settlement unit and nothing else. It is bought, it is spent on a successful
 // call, and it expires per the rollover rule below. It is NOT something a contribution can earn.

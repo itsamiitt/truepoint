@@ -77,6 +77,7 @@ import {
   sourceName,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import { conditionalJson } from "../../lib/conditionalJson.ts";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
@@ -1038,7 +1039,10 @@ importRoutes.get("/:jobId", async (c) => {
     // S-I4: the detail is the legacy poll shape (byte-compat for old clients) PLUS the additive v2 members
     // (mode, counts, derived percent/stage, attribution, strategy, preview_summary — 08 §7). Additive ⇒ old
     // clients ignore the new keys; new clients read `statusV2` + `counts` instead of `status`/`progress`.
-    return c.json({ ...toLegacyResponseV2(row), ...toImportJobDetailV2(row) }, 200);
+    // Conditional GET (TP-4's HTTP half). This route is POLLED while an import runs, and between chunk
+    // completions the payload is byte-identical — which the nightly soak's TP-4 probe asserts directly. The
+    // ETag turns that stability into a 304 instead of re-serialising the same body every second or two.
+    return conditionalJson(c, { ...toLegacyResponseV2(row), ...toImportJobDetailV2(row) });
   }
 
   const job = await getImportJob(jobIdParam);
@@ -1068,7 +1072,10 @@ importRoutes.get("/:jobId", async (c) => {
     summary: summary.success ? summary.data : null,
     failedReason: job.failedReason ?? null,
   };
-  return c.json(body, 200);
+  // Same conditional read on the legacy branch. Deliberately BOTH: a tenant on either side of the S-I3 gate
+  // polls the same endpoint at the same rate, and giving only the v2 branch the header would make the
+  // saving depend on a flag the caller cannot see.
+  return conditionalJson(c, body);
 });
 
 // ── S-I4: POST /imports/:jobId/cancel — the tenant cancel verb (G05; 08 §2.2 stop-remainder, 09 §5 machinery).
