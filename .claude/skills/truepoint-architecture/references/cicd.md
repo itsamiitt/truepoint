@@ -5,9 +5,16 @@ only triggers the customer pipeline. A change to `apps/admin` (the internal app)
 only triggers the admin pipeline. Shared package changes propagate via Turborepo's
 dependency graph.
 
-> **Implementation status:** today there is a **single** `.github/workflows/ci.yml`, not
-> per-app pipelines — the per-app, path-filtered design below is the target. There is no
-> `customer-web.yml` / `admin.yml` yet; do not reference them.
+> **Implementation status (corrected 2026-08-25):** there are **two** workflows —
+> `.github/workflows/ci.yml` (gates + four itest shards + the cascade job) and
+> `.github/workflows/nightly.yml` (the import soak, `SOAK_ROWS`-driven, which the itest
+> shards deliberately skip). Neither is per-app: the per-app, path-filtered design below is
+> still the target, and there is no `customer-web.yml` / `admin.yml` — do not reference them.
+>
+> Worth knowing about the nightly, because it is easy to assume it reports for itself: a
+> scheduled workflow cannot detect its own absence, so ci.yml carries a step that warns when
+> the last nightly run is older than 48h, and the nightly carries a confirm step that treats
+> "no executed tests" as a regression rather than a pass.
 
 ---
 

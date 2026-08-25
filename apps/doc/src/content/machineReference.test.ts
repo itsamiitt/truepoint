@@ -1,5 +1,8 @@
 // machineReference.test.ts — the generated contract document, held to the same rules as every page.
 //
+// earned-currency-ok: this file DEFINES the rule-7 copy patterns as regexes; lint:earned-currency scans for
+// the same shapes repo-wide and would otherwise report the guard it complements.
+//
 // This file is served to machines and pasted into assistants, which makes it the highest-leverage place on
 // the site for a wrong claim to travel: a scraped page misleads one reader, a bad line here gets quoted back
 // with confidence for as long as it sits in someone's context window. So the rules the human pages carry —

@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2428,
-  "fileSetHash": "sha256:1f10b6e7d5b7d78de3352e36e85e9af888bc79ee8d957a94693e57b2fd670872",
+  "fileCount": 2436,
+  "fileSetHash": "sha256:3370080e160f7d000623a49ca4682feef686ff1b5f009285c8a41f481491cf1e",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1185,6 +1185,7 @@
         "apps/api/src/features/import/legacyStatus.ts",
         "apps/api/src/features/import/malwareScan.test.ts",
         "apps/api/src/features/import/malwareScan.ts",
+        "apps/api/src/features/import/pollConditional.test.ts",
         "apps/api/src/features/import/queue.ts",
         "apps/api/src/features/import/queueBackpressure.ts",
         "apps/api/src/features/import/routes.ts",
@@ -1322,6 +1323,7 @@
         "apps/api/src/features/ingest/routes.ts"
       ],
       "core": [
+        "packages/core/src/ingestion/captureConsent.test.ts",
         "packages/core/src/ingestion/connectors/adminUpload.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
         "packages/core/src/ingestion/connectors/chromeExtension.ts",
@@ -2521,6 +2523,8 @@
     "apps/api/lib": [
       "apps/api/src/lib/apiKeySecret.test.ts",
       "apps/api/src/lib/apiKeySecret.ts",
+      "apps/api/src/lib/conditionalJson.test.ts",
+      "apps/api/src/lib/conditionalJson.ts",
       "apps/api/src/lib/csvDownload.ts",
       "apps/api/src/lib/gateMemo.test.ts",
       "apps/api/src/lib/gateMemo.ts",
@@ -2679,6 +2683,7 @@
     ],
     "apps/doc": [
       "apps/doc/next.config.mjs",
+      "apps/doc/scripts/routes.mjs",
       "apps/doc/scripts/verify.mjs"
     ],
     "apps/doc/app": [
@@ -2740,6 +2745,7 @@
       "apps/doc/src/content/openapi.test.ts",
       "apps/doc/src/content/openapi.ts",
       "apps/doc/src/content/pricing.ts",
+      "apps/doc/src/content/routeCoverage.test.ts",
       "apps/doc/src/content/searchIndex.test.ts",
       "apps/doc/src/content/searchIndex.ts",
       "apps/doc/src/content/shippedContract.test.ts",
@@ -2784,6 +2790,7 @@
       "apps/extension/manifest.config.ts",
       "apps/extension/scripts/gen-icons.mjs",
       "apps/extension/scripts/pack-zip.mjs",
+      "apps/extension/src/manifest.test.ts",
       "apps/extension/vite.config.ts"
     ],
     "apps/extension/background": [
@@ -3412,6 +3419,7 @@
       "packages/db/test/migrationSeedLengths.test.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/partitionMaintenance.itest.ts",
+      "packages/db/test/partitionRls.itest.ts",
       "packages/db/test/partitioningFeasibility.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",

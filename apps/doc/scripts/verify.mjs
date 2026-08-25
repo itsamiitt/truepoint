@@ -13,30 +13,13 @@
 // Runs in CI (the "Developer portal — rendered-HTML + a11y + CSP checks" step in .github/workflows/ci.yml,
 // which starts the portal on the runner first), locally against `next start`, and against the live origin
 // via DOC_BASE_URL. deploy/deploy.sh runs a lighter probe of the same idea post-deploy.
+import { FILES, PAGES } from "./routes.mjs";
+
 const BASE = process.env.DOC_BASE_URL ?? "http://localhost:3007";
 
-const PAGES = [
-  "/",
-  "/pricing",
-  "/datasets",
-  "/datasets/us-accounting-firms",
-  "/datasets/us-managed-it-services",
-  "/docs",
-  "/docs/playground",
-  "/docs/machine-reference",
-  "/docs/authentication",
-  "/docs/errors",
-  "/docs/pagination",
-  "/docs/confidence",
-  "/docs/versioning",
-  "/docs/api/company-match",
-  "/docs/api/company-enrich",
-  "/docs/api/search",
-  "/docs/api/person-enrich",
-  "/trust",
-  "/changelog",
-];
-const FILES = ["/robots.txt", "/sitemap.xml", "/llms.txt", "/openapi.json", "/changelog.xml"];
+// The published surface lives in routes.mjs so routeCoverage.test.ts can assert this list really is EVERY
+// route — three of them are generated from content arrays, and a guide added to an array would otherwise
+// ship without ever being fetched by this script.
 
 // Claims that must never reach a reader. Each is a CLAUDE.md hard rule, not a style preference:
 // earned credits and bounties are rule 7; the Sales Navigator supply path is rule 4.
