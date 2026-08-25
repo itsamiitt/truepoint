@@ -199,8 +199,18 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  came and the table had no journal entry, which is the one place a reader looks to find out when it
  *  appeared. So the deficit grows by one to close a worse gap than the one it opens. `IF NOT EXISTS`
  *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
- *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 98;
+ *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  98 → 99 for 0140_partition_rls — and this one is a different category from every bump above it. 0137-0139
+ *  each added a TABLE whose snapshot was owed; 0140 adds no table and no column. It replaces a function
+ *  (ensure_month_partitions) so that a partition of a tenant-scoped parent is born with RLS enabled, closing
+ *  a cross-tenant read where naming a partition directly walked around the parent's policy. Drizzle
+ *  snapshots capture SCHEMA STATE, and the schema state after 0140 is byte-identical to the state after
+ *  0139 — a snapshot for it would be a copy of its predecessor with a new id, which is noise in the chain
+ *  rather than the repair the ratchet is asking for. The deficit still grows by one because the journal
+ *  entry count grows by one, so it is recorded here rather than papered over. Absorbed by the next
+ *  rebaseline like the rest. */
+const EXPECTED_DEFICIT = 99;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
