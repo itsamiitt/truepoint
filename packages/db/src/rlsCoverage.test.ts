@@ -34,7 +34,13 @@
 //     assumed.
 // Excluded from the count by shape, each for a stated reason asserted below: `forge.*` and `er.*` (isolated
 // by schema + a dedicated role, ADR-0047 — the wrong mechanism to demand a policy for) and partition children
-// (`CREATE TABLE … PARTITION OF …`, which inherit the parent ACL via mirror_partition_acl, 0102).
+// (`CREATE TABLE … PARTITION OF …`, which must not carry a policy of their own — parent-routed access is
+// governed by the parent's). That exclusion is from the POLICY requirement ONLY. It used to be justified here
+// partly by children inheriting "the parent ACL via mirror_partition_acl (0102)", which is true and is the
+// opposite of reassuring: an ACL is GRANTS, and mirroring the parent's grants is what lets leadwolf_app address
+// a child BY NAME — while RLS is not inherited alongside it. Children are held to RLS ENABLED (no policy) by
+// rls/zzPartitionInheritance.sql and by ensure_month_partitions; being a catalog fact, that is enforced in
+// packages/db/test/partitionRls.itest.ts rather than by this text-scanning file. See the test below.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
