@@ -31,9 +31,11 @@ import type {
   ContactQuery,
   FacetKey,
   MaskedContact,
+  PhoneLineType,
   SuggestQuery,
   Suggestion,
 } from "@leadwolf/types";
+import { ageDaysSince, computeContactDataQuality } from "@leadwolf/types";
 import { type SQL, and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withReplicaTx, withTenantTx } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
@@ -103,6 +105,7 @@ const FACET_EXPR: Partial<Record<FacetKey, SQL>> = {
   email_status: sql`${contacts.emailStatus}`,
   funding_stage: sql`${accounts.fundingStage}`,
   company_stage: sql`${accounts.companyStage}`,
+  phone_line_type: sql`${contacts.phoneLineType}`,
 };
 
 /** ILIKE-any across the given values for one column (case-insensitive contains). */
@@ -181,6 +184,10 @@ function clauseCondition(
         return inv(inArray(accounts.fundingStage, clause.values));
       case "company_stage":
         return inv(inArray(accounts.companyStage, clause.values));
+      case "phone_line_type":
+        // Exact IN, not ILIKE: this is a closed carrier classification (mobile | landline | voip | …), so a
+        // contains-match would let "voip" also select "fixed_voip" and "non_fixed_voip". [S-04]
+        return inv(inArray(contacts.phoneLineType, clause.values));
       default:
         return undefined; // skill — no column on the overlay
     }
@@ -216,8 +223,28 @@ function clauseCondition(
             ? (sql`(${emailChildExists} AND ${phoneChildExists} AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)` as SQL)
             : sql`(${contacts.emailEnc} IS NOT NULL AND ${contacts.phoneEnc} IS NOT NULL AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)`,
         );
+      case "do_not_contact":
+        // THIS SURFACE CANNOT SHOW SUPPRESSED RECORDS AT ALL, so there is no useful filter to build here —
+        // and the reason is a decision made deliberately upstream, not a gap.
+        //
+        // buildWhere ANDs `NOT_SUPPRESSED_SET`/`_PROBE` into EVERY search, count and facet query, at one
+        // chokepoint, precisely so a count can never promise rows the list will not show. A suppressed
+        // contact is therefore invisible to this repository by construction.
+        //
+        //   do_not_contact = false ⇒ "not on the DNC list". Already guaranteed by that anti-join, so the
+        //                            clause is a no-op and correctly adds nothing.
+        //   do_not_contact = true  ⇒ "on the DNC list". Unsatisfiable here: any row matching a suppression
+        //                            rung has already been removed. `false` is the honest answer — the
+        //                            alternative (returning the unfiltered list, which is what fell through
+        //                            to `default` before) claims the opposite of what was asked.
+        //
+        // An earlier revision of this branch built the obvious `EXISTS(suppression_list …)` and it was
+        // exactly wrong: `EXISTS(...) AND NOT EXISTS(...)` over the same rungs is a contradiction, so it
+        // returned zero rows while looking like a working filter. The sidebar control is gone for the same
+        // reason (filterGroups.ts); surfacing suppressed records needs its own surface, not a search facet.
+        return want ? (sql`false` as SQL) : undefined;
       default:
-        return undefined; // do_not_contact — suppression matching is a documented follow-up
+        return undefined; // exhaustive — every boolFilterField above has a clause
     }
   }
   // range (epoch-ms for date fields)
@@ -259,6 +286,28 @@ function rangeSpec(field: string): { col: SQL; kind: "number" | "timestamp" } | 
       return { col: sql`${contacts.createdAt}`, kind: "timestamp" };
     case "last_activity_at":
       return { col: sql`${contacts.lastActivityAt}`, kind: "timestamp" };
+    case "last_verified_at":
+      // How recently the record's PII was verified — the "is this still good?" question [S-10]. NULL means
+      // never verified, and a bounded range excludes those, which is the honest reading: an unverified
+      // record cannot satisfy "verified since <date>".
+      return { col: sql`${contacts.lastVerifiedAt}`, kind: "timestamp" };
+    case "job_change_at":
+      // When we last DETECTED that this person changed job [S-13]. Correlated rather than joined so the
+      // row count is unaffected (a contact can carry several job-change signals over time).
+      //
+      // SCOPED TO signal_type='job_change' ON PURPOSE. intent_signals also holds web_visit,
+      // keyword_search and content_engagement — third-party behavioural intent, which is X-04, a DEFERRED
+      // NON-GOAL. This filter is deliberately not a general "signal recency" filter, and must not be
+      // widened into one without a recorded decision. That the narrow read is permitted at all is itself
+      // a recorded decision: docs/strategy/decisions.md, open-decision register entry 8 (2026-08-25).
+      // Enforced, not merely asked for — ../searchIntentScope.test.ts fails the build if this scoping is
+      // dropped, if a producer-less signal type appears anywhere in this module, or if the intentSignals
+      // table object is imported (which would put a clause beyond the reach of a raw-SQL scan).
+      return {
+        col: sql`(SELECT max(s.detected_at) FROM intent_signals s
+                   WHERE s.contact_id = ${contacts.id} AND s.signal_type = 'job_change')`,
+        kind: "timestamp",
+      };
     default:
       return undefined;
   }
@@ -377,6 +426,11 @@ const MASKED = {
   emailDomain: contacts.emailDomain,
   emailStatus: contacts.emailStatus,
   phoneStatus: contacts.phoneStatus,
+  // The carrier classification (never the number) — non-PII, and the TCPA-relevant dial-risk signal the
+  // grid shows pre-reveal [S-04]. It is filterable (clauseCondition) and countable (FACET_EXPR); without it
+  // in the projection the column those exist for would render an em-dash on every row.
+  phoneLineType: contacts.phoneLineType,
+  accountId: contacts.accountId,
   // Flat presence by default; runSearch swaps these two columns to the child-EXISTS variants gate-on
   // (05 §5 — "∃ live child row", identical in steady state by CH-INV-1, correct for no-primary edges).
   hasEmail: hasEmailFlat,
@@ -421,16 +475,38 @@ type MaskedRow = {
 };
 
 function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedContact {
+  const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
+  const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
+  const hasEmail = r.hasEmail as boolean;
+  const hasPhone = r.hasPhone as boolean;
+  const lastVerifiedAt = (r.lastVerifiedAt as Date | null)?.toISOString() ?? null;
   return {
     id: r.id as string,
     firstName: r.firstName as string | null,
     lastName: r.lastName as string | null,
     jobTitle: r.jobTitle as string | null,
     emailDomain: r.emailDomain as string | null,
-    emailStatus: r.emailStatus as MaskedContact["emailStatus"],
-    phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
-    hasEmail: r.hasEmail as boolean,
-    hasPhone: r.hasPhone as boolean,
+    emailStatus,
+    phoneStatus,
+    phoneLineType: (r.phoneLineType as PhoneLineType | null) ?? null,
+    // Derived here rather than fetched: every input is already in this projection (presence flags, the two
+    // statuses, the last-verified age), and the fold is the same pure function contactRepository uses, so
+    // the Search grid's Data health column reads identically to the list-detail one [S-10]. Computing it in
+    // the mapper costs no extra query and no extra column.
+    dataHealth: computeContactDataQuality({
+      hasName: r.firstName !== null || r.lastName !== null,
+      hasEmail,
+      hasPhone,
+      hasTitle: r.jobTitle !== null,
+      hasCompany: r.accountId !== null || r.emailDomain !== null,
+      hasLocation: r.locationCountry !== null || r.locationCity !== null,
+      hasLinkedin: r.linkedinPublicId !== null || r.linkedinUrl !== null,
+      emailStatus,
+      phoneStatus,
+      ageDaysSinceVerified: ageDaysSince(lastVerifiedAt),
+    }),
+    hasEmail,
+    hasPhone,
     seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
     department: r.department as string | null,
     locationCountry: r.locationCountry as string | null,
@@ -440,7 +516,7 @@ function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedConta
     revealedTypes: r.revealedTypes as string[] as MaskedContact["revealedTypes"],
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
-    lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,
+    lastVerifiedAt,
     companyName: (r.companyName as string | null) ?? null,
     linkedinPublicId: (r.linkedinPublicId as string | null) ?? null,
     linkedinUrl: (r.linkedinUrl as string | null) ?? null,

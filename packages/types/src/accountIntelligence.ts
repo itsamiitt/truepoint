@@ -203,6 +203,16 @@ export type AccountAlumniResponse = z.infer<typeof accountAlumniResponse>;
 // title and no dates. The contract models the rich stint because enrichment will fill it, but a client must
 // treat title/dates as usually-absent and render a company list rather than a timeline of blanks.
 export const employmentStint = z.object({
+  /**
+   * Opaque per-response token identifying the COMPANY, so a client can group several roles at one employer
+   * under a single company block — the promotion case ("Finance Manager" then "Finance Director" at one
+   * employer), which the flat list rendered as two unrelated rows with the company name printed twice.
+   *
+   * It carries NO information beyond "these rows are the same company": it is a dense_rank over the company
+   * identity, computed in SQL, so no Layer-0 id (nor a stable hash of one) crosses this boundary. Optional
+   * so an older client is unaffected; a client without it falls back to folding on the normalized name.
+   */
+  group_key: z.string().optional(),
   company_name: z.string().nullable(),
   org_kind: orgKind.nullable(),
   title: z.string().nullable(),
@@ -211,6 +221,14 @@ export const employmentStint = z.object({
   /** The '-infinity' "start unknown" sentinel is normalized away server-side; this is a real date or null. */
   started_on: z.string().nullable(),
   ended_on: z.string().nullable(),
+  /**
+   * How much the SOURCE actually asserted: 'year' | 'month' | 'day'. Load-bearing, not metadata — a
+   * year-only assertion is STORED as YYYY-01-01, so without this a client cannot tell "2018" from
+   * "January 2018" and will render a month, and compute a tenure, that nothing in the record supports.
+   * Optional: older clients ignore it, and a client that has it must refuse both at 'year'.
+   */
+  start_precision: z.string().nullable().optional(),
+  end_precision: z.string().nullable().optional(),
   is_current: z.boolean(),
   /** The ONE edge that drives the person's headline employer. */
   is_primary: z.boolean(),

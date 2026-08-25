@@ -157,6 +157,8 @@ export {
 export {
   masterPersonSearchRepository,
   type DatabaseSearchRows,
+  type DatabaseSuggestField,
+  isDatabaseSuggestField,
 } from "./repositories/masterPersonSearchRepository.ts";
 // The Layer-0 COMPANY read seam + its global search (search-consolidation stage 2) — the company twins of
 // the two person modules above. MASTER_COMPANY_VISIBLE is the policy every global company read inherits.

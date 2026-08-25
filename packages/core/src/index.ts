@@ -1542,6 +1542,7 @@ export { inferSeniorityFromTitle } from "./search/inferSeniority.ts";
 // The GLOBAL database search (Layer-0-as-database slice 2) — visibility-filtered, workspace-flagged.
 export {
   searchDatabase,
+  suggestDatabase,
   countDatabase,
   toMaskedDatabasePerson,
   type DatabaseSearchScope,

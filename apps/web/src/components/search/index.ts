@@ -9,6 +9,8 @@ export { SearchDrawer, SearchDrawerOpener } from "./SearchDrawer";
 export type { SearchShell } from "./searchShell";
 export { SearchTabs } from "./SearchTabs";
 export { AppliedFilterChips, type AppliedChip } from "./AppliedFilterChips";
+export { ColumnChooser, type ToggleableColumn } from "./ColumnChooser";
+export { ScopeNotice } from "./ScopeNotice";
 export {
   WorkspaceScopeControl,
   WORKSPACE_SCOPES,

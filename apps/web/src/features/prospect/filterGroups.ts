@@ -24,7 +24,27 @@ export interface FacetOption {
   label: string;
 }
 
-export type FacetDef =
+/**
+ * WHICH ENGINE a facet can actually be answered by. The Search grid merges two engines — the workspace
+ * overlay and the global Layer-0 database — and most facets exist only on the overlay.
+ *
+ * This is not decoration. `databaseRows.toDatabaseQuery` DERIVES its narrowing from these values, so the
+ * badge the sidebar shows and the query the client actually sends can never disagree; and because the field
+ * is required, a new facet cannot be added without someone deciding which engines can serve it.
+ *
+ *   both           — the global graph carries this field too.
+ *   workspace-only — an overlay-only signal (owner, outreach state, verification dates, ranges…). Applying
+ *                    one means the user is interrogating their OWN pipeline, so the database half is
+ *                    dropped rather than answered wrongly — and the pane now SAYS so.
+ *   database-only  — a Layer-0 SATELLITE fact (skills, languages, education, past employers). The mirror
+ *                    image: the overlay holds none of it, and its role is REVOKEd from every `master_*`
+ *                    table, so the WORKSPACE half is what gets skipped. Not a UI preference — reading those
+ *                    tables as `leadwolf_app` is a privilege denial (SQLSTATE 42501), held there by
+ *                    layerZeroWall.test.ts and masterGraphIsolation.itest.ts.
+ */
+export type FacetScope = "both" | "workspace-only" | "database-only";
+
+export type FacetDef = { scope: FacetScope } & (
   | {
       kind: "term";
       field: FacetKey;
@@ -34,7 +54,8 @@ export type FacetDef =
       options?: FacetOption[];
     }
   | { kind: "bool"; field: BoolFilterField; label: string }
-  | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string };
+  | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string }
+);
 
 export interface FilterGroup {
   id: string;
@@ -60,6 +81,20 @@ const optionsOf = (values: readonly string[]): FacetOption[] =>
  *    Which vendor the platform buys from is internal, so these are deliberately NOT offered as separate
  *    filter values; a record sourced that way reads as the TruePoint database, which is what it is.
  */
+/**
+ * The carrier line types worth offering as a filter [S-04]. The enum has fourteen values; these are the four
+ * that change what a rep DOES — a mobile can be texted and is the TCPA-sensitive case, a landline usually
+ * reaches a desk or switchboard, and VoIP is the one most likely to be a dead number. The rest (pager, uan,
+ * voicemail, premium_rate…) are real values the server still accepts and round-trips; they are simply not
+ * worth a chip in a sidebar nobody would use them from.
+ */
+const PHONE_LINE_TYPE_FACET_OPTIONS: FacetOption[] = [
+  { value: "mobile", label: "Mobile" },
+  { value: "landline", label: "Landline" },
+  { value: "voip", label: "VoIP" },
+  { value: "personal", label: "Personal" },
+];
+
 const SOURCE_FACET_OPTIONS: FacetOption[] = [
   { value: "manual", label: "Manual entry" },
   { value: "chrome_extension", label: "Browser extension" },
@@ -76,34 +111,66 @@ export const FILTER_GROUPS: FilterGroup[] = [
     id: "person",
     title: "Person",
     facets: [
-      { kind: "term", field: "title", label: "Title", input: "typeahead" },
+      { kind: "term", field: "title", label: "Title", input: "typeahead", scope: "both" },
       {
         kind: "term",
         field: "seniority",
         label: "Seniority",
         input: "options",
         options: optionsOf(seniorityLevel.options),
+        scope: "both",
       },
-      { kind: "term", field: "department", label: "Department", input: "typeahead" },
-      { kind: "term", field: "location", label: "Location", input: "typeahead" },
+      {
+        kind: "term",
+        field: "department",
+        label: "Department",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      { kind: "term", field: "location", label: "Location", input: "typeahead", scope: "both" },
     ],
   },
   {
     id: "company",
     title: "Company",
     facets: [
-      { kind: "term", field: "company", label: "Company", input: "typeahead" },
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
-      { kind: "term", field: "technology", label: "Technology", input: "typeahead" },
-      { kind: "term", field: "funding_stage", label: "Funding stage", input: "typeahead" },
-      { kind: "term", field: "company_stage", label: "Company stage", input: "typeahead" },
-      { kind: "range", field: "headcount", label: "Headcount", valueKind: "number" },
+      { kind: "term", field: "company", label: "Company", input: "typeahead", scope: "both" },
+      { kind: "term", field: "industry", label: "Industry", input: "typeahead", scope: "both" },
+      {
+        kind: "term",
+        field: "technology",
+        label: "Technology",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "term",
+        field: "funding_stage",
+        label: "Funding stage",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "term",
+        field: "company_stage",
+        label: "Company stage",
+        input: "typeahead",
+        scope: "workspace-only",
+      },
+      {
+        kind: "range",
+        field: "headcount",
+        label: "Headcount",
+        valueKind: "number",
+        scope: "workspace-only",
+      },
       {
         kind: "range",
         field: "company_age",
         label: "Company age",
         valueKind: "number",
         unit: "yrs",
+        scope: "workspace-only",
       },
     ],
   },
@@ -117,11 +184,28 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Status",
         input: "options",
         options: optionsOf(outreachStatus.options),
+        scope: "workspace-only",
       },
-      { kind: "term", field: "owner", label: "Owner", input: "owner" },
-      { kind: "bool", field: "never_contacted", label: "Never contacted" },
-      { kind: "bool", field: "do_not_contact", label: "Do not contact" },
-      { kind: "range", field: "last_activity_at", label: "Last activity", valueKind: "date" },
+      { kind: "term", field: "owner", label: "Owner", input: "owner", scope: "workspace-only" },
+      {
+        kind: "bool",
+        field: "never_contacted",
+        label: "Never contacted",
+        scope: "workspace-only",
+      },
+      // NO "Do not contact" CONTROL, and it is not an oversight. Search excludes suppressed contacts at a
+      // single chokepoint (searchRepository.buildWhere) so a count can never promise rows the list will not
+      // show — which means "on the DNC list" is unsatisfiable on this surface and "not on the DNC list" is
+      // already true of every row. The control shipped for months writing a clause the repository dropped,
+      // returning the unfiltered list either way; implementing that clause as written would have returned
+      // zero rows instead. Neither is a filter. See the do_not_contact case in searchRepository.
+      {
+        kind: "range",
+        field: "last_activity_at",
+        label: "Last activity",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
     ],
   },
   {
@@ -134,12 +218,72 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Email status",
         input: "options",
         options: optionsOf(emailStatus.options),
+        scope: "workspace-only",
       },
-      { kind: "bool", field: "has_email", label: "Has email" },
-      { kind: "bool", field: "has_phone", label: "Has phone" },
-      { kind: "bool", field: "has_linkedin", label: "Has LinkedIn" },
-      { kind: "bool", field: "complete", label: "Complete record" },
-      { kind: "bool", field: "duplicate", label: "Likely duplicate" },
+      { kind: "bool", field: "has_email", label: "Has email", scope: "both" },
+      { kind: "bool", field: "has_phone", label: "Has phone", scope: "both" },
+      // The carrier classification, filterable pre-reveal — "mobile only" is the dial-risk question, and it
+      // is TCPA-relevant [S-04]. The value was already on every masked row and nothing could filter it.
+      {
+        kind: "term",
+        field: "phone_line_type",
+        label: "Phone line type",
+        input: "options",
+        options: PHONE_LINE_TYPE_FACET_OPTIONS,
+        scope: "workspace-only",
+      },
+      { kind: "bool", field: "has_linkedin", label: "Has LinkedIn", scope: "workspace-only" },
+      { kind: "bool", field: "complete", label: "Complete record", scope: "workspace-only" },
+      { kind: "bool", field: "duplicate", label: "Likely duplicate", scope: "workspace-only" },
+      // Supported by the search repository since the reveal work landed, but never offered in the sidebar —
+      // "which of these have I already paid to reveal" is a question users had no way to ask.
+      { kind: "bool", field: "is_revealed", label: "Already revealed", scope: "workspace-only" },
+    ],
+  },
+  {
+    // Layer-0 satellite facts. Every facet here is `database-only`: the workspace overlay holds none of this
+    // data and its role cannot read the tables that do, so applying one searches the platform database and
+    // skips the workspace half. Values come from the global suggest endpoint, not the workspace one.
+    id: "background",
+    title: "Background",
+    facets: [
+      {
+        kind: "term",
+        field: "skill",
+        label: "Skill",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        // "has EVER worked at X" — distinct from the Company facet above, which is the CURRENT employer.
+        // This is what makes "ex-Stripe people" askable.
+        kind: "term",
+        field: "past_company",
+        label: "Past employer",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "school",
+        label: "School",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "field_of_study",
+        label: "Field of study",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "language",
+        label: "Language",
+        input: "typeahead",
+        scope: "database-only",
+      },
     ],
   },
   {
@@ -152,12 +296,93 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Source",
         input: "options",
         options: SOURCE_FACET_OPTIONS,
+        scope: "workspace-only",
       },
-      { kind: "range", field: "created_at", label: "Created", valueKind: "date" },
-      { kind: "range", field: "score", label: "Score", valueKind: "number" },
+      {
+        kind: "range",
+        field: "created_at",
+        label: "Created",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      // "How stale is this record" — the verification-recency question the Data health column answers at a
+      // glance and this answers in bulk [S-10]. A bounded range excludes never-verified records, which is
+      // the honest reading: an unverified record cannot satisfy "verified since <date>".
+      {
+        kind: "range",
+        field: "last_verified_at",
+        label: "Last verified",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      // "Who has moved recently" — the job-change question [S-13]. Reads ONLY job-change detections, never
+      // the behavioural signal types that share their table (those are X-04 intent data, a deferred
+      // non-goal); see the rangeSpec entry in searchRepository for why that scoping is load-bearing.
+      {
+        kind: "range",
+        field: "job_change_at",
+        label: "Job change detected",
+        valueKind: "date",
+        scope: "workspace-only",
+      },
+      {
+        kind: "range",
+        field: "score",
+        label: "Score",
+        valueKind: "number",
+        scope: "workspace-only",
+      },
     ],
   },
 ];
+
+/** Every facet, flattened — the lookups below and the narrowing map both read this. */
+const ALL_FACETS: FacetDef[] = FILTER_GROUPS.flatMap((g) => g.facets);
+
+/**
+ * Which engines can answer this field. Unknown fields are treated as workspace-only: the safe answer is to
+ * drop the database half rather than to send a filter the global graph would ignore.
+ */
+export function facetScope(field: string): FacetScope {
+  return ALL_FACETS.find((f) => f.field === field)?.scope ?? "workspace-only";
+}
+
+/**
+ * The fields on the ACTIVE query that the global database cannot answer, in sidebar order.
+ *
+ * FAILS CLOSED. An undeclared field — `skill` is one today: it is in `FacetKey`, so it validates and
+ * round-trips through a saved search or a shared `?f=` URL, but has no sidebar control — must still appear
+ * here, because this is now the ONLY thing standing between such a clause and the global query. Ordering by
+ * the registry alone would have silently dropped it from the result, and `toDatabaseQuery` would then have
+ * cast it to one of the shared fields and POSTed it, where the global contract rejects it with a 400.
+ * Declared fields keep sidebar order; anything unrecognised is appended.
+ */
+export function workspaceOnlyFields(query: ContactQuery): string[] {
+  return activeFieldsWithScope(query, "workspace-only");
+}
+
+/**
+ * The fields on the ACTIVE query that ONLY the global database can answer, in sidebar order.
+ *
+ * The mirror of `workspaceOnlyFields`, and it drives the mirror behaviour: when this is non-empty the
+ * WORKSPACE half is skipped, because the overlay physically cannot answer a satellite question. Unknown
+ * fields are deliberately NOT collected here — the unknown default stays `workspace-only`, which fails
+ * closed in the direction that matters (never send an unrecognised field to the global engine).
+ */
+export function databaseOnlyFields(query: ContactQuery): string[] {
+  return activeFieldsWithScope(query, "database-only");
+}
+
+/** Shared shape: declared fields in sidebar order, then anything unrecognised appended (fails closed). */
+function activeFieldsWithScope(query: ContactQuery, scope: FacetScope): string[] {
+  const seen = new Set<string>();
+  for (const clause of query.filters) {
+    if (facetScope(clause.field) === scope) seen.add(clause.field);
+  }
+  const declared = ALL_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+  const known = new Set(declared);
+  return [...declared, ...[...seen].filter((f) => !known.has(f))];
+}
 
 /** Flat label lookup for a facet field (term/bool/range), for chips + headings. */
 export function facetLabel(field: string): string {

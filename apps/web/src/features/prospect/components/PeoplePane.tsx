@@ -18,6 +18,7 @@
 
 import {
   AppliedFilterChips,
+  ScopeNotice,
   SearchDrawer,
   SearchDrawerOpener,
   type SearchShell,
@@ -32,7 +33,6 @@ import {
   SegmentedControl,
   StateSwitch,
   TableSkeleton,
-  Tooltip,
   TpButton,
   TpInput,
 } from "@leadwolf/ui";
@@ -42,7 +42,7 @@ import dynamic from "next/dynamic";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
-import { activeChips, clearAllFilters } from "../filterGroups";
+import { activeChips, clearAllFilters, facetLabel } from "../filterGroups";
 import {
   type BulkSelectionStore,
   useBulkSelection,
@@ -55,7 +55,6 @@ import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { displayName, emailGlyphFor, profileHref } from "../types";
 import { AiSearchBox } from "./AiSearchBox";
 import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 
@@ -70,16 +69,13 @@ const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.Bulk
   ssr: false,
 });
 import type { ProspectRow } from "../databaseRows";
-import { AddToWorkspaceButton } from "./AddToWorkspaceButton";
 import { FilterPanel } from "./FilterPanel";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
 import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
-import { RevealCell } from "./RevealCell";
-import { RowActions } from "./RowActions";
 import { SaveSearchPanel } from "./SaveSearchPanel";
-import { RowSelectCheckbox, SelectAllCheckbox } from "./SelectionControls";
+import { DEFAULT_VISIBLE_COLUMNS, TOGGLEABLE_COLUMNS, buildPeopleColumns } from "./peopleColumns";
 
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
@@ -87,16 +83,6 @@ const DENSITIES = [
 ];
 // The fixed-option facets that get live counts in the sidebar (POST /search/facets).
 const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
-
-// The toggleable result columns (the "select" checkbox + "actions" menu are always shown, not toggleable).
-const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
-  { key: "name", label: "Name" },
-  { key: "company", label: "Company" },
-  { key: "email", label: "Email" },
-  { key: "address", label: "Address" },
-  { key: "phone", label: "Phone" },
-];
-const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
 function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   // Only ONE pane is mounted at a time (the composer picks by tab), so this pane's engines are never
@@ -112,6 +98,9 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     setQuery,
     hits,
     databaseCount,
+    databaseHasMore,
+    databaseDroppedFields,
+    workspaceDroppedFields,
     loading,
     error,
     hasMore,
@@ -125,9 +114,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   const counts = useFacetCounts(query, COUNT_FIELDS);
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
+  // Gated on the same skip as the workspace search itself. Without this the header prints a real workspace
+  // total beside zero workspace rows, and the request carries a satellite field the workspace count endpoint
+  // has no clause for.
+  const workspaceSkipped = workspaceDroppedFields.length > 0;
   const countResult = useQuery({
     queryKey: prospectKeys.contactCount(query),
     queryFn: () => searchCount(query),
+    enabled: !workspaceSkipped,
     staleTime: 30_000,
   }).data;
   const totalCount = countResult?.total;
@@ -148,7 +142,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
   // A pending row-level bulk action: the single id to seed + which bulk dialog to open.
   const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
 
@@ -191,131 +185,13 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   );
 
   const allColumns: Column<ProspectRow>[] = useMemo(
-    () => [
-      {
-        key: "select",
-        header: (
-          <SelectAllCheckbox
-            store={selectionStore}
-            shownIds={shownIds}
-            className={styles.headCheck}
-          />
-        ),
-        width: 36,
-        cell: (c) => (
-          <RowSelectCheckbox
-            store={selectionStore}
-            id={c.id}
-            label={`Select ${displayName(c)}`}
-            className={styles.rowCheck}
-          />
-        ),
-      },
-      {
-        key: "name",
-        header: "Name",
-        sortValue: (c) => displayName(c),
-        cell: (c) => {
-          const href = profileHref(c);
-          return (
-            <span className={styles.nameCell}>
-              <span className={styles.nameMeta}>
-                <span className={styles.name}>{displayName(c)}</span>
-                <span className={styles.title}>
-                  {c.jobTitle ?? "—"}
-                  {href ? (
-                    <>
-                      {" · "}
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label="Open profile"
-                      >
-                        profile
-                      </a>
-                    </>
-                  ) : null}
-                </span>
-              </span>
-            </span>
-          );
-        },
-      },
-      {
-        key: "company",
-        header: "Company",
-        // Account name first (works for email-less contacts — capture/import rows), email domain as the
-        // fallback facet the column used to show exclusively.
-        sortValue: (c) => c.companyName ?? c.emailDomain ?? "",
-        cell: (c) =>
-          c.companyName ? (
-            <span>{c.companyName}</span>
-          ) : (
-            <span className={styles.mono}>{c.emailDomain ?? "—"}</span>
-          ),
-      },
-      {
-        key: "email",
-        header: "Email",
-        align: "center",
-        width: 56,
-        sortValue: (c) => c.emailStatus,
-        cell: (c) => {
-          const g = emailGlyphFor(c);
-          const cls =
-            g.tone === "ok"
-              ? styles.glyphOk
-              : g.tone === "warn"
-                ? styles.glyphWarn
-                : styles.glyphNone;
-          return (
-            <Tooltip label={g.label}>
-              <span className={`${styles.glyph} ${cls}`} aria-label={g.label}>
-                {g.mark}
-              </span>
-            </Tooltip>
-          );
-        },
-      },
-      {
-        key: "address",
-        header: "Email",
-        cell: (c) => <RevealCell contact={c} field="email" onRevealed={markRevealed} />,
-      },
-      {
-        key: "phone",
-        header: "Phone",
-        sortValue: (c) => (c.hasPhone ? 1 : 0),
-        cell: (c) => <RevealCell contact={c} field="phone" onRevealed={markRevealed} />,
-      },
-      {
-        key: "actions",
-        header: "",
-        align: "right",
-        width: 48,
-        cell: (c) => (
-          <span
-            className={styles.rowCheck}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            {c.databaseSlug ? (
-              <AddToWorkspaceButton slug={c.databaseSlug} name={displayName(c)} />
-            ) : (
-              <RowActions
-                contact={c}
-                onAddToList={() => startRowAction(c.id, "list")}
-                onTag={() => startRowAction(c.id, "addTags")}
-                onChangeStatus={() => startRowAction(c.id, "status")}
-              />
-            )}
-          </span>
-        ),
-      },
-    ],
+    () =>
+      buildPeopleColumns({
+        selectionStore,
+        shownIds,
+        onRevealed: markRevealed,
+        onRowAction: startRowAction,
+      }),
     // The store is identity-stable, so selection changes no longer rebuild the columns (and with them every
     // cell of every row) — only new rows (shownIds) or new handlers do.
     [selectionStore, shownIds, startRowAction, markRevealed],
@@ -361,13 +237,26 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             <span className={styles.count}>
               {loading
                 ? "Loading…"
-                : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                    totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
-                  } in your workspace${
-                    databaseCount > 0
-                      ? ` · ${databaseCount.toLocaleString()} more in the database`
-                      : ""
-                  }`}
+                : workspaceSkipped
+                  ? `${databaseCount.toLocaleString()}${
+                      databaseHasMore ? "+" : ""
+                    } in the database${
+                      hits.length - databaseCount > 0
+                        ? ` · ${(hits.length - databaseCount).toLocaleString()} already yours`
+                        : ""
+                    }`
+                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
+                      totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
+                    } in your workspace${
+                      databaseCount > 0
+                        ? // "N more in the database" read as the whole of what the database holds, while N is
+                          // only the single capped page the global half fetches — "Load more" pages the
+                          // workspace query alone. Say what is actually on screen.
+                          ` · ${databaseCount.toLocaleString()} from the database${
+                            databaseHasMore ? " (top matches)" : ""
+                          }`
+                        : ""
+                    }`}
             </span>
           </div>
           <div className={styles.headRight}>
@@ -410,6 +299,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           onClearAll={() => setQuery(clearAllFilters(query))}
         />
 
+        {/* Only when workspace-only filters are actually suppressing the database half. */}
+        <ScopeNotice
+          fields={shell.workspace.includeDatabase ? databaseDroppedFields : []}
+          labelFor={facetLabel}
+        />
+        {/* The mirror: a Layer-0 satellite filter the workspace overlay cannot answer at all. */}
+        <ScopeNotice fields={workspaceDroppedFields} labelFor={facetLabel} skipped="workspace" />
+
         {
           <StateSwitch
             loading={loading}
@@ -421,7 +318,11 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               <EmptyState
                 icon={<Users size={28} />}
                 title="No matches"
-                description="No contacts match this search. Adjust your filters or import more from the Import surface."
+                description={
+                  workspaceSkipped
+                    ? "Nobody in the platform database matches this search. Try broadening the background filters."
+                    : "No contacts match this search. Adjust your filters or import more from the Import surface."
+                }
               />
             }
           >

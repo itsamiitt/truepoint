@@ -12,10 +12,12 @@
 //      `databaseSlug` so the grid can render "Add to workspace" instead of reveal/bulk affordances.
 import type {
   ContactQuery,
+  DatabaseFacetKey,
   DatabaseQuery,
   MaskedContact,
   MaskedDatabasePerson,
 } from "@leadwolf/types";
+import { workspaceOnlyFields } from "./filterGroups";
 
 /** A grid row: a workspace contact, or a database person adapted to the same shape. */
 export type ProspectRow = MaskedContact & {
@@ -24,35 +26,47 @@ export type ProspectRow = MaskedContact & {
   databaseUrl?: string;
 };
 
-/** Facets the global graph can answer, mapped 1:1 from the contact search's own field names. */
-const SHARED_TERM_FIELDS = new Set(["title", "company", "location", "seniority", "industry"]);
-/** Bool facets the graph carries as precomputed columns. */
-const SHARED_BOOL_FIELDS = new Set(["has_email", "has_phone"]);
-
 /**
- * Reduce a workspace query to a database query — or null when the query is inherently workspace-only.
- * Null is the honest answer: silently dropping "owner = me" would show a stranger's record as if it
- * matched the user's own filter.
+ * Reduce a workspace query to a database query, reporting WHICH clauses (if any) forced the database half to
+ * be skipped.
+ *
+ * Skipping is still the honest answer — silently dropping "owner = me" would show a stranger's record as if
+ * it matched the user's own filter. What was NOT honest was doing it invisibly: 13 of the 20 sidebar controls
+ * made this return null, and the entire global half of the grid vanished with no indication that a filter,
+ * rather than the dataset, was the reason. The dropped fields come back with the result so the pane can say
+ * so. See `facetScope` in filterGroups.ts — this reads the same metadata the sidebar badges do, so the two
+ * cannot drift.
  */
-export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQuery | null {
+export interface DatabaseQueryNarrowing {
+  /** The query to run, or null when an active filter cannot be answered by the global graph. */
+  query: DatabaseQuery | null;
+  /** The workspace-only fields that caused `query` to be null, in sidebar order. Empty when it is not. */
+  droppedFields: string[];
+}
+
+export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQueryNarrowing {
+  const droppedFields = workspaceOnlyFields(query);
+  if (droppedFields.length > 0) return { query: null, droppedFields };
+
   const filters: DatabaseQuery["filters"] = [];
   for (const clause of query.filters) {
     if (clause.kind === "term") {
-      if (!SHARED_TERM_FIELDS.has(clause.field)) return null;
-      // EXCLUDE now crosses (the global contract gained `op` in stage 4). Before that it did not, and this
+      // EXCLUDE crosses (the global contract gained `op` in stage 4). Before that it did not, and this
       // returned null for ANY excluding query — one "not in Recruiting" clause and the database half of the
       // grid silently disappeared. Passing the sense through is the fix; dropping it would show the user
       // exactly the people they asked to hide.
       filters.push({
         kind: "term",
-        field: clause.field as "title" | "company" | "location" | "seniority" | "industry",
+        // Safe because `workspaceOnlyFields` above already returned for anything the global engine cannot
+        // answer, INCLUDING fields with no sidebar control (it fails closed). What survives is a `both`
+        // field or a `database-only` satellite field, and DatabaseFacetKey covers exactly those.
+        field: clause.field as DatabaseFacetKey,
         op: clause.op,
         values: clause.values,
       });
       continue;
     }
     if (clause.kind === "bool") {
-      if (!SHARED_BOOL_FIELDS.has(clause.field)) return null;
       filters.push({
         kind: "bool",
         field: clause.field as "has_email" | "has_phone",
@@ -60,18 +74,28 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
       });
       continue;
     }
-    // Ranges (created_at, score, headcount…) are overlay-only signals.
-    return null;
+    // Unreachable: every range facet is workspace-only, so `droppedFields` returned above. Kept as a guard
+    // in case a future range facet is declared `both` without a mapping being added here.
+    return { query: null, droppedFields: [clause.field] };
   }
-  return { text: query.text, filters, limit };
+  return { query: { text: query.text, filters, limit }, droppedFields: [] };
 }
 
-/** Adapt a database person to the grid row shape. Workspace-only fields take their empty state — the row
- *  renders as a prospect the user does not own yet, which is exactly what it is. */
-export function databasePersonToRow(p: MaskedDatabasePerson): ProspectRow {
+/**
+ * Adapt a database person to the grid row shape. Workspace-only fields take their empty state — the row
+ * renders as a prospect the user does not own yet, which is exactly what it is.
+ *
+ * `owned` flips that: when the workspace half was skipped (a database-only filter), a person the workspace
+ * DOES hold still arrives through the global half, and marking them `databaseSlug` would offer "Add to
+ * workspace" for a contact already in it. Their real contact id is used so row actions address the record
+ * the workspace owns, not a synthetic one.
+ */
+export function databasePersonToRow(p: MaskedDatabasePerson, owned = false): ProspectRow {
+  const contactId = owned ? (p.inWorkspace?.contactId ?? null) : null;
   return {
-    // Synthetic, stable, and never sent back to the server: the row is addressed by its slug.
-    id: `db:${p.linkedinPublicId}`,
+    // Synthetic, stable, and never sent back to the server: the row is addressed by its slug — unless the
+    // workspace holds it, in which case its real contact id is what every action needs.
+    id: contactId ?? `db:${p.linkedinPublicId}`,
     firstName: p.firstName,
     lastName: p.lastName,
     jobTitle: p.jobTitle ?? p.headline,
@@ -88,20 +112,34 @@ export function databasePersonToRow(p: MaskedDatabasePerson): ProspectRow {
     locationCountry: p.locationCountry,
     locationCity: p.locationCity ?? p.locationRaw,
     outreachStatus: "new",
-    isRevealed: false,
     ownerUserId: null,
     createdAt: p.updatedAt,
     lastVerifiedAt: null,
-    databaseSlug: p.linkedinPublicId,
-    databaseUrl: p.linkedinUrl,
+    isRevealed: owned ? (p.inWorkspace?.isRevealed ?? false) : false,
+    // Set ONLY for a person the workspace does not hold. Its absence is what makes the row read as owned.
+    ...(contactId ? {} : { databaseSlug: p.linkedinPublicId, databaseUrl: p.linkedinUrl }),
   };
 }
 
-/** Owned rows first, then database people the workspace does not already hold (deduped by slug). */
-export function mergeRows(owned: MaskedContact[], database: MaskedDatabasePerson[]): ProspectRow[] {
+/**
+ * Owned rows first, then database people the workspace does not already hold (deduped by slug).
+ *
+ * `workspaceSkipped` is what keeps a database-only filter honest. Normally a person the workspace holds is
+ * dropped from the global half because the WORKSPACE half already supplied them — that is the dedup. But a
+ * satellite filter (skill, school, past employer) cannot run against the overlay at all, so that half is
+ * skipped and supplies nothing; dropping them again would mean searching "ex-Stripe people" and getting
+ * back everyone EXCEPT the ex-Stripe people already in your workspace, which is the opposite of useful.
+ * When the workspace half is skipped, an in-workspace match is kept and rendered as an owned row (no
+ * `databaseSlug` ⇒ no "In database" chip, no "Add to workspace" button — it reads as yours, because it is).
+ */
+export function mergeRows(
+  owned: MaskedContact[],
+  database: MaskedDatabasePerson[],
+  workspaceSkipped = false,
+): ProspectRow[] {
   const held = new Set(owned.map((c) => c.linkedinPublicId).filter((s): s is string => Boolean(s)));
   const extra = database
-    .filter((p) => !held.has(p.linkedinPublicId) && !p.inWorkspace)
-    .map(databasePersonToRow);
+    .filter((p) => !held.has(p.linkedinPublicId) && (workspaceSkipped || !p.inWorkspace))
+    .map((p) => databasePersonToRow(p, workspaceSkipped && p.inWorkspace !== null));
   return [...(owned as ProspectRow[]), ...extra];
 }

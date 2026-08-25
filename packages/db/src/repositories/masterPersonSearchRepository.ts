@@ -1,4 +1,4 @@
-import { DATABASE_COUNT_CAP, type DatabaseQuery } from "@leadwolf/types";
+import { DATABASE_COUNT_CAP, type DatabaseFacetKey, type DatabaseQuery } from "@leadwolf/types";
 // masterPersonSearchRepository.ts — the GLOBAL database search over Layer-0 persons (Layer-0-as-database
 // plan, slice 2 [S-09][S-13][S-10]). A SIBLING of searchRepository, not a second SearchPort implementation:
 // the overlay port is typed to workspace-owned contacts, and this returns people the workspace does NOT
@@ -34,6 +34,7 @@ function inList(column: SQL, values: string[]): SQL {
   )})`;
 }
 
+/** The FLAT columns — matched by substring (trgm-indexed) or, for the enum, by exact IN. */
 const COL = {
   title: sql`p.job_title`,
   location: sql`p.location_raw`,
@@ -41,6 +42,125 @@ const COL = {
   industry: sql`mc.industry`,
   seniority: sql`p.seniority_level`,
 } as const;
+
+/**
+ * A SATELLITE fact: one row per (person, value) in a Layer-0 edge table, matched by a correlated EXISTS.
+ *
+ * EQUALITY, NEVER `ILIKE '%x%'`, and that is the whole performance story. Every column below is CITEXT, so
+ * an IN-list is both case-insensitive AND served by the plain btree migration 0135 built for it — 0135's
+ * own header says so: "citext … is fine for an equality/prefix btree — this is NOT the trgm case". A
+ * leading-wildcard ILIKE would silently drop to a sequential scan of the edge table, and there is no trgm
+ * GIN on any of these columns to catch it.
+ *
+ * Correlated on `p.id` rather than joined so the outer row count is untouched: a person with four matching
+ * skills is one result, not four.
+ */
+function satelliteExists(table: SQL, column: SQL, values: string[]): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${table} sat
+                      WHERE sat.master_person_id = p.id
+                        AND ${inList(column, values)})`;
+}
+
+/** Build the WHERE leg for one term field. Flat columns and satellites dispatch from the same place so a
+ *  new field cannot be added to the contract without a clause here (the enum indexes this switch). */
+function termCondition(field: DatabaseFacetKey, values: string[]): SQL {
+  switch (field) {
+    case "seniority":
+      // A closed enum — exact IN, not substring, or "vp" would also select "svp".
+      return inList(COL.seniority, values);
+    case "skill":
+      return satelliteExists(sql`master_person_skills`, sql`sat.skill`, values);
+    case "language":
+      return satelliteExists(sql`master_person_languages`, sql`sat.name`, values);
+    case "school":
+      return satelliteExists(sql`master_education`, sql`sat.school_name_normalized`, values);
+    case "past_company":
+      // "has EVER worked at X", across the whole employment history — the filter `company` above cannot
+      // express, because that one reads master_persons.current_company_id.
+      //
+      // TWO LEGS, and both are load-bearing. The live import path mints a BARE edge carrying only
+      // (person, company, is_current, is_primary) — no name at all — so a name-only match would miss most
+      // stints in the graph. A stint whose employer ER never resolved carries the reverse: a normalized
+      // name and no company id. Matching either leg is what makes the filter cover both populations.
+      //
+      // Written as an IN-subquery rather than a join so the outer row count is untouched, and so the
+      // company lookup is evaluated once per query rather than once per candidate person.
+      return sql`EXISTS (
+        SELECT 1 FROM master_employment sat
+         WHERE sat.master_person_id = p.id
+           AND (${inList(sql`sat.company_name_normalized`, values)}
+                OR sat.master_company_id IN (
+                     SELECT mcx.id FROM master_companies mcx
+                      WHERE ${inList(sql`mcx.name_normalized`, values)}))
+      )`;
+    case "field_of_study":
+      // Array containment (`&&` = overlaps), served by 0135's GIN. Mirrors the company repo's
+      // `specialtyCondition`. `fields_of_study` is nullable — "absent" is not "empty" — and `&&` is
+      // false for NULL, which is the right answer for a person whose fields were never recorded.
+      return sql`EXISTS (SELECT 1 FROM master_education sat
+                          WHERE sat.master_person_id = p.id
+                            AND sat.fields_of_study && ARRAY[${sql.join(
+                              values.map((v) => sql`${v}`),
+                              sql`, `,
+                            )}]::text[])`;
+    default:
+      return ilikeAny(COL[field], values);
+  }
+}
+
+/**
+ * The satellite columns a global typeahead can draw values from, and the table each lives in.
+ *
+ * Deliberately NOT the flat person columns: `title`/`location` are free text over a table sized for
+ * billions, where a prefix aggregate is a different (and much larger) query than an aggregate over an edge
+ * table keyed by person. Those keep using the workspace suggest, which is what the sidebar has always shown.
+ */
+const SUGGEST_SOURCE = {
+  skill: { table: sql`master_person_skills`, column: sql`sat.skill` },
+  language: { table: sql`master_person_languages`, column: sql`sat.name` },
+  school: { table: sql`master_education`, column: sql`sat.school_name_normalized` },
+} as const;
+
+export type DatabaseSuggestField = keyof typeof SUGGEST_SOURCE;
+
+export function isDatabaseSuggestField(field: string): field is DatabaseSuggestField {
+  return field in SUGGEST_SOURCE;
+}
+
+/**
+ * Typeahead over the Layer-0 satellite values — the global twin of `searchRepository.suggest`.
+ *
+ * VISIBILITY IS NOT OPTIONAL HERE. The aggregate never returns a person, only values and counts, but a value
+ * is still evidence: a suggestion that exists only because one suppressed or private person holds it
+ * confirms that person is in the database, and the count says how many. That is the same reasoning the
+ * workspace suggest records for its suppression anti-join — egress means egress — so this joins
+ * `master_persons` purely to apply MASTER_PERSON_VISIBLE, and never to return anything from it.
+ *
+ * Prefix-matched (`ILIKE 'x%'`, not `'%x%'`) so the 0135 btrees serve it; these columns are CITEXT, so the
+ * match is case-insensitive without a lower() that would defeat the index.
+ */
+export async function suggestDatabaseValuesTx(
+  tx: Tx,
+  field: DatabaseSuggestField,
+  prefix: string,
+  limit: number,
+): Promise<Array<{ value: string; count: number }>> {
+  // Same server-side floor as the workspace suggest: a 0/1-character prefix aggregates the whole edge table
+  // per keystroke for a list the user has not meaningfully narrowed.
+  if (prefix.trim().length < 2) return [];
+  const src = SUGGEST_SOURCE[field];
+  const rows = (await tx.execute(sql`
+    SELECT ${src.column}::text AS value, count(*)::int AS n
+      FROM ${src.table} sat
+      JOIN master_persons p ON p.id = sat.master_person_id
+     WHERE ${MASTER_PERSON_VISIBLE("p")}
+       AND ${src.column} ILIKE ${`${prefix}%`}
+     GROUP BY ${src.column}
+     ORDER BY count(*) DESC, ${src.column}
+     LIMIT ${limit}
+  `)) as unknown as Array<{ value: string; n: number }>;
+  return rows.map((r) => ({ value: r.value, count: r.n }));
+}
 
 export function buildWhere(query: DatabaseQuery): SQL {
   const conds: SQL[] = [
@@ -50,10 +170,7 @@ export function buildWhere(query: DatabaseQuery): SQL {
   ];
   for (const f of query.filters) {
     if (f.kind === "term") {
-      const cond =
-        f.field === "seniority"
-          ? inList(COL.seniority, f.values)
-          : ilikeAny(COL[f.field], f.values);
+      const cond = termCondition(f.field, f.values);
       // An exclude must not also drop rows where the column is NULL — "not a Recruiter" includes people
       // with no title recorded. A bare NOT (…) evaluates to NULL for those and filters them out, which
       // reads as the exclude being far more aggressive than the user asked for.
@@ -92,6 +209,7 @@ export interface DatabaseSearchRows {
 }
 
 export const masterPersonSearchRepository = {
+  suggestDatabaseValuesTx,
   /**
    * Keyset page over the visible population, newest first.
    *

@@ -39,6 +39,22 @@ export function maskedEmail(c: MaskedContact): string {
   return c.emailDomain ? `•••@${c.emailDomain}` : "••• (hidden)";
 }
 
+/** Short absolute date ("12 Mar 2026"), em dash when absent or unparseable. Absolute rather than relative:
+ *  "3 months ago" is unusable for the verification-recency judgement these dates support ([S-10]). */
+export function shortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** The company a masked row belongs to: the linked account's name, else the non-PII email domain. Both the
+ *  grid and the drawers must answer this the SAME way — they used to disagree, so one row could show two
+ *  different "Company" values depending on where you looked at it. */
+export function companyLabel(c: MaskedContact): string | null {
+  return c.companyName ?? c.emailDomain ?? null;
+}
+
 /** A contact's display name — name parts, else the LinkedIn slug (a name-less capture row must still be
  *  identifiable, D4), else an em dash. */
 export function displayName(c: MaskedContact): string {

@@ -63,6 +63,9 @@ export function facetDisplay(row: ContactHit, field: FacetKey): FacetValue[] {
       return [{ key: row.outreachStatus, label: row.outreachStatus }];
     case "email_status":
       return [{ key: row.emailStatus, label: row.emailStatus }];
+    case "phone_line_type":
+      // Optional-populated on the masked view, like dataHealth — absent on surfaces that don't compute it.
+      return row.phoneLineType ? [{ key: row.phoneLineType, label: row.phoneLineType }] : [];
     case "industry":
     case "technology":
     case "skill":

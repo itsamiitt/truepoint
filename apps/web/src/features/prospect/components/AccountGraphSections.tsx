@@ -138,13 +138,15 @@ export function AccountAlumniSection({ accountId }: { accountId: string | null }
       <ul className={styles.timeline}>
         {alumni.map((a) => (
           <li key={a.contact_id} className={styles.timelineItem}>
-            <div className={styles.fieldValue}>
-              {[a.first_name, a.last_name].filter(Boolean).join(" ") || "Unnamed contact"}
-            </div>
-            <div className={styles.fieldLabel}>
-              {[a.job_title, a.degree, a.ended_on ? `class of ${a.ended_on.slice(0, 4)}` : null]
-                .filter(Boolean)
-                .join(" · ")}
+            <div className={styles.timelineMeta}>
+              <div className={styles.fieldValue}>
+                {[a.first_name, a.last_name].filter(Boolean).join(" ") || "Unnamed contact"}
+              </div>
+              <div className={styles.fieldLabel}>
+                {[a.job_title, a.degree, a.ended_on ? `class of ${a.ended_on.slice(0, 4)}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
             </div>
           </li>
         ))}

@@ -58,6 +58,22 @@ beforeAll(async () => {
       (${visibleId}, ${companyId}, 'Acme', 'acme', 'VP Engineering', true, true, '2020-03-01'),
       (${visibleId}, NULL, 'Older Co', 'older co', 'Engineer', false, false, '-infinity')`;
 
+  // A PROMOTED person: two stints at the SAME company plus one elsewhere. Separate from Jane so the
+  // assertions above (which count her rows) are untouched. This is the shape the grouped employment view
+  // exists for — one company, two titles in sequence.
+  const [promoted] = await admin`
+    INSERT INTO master_persons (linkedin_public_id, full_name, visibility, current_company_id)
+    VALUES ('raj-promoted', 'Raj Promoted', 'licensed', ${companyId}) RETURNING id`;
+  const promotedId = (promoted as { id: string }).id;
+  await admin`
+    INSERT INTO master_employment
+      (master_person_id, master_company_id, company_name_raw, company_name_normalized,
+       title, is_current, is_primary, started_on, ended_on)
+    VALUES
+      (${promotedId}, ${companyId}, 'Acme', 'acme', 'Finance Director', true, true, '2023-06-01', NULL),
+      (${promotedId}, ${companyId}, 'Acme', 'acme', 'Finance Manager', false, false, '2019-03-01', '2023-06-01'),
+      (${promotedId}, NULL, 'Older Co', 'older co', 'Analyst', false, false, '2016-01-01', '2019-03-01')`;
+
   await admin`
     INSERT INTO master_education (master_person_id, school_name_raw, school_name_normalized, degree, started_on)
     VALUES (${visibleId}, 'State University', 'state university', 'BSc', '-infinity')`;
@@ -135,6 +151,39 @@ describe("profile collections", () => {
       db.masterProfileReadRepository.employmentForSlugTx(tx, "jane-visible", 1),
     );
     expect(rows).toHaveLength(1);
+  });
+
+  test("4b. group_key identifies the COMPANY, so two roles at one employer share it", async () => {
+    // What the grouped employment view keys off. The client never sees master_company_id (a Layer-0
+    // identifier that deliberately does not cross the API boundary), so the repository ships a dense_rank
+    // over the company identity instead — enough to group by, and nothing more.
+    const rows = await db.withErTx((tx) =>
+      db.masterProfileReadRepository.employmentForSlugTx(tx, "raj-promoted", 25),
+    );
+    expect(rows).toHaveLength(3);
+
+    const byTitle = new Map(rows.map((r) => [r.title, r.groupKey]));
+    // The promotion: same employer, so the same key — this is what stops the UI printing "Acme" twice.
+    expect(byTitle.get("Finance Director")).toBe(byTitle.get("Finance Manager") as string);
+    // A different employer must NOT collide with it.
+    expect(byTitle.get("Analyst")).not.toBe(byTitle.get("Finance Director") as string);
+    // Every row carries one, including the stint whose employer never resolved to a company row (that leg
+    // falls back to company_name_normalized).
+    for (const row of rows) expect(row.groupKey).toBeTruthy();
+  });
+
+  test("4c. group_key is stable across identical reads", async () => {
+    // The client uses it as a React key and as a grouping identity across refetches; a value that moved
+    // between two identical reads would remount the list and could regroup it differently.
+    const [first, second] = await Promise.all([
+      db.withErTx((tx) =>
+        db.masterProfileReadRepository.employmentForSlugTx(tx, "raj-promoted", 25),
+      ),
+      db.withErTx((tx) =>
+        db.masterProfileReadRepository.employmentForSlugTx(tx, "raj-promoted", 25),
+      ),
+    ]);
+    expect(first.map((r) => r.groupKey)).toEqual(second.map((r) => r.groupKey));
   });
 
   test("5. a PRIVATE person's collections are invisible — every one, not just the identity read", async () => {

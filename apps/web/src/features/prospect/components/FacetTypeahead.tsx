@@ -9,7 +9,7 @@ import type { FacetKey } from "@leadwolf/types";
 import { TpInput } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
 import type { TermOp } from "../filterGroups";
-import { useTypeahead } from "../hooks/useTypeahead";
+import { type TypeaheadSource, useTypeahead } from "../hooks/useTypeahead";
 
 export function FacetTypeahead({
   field,
@@ -18,6 +18,7 @@ export function FacetTypeahead({
   onAdd,
   op = "include",
   autoFocus = false,
+  source = "workspace",
 }: {
   field: FacetKey;
   label: string;
@@ -28,8 +29,10 @@ export function FacetTypeahead({
   op?: TermOp;
   /** Focus the field on mount — set when the user just opened the exclude block. */
   autoFocus?: boolean;
+  /** Which endpoint supplies values — a `database-only` facet must say so. */
+  source?: TypeaheadSource;
 }) {
-  const { query, setQuery, suggestions, loading } = useTypeahead(field);
+  const { query, setQuery, suggestions, loading } = useTypeahead(field, source);
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const showMenu = open && query.trim().length >= 3;

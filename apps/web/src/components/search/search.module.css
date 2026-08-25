@@ -147,3 +147,23 @@
   border-bottom: 1px solid var(--tp-hairline);
   margin-bottom: 8px;
 }
+
+/* ── Scope notice ─────────────────────────────────────────────────────────────────────────────────────── */
+/* Shown when active workspace-only filters make the client skip the platform-database half of the results.
+   Informational, not an error: the results ARE correct, they are just narrower than the user may expect. */
+.scopeNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tp-space-2);
+  margin: 0 0 var(--tp-space-2);
+  padding: var(--tp-space-2) var(--tp-space-3);
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--tp-radius-sm);
+  background: var(--tp-surface-2);
+  font-size: var(--tp-text-caption);
+  color: var(--tp-ink-3);
+}
+.scopeNoticeIcon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
