@@ -1,0 +1,13 @@
+{
+  // Type-checks this workspace INCLUDING its out-of-src tests. Mirrors packages/db/tsconfig.typecheck.json.
+  //
+  // Extends the BASE config rather than ./tsconfig.json: that one carries `rootDir: "src"` for the build, and
+  // a rootDir cannot contain files outside itself, so inheriting it reports every test file as TS6059 instead
+  // of type-checking it. Emit settings are irrelevant here — this only ever runs with noEmit.
+  //
+  // No exclude list, and there should never be one: an exclusion is a file nobody type-checks, which is the
+  // condition that let a wrong applyMigrations signature reach CI.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src", "test"]
+}
