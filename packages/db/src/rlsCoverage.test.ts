@@ -57,6 +57,14 @@ const DOCUMENTED_EXCEPTIONS: Readonly<Record<string, string>> = {
   // workspace_members join, and "its no-RLS gap (a RAW query bypasses the join) wants an RLS policy rather
   // than a revoke — a separate follow-up". Listed here so it stays VISIBLE and countable rather than
   // dissolving into the 82 tables that are fine.
+  //
+  // THE PREDICTED HAZARD HAS NOW HAPPENED ONCE (2026-08-25). "A raw query bypasses the join" was written as a
+  // possibility; `sessionRepository.revokeInTx` was an instance of it — an UPDATE keyed on the session id
+  // alone, with no workspace predicate and no RLS underneath, safe only because its single caller happened to
+  // call findActiveInWorkspace first. Now scoped by workspaceId and pinned by an itest. A second comment in
+  // that same feature claimed the read was "RLS-scoped", i.e. asserted the opposite of this register; also
+  // corrected. The gap itself is unchanged and still wants the policy — see decisions.md #10 — but it is no
+  // longer only theoretical, which is the part worth knowing when it is prioritised.
   user_sessions: "audit 32 §9.3-1 — known gap, wants a policy (not a revoke); see applyMigrations",
 };
 
