@@ -179,7 +179,15 @@ jobs:
       # agent's machine at task end. Nothing checked it here, and the committed map was 8 files behind the
       # tree while every run stayed green. Compares fileSetHash via the hook's own buildMap(), so a git
       # checkout or a reinstall cannot trip it.
+      # PUSH ONLY, and its own first live run is what taught me why. On a `pull_request` event GitHub checks
+      # out a MERGE of the PR head with its base, so the tree carries files from `main` that the branch has
+      # never seen — this failed with "11 more files" while main sat one commit and 75 files ahead, which says
+      # nothing about whether the PR's own map is current. Demanding it pass there would mean every PR has to
+      # merge main before its map validates: churn over a base the author did not touch. A `push` event checks
+      # out the branch head exactly, which IS the tree the committed map should describe, and this workflow
+      # runs on push for every branch, so nothing goes unchecked.
       - name: Architecture map is current
+        if: github.event_name == 'push'
         run: bun run lint:arch-map
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
