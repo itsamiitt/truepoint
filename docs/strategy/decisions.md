@@ -652,8 +652,20 @@ pass silently if it falls — they demand the budget be tightened instead.
 
 ## 10. `user_sessions` has no RLS by design, but a customer-surface path now reads it as `leadwolf_app`
 
-**Status:** open — needs a human decision. Raised 2026-08-25 while sweeping every `tenant_id` table for RLS
-coverage (the sweep that found the partition bypass fixed in the same session).
+**Status:** open — needs a human decision. Surfaced again 2026-08-25 while sweeping every `tenant_id` table
+for RLS coverage (the sweep that found the partition bypass fixed in the same session).
+
+**THIS GAP WAS ALREADY KNOWN, and I initially wrote this entry as though it were not.** It is registered as
+audit 32 §9.3-1, carried in `rlsCoverage.test.ts`'s `DOCUMENTED_EXCEPTIONS` precisely so it stays "VISIBLE and
+countable rather than dissolving into the 82 tables that are fine", and `applyMigrations` states both the
+mechanism and the preferred remedy: user_sessions "deliberately KEEPS the grant — the workspace-admin
+session-management path reads it via withTenantTx (bounded by a workspace_members join). Its no-RLS gap (a RAW
+query bypasses the join) wants an RLS policy rather than a revoke — a separate follow-up." The register was
+right, and it named the hazard class before I found an instance of it. What is new below is that instance —
+`revokeInTx`, an UPDATE keyed on the session id alone, which is exactly the "RAW query bypasses the join"
+shape — plus a comment in the same feature asserting the opposite of the register. Read option (b) with the
+register's verdict in mind: a revoke was already considered and rejected, because the admin path needs the
+grant.
 
 **What is true.** `user_sessions` is one of very few tables carrying `tenant_id`/`workspace_id` with no RLS
 policy at all, and that is deliberate and recorded. `packages/db/src/rls/auth.sql` states it: the user-scoped
