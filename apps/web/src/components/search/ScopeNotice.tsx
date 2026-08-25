@@ -16,11 +16,19 @@ import styles from "./search.module.css";
 export function ScopeNotice({
   fields,
   labelFor,
+  skipped = "database",
 }: {
-  /** The active workspace-only filter fields that caused the skip. Empty renders nothing. */
+  /** The active filter fields that caused the skip. Empty renders nothing. */
   fields: string[];
   /** Field → the sidebar label the user actually saw, so the notice names the control they touched. */
   labelFor: (field: string) => string;
+  /**
+   * WHICH half was skipped. The two directions are symmetric and both real:
+   *   "database"  — workspace-only filters (owner, outreach state, ranges) skipped the platform database.
+   *   "workspace" — Layer-0 satellite filters (skill, school, field of study, language) skipped the
+   *                 workspace overlay, which physically cannot answer them.
+   */
+  skipped?: "database" | "workspace";
 }) {
   if (fields.length === 0) return null;
   const names = fields.map(labelFor);
@@ -28,15 +36,24 @@ export function ScopeNotice({
     names.length === 1
       ? names[0]
       : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const one = names.length === 1;
 
   return (
     <p className={styles.scopeNotice}>
       <Info size={14} aria-hidden className={styles.scopeNoticeIcon} />
-      <span>
-        Showing your workspace only — {list} {names.length === 1 ? "applies" : "apply"} to records
-        you already hold, so the platform database is not being searched. Clear{" "}
-        {names.length === 1 ? "it" : "them"} to search the database too.
-      </span>
+      {skipped === "database" ? (
+        <span>
+          Showing your workspace only — {list} {one ? "applies" : "apply"} to records you already
+          hold, so the platform database is not being searched. Clear {one ? "it" : "them"} to
+          search the database too.
+        </span>
+      ) : (
+        <span>
+          Searching the platform database — {list} {one ? "is" : "are"} only recorded there, not on
+          your own contacts. Anyone already in your workspace still appears, marked. Clear{" "}
+          {one ? "it" : "them"} to search your workspace too.
+        </span>
+      )}
     </p>
   );
 }

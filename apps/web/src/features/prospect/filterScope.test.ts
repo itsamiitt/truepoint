@@ -18,7 +18,12 @@ import {
   accountFacetScope,
   accountWorkspaceOnlyFields,
 } from "./accountFilterGroups.ts";
-import { FILTER_GROUPS, facetScope, workspaceOnlyFields } from "./filterGroups.ts";
+import {
+  FILTER_GROUPS,
+  databaseOnlyFields,
+  facetScope,
+  workspaceOnlyFields,
+} from "./filterGroups.ts";
 
 const PEOPLE_BASE: ContactQuery = { filters: [], sort: "relevance", limit: 50 };
 const ACCOUNT_BASE: AccountQuery = { filters: [], sort: "relevance", limit: 50 };
@@ -36,7 +41,7 @@ function clauseFor(facet: (typeof peopleFacets)[number]): ContactQuery["filters"
 describe("people filter scopes", () => {
   test("every facet declares a scope", () => {
     for (const facet of peopleFacets) {
-      expect(["both", "workspace-only"]).toContain(facet.scope);
+      expect(["both", "workspace-only", "database-only"]).toContain(facet.scope);
     }
   });
 
@@ -62,7 +67,37 @@ describe("people filter scopes", () => {
   });
 
   test("an unknown field is treated as workspace-only, never as safe to send", () => {
+    // The fail-closed direction: an unrecognised field must never be assumed answerable by the global
+    // engine, and must never be collected as database-only either (which would skip the workspace half
+    // for a field nothing can serve).
     expect(facetScope("something_invented")).toBe("workspace-only");
+    const q: ContactQuery = {
+      ...PEOPLE_BASE,
+      filters: [
+        { kind: "term", field: "something_invented" as never, op: "include", values: ["x"] },
+      ],
+    };
+    expect(databaseOnlyFields(q)).toEqual([]);
+  });
+
+  test("a database-only facet skips the WORKSPACE half, and only that half", () => {
+    // The mirror of the workspace-only case. These are Layer-0 satellite facts; the overlay's role is
+    // REVOKEd from every master_* table, so asking it is a privilege denial, not an empty result.
+    for (const facet of peopleFacets.filter((f) => f.scope === "database-only")) {
+      const query: ContactQuery = { ...PEOPLE_BASE, filters: [clauseFor(facet)] };
+      expect(databaseOnlyFields(query)).toEqual([facet.field]);
+      // …and it must NOT also suppress the database half, or the grid would show nothing at all.
+      expect(workspaceOnlyFields(query)).toEqual([]);
+    }
+  });
+
+  test("the satellite facets are declared database-only, not `both`", () => {
+    // Declaring one `both` would send it to the workspace engine, which has no clause for it and would
+    // silently return the unfiltered list — the exact defect class the scope model exists to prevent.
+    const byField = new Map(peopleFacets.map((f) => [f.field, f.scope]));
+    for (const field of ["skill", "school", "field_of_study", "language"]) {
+      expect(byField.get(field)).toBe("database-only");
+    }
   });
 
   test("the outcome-driven filters are all offered", () => {
@@ -83,14 +118,19 @@ describe("people filter scopes", () => {
   });
 
   test("an undeclared field still suppresses the database half — the guard fails CLOSED", () => {
-    // `skill` is in FacetKey (so it validates and round-trips through a saved search or a shared ?f= URL)
-    // but has no sidebar control. This function is the ONLY thing standing between such a clause and the
-    // global query, which would reject it with a 400 rather than skipping cleanly.
+    // A field with no sidebar control can still reach this: a saved search or a shared ?f= URL carries
+    // whatever validated when it was written, and the contract enum outlives any one panel. This function
+    // is the ONLY thing standing between such a clause and the global query, which would reject it with a
+    // 400 rather than skipping cleanly.
+    //
+    // `skill` used to be the live example — declared in FacetKey, implemented nowhere, offered by no
+    // control. It has since graduated to a real database-only facet, which is why this now uses a synthetic
+    // field: the property is about UNKNOWN fields, and it must keep holding when every known one is wired.
     const query: ContactQuery = {
       ...PEOPLE_BASE,
-      filters: [{ kind: "term", field: "skill", op: "include", values: ["go"] }],
+      filters: [{ kind: "term", field: "retired_facet" as never, op: "include", values: ["x"] }],
     };
-    expect(workspaceOnlyFields(query)).toEqual(["skill"]);
+    expect(workspaceOnlyFields(query)).toEqual(["retired_facet"]);
   });
 
   test("the job-change filter is a job-change filter, not a signal filter", () => {
@@ -121,12 +161,21 @@ describe("people filter scopes", () => {
       expect(supported.has(facet.field)).toBe(true);
     }
   });
+
+  test("every database-only field is one masterPersonSearchRepository can answer", () => {
+    // The mirror of the `both` check above: a database-only facet the global engine has no clause for
+    // would send a field its Zod contract rejects, turning a filter into a 400.
+    const supported = new Set(["skill", "language", "school", "field_of_study"]);
+    for (const facet of peopleFacets.filter((f) => f.scope === "database-only")) {
+      expect(supported.has(facet.field)).toBe(true);
+    }
+  });
 });
 
 describe("account filter scopes", () => {
   test("every facet declares a scope", () => {
     for (const facet of accountFacets) {
-      expect(["both", "workspace-only"]).toContain(facet.scope);
+      expect(["both", "workspace-only", "database-only"]).toContain(facet.scope);
     }
   });
 

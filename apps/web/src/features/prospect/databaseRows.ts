@@ -12,6 +12,7 @@
 //      `databaseSlug` so the grid can render "Add to workspace" instead of reveal/bulk affordances.
 import type {
   ContactQuery,
+  DatabaseFacetKey,
   DatabaseQuery,
   MaskedContact,
   MaskedDatabasePerson,
@@ -56,7 +57,10 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
       // exactly the people they asked to hide.
       filters.push({
         kind: "term",
-        field: clause.field as "title" | "company" | "location" | "seniority" | "industry",
+        // Safe because `workspaceOnlyFields` above already returned for anything the global engine cannot
+        // answer, INCLUDING fields with no sidebar control (it fails closed). What survives is a `both`
+        // field or a `database-only` satellite field, and DatabaseFacetKey covers exactly those.
+        field: clause.field as DatabaseFacetKey,
         op: clause.op,
         values: clause.values,
       });
@@ -77,12 +81,21 @@ export function toDatabaseQuery(query: ContactQuery, limit: number): DatabaseQue
   return { query: { text: query.text, filters, limit }, droppedFields: [] };
 }
 
-/** Adapt a database person to the grid row shape. Workspace-only fields take their empty state — the row
- *  renders as a prospect the user does not own yet, which is exactly what it is. */
-export function databasePersonToRow(p: MaskedDatabasePerson): ProspectRow {
+/**
+ * Adapt a database person to the grid row shape. Workspace-only fields take their empty state — the row
+ * renders as a prospect the user does not own yet, which is exactly what it is.
+ *
+ * `owned` flips that: when the workspace half was skipped (a database-only filter), a person the workspace
+ * DOES hold still arrives through the global half, and marking them `databaseSlug` would offer "Add to
+ * workspace" for a contact already in it. Their real contact id is used so row actions address the record
+ * the workspace owns, not a synthetic one.
+ */
+export function databasePersonToRow(p: MaskedDatabasePerson, owned = false): ProspectRow {
+  const contactId = owned ? (p.inWorkspace?.contactId ?? null) : null;
   return {
-    // Synthetic, stable, and never sent back to the server: the row is addressed by its slug.
-    id: `db:${p.linkedinPublicId}`,
+    // Synthetic, stable, and never sent back to the server: the row is addressed by its slug — unless the
+    // workspace holds it, in which case its real contact id is what every action needs.
+    id: contactId ?? `db:${p.linkedinPublicId}`,
     firstName: p.firstName,
     lastName: p.lastName,
     jobTitle: p.jobTitle ?? p.headline,
@@ -99,20 +112,34 @@ export function databasePersonToRow(p: MaskedDatabasePerson): ProspectRow {
     locationCountry: p.locationCountry,
     locationCity: p.locationCity ?? p.locationRaw,
     outreachStatus: "new",
-    isRevealed: false,
     ownerUserId: null,
     createdAt: p.updatedAt,
     lastVerifiedAt: null,
-    databaseSlug: p.linkedinPublicId,
-    databaseUrl: p.linkedinUrl,
+    isRevealed: owned ? (p.inWorkspace?.isRevealed ?? false) : false,
+    // Set ONLY for a person the workspace does not hold. Its absence is what makes the row read as owned.
+    ...(contactId ? {} : { databaseSlug: p.linkedinPublicId, databaseUrl: p.linkedinUrl }),
   };
 }
 
-/** Owned rows first, then database people the workspace does not already hold (deduped by slug). */
-export function mergeRows(owned: MaskedContact[], database: MaskedDatabasePerson[]): ProspectRow[] {
+/**
+ * Owned rows first, then database people the workspace does not already hold (deduped by slug).
+ *
+ * `workspaceSkipped` is what keeps a database-only filter honest. Normally a person the workspace holds is
+ * dropped from the global half because the WORKSPACE half already supplied them — that is the dedup. But a
+ * satellite filter (skill, school, past employer) cannot run against the overlay at all, so that half is
+ * skipped and supplies nothing; dropping them again would mean searching "ex-Stripe people" and getting
+ * back everyone EXCEPT the ex-Stripe people already in your workspace, which is the opposite of useful.
+ * When the workspace half is skipped, an in-workspace match is kept and rendered as an owned row (no
+ * `databaseSlug` ⇒ no "In database" chip, no "Add to workspace" button — it reads as yours, because it is).
+ */
+export function mergeRows(
+  owned: MaskedContact[],
+  database: MaskedDatabasePerson[],
+  workspaceSkipped = false,
+): ProspectRow[] {
   const held = new Set(owned.map((c) => c.linkedinPublicId).filter((s): s is string => Boolean(s)));
   const extra = database
-    .filter((p) => !held.has(p.linkedinPublicId) && !p.inWorkspace)
-    .map(databasePersonToRow);
+    .filter((p) => !held.has(p.linkedinPublicId) && (workspaceSkipped || !p.inWorkspace))
+    .map((p) => databasePersonToRow(p, workspaceSkipped && p.inWorkspace !== null));
   return [...(owned as ProspectRow[]), ...extra];
 }

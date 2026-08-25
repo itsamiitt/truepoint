@@ -231,6 +231,8 @@ function TermFacet({
           <FacetTypeahead
             field={facet.field}
             label={facet.label}
+            // A database-only facet's values live in Layer-0, which the workspace suggest cannot see.
+            source={facet.scope === "database-only" ? "database" : "workspace"}
             op={op}
             autoFocus={autoFocus}
             selected={[...applied]}

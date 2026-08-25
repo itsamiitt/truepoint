@@ -36,8 +36,13 @@ export interface FacetOption {
  *   workspace-only — an overlay-only signal (owner, outreach state, verification dates, ranges…). Applying
  *                    one means the user is interrogating their OWN pipeline, so the database half is
  *                    dropped rather than answered wrongly — and the pane now SAYS so.
+ *   database-only  — a Layer-0 SATELLITE fact (skills, languages, education, past employers). The mirror
+ *                    image: the overlay holds none of it, and its role is REVOKEd from every `master_*`
+ *                    table, so the WORKSPACE half is what gets skipped. Not a UI preference — reading those
+ *                    tables as `leadwolf_app` is a privilege denial (SQLSTATE 42501), held there by
+ *                    layerZeroWall.test.ts and masterGraphIsolation.itest.ts.
  */
-export type FacetScope = "both" | "workspace-only";
+export type FacetScope = "both" | "workspace-only" | "database-only";
 
 export type FacetDef = { scope: FacetScope } & (
   | {
@@ -236,6 +241,43 @@ export const FILTER_GROUPS: FilterGroup[] = [
     ],
   },
   {
+    // Layer-0 satellite facts. Every facet here is `database-only`: the workspace overlay holds none of this
+    // data and its role cannot read the tables that do, so applying one searches the platform database and
+    // skips the workspace half. Values come from the global suggest endpoint, not the workspace one.
+    id: "background",
+    title: "Background",
+    facets: [
+      {
+        kind: "term",
+        field: "skill",
+        label: "Skill",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "school",
+        label: "School",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "field_of_study",
+        label: "Field of study",
+        input: "typeahead",
+        scope: "database-only",
+      },
+      {
+        kind: "term",
+        field: "language",
+        label: "Language",
+        input: "typeahead",
+        scope: "database-only",
+      },
+    ],
+  },
+  {
     id: "source",
     title: "Source & recency",
     facets: [
@@ -307,9 +349,26 @@ export function facetScope(field: string): FacetScope {
  * Declared fields keep sidebar order; anything unrecognised is appended.
  */
 export function workspaceOnlyFields(query: ContactQuery): string[] {
+  return activeFieldsWithScope(query, "workspace-only");
+}
+
+/**
+ * The fields on the ACTIVE query that ONLY the global database can answer, in sidebar order.
+ *
+ * The mirror of `workspaceOnlyFields`, and it drives the mirror behaviour: when this is non-empty the
+ * WORKSPACE half is skipped, because the overlay physically cannot answer a satellite question. Unknown
+ * fields are deliberately NOT collected here — the unknown default stays `workspace-only`, which fails
+ * closed in the direction that matters (never send an unrecognised field to the global engine).
+ */
+export function databaseOnlyFields(query: ContactQuery): string[] {
+  return activeFieldsWithScope(query, "database-only");
+}
+
+/** Shared shape: declared fields in sidebar order, then anything unrecognised appended (fails closed). */
+function activeFieldsWithScope(query: ContactQuery, scope: FacetScope): string[] {
   const seen = new Set<string>();
   for (const clause of query.filters) {
-    if (facetScope(clause.field) === "workspace-only") seen.add(clause.field);
+    if (facetScope(clause.field) === scope) seen.add(clause.field);
   }
   const declared = ALL_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
   const known = new Set(declared);

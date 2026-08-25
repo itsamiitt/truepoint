@@ -35,6 +35,14 @@ export const facetKey = z.enum([
   // rep needs BEFORE spending a reveal, and it is TCPA-relevant — [S-04]. It rides on contacts.phone_line_type,
   // which the masked row has always returned and nothing could filter on.
   "phone_line_type",
+  // SATELLITE facts, answerable ONLY by the global Layer-0 search (see databaseFacetKey). They appear in
+  // this workspace-side enum because the client's facet model is typed to it — `searchRepository` returns
+  // no clause for them, which is safe ONLY because the client skips the workspace half whenever one is
+  // active (`facetScope` → "database-only"). `skill` was already here, declared and unimplemented, and is
+  // the field the client's fail-closed narrowing guard was written for.
+  "language",
+  "school",
+  "field_of_study",
 ]);
 export type FacetKey = z.infer<typeof facetKey>;
 

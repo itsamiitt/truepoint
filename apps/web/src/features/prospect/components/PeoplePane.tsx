@@ -100,6 +100,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     databaseCount,
     databaseHasMore,
     databaseDroppedFields,
+    workspaceDroppedFields,
     loading,
     error,
     hasMore,
@@ -113,9 +114,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   const counts = useFacetCounts(query, COUNT_FIELDS);
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
+  // Gated on the same skip as the workspace search itself. Without this the header prints a real workspace
+  // total beside zero workspace rows, and the request carries a satellite field the workspace count endpoint
+  // has no clause for.
+  const workspaceSkipped = workspaceDroppedFields.length > 0;
   const countResult = useQuery({
     queryKey: prospectKeys.contactCount(query),
     queryFn: () => searchCount(query),
+    enabled: !workspaceSkipped,
     staleTime: 30_000,
   }).data;
   const totalCount = countResult?.total;
@@ -231,18 +237,26 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             <span className={styles.count}>
               {loading
                 ? "Loading…"
-                : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                    totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
-                  } in your workspace${
-                    databaseCount > 0
-                      ? // "N more in the database" read as the whole of what the database holds, while N is
-                        // only the single capped page the global half fetches — "Load more" pages the
-                        // workspace query alone. Say what is actually on screen.
-                        ` · ${databaseCount.toLocaleString()} from the database${
-                          databaseHasMore ? " (top matches)" : ""
-                        }`
-                      : ""
-                  }`}
+                : workspaceSkipped
+                  ? `${databaseCount.toLocaleString()}${
+                      databaseHasMore ? "+" : ""
+                    } in the database${
+                      hits.length - databaseCount > 0
+                        ? ` · ${(hits.length - databaseCount).toLocaleString()} already yours`
+                        : ""
+                    }`
+                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
+                      totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
+                    } in your workspace${
+                      databaseCount > 0
+                        ? // "N more in the database" read as the whole of what the database holds, while N is
+                          // only the single capped page the global half fetches — "Load more" pages the
+                          // workspace query alone. Say what is actually on screen.
+                          ` · ${databaseCount.toLocaleString()} from the database${
+                            databaseHasMore ? " (top matches)" : ""
+                          }`
+                        : ""
+                    }`}
             </span>
           </div>
           <div className={styles.headRight}>
@@ -290,6 +304,8 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           fields={shell.workspace.includeDatabase ? databaseDroppedFields : []}
           labelFor={facetLabel}
         />
+        {/* The mirror: a Layer-0 satellite filter the workspace overlay cannot answer at all. */}
+        <ScopeNotice fields={workspaceDroppedFields} labelFor={facetLabel} skipped="workspace" />
 
         {
           <StateSwitch
@@ -302,7 +318,11 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               <EmptyState
                 icon={<Users size={28} />}
                 title="No matches"
-                description="No contacts match this search. Adjust your filters or import more from the Import surface."
+                description={
+                  workspaceSkipped
+                    ? "Nobody in the platform database matches this search. Try broadening the background filters."
+                    : "No contacts match this search. Adjust your filters or import more from the Import surface."
+                }
               />
             }
           >

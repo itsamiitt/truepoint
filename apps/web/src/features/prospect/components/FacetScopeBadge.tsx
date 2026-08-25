@@ -9,11 +9,24 @@ import { Tooltip } from "@leadwolf/ui";
 import type { FacetScope } from "../filterGroups";
 import styles from "../prospect.module.css";
 
+const COPY: Record<string, { label: string; tip: string }> = {
+  "workspace-only": {
+    label: "Workspace only",
+    tip: "Only records already in your workspace carry this field, so filtering by it does not search the platform database.",
+  },
+  "database-only": {
+    label: "Database only",
+    tip: "Only the platform database records this, so filtering by it searches the database rather than your own contacts. People you already hold still appear, marked.",
+  },
+};
+
 export function FacetScopeBadge({ scope }: { scope: FacetScope }) {
-  if (scope !== "workspace-only") return null;
+  const copy = COPY[scope];
+  // `both` has no badge — a facet that works everywhere needs no explanation.
+  if (!copy) return null;
   return (
-    <Tooltip label="Only records already in your workspace carry this field, so filtering by it does not search the platform database.">
-      <span className={styles.scopeBadge}>Workspace only</span>
+    <Tooltip label={copy.tip}>
+      <span className={styles.scopeBadge}>{copy.label}</span>
     </Tooltip>
   );
 }

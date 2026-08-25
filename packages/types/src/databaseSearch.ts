@@ -8,7 +8,28 @@ import { z } from "zod";
 import { seniorityLevel } from "./contacts.ts";
 
 /** The facets a database search may filter on (each maps to an indexed Layer-0 column). */
-export const databaseFacetKey = z.enum(["title", "company", "location", "seniority", "industry"]);
+/**
+ * The fields the GLOBAL people search can filter on.
+ *
+ * The first five are flat columns on `master_persons` (or its current-employer join). The rest are
+ * SATELLITE facts — one row per (person, value) in a Layer-0 edge table — answered by a correlated EXISTS.
+ * They exist here and nowhere else on purpose: the workspace overlay holds none of this data and its role
+ * (`leadwolf_app`) is REVOKEd from every `master_*` table, so these questions are answerable by the global
+ * engine or not at all. The client marks them `database-only` and skips the workspace half when one is
+ * active — see `facetScope` in the web app's filterGroups.
+ */
+export const databaseFacetKey = z.enum([
+  "title",
+  "company",
+  "location",
+  "seniority",
+  "industry",
+  // Satellite facts (EXISTS-backed). Indexed by migration 0135, which was written for exactly these.
+  "skill",
+  "language",
+  "school",
+  "field_of_study",
+]);
 export type DatabaseFacetKey = z.infer<typeof databaseFacetKey>;
 
 export const databaseTermFilter = z.object({
