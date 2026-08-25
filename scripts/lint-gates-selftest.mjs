@@ -34,13 +34,19 @@
 // not been, a script written to make verification trustworthy would have destroyed a day of work.
 //
 // Two rules now, and they are why every plant sits in its OWN tag-named directory rather than beside real code:
-//   1. Cleanup removes only what THIS RUN CREATED. `mkdirSync(…, { recursive: true })` returns the topmost
-//      directory it actually made, or `undefined` if the path already existed — so that return value, not a
-//      path computed from the fixture, is what may be recursively removed. If the directory already existed,
-//      only the planted file is unlinked.
-//   2. The removal target must still be tag-named when it is removed, asserted immediately before the call.
-// Neither alone is enough: (1) without (2) trusts a path built by string arithmetic, and (2) without (1) would
-// happily delete a leftover directory this run did not create.
+//   1. The only path ever removed RECURSIVELY is the fixture's own tag-named directory, asserted to still be
+//      tag-named immediately before the call. A recursive delete can therefore only ever land on a directory
+//      this script named itself.
+//   2. Parent directories this run had to create are unwound afterwards with `rmdirSync`, which REFUSES on a
+//      non-empty directory. That refusal is the safety property: an intermediate directory holding anything
+//      else is left exactly as found, with no assumption about who created it.
+//
+// The obvious-looking alternative to (1) — recursively removing whatever `mkdirSync(…, { recursive: true })`
+// returned — is wrong, and shipped for one commit. That return value is the TOPMOST directory it made, not the
+// leaf: for a fixture at `packages/ui/test/<TAG>` on a checkout where `packages/ui/test` does not exist, it is
+// `packages/ui/test` — a real directory, not tag-named. Rule (2)'s ancestor caught it and aborted rather than
+// deleting it, which meant the self-test could not run at all on a clean checkout. A local run passed because
+// a leftover `packages/ui/test` happened to exist; CI on a fresh clone is what found it.
 //
 // TWO GATES NEED A DIFFERENT SHAPE, and this file used to claim they could not be covered at all:
 //   • lint:secrets scans `git ls-files`, so an untracked fixture is invisible to it — proving it appeared to
@@ -57,9 +63,9 @@
 // All seven script gates are therefore covered.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 const TAG = `__gate_selftest_${process.pid}__`;
 
@@ -254,26 +260,59 @@ function runGate(script, cwd) {
 }
 
 /**
- * Remove the fixture, and the directory ONLY if this run created it.
+ * Remove the fixture directory, then unwind any parent directories this run had to create — and ONLY while
+ * they are empty.
  *
- * `created` is whatever `mkdirSync(…, { recursive: true })` returned — the topmost directory it actually made,
- * or `undefined` when the path already existed. Removing that value (never a path derived from the fixture)
- * is what bounds the blast radius to this run's own work. The tag assertion is the second, independent check:
- * a recursive delete of anything not tag-named is a bug in this script, and it aborts rather than proceeds.
+ * THE RECURSIVE DELETE TARGETS THE TAG DIRECTORY, never `mkdirSync`'s return value. That distinction is the
+ * whole of this function's safety, and getting it wrong has now failed in both directions here. Earlier the
+ * fixture path was derived from the planted FILE, and `rmSync(dirname(planted))` removed 337 tracked files.
+ * Then the fix over-corrected onto `mkdirSync(…, { recursive: true })`'s return — which is the TOPMOST
+ * directory it made, not the leaf. For a fixture at `packages/ui/test/<TAG>` on a checkout where
+ * `packages/ui/test` does not exist, that return value is `packages/ui/test`: a real directory, not tag-named.
+ * The assertion below caught it and aborted rather than deleting it, which is the guard working — but it also
+ * meant the self-test could not run at all on a clean checkout, which is how CI found it and a local run with
+ * a leftover directory did not.
+ *
+ * So: delete `absDir` (asserted tag-named, so a recursive delete can only ever hit a directory this script
+ * named), then walk UP from it removing empty parents with `rmdirSync`, which refuses on a non-empty
+ * directory. That refusal is the safety property — an intermediate directory that holds anything else is left
+ * exactly as found, and no assumption is made about who created what.
  */
-function cleanup(created, planted, dir) {
+function cleanup(created, planted, absDir, relDir) {
   try {
     unlinkSync(planted);
   } catch {
     // already gone — the recursive remove below, or a previous failed run, got there first
   }
-  if (typeof created !== "string" || created.length === 0) return;
-  if (!basename(created).startsWith("__gate_selftest_")) {
+  if (typeof absDir !== "string" || absDir.length === 0) return;
+  if (!basename(absDir).startsWith("__gate_selftest_")) {
     throw new Error(
-      `refusing to remove ${created}: not a self-test directory. Fixture was ${dir}; this is a bug in ${basename(import.meta.url)}.`,
+      `refusing to remove ${absDir}: not a self-test directory. Fixture was ${relDir}; this is a bug in ${basename(import.meta.url)}.`,
     );
   }
-  rmSync(created, { recursive: true, force: true });
+  rmSync(absDir, { recursive: true, force: true });
+
+  // Nothing to unwind when the path already existed — mkdirSync returns undefined then. `created` is used ONLY
+  // as that yes/no signal and never compared as a path: on Windows it comes back as an extended-length path
+  // (`\\?\C:\…`), so `current.startsWith(created)` is false for the very directory it names, and a walk gated
+  // on that string silently does nothing. It would have worked on the Linux runner and not on a Windows
+  // checkout — a cleanup that differs by platform is worse than one that is simply wrong.
+  if (typeof created !== "string" || created.length === 0) return;
+
+  // Walk up from the fixture, bounded by the repo root, removing directories only while they are EMPTY.
+  // `rmdirSync` throws ENOTEMPTY on anything still holding a file and that stops the walk, so an intermediate
+  // directory containing anything else is left exactly as found. The root bound is the second limit: the walk
+  // can never step outside the working directory, and never removes the working directory itself.
+  const root = process.cwd();
+  let current = dirname(absDir);
+  while (current.startsWith(root) && current.length > root.length) {
+    try {
+      rmdirSync(current);
+    } catch {
+      break;
+    }
+    current = dirname(current);
+  }
 }
 
 const failures = [];
@@ -309,7 +348,7 @@ for (const testCase of CASES) {
     }
     proven += 1;
   } finally {
-    cleanup(created, planted, testCase.dir);
+    cleanup(created, planted, dir, testCase.dir);
   }
 
   // And it must go quiet again once the plant is gone — otherwise the "failure" was pre-existing noise and
