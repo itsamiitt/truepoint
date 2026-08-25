@@ -114,6 +114,13 @@ process.stdout.write("\n");
 process.stdout.write(
   `NOT run here: unit tests, *.itest.ts (needs Postgres), bun run build (needs env)${withTypecheck ? "" : ", typecheck (pass --with-typecheck)"} — CI runs those.\n`,
 );
+// The two REPORT-ONLY audits are named because this script's whole job is telling you what it did and did not
+// check, and silently omitting the existence of two more checks is the same omission in miniature. They are
+// not run here on purpose: both always exit 0, so folding them into a pass/fail sweep would either read as a
+// PASS that proves nothing, or force a red on findings that are open questions rather than defects.
+process.stdout.write(
+  "Report-only audits (exit 0, run them yourself): bun run audit:feature-flags · node scripts/audit-dead-repository-methods.mjs\n",
+);
 
 // Unavailable counts as failure for the EXIT code even though it is reported separately: a sweep that could
 // not run two of its checks has not verified anything, and the whole point of this script is that its result
