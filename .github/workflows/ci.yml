@@ -16,6 +16,11 @@ on:
 
 permissions:
   contents: read
+  # actions: read — for the "nightly still firing?" step in the gates job. Read-only metadata about THIS
+  # repository's own workflow runs: no write of any kind, no secrets, no other repository. It is here because
+  # a scheduled workflow cannot detect its own absence, and the triggers that fire RELIABLY are push and
+  # pull_request — so the reliable trigger has to watch the unreliable one.
+  actions: read
 
 # Supersede in-flight runs for the same ref.
 concurrency:
@@ -54,6 +59,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: lint:outcome-tags reads `origin/main..HEAD`, and the default shallow clone has
+          # neither the base ref nor the merge base. The repo is 18.6 MiB / 1847 commits, so this costs
+          # a moment; a shallow clone would cost the check entirely.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -130,6 +140,40 @@ jobs:
       # text directly, and ratchets apps/web's 9 known imports so they cannot become 10.
       - name: Cross-feature imports
         run: bun run lint:cross-feature
+      # Same blind spot, second rule. depcruise carries a no-circular rule at severity "error" and it cannot
+      # see `@/…` edges either — it is configured with no options.tsConfig while every app maps "@/*" to
+      # "./src/*" — so a cycle built out of alias imports is invisible to it. The clean bill of health it had
+      # was a ONE-OFF measurement written into a comment, true when taken and silent about every commit since.
+      # This is that measurement as a check: run on main it reproduces the recorded census app for app (976
+      # modules: web 490, admin 204, auth 100, doc 82, extension 54, forge 46) and finds zero cycles.
+      - name: Import cycles, counting the alias edges depcruise cannot see
+        run: bun run lint:alias-cycles
+      # `turbo run typecheck typecheck:tests` treats an UNDEFINED task as nothing to do, not as a failure, so
+      # the repo's type-check coverage was decided by which package.json files happened to declare which
+      # script. Every tsconfig here is `include: ["src"]`, so a test outside src/ is checked only where a
+      # typecheck:tests task exists — and three of the six workspaces with out-of-src tests had none. Adding
+      # the task to them surfaced four real errors, including two test doubles missing a BffReaders member
+      # that the interface requires.
+      - name: Type-checking reaches every test file
+        run: bun run lint:typecheck-coverage
+      # @leadwolf/config validates at IMPORT, so a REQUIRED var missing from the production template is a boot
+      # failure, not a missing feature — the process dies with a bare `Required` list naming the key and
+      # nothing naming the file that should have carried it. Five of the 154 schema entries are truly
+      # required (no .default/.optional); this asserts the template still carries all of them.
+      - name: Required env vars appear in the production template
+        run: bun run lint:env-template
+      # CLAUDE.md rule 1 — "Every feature, commit, and PR names the outcome ID(s) it advances" — is the
+      # first binding rule in the file and the only one of the seven a machine can check. Scoped to the
+      # commits under review, never history: of the last 300 non-merge commits on main 96% carry a tag, but
+      # over the last 1000 it is 36%, so a gate judging the past would be red on arrival and switched off.
+      - name: Behaviour-changing commits name an outcome
+        run: bun run lint:outcome-tags
+      # Rule 7 — no contributor-EARNED currency anywhere. apps/doc has guarded its own copy since the brief
+      # behind that portal proposed reviving the economy the strategy pack deleted; nothing guarded the other
+      # four apps, packages/ui, or the server. A PURCHASED credit is fine (the ledger is a settlement unit),
+      # so the patterns match EARNING one, plus the schema shapes copy patterns cannot see.
+      - name: No contributor-earned currency
+        run: bun run lint:earned-currency
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
       # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every
@@ -150,6 +194,45 @@ jobs:
         run: bun run lint:queue-consumers
       - name: Each gate can still fail (plant-and-check)
         run: bun run lint:gates-selftest
+      # Is the nightly still firing? A scheduled workflow cannot detect its own absence: if GitHub delays or
+      # DROPS a run — which it does under load, with no guarantee and no notification — the soak simply stops
+      # happening, and a nightly that silently stopped looks exactly like one that keeps passing. Observed
+      # 2026-08-25: state `active`, 03:17 UTC passed, no run 24 minutes later, nothing reported.
+      #
+      # WARNS, never fails. A dropped run is GitHub's scheduling, not a defect in the diff being tested, and
+      # turning every push red for it would get this step deleted within a week — the fate of any check that
+      # blames the wrong person. The annotation is loud enough to notice on a PR and harmless enough to
+      # ignore when a lapse is known.
+      #
+      # Fail-open on the API call itself for the same reason: a fork PR whose token cannot read Actions
+      # metadata must not turn red over a monitoring nicety.
+      #
+      # WHAT IT DOES NOT TELL YOU: it counts ANY run, including a workflow_dispatch. So it answers "did the
+      # soak run recently", not "is the SCHEDULE working" — and a cron that has quietly stopped can hide
+      # behind manual dispatches indefinitely. That is the right trade for the thing being protected (the
+      # TP-2/TP-6 numbers exist either way, and those are what gate the ceiling raise), but if the question
+      # you actually have is whether the cron fires, filter on `.event == "schedule"` instead. Verified on the
+      # runner 2026-08-25: it read a dispatch from 10h earlier and stayed quiet, which is exactly this
+      # behaviour.
+      - name: Nightly soak still firing?
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          STALE_HOURS=48
+          last="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly.yml/runs?per_page=1" \
+                    --jq '.workflow_runs[0].created_at // empty' 2>/dev/null || true)"
+          if [ -z "$last" ]; then
+            echo "::warning::No nightly run found at all. If the soak matters (TP-2/TP-6 gate the 1M→2M ceiling raise), dispatch one: gh workflow run nightly.yml --ref main"
+            exit 0
+          fi
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          echo "last nightly run: $last (${age_h}h ago)"
+          if [ "$age_h" -gt "$STALE_HOURS" ]; then
+            echo "::warning::The nightly soak has not run in ${age_h}h (>${STALE_HOURS}h). GitHub may have dropped the schedule — dispatch one: gh workflow run nightly.yml --ref main"
+          fi
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
@@ -197,6 +280,27 @@ jobs:
           REDIS_URL: redis://localhost:6379
           BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
         run: bun run build
+      # A build that builds NOTHING exits 0. `turbo run build` is unfiltered here, so a broken `workspaces`
+      # glob in the root package.json, a renamed per-app script, or a turbo.json edit that stops matching
+      # leaves "no tasks to run" — success, under a step whose own title promises six artifacts. Name them.
+      #
+      # .next/BUILD_ID is written at the END of a successful next build, so it cannot exist for a build that
+      # started and died. manifest.json is the extension's vite output. Both live inside the paths turbo
+      # declares as build outputs ("dist/**", ".next/**"), so a cache HIT — which legitimately restores the
+      # artifacts without re-running the builders — still satisfies this. The invariant asserted is "the
+      # outputs exist", not "work was performed"; the second would go red on every cached run.
+      - name: The build produced its six artifacts
+        run: |
+          missing=()
+          for app in web admin auth forge doc; do
+            [ -f "apps/$app/.next/BUILD_ID" ] || missing+=("apps/$app/.next/BUILD_ID")
+          done
+          [ -f "apps/extension/dist/manifest.json" ] || missing+=("apps/extension/dist/manifest.json")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Build step reported success but ${#missing[@]} of 6 artifacts are absent: ${missing[*]} — turbo built nothing or built less than this job claims."
+            exit 1
+          fi
+          echo "6/6 build artifacts present."
       # The developer portal's compliance guarantees are about DELIVERED HTML, and no unit test can assert
       # those: content.test.ts proves the content MODULES carry no rule-4/rule-7 copy, but an edit that
       # hardcoded a claim straight into JSX would sail past it. So the portal is started and probed here.
@@ -229,9 +333,13 @@ jobs:
         run: |
           set -uo pipefail
           mapfile -t files < <(find packages apps -name '*.test.ts' -o -name '*.test.tsx' | sort)
+          # Zero is a BROKEN GLOB, not an empty repo: there are 320 of these files. A rename, a moved
+          # directory or a changed extension would otherwise pass a build that ran no tests at all — which is
+          # precisely what the nightly's own confirm step treats as an error, and CI should not disagree with
+          # it about that. (One line: a `::error::` annotation cannot span newlines.)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No *.test.ts found — nothing to run."
-            exit 0
+            echo "::error::No *.test.ts found — this repo has 320, so the glob broke. Refusing to report green on a build that ran no tests."
+            exit 1
           fi
           printf 'Found %d unit test file(s):\n' "${#files[@]}"
           status=0
@@ -305,18 +413,50 @@ jobs:
           for i in "${!all[@]}"; do
             if [ $((i % 4)) -eq ${{ matrix.shard }} ]; then files+=("${all[$i]}"); fi
           done
+          # The TOTAL, checked before sharding. A shard legitimately drawing nothing is possible only when the
+          # whole set is smaller than the shard count; with 131 files, an empty total means the glob broke and
+          # every shard would then pass green having run nothing.
+          if [ "${#all[@]}" -eq 0 ]; then
+            echo "::error::No *.itest.ts found at all — this repo has 131, so the glob broke. All four shards would otherwise report green on an empty set."
+            exit 1
+          fi
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No *.itest.ts found — nothing to run."
+            echo "Shard ${{ matrix.shard }}/4 drew no files from ${#all[@]} — fewer files than shards."
             exit 0
           fi
           printf 'Shard ${{ matrix.shard }}/4 — %d of %d integration test file(s):\n' "${#files[@]}" "${#all[@]}"
           printf '  %s\n' "${files[@]}"
+          # Suites that legitimately execute NOTHING here, each skipped by its own condition. This list is a
+          # RATCHET: a fourth suite going silent means a skip condition broke, not that someone intended it.
+          # Otherwise it is invisible — a file whose every test is skipped prints `0 pass`, bun exits 0, and
+          # the shard stays green. That is the same shape as the regression the nightly's own confirm step
+          # guards against ("the soak suite reported no executed tests").
+          zero_ok=(
+            'packages/db/test/importSoak.nightly.itest.ts'           # nightly by name; the nightly workflow runs it
+            'apps/workers/test/importSoak.fairness.nightly.itest.ts' # ditto
+            'packages/integrations/src/storage/s3FileStore.itest.ts' # Gate B needs a non-prod S3 bucket
+          )
           status=0
           for f in "${files[@]}"; do
             echo "::group::bun test ${f}"
             # --timeout: a single hung await must FAIL with the test's name, never eat the job's
             # 40-minute ceiling in silence (importCopyRouting did exactly that).
-            if ! bun test --timeout 120000 "./${f}"; then
+            # The output is CAPTURED as well as printed, because the exit code cannot tell a file that
+            # passed from one that ran nothing: bun exits 0 for a file whose every test was skipped.
+            if out=$(bun test --timeout 120000 "./${f}" 2>&1); then
+              echo "$out"
+              if echo "$out" | grep -qE '^ *0 pass'; then
+                known=0
+                for k in "${zero_ok[@]}"; do [ "$k" = "$f" ] && known=1; done
+                if [ "$known" -eq 1 ]; then
+                  echo "note: ${f} executed no tests — skipped by design, on the known list."
+                else
+                  status=1
+                  echo "::error file=${f}::executed NO tests. Every test in this file was skipped, so it covers nothing while reporting green. If deliberate, add it to zero_ok in this workflow with the reason; otherwise its skip condition has broken."
+                fi
+              fi
+            else
+              echo "$out"
               status=1
               echo "::error file=${f}::integration test failed"
             fi
