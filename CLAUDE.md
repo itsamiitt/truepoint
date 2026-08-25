@@ -76,7 +76,13 @@ news/social feeds. See 04-opportunity-scores.md.
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
   `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
   `bun run lint:secrets` · `bun run lint:roving-tabindex` · `bun run lint:design-tokens` ·
-  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run db:migrate`.
+  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run lint:queue-consumers` ·
+  `bun run lint:alias-cycles` · `bun run lint:typecheck-coverage` · `bun run lint:env-template` ·
+  `bun run lint:outcome-tags` · `bun run lint:earned-currency` · `bun run lint:gates-selftest` ·
+  `bun run db:migrate`.
+  **`bun run verify` runs every one of the cheap ones in a single pass**, status first, failing output in
+  full, and — because this repo has been bitten by it — distinguishing UNAVAILABLE (a tool that could not run)
+  from PASS, exiting non-zero for both. Use it before pushing; it is the closest local proxy for the gates job.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
@@ -85,6 +91,22 @@ news/social feeds. See 04-opportunity-scores.md.
   `secrets` scans tracked files for credential shapes and for this product's PII formats
   (`.csv`/`.xlsx`/`.xls`/`.rdb`). The last two carry a declared escape hatch (`lint-secrets-ok:`,
   `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
+  **The seven added 2026-08-24/25, each for a rule that existed only as prose:** `queue-consumers` — a queue
+  with a producer and no worker parks jobs for ever; `alias-cycles` — depcruise's `no-circular` runs with no
+  `tsConfig`, so an import cycle built out of `@/…` edges is invisible to the rule that forbids it, and its
+  clean bill of health was a one-off measurement rather than a check; `typecheck-coverage` — `turbo run
+  typecheck typecheck:tests` treats an UNDEFINED task as nothing to do, so 18 test files in three workspaces
+  were type-checked by nothing (adding the task surfaced four real errors); `env-template` — `@leadwolf/config`
+  validates at import, so a REQUIRED var missing from `deploy/env.production.template` is a boot failure with a
+  bare `Required` list naming no file; `outcome-tags` — rule 1, scoped to the commits under review because 96%
+  of the last 300 carry a tag but only 36% of the last 1000, so judging history would be red on arrival;
+  `earned-currency` — rule 7 across the whole product rather than just `apps/doc`, matching EARNING a credit
+  and the schema shapes (`points_balance`, `awardPoints`) while leaving the purchased-credit ledger alone;
+  `gates-selftest` — plants a violation per gate and requires each to fail on it and go green again. That last
+  one is the load-bearing one: **13 gates are proven able to fail on every build**, because a lint rule that
+  cannot fail is indistinguishable from one that passes, and this repo has produced at least seven of those.
+  Escape hatches follow the same idiom (`feature-flag-ok:`, `batch-insert-bounds-ok:`, `roving-tabindex-ok:`,
+  `earned-currency-ok:`, `no-outcome:`) — a reason, never a bare suppression.
   **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
   were listed here but never actually enforced. All of them are steps in the gates job now.
   **`bun run lint` on a pre-2026-08-22 Windows checkout reports ~1,599 errors, and 1,582 of them are the
