@@ -426,12 +426,37 @@ jobs:
           fi
           printf 'Shard ${{ matrix.shard }}/4 — %d of %d integration test file(s):\n' "${#files[@]}" "${#all[@]}"
           printf '  %s\n' "${files[@]}"
+          # Suites that legitimately execute NOTHING here, each skipped by its own condition. This list is a
+          # RATCHET: a fourth suite going silent means a skip condition broke, not that someone intended it.
+          # Otherwise it is invisible — a file whose every test is skipped prints `0 pass`, bun exits 0, and
+          # the shard stays green. That is the same shape as the regression the nightly's own confirm step
+          # guards against ("the soak suite reported no executed tests").
+          zero_ok=(
+            'packages/db/test/importSoak.nightly.itest.ts'           # nightly by name; the nightly workflow runs it
+            'apps/workers/test/importSoak.fairness.nightly.itest.ts' # ditto
+            'packages/integrations/src/storage/s3FileStore.itest.ts' # Gate B needs a non-prod S3 bucket
+          )
           status=0
           for f in "${files[@]}"; do
             echo "::group::bun test ${f}"
             # --timeout: a single hung await must FAIL with the test's name, never eat the job's
             # 40-minute ceiling in silence (importCopyRouting did exactly that).
-            if ! bun test --timeout 120000 "./${f}"; then
+            # The output is CAPTURED as well as printed, because the exit code cannot tell a file that
+            # passed from one that ran nothing: bun exits 0 for a file whose every test was skipped.
+            if out=$(bun test --timeout 120000 "./${f}" 2>&1); then
+              echo "$out"
+              if echo "$out" | grep -qE '^ *0 pass'; then
+                known=0
+                for k in "${zero_ok[@]}"; do [ "$k" = "$f" ] && known=1; done
+                if [ "$known" -eq 1 ]; then
+                  echo "note: ${f} executed no tests — skipped by design, on the known list."
+                else
+                  status=1
+                  echo "::error file=${f}::executed NO tests. Every test in this file was skipped, so it covers nothing while reporting green. If deliberate, add it to zero_ok in this workflow with the reason; otherwise its skip condition has broken."
+                fi
+              fi
+            else
+              echo "$out"
               status=1
               echo "::error file=${f}::integration test failed"
             fi
