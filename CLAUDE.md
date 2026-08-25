@@ -131,6 +131,18 @@ news/social feeds. See 04-opportunity-scores.md.
   fatal disappears, leaving empty output that reads exactly like "that path is not in this revision". On
   2026-08-24 that produced a confident wrong conclusion about which workflow file was on `main`. Same rule as
   above: if a command's output is empty, prove it ran before believing what the emptiness seems to say.
+  **Do NOT author a script with a shell heredoc — write the file with an editor.** Backslash escapes written
+  into a `cat > f <<'EOF'` heredoc arrive mangled, quoted delimiter or not: `\n` becomes a real newline, `\b`
+  a backspace character, `\(` loses its backslash. On 2026-08-25 this cost six cycles in one session and never
+  once appeared as an error — the damage always looked like a RESULT:
+  · a regex built as `` `\\b${name}` `` matched nothing, so a runbook audit reported all 12 env switches
+    missing when every one was present;
+  · a `content:` string carrying `\n` produced a real newline inside a JS string literal, so the script failed
+    to PARSE — and the run "proved" a mechanism it had never reached;
+  · three separate attempts to plant a deliberate failure planted nothing, and each silently "passed".
+  A heredoc is fine for prose (commit messages, PR bodies) — the trap is code containing escapes. If one is
+  unavoidable, assert the string survived: read the file back and require a distinctive substring before
+  trusting the run. `scripts/audit-dead-repository-methods.mjs`'s verdict writer does that and says why.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
