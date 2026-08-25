@@ -514,6 +514,7 @@ contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
     contactEmploymentResponse.parse({
       resolved: true,
       employment: stints.map((s) => ({
+        group_key: s.groupKey,
         company_name: s.companyName,
         org_kind: s.orgKind,
         title: s.title,

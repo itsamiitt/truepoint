@@ -17,6 +17,8 @@ import { sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 
 export interface EmploymentStintRow {
+  /** See COMPANY_GROUP below — an opaque per-response company token, safe to ship. */
+  groupKey: string;
   companyName: string | null;
   orgKind: string | null;
   title: string | null;
@@ -29,6 +31,25 @@ export interface EmploymentStintRow {
   confidence: string | null;
   sourceCount: number;
 }
+
+/**
+ * A stable, opaque token identifying the COMPANY a stint belongs to, so a client can group the promotion
+ * ("Finance Manager" then "Finance Director" at one employer) under one company block. [S-09]
+ *
+ * It is a `dense_rank` over the company identity rather than that identity itself, and the difference is the
+ * point: `master_company_id` is a Layer-0 identifier that deliberately never crosses the API boundary, and a
+ * salted hash of it would still be a per-install-stable handle on a graph node. A rank is an ordinal WITHIN
+ * ONE RESPONSE — it carries no information about the company beyond "these rows are the same one", which is
+ * exactly and only what grouping needs. Nothing else can be recovered from it.
+ *
+ * The fallback leg matters as much as the primary: `master_company_id` is nullable (an unresolved employer),
+ * and those rows group on `company_name_normalized` — the citext, legal-suffix-stripped name. Grouping on
+ * the DISPLAY name instead would merge two distinct companies that share a name and split one company
+ * written two ways.
+ */
+const COMPANY_GROUP = sql`'g' || dense_rank() OVER (
+  ORDER BY COALESCE(me.master_company_id::text, 'name:' || me.company_name_normalized)
+)`;
 
 /**
  * Every employment stint we hold for one person, current first.
@@ -44,6 +65,7 @@ export async function listPersonEmployment(
 ): Promise<EmploymentStintRow[]> {
   const rows = (await tx.execute(sql`
     SELECT COALESCE(mc.name, me.company_name_raw) AS company_name,
+           ${COMPANY_GROUP} AS group_key,
            mc.org_kind,
            me.title, me.department, me.seniority_level,
            CASE WHEN me.started_on = '-infinity'::date THEN NULL ELSE me.started_on END AS started_on,
@@ -55,6 +77,7 @@ export async function listPersonEmployment(
      LIMIT ${limit}
   `)) as unknown as Array<{
     company_name: string | null;
+    group_key: string;
     org_kind: string | null;
     title: string | null;
     department: string | null;
@@ -68,6 +91,7 @@ export async function listPersonEmployment(
   }>;
 
   return rows.map((r) => ({
+    groupKey: r.group_key,
     companyName: r.company_name,
     orgKind: r.org_kind,
     title: r.title,

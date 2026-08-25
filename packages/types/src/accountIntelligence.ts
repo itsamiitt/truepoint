@@ -203,6 +203,16 @@ export type AccountAlumniResponse = z.infer<typeof accountAlumniResponse>;
 // title and no dates. The contract models the rich stint because enrichment will fill it, but a client must
 // treat title/dates as usually-absent and render a company list rather than a timeline of blanks.
 export const employmentStint = z.object({
+  /**
+   * Opaque per-response token identifying the COMPANY, so a client can group several roles at one employer
+   * under a single company block — the promotion case ("Finance Manager" then "Finance Director" at one
+   * employer), which the flat list rendered as two unrelated rows with the company name printed twice.
+   *
+   * It carries NO information beyond "these rows are the same company": it is a dense_rank over the company
+   * identity, computed in SQL, so no Layer-0 id (nor a stable hash of one) crosses this boundary. Optional
+   * so an older client is unaffected; a client without it falls back to folding on the normalized name.
+   */
+  group_key: z.string().optional(),
   company_name: z.string().nullable(),
   org_kind: orgKind.nullable(),
   title: z.string().nullable(),

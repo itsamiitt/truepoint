@@ -1,58 +1,50 @@
-// EmploymentSection.tsx — career history from the graph (plan 33 · A2).
+// EmploymentSection.tsx — career history from the graph, grouped by company (plan 33 · A2). [S-09] [S-13]
 //
-// ⚠ THIS COMPONENT IS DELIBERATELY NOT A TIMELINE, and that is the whole design decision.
+// WHAT THIS IS NOT: a timeline. That remains the governing decision, and for the same reason as before —
+// the live import path mints a BARE employment edge (person, company, is_current, is_primary; no title, no
+// dates), and a layout designed for rich stints renders a column of dashes against every row, which reads
+// as broken rather than sparse.
 //
-// The live import path mints a BARE employment edge: person, company, is_current, is_primary — no title, no
-// start date, no end date. A timeline laid out for rich stints would render a column of dashes against every
-// row, which reads as "broken" rather than "sparse", and would quietly train users to distrust the section.
-//
-// So: a company list that GROWS INTO detail. Each row shows whatever it actually has — company always, then
-// title, then dates — and a stint that carries the full payload (once enrichment fills it) renders richer
-// automatically with no code change. Nothing here is laid out for data we do not have.
+// WHAT CHANGED: the rows are grouped by COMPANY rather than listed flat. `master_employment` is one row per
+// (person, company, start), so a promotion is a second row at the same employer — and flat, that rendered as
+// two unrelated entries with the company name printed twice and nothing tying them together. Grouping is not
+// a richer layout; it is the same rows, arranged the way the data already describes them. A group of one
+// bare edge still renders as one clean company line, so the honesty constraint is unchanged.
 "use client";
 
-import type { EmploymentStintDto } from "@leadwolf/types";
-import { EmptyState, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import { EmploymentHistory } from "@/components/employment";
+import { groupStints } from "@/lib/employment/groupEmployment";
+import { EmptyState, StateSwitch } from "@leadwolf/ui";
 import { Briefcase } from "lucide-react";
+import { useMemo } from "react";
 import { useContactEmployment } from "../hooks/useContactEmployment";
-import styles from "../prospect.module.css";
-
-/** "2019 – 2023", "2019 – present", or "" when the source gave no usable dates (the common case today). */
-function span(startedOn: string | null, endedOn: string | null, isCurrent: boolean): string {
-  const start = startedOn ? startedOn.slice(0, 4) : null;
-  const end = endedOn ? endedOn.slice(0, 4) : null;
-  if (!start && !end) return "";
-  if (start && end) return `${start} – ${end}`;
-  if (start) return isCurrent ? `${start} – present` : `${start} –`;
-  return `until ${end}`;
-}
-
-function StintRow({ stint }: { stint: EmploymentStintDto }) {
-  // Built from whatever exists rather than a fixed template, so a bare edge shows a clean single line
-  // instead of a row of em-dashes.
-  const detail = [
-    stint.title,
-    stint.department,
-    span(stint.started_on, stint.ended_on, stint.is_current),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <li className={styles.timelineItem}>
-      <div className={styles.timelineMeta}>
-        <div className={styles.fieldValue}>
-          {stint.company_name ?? "Unknown employer"}
-          {stint.is_current ? <StatusBadge tone="success">current</StatusBadge> : null}
-        </div>
-        {detail ? <div className={styles.fieldLabel}>{detail}</div> : null}
-      </div>
-    </li>
-  );
-}
 
 export function EmploymentSection({ contactId }: { contactId: string }) {
   const { stints, resolved, loading, error, reload } = useContactEmployment(contactId);
+
+  // This path's wire shape is snake_case and carries department/confidence/source_count but no per-date
+  // precision; the global path is camelCase and carries precision but no department. Both normalize to the
+  // grouping util's input here, which is why one component can render either.
+  const groups = useMemo(
+    () =>
+      groupStints(
+        stints.map((s) => ({
+          groupKey: s.group_key ?? null,
+          companyName: s.company_name,
+          title: s.title,
+          department: s.department,
+          isCurrent: s.is_current,
+          isPrimary: s.is_primary,
+          startedOn: s.started_on,
+          endedOn: s.ended_on,
+          startPrecision: null,
+          endPrecision: null,
+          confidence: s.confidence,
+          sourceCount: s.source_count,
+        })),
+      ),
+    [stints],
+  );
 
   return (
     <StateSwitch
@@ -72,16 +64,7 @@ export function EmploymentSection({ contactId }: { contactId: string }) {
         />
       }
     >
-      <ul className={styles.timeline}>
-        {stints.map((stint, i) => (
-          <StintRow
-            // No stable id on the wire (the edge id is a Layer-0 identifier we deliberately do not ship),
-            // so the key is company + index — stable for a list that is read-only and never reordered.
-            key={`${stint.company_name ?? "unknown"}-${i}`}
-            stint={stint}
-          />
-        ))}
-      </ul>
+      <EmploymentHistory groups={groups} />
     </StateSwitch>
   );
 }

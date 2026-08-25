@@ -12,9 +12,12 @@
 // so it has no business in the Search route's first load.
 "use client";
 
+import { EmploymentHistory } from "@/components/employment";
+import { groupStints } from "@/lib/employment/groupEmployment";
 import { Avatar, Drawer, EmptyState, StateSwitch, TpButton, TpChip } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ExternalLink, UserX } from "lucide-react";
+import { useMemo } from "react";
 import styles from "../accounts.module.css";
 import { fetchDatabaseCompanyProfile, fetchDatabasePersonProfile } from "../databaseProfileApi";
 
@@ -91,6 +94,29 @@ export function DatabasePersonProfileDrawer({
   });
   const p = q.data?.person;
 
+  // This path's wire shape is camelCase and carries per-date precision + location, where the owned-contact
+  // path is snake_case and carries department/confidence instead. Both normalize to the grouping util's
+  // input, which is why one component renders either.
+  const employmentGroups = useMemo(
+    () =>
+      groupStints(
+        (q.data?.employment ?? []).map((e) => ({
+          groupKey: e.groupKey ?? null,
+          companyName: e.companyName,
+          companyDomain: e.companyDomain,
+          title: e.title,
+          location: e.location,
+          isCurrent: e.isCurrent,
+          isPrimary: e.isPrimary,
+          startedOn: e.startedOn,
+          endedOn: e.endedOn,
+          startPrecision: e.startPrecision,
+          endPrecision: e.endPrecision,
+        })),
+      ),
+    [q.data?.employment],
+  );
+
   return (
     <Drawer open onClose={onClose} width={480} side="right" title={p?.fullName ?? "Profile"}>
       <StateSwitch
@@ -151,22 +177,13 @@ export function DatabasePersonProfileDrawer({
               </a>
             </div>
 
-            {q.data && q.data.employment.length > 0 ? (
+            {employmentGroups.length > 0 ? (
               <section className={styles.profileSection}>
                 <h3 className={styles.profileSectionTitle}>Experience</h3>
-                {q.data.employment.map((e, i) => (
-                  <div
-                    // Index-suffixed: two roles at the same company with the same title and no known start
-                    // (the bare-edge case the import path mints) collided on the composite key alone.
-                    key={`${e.companyName ?? "?"}-${e.startedOn ?? "?"}-${e.title ?? "?"}-${i}`}
-                    className={styles.timelineRow}
-                  >
-                    <div className={styles.fieldValue}>{e.title ?? "—"}</div>
-                    <div className={styles.profileSub}>
-                      {e.companyName ?? "—"} · {period(e.startedOn, e.endedOn)}
-                    </div>
-                  </div>
-                ))}
+                {/* Grouped by company: several roles at one employer are one block with the titles in
+                    sequence, not repeated company lines. The grouping is pure and unit-tested (see
+                    lib/employment); this drawer only supplies the rows. */}
+                <EmploymentHistory groups={employmentGroups} />
               </section>
             ) : null}
 

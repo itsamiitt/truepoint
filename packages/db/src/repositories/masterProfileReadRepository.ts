@@ -16,6 +16,8 @@ import { MASTER_COMPANY_VISIBLE } from "./masterCompanyReadRepository.ts";
 import { MASTER_PERSON_VISIBLE } from "./masterPersonReadRepository.ts";
 
 export interface EmploymentStintRead {
+  /** See COMPANY_GROUP below — an opaque per-response company token, safe to ship. */
+  groupKey: string;
   companyName: string | null;
   companyDomain: string | null;
   title: string | null;
@@ -56,11 +58,31 @@ export interface HeadcountPointRead {
  */
 const NULLIF_SENTINEL = (col: string) => sql`NULLIF(${sql.raw(col)}, '-infinity'::date)::text`;
 
+/**
+ * A stable, opaque token identifying the COMPANY a stint belongs to, so a client can group the promotion
+ * ("Finance Manager" then "Finance Director" at one employer) under one company block. [S-09]
+ *
+ * It is a `dense_rank` over the company identity rather than that identity itself, and the difference is the
+ * point: `master_company_id` is a Layer-0 identifier that deliberately never crosses the API boundary, and a
+ * salted hash of it would still be a per-install-stable handle on a graph node. A rank is an ordinal WITHIN
+ * ONE RESPONSE — it carries no information about the company beyond "these rows are the same one", which is
+ * exactly and only what grouping needs.
+ *
+ * The fallback leg matters as much as the primary: `master_company_id` is nullable (an unresolved employer),
+ * and those rows group on `company_name_normalized` — the citext, legal-suffix-stripped name. Grouping on
+ * the DISPLAY name instead would merge two distinct companies that share a name and split one company
+ * written two ways.
+ */
+const COMPANY_GROUP = sql`'g' || dense_rank() OVER (
+  ORDER BY COALESCE(e.master_company_id::text, 'name:' || e.company_name_normalized)
+)`;
+
 export const masterProfileReadRepository = {
   /** Employment history for a visible person, most recent first. Bounded. */
   async employmentForSlugTx(tx: Tx, slug: string, limit: number): Promise<EmploymentStintRead[]> {
     const rows = (await tx.execute(sql`
       SELECT e.company_name_raw, e.title, e.location, e.is_current, e.is_primary,
+             ${COMPANY_GROUP} AS group_key,
              ${NULLIF_SENTINEL("e.started_on")} AS started_on,
              e.ended_on::text AS ended_on, e.start_precision, e.end_precision,
              mc.primary_domain AS company_domain, mc.name AS company_name
@@ -72,6 +94,7 @@ export const masterProfileReadRepository = {
        LIMIT ${limit}
     `)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
+      groupKey: r.group_key as string,
       companyName: (r.company_name as string | null) ?? (r.company_name_raw as string | null),
       companyDomain: r.company_domain as string | null,
       title: r.title as string | null,

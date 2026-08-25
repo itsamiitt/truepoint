@@ -31,6 +31,16 @@ export const MAX_PROFILE_HEADCOUNT_POINTS = 36;
 
 /** One employment stint. `startedOn` is null when the source gave no start — see the sentinel note below. */
 export const databaseEmploymentStint = z.object({
+  /**
+   * Opaque per-response token identifying the COMPANY, so a client can group several roles at one employer
+   * under a single company block — the promotion case, which the flat list rendered as two unrelated rows
+   * with the company name printed twice.
+   *
+   * It carries NO information beyond "these rows are the same company": a dense_rank over the company
+   * identity, computed in SQL, so no Layer-0 id (nor a stable hash of one) crosses this boundary — which
+   * invariant 2 above would otherwise make a question. Optional so an older client is unaffected.
+   */
+  groupKey: z.string().optional(),
   companyName: z.string().nullable(),
   companyDomain: z.string().nullable(),
   title: z.string().nullable(),
