@@ -266,7 +266,14 @@ apps/                           # deployable processes (thin transport adapters)
 - **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
   customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
   unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
-  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database`;
+  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database` — its
+  `termCondition` dispatcher answers the flat person columns by trgm substring AND the SATELLITE facts
+  (skill · language · school · field of study · past employer) by correlated `EXISTS` over the Layer-0 edge
+  tables. Those match by CITEXT equality, never `ILIKE '%x%'`, which is what makes migration 0135's btrees
+  serve them (0135 shipped its indexes ahead of the query side and they had no readers until phase 3d);
+  `past_company` matches BOTH a resolved `master_company_id` and an unresolved `company_name_normalized`,
+  because the live import path mints bare edges carrying no name and unresolved stints carry no id —
+  0141 indexes both legs, since every pre-existing index on that table is person-keyed;
   `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
   core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
   `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
@@ -405,11 +412,17 @@ apps/                           # deployable processes (thin transport adapters)
   `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
   `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
   cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound is 1 search, not one per digit));
-  every facet carries a **`scope`** (`both` | `workspace-only`) and `FacetScopeBadge` renders it: the two
-  narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`) DERIVE from that one
-  declaration and return the fields they dropped, so the badge, the `ScopeNotice` above the grid and the
-  query actually sent cannot drift — before it, 13 of 20 People controls deleted the whole database half of
-  the results with nothing on screen saying so (`filterScope.test.ts` is the gate);
+  every facet carries a **`scope`** (`both` | `workspace-only` | `database-only`) and `FacetScopeBadge`
+  renders it: the two narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`)
+  DERIVE from that one declaration and return the fields they dropped, so the badge, the `ScopeNotice` above
+  the grid and the query actually sent cannot drift — before it, 13 of 20 People controls deleted the whole
+  database half of the results with nothing on screen saying so (`filterScope.test.ts` is the gate).
+  **`database-only` is the mirror**, and it is a privilege boundary rather than a preference: the Background
+  group's facets (skill · past employer · school · field of study · language) are Layer-0 satellite facts,
+  and `leadwolf_app` is REVOKEd from every `master_*` table, so the *workspace* half is what gets skipped.
+  `mergeRows` then keeps in-workspace matches instead of deduping them away (`databaseRows.test.ts` pins it)
+  — dropping them would mean searching "ex-Stripe people" and getting back everyone except the ex-Stripe
+  people you already hold;
   **result columns** (`columnRegistry.ts` — which columns each grid offers and which are on by default, kept
   alias-free so `bun test` can reach it; `peopleColumns.tsx`/`AccountsTable.tsx` render them, the shared
   `components/search/ColumnChooser` toggles them);
@@ -431,8 +444,9 @@ apps/                           # deployable processes (thin transport adapters)
   `useSearchTab` + `searchTabUrlState` (the `?tab` codec, which writes without touching either pane's
   query params — the property `searchTabUrlState.test.ts` asserts), `ColumnChooser` (both grids' column
   toggle; sorting stays with each pane's own toolbar because sort values are query-shaped and the two
-  queries are different types) and `ScopeNotice` (says which active filters are suppressing the
-  platform-database half). It sits outside `features/` so both panes and the composer can import it without
+  queries are different types) and `ScopeNotice` (says which active filters are suppressing the OTHER
+  half — it takes a direction, because the narrowing runs both ways: workspace-only filters suppress the
+  platform database, and Layer-0 satellite filters suppress the workspace). It sits outside `features/` so both panes and the composer can import it without
   closing an import cycle.
 - **shared:** `components/employment/` — `EmploymentHistory`, the grouped (company-block) career view over
   the pure `lib/employment/` grouping + precision-aware date rules. `master_employment` is one row per
@@ -598,7 +612,12 @@ apps/                           # deployable processes (thin transport adapters)
   `planTitleFilter.ts` (selected values → an engine-agnostic match plan)
 - **search (pkg):** `fields.ts` (project rows → searchable facets), `inMemorySearchPort.ts` (dev/test adapter proving the
   contract: term filters, free-text, suggest, facet counts, keyset paging) · **types:** `search.ts` (the `SearchPort` contract)
-- **api:** `features/search/` — `routes.ts` (`/search/{contacts,suggest,facets}`), `searchPortProvider.ts` (wires the active port),
+- **api:** `features/search/` — `routes.ts` (`/search/{contacts,suggest,facets}` + the global half:
+  `/search/database{,/count,/suggest}`; **`/search/database/suggest` is a sibling of `/search/suggest`, not a
+  mode of it** — that one aggregates the caller's own `contacts` under RLS and stores no skills, schools or
+  languages, so it cannot answer the Background facets. It runs under `withErTx` and carries
+  `MASTER_PERSON_VISIBLE`, because a suggestion that exists only because one suppressed person holds it
+  confirms that person is in the database and its count says how many), `searchPortProvider.ts` (wires the active port),
   `searchReadCache.ts` (+test — the S5 generation-keyed read-through for facets/count/suggest; TTLs in env, keys fold
   `v{N}` from `lib/searchVersion.ts`, whose `bumpSearchVersion` binds @leadwolf/integrations `searchCacheBump.ts`
   (+test) — the shared fail-open INCR the workers also emit from register.ts on completed search-mutating jobs)

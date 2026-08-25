@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2461,
-  "fileSetHash": "sha256:bad6d926b51a6135a6f4c6389117bfa31ac1cb372c64d1e9a631d47299225e88",
+  "fileCount": 2463,
+  "fileSetHash": "sha256:5ae106d4e8f7be3f2fed090c2963d6dbc4545a9676ae565287033747dced17fb",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1581,6 +1581,7 @@
         "apps/web/src/features/prospect/components/TermFacetField.tsx",
         "apps/web/src/features/prospect/components/TermOptionChips.tsx",
         "apps/web/src/features/prospect/components/peopleColumns.tsx",
+        "apps/web/src/features/prospect/databaseRows.test.ts",
         "apps/web/src/features/prospect/databaseRows.ts",
         "apps/web/src/features/prospect/databaseSearchApi.ts",
         "apps/web/src/features/prospect/enrichApi.ts",
@@ -3384,6 +3385,7 @@
       "packages/db/test/crmSyncPersistence.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
+      "packages/db/test/databasePeopleFilters.itest.ts",
       "packages/db/test/dsarLayerZero.itest.ts",
       "packages/db/test/effectivePolicyResolve.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
