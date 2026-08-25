@@ -115,6 +115,34 @@ news/social feeds. See 04-opportunity-scores.md.
   `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
   directive last; a wrapped comment between them makes it bind to nothing and biome says `suppressions/unused`
   while the rule keeps firing.
+  **`biome check --write` SILENTLY REFUSES the unsafe fixes, and `useTemplate` is one of them.** It prints
+  `× Some errors were emitted while applying fixes.` and changes nothing; only `--write --unsafe` rewrites
+  them. The two that bite here are `lint/style/useTemplate` (a `` `a` + `b` `` concatenation of template
+  literals — very easy to write in a multi-line error message) and `lint/style/noUnusedTemplateLiteral`. This
+  broke three branches at once on 2026-08-24: the safe `--write` was run, its output piped through `tail`, and
+  the SCRIPT's own `ok` line printed underneath was read as the formatter passing. **Never read a format check
+  through `tail` beside other output, and never assume `--write` finished the job** — run
+  `bunx biome check <file>` on its own line afterwards and require `No fixes applied.` Otherwise CI's `lint`
+  step is the only thing that catches it, i.e. after the push.
+  **Git Bash MANGLES `git show <rev>:<path>` on Windows.** MSYS path conversion rewrites
+  `origin/main:.github/workflows/ci.yml` into `origin\main;.github\workflows\ci.yml`, and git answers
+  `fatal: ambiguous argument`. Prefix the command with `MSYS_NO_PATHCONV=1`. The trap is not the error, it is
+  the error being HIDDEN: run it with `2>/dev/null` — which is a reflex when a file may not exist — and the
+  fatal disappears, leaving empty output that reads exactly like "that path is not in this revision". On
+  2026-08-24 that produced a confident wrong conclusion about which workflow file was on `main`. Same rule as
+  above: if a command's output is empty, prove it ran before believing what the emptiness seems to say.
+  **Do NOT author a script with a shell heredoc — write the file with an editor.** Backslash escapes written
+  into a `cat > f <<'EOF'` heredoc arrive mangled, quoted delimiter or not: `\n` becomes a real newline, `\b`
+  a backspace character, `\(` loses its backslash. On 2026-08-25 this cost six cycles in one session and never
+  once appeared as an error — the damage always looked like a RESULT:
+  · a regex built as `` `\\b${name}` `` matched nothing, so a runbook audit reported all 12 env switches
+    missing when every one was present;
+  · a `content:` string carrying `\n` produced a real newline inside a JS string literal, so the script failed
+    to PARSE — and the run "proved" a mechanism it had never reached;
+  · three separate attempts to plant a deliberate failure planted nothing, and each silently "passed".
+  A heredoc is fine for prose (commit messages, PR bodies) — the trap is code containing escapes. If one is
+  unavoidable, assert the string survived: read the file back and require a distinctive substring before
+  trusting the run. `scripts/audit-dead-repository-methods.mjs`'s verdict writer does that and says why.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
@@ -157,7 +185,7 @@ The doc's `services/*` are **modules, not directories**. Do not create a `servic
 | graph | `packages/db/src/schema/masterGraph.ts` + `masterGraphRepository` (Layer 0, no tenant key); ER in `packages/forge-core` |
 | ingest | the `forge` Postgres schema (`raw_captures → parsed_records → verified_records → sync`), `/api/v1/ingest`, the `import_jobs` trio |
 | verify | `verification_jobs` + the `reverification` / `reverification_sweep` queues in `apps/workers` |
-| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. |
+| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. **Rule 5 is upheld by THREE mechanisms, not one** — grep for `fieldProvenance` alone and a compliant path looks like a gap: (1) `field_provenance` jsonb, written via `planFieldWrite` on the import and enrichment paths; (2) `sourceImportRepository.append` with `sourceName: "database"`, which is how a REVEAL records that a copied channel came from the TruePoint graph; (3) on Layer-0, `source_records` + `field_provenance` + `match_links`, written **only** by the opt-in CONTRIBUTE-TO path — `masterGraphRepository` states that MATCH-AGAINST writes none of them and a LINK mutates nothing at all. |
 | entitlements | `subscriptions`, `billing_cycles`, `plan_templates.features`, `tenant_feature_flags`, `credit_ledger` (+ `entitlement`, Phase 1) |
 | fraud | not built (Phase 3) |
 | compliance | `suppression_list`, `consent_records`, `dsar_requests`, `retention_*`, the `dsar` queue |

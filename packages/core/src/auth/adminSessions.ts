@@ -69,7 +69,15 @@ export async function listMemberSessions(scope: AdminSessionScope): Promise<Admi
  * check (the session belongs to a member of this workspace and is active), the revoke, and the audit commit
  * or roll back together. A session id that is not an active session of a workspace member is a 404 (it
  * reveals nothing about other tenants/workspaces). The admin-role read is a separate snapshot (same TOCTOU
- * window as the route's requireRole guard), which is the accepted trade for re-using the RLS-scoped read.
+ * window as the route's requireRole guard), which is the accepted trade for re-using the scoped read.
+ *
+ * THE SCOPING HERE IS THE QUERY PREDICATE, NOT RLS. This comment used to say "the RLS-scoped read", which is
+ * false and worth correcting rather than deleting: user_sessions is one of the few tenant-column tables with
+ * no RLS policy at all, deliberately (rls/auth.sql — it is auth-service-owned and read pre-tenant, before any
+ * tenant GUC exists to filter on). So both statements in this function that keep a caller inside its
+ * workspace — findActiveInWorkspace's predicate and revokeInTx's — are load-bearing on their own, with no
+ * database backstop underneath them. Believing otherwise is how the workspace predicate gets dropped from one
+ * of them as "redundant".
  */
 export async function revokeMemberSession(
   scope: AdminSessionScope,
@@ -79,7 +87,7 @@ export async function revokeMemberSession(
   return withTenantTx(tenantScope(scope), async (tx) => {
     const owner = await sessionRepository.findActiveInWorkspace(tx, scope.workspaceId, sessionId);
     if (!owner) throw new NotFoundError("Session not found.");
-    await sessionRepository.revokeInTx(tx, sessionId);
+    await sessionRepository.revokeInTx(tx, scope.workspaceId, sessionId);
     await writeAudit(tx, {
       tenantId: scope.tenantId,
       workspaceId: scope.workspaceId,

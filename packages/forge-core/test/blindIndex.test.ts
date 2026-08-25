@@ -11,8 +11,13 @@ import {
 } from "../../identity/src/index.ts";
 import { blindIndex, normalizeEmail } from "../src/blindIndex.ts";
 
-const masterBytes = (email: string): Uint8Array =>
-  new Uint8Array(coreBlindIndex(normalizeEmailForIndex(normalizeEmailForStorage(email) ?? email)));
+// Uint8Array.from on both sides, and the result annotated Uint8Array<ArrayBuffer>. TypeScript 5.7 made the
+// typed arrays generic over their buffer, and identity.blindIndex returns node crypto's Buffer — whose
+// buffer is ArrayBufferLike (it may be a SharedArrayBuffer), which does not satisfy the Uint8Array<ArrayBuffer>
+// that bun's toEqual overloads accept. Uint8Array.from copies element-wise, so the BYTES compared are exactly
+// what they were; only the declared buffer kind changes.
+const masterBytes = (email: string): Uint8Array<ArrayBuffer> =>
+  Uint8Array.from(coreBlindIndex(normalizeEmailForIndex(normalizeEmailForStorage(email) ?? email)));
 
 describe("forge blind index ↔ master graph", () => {
   const emails = ["Jane.Doe@Example.com", "jane+promo@example.com", "  Mixed+Tag@Sub.Domain.COM "];
@@ -26,7 +31,7 @@ describe("forge blind index ↔ master graph", () => {
     for (const e of emails) {
       const forgeHex = blindIndex(normalizeEmail(e)); // what Forge stores in silver (text)
       expect(forgeHex).toMatch(/^[0-9a-f]{64}$/);
-      expect(new Uint8Array(Buffer.from(forgeHex, "hex"))).toEqual(masterBytes(e));
+      expect(Uint8Array.from(Buffer.from(forgeHex, "hex"))).toEqual(masterBytes(e));
     }
   });
 });
