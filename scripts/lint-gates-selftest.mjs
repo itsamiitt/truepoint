@@ -156,6 +156,21 @@ const CASES = [
     content: 'import { x } from "@/features/tenants";\nexport const y = x;\n',
   },
   {
+    // The only case needing a PAIR: one module cannot form a cycle. The two edges are written differently on
+    // purpose — probeA reaches probeB relatively, probeB reaches probeA through the `@/` alias — so a plant
+    // that passed would tell us the ALIAS half of the resolver is broken, which is the half depcruise lacks
+    // and the only reason this gate exists.
+    gate: "lint:alias-cycles",
+    script: "scripts/lint-alias-cycles.mjs",
+    dir: `apps/doc/src/${TAG}`,
+    name: "probeA.ts",
+    content: 'import { b } from "./probeB";\nexport const a = (): string => b();\n',
+    extra: {
+      name: "probeB.ts",
+      content: `import { a } from "@/${TAG}/probeA";\nexport const b = (): string => a();\n`,
+    },
+  },
+  {
     gate: "lint:batch-inserts",
     script: "scripts/lint-batch-insert-bounds.mjs",
     dir: `packages/db/src/repositories/${TAG}`,
@@ -261,6 +276,10 @@ for (const testCase of CASES) {
   try {
     created = mkdirSync(dir, { recursive: true });
     writeFileSync(planted, testCase.content);
+    // A second file, for a gate whose violation needs a PAIR — an import cycle is not expressible in one
+    // module. It lands in the same tag directory, which `cleanup` already removes recursively, so it needs no
+    // separate teardown and cannot outlive the run.
+    if (testCase.extra) writeFileSync(join(dir, testCase.extra.name), testCase.extra.content);
 
     const withPlant = runGate(testCase.script);
     if (withPlant.code === 0) {

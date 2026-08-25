@@ -193,9 +193,12 @@ module.exports = {
       // The blindness is now fully scoped, so nobody has to fear the worst or wave it away:
       //   • no-cross-feature-import — blind, 9 live instances, covered by the script above.
       //   • no-orphans             — blind, ~14 false positives, documented here.
-      //   • no-circular            — blind in principle, and MEASURED CLEAN: an alias-aware cycle scan over
+      //   • no-circular            — blind in principle. It WAS only measured: an alias-aware cycle scan over
       //     all six apps (976 modules: web 490, admin 204, auth 100, doc 82, extension 54, forge 46) found
-      //     ZERO cycles. Nothing is hiding there today.
+      //     ZERO cycles. That was a one-off, true when taken and silent about every commit after it, so it is
+      //     now a gate — scripts/lint-alias-cycles.mjs (bun run lint:alias-cycles), which reproduces that
+      //     census app for app and runs in CI. The self-test plants a two-module cycle whose edges are written
+      //     one relative and one aliased, so a blind resolver fails the plant instead of passing it.
       //   • every other error rule — unaffected. They target `packages/*` and `apps/*` edges written as
       //     workspace specifiers or relative paths, neither of which goes through `@/`.
       comment:

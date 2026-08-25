@@ -19,6 +19,7 @@
     "lint:roving-tabindex": "node scripts/lint-roving-tabindex.mjs",
     "lint:design-tokens": "node scripts/lint-design-tokens.mjs",
     "lint:cross-feature": "node scripts/lint-cross-feature-imports.mjs",
+    "lint:alias-cycles": "node scripts/lint-alias-cycles.mjs",
     "lint:batch-inserts": "node scripts/lint-batch-insert-bounds.mjs",
     "lint:queue-consumers": "node scripts/lint-queue-consumers.mjs",
     "lint:gates-selftest": "node scripts/lint-gates-selftest.mjs",

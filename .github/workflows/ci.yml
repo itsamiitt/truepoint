@@ -135,6 +135,14 @@ jobs:
       # text directly, and ratchets apps/web's 9 known imports so they cannot become 10.
       - name: Cross-feature imports
         run: bun run lint:cross-feature
+      # Same blind spot, second rule. depcruise carries a no-circular rule at severity "error" and it cannot
+      # see `@/…` edges either — it is configured with no options.tsConfig while every app maps "@/*" to
+      # "./src/*" — so a cycle built out of alias imports is invisible to it. The clean bill of health it had
+      # was a ONE-OFF measurement written into a comment, true when taken and silent about every commit since.
+      # This is that measurement as a check: run on main it reproduces the recorded census app for app (976
+      # modules: web 490, admin 204, auth 100, doc 82, extension 54, forge 46) and finds zero cycles.
+      - name: Import cycles, counting the alias edges depcruise cannot see
+        run: bun run lint:alias-cycles
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
       # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every

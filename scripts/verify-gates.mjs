@@ -36,6 +36,7 @@ const GATES = [
   { name: "roving tabindex", cmd: ["bun", "run", "lint:roving-tabindex"] },
   { name: "design tokens", cmd: ["bun", "run", "lint:design-tokens"] },
   { name: "cross-feature imports", cmd: ["bun", "run", "lint:cross-feature"] },
+  { name: "alias-aware import cycles", cmd: ["bun", "run", "lint:alias-cycles"] },
   { name: "batch insert bounds", cmd: ["bun", "run", "lint:batch-inserts"] },
   { name: "queue consumers", cmd: ["bun", "run", "lint:queue-consumers"] },
   { name: "gates can still fail", cmd: ["bun", "run", "lint:gates-selftest"] },
