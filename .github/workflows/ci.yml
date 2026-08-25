@@ -143,6 +143,14 @@ jobs:
       # modules: web 490, admin 204, auth 100, doc 82, extension 54, forge 46) and finds zero cycles.
       - name: Import cycles, counting the alias edges depcruise cannot see
         run: bun run lint:alias-cycles
+      # `turbo run typecheck typecheck:tests` treats an UNDEFINED task as nothing to do, not as a failure, so
+      # the repo's type-check coverage was decided by which package.json files happened to declare which
+      # script. Every tsconfig here is `include: ["src"]`, so a test outside src/ is checked only where a
+      # typecheck:tests task exists — and three of the six workspaces with out-of-src tests had none. Adding
+      # the task to them surfaced four real errors, including two test doubles missing a BffReaders member
+      # that the interface requires.
+      - name: Type-checking reaches every test file
+        run: bun run lint:typecheck-coverage
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
       # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every

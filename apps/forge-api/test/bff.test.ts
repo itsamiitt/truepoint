@@ -144,9 +144,11 @@ describe("cross-tenant read audit (ADR-0032, F-0.9)", () => {
       read = true;
       return {};
     };
-    await createBffApp(d)
-      .request("/bff/overview", { headers: { "x-staff": "u1" } })
-      .catch(() => undefined);
+    // Hono types request() as `Response | Promise<Response>`, so .catch is not on it. The intent is
+    // unchanged: swallow a rejection and assert on `read` instead.
+    await Promise.resolve(
+      createBffApp(d).request("/bff/overview", { headers: { "x-staff": "u1" } }),
+    ).catch(() => undefined);
     expect(read).toBe(false);
   });
 

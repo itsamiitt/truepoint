@@ -37,6 +37,7 @@ const GATES = [
   { name: "design tokens", cmd: ["bun", "run", "lint:design-tokens"] },
   { name: "cross-feature imports", cmd: ["bun", "run", "lint:cross-feature"] },
   { name: "alias-aware import cycles", cmd: ["bun", "run", "lint:alias-cycles"] },
+  { name: "typecheck reaches every test", cmd: ["bun", "run", "lint:typecheck-coverage"] },
   { name: "batch insert bounds", cmd: ["bun", "run", "lint:batch-inserts"] },
   { name: "queue consumers", cmd: ["bun", "run", "lint:queue-consumers"] },
   { name: "gates can still fail", cmd: ["bun", "run", "lint:gates-selftest"] },

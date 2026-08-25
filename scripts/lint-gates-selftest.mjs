@@ -156,6 +156,16 @@ const CASES = [
     content: 'import { x } from "@/features/tenants";\nexport const y = x;\n',
   },
   {
+    // One planted file is enough: the violation is a test living outside src/ in a workspace that declares
+    // no typecheck:tests. packages/ui is the fixture precisely because it keeps its tests colocated in src/,
+    // so the plant CREATES the out-of-src condition instead of joining one that already exists.
+    gate: "lint:typecheck-coverage",
+    script: "scripts/lint-typecheck-coverage.mjs",
+    dir: `packages/ui/test/${TAG}`,
+    name: "probe.test.ts",
+    content: 'import { expect, test } from "bun:test";\ntest("probe", () => expect(1).toBe(1));\n',
+  },
+  {
     // The only case needing a PAIR: one module cannot form a cycle. The two edges are written differently on
     // purpose — probeA reaches probeB relatively, probeB reaches probeA through the `@/` alias — so a plant
     // that passed would tell us the ALIAS half of the resolver is broken, which is the half depcruise lacks

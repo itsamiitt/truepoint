@@ -20,6 +20,7 @@
     "lint:design-tokens": "node scripts/lint-design-tokens.mjs",
     "lint:cross-feature": "node scripts/lint-cross-feature-imports.mjs",
     "lint:alias-cycles": "node scripts/lint-alias-cycles.mjs",
+    "lint:typecheck-coverage": "node scripts/lint-typecheck-coverage.mjs",
     "lint:batch-inserts": "node scripts/lint-batch-insert-bounds.mjs",
     "lint:queue-consumers": "node scripts/lint-queue-consumers.mjs",
     "lint:gates-selftest": "node scripts/lint-gates-selftest.mjs",
