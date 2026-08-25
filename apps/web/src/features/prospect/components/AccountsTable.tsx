@@ -8,6 +8,7 @@ import type { MaskedAccount } from "@leadwolf/types";
 import { type Column, DataTable, EmptyState, StatusBadge, TpChip } from "@leadwolf/ui";
 import { Avatar } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
+import { ACCOUNT_DEFAULT_VISIBLE_COLUMNS as DEFAULT_VISIBLE } from "../columnRegistry";
 import styles from "../prospect.module.css";
 
 /** Human label for an employee count → a coarse size band ("1–10", "51–200", "10k+"). */
@@ -24,6 +25,10 @@ function fundingStageLabel(a: MaskedAccount): string {
   return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
+function textCell(value: string | null | undefined) {
+  return value ? <span>{value}</span> : <span className={styles.glyphNone}>—</span>;
+}
+
 function humanizeToken(v: string): string {
   return v
     .replace(/[_-]+/g, " ")
@@ -31,26 +36,39 @@ function humanizeToken(v: string): string {
     .replace(/\bSeries ([a-z])\b/i, (_m, l: string) => `Series ${l.toUpperCase()}`);
 }
 
+// Re-exported so the pane imports its columns from one place; the definitions live in the alias-free
+// registry module so they can be unit-tested.
+export {
+  ACCOUNT_TOGGLEABLE_COLUMNS,
+  ACCOUNT_DEFAULT_VISIBLE_COLUMNS,
+} from "../columnRegistry";
+
 export function AccountsTable({
   accounts,
   loading,
   onOpen,
-  density,
   isDatabaseRow,
+  visibleColumns,
 }: {
   accounts: MaskedAccount[];
   loading: boolean;
   onOpen: (a: MaskedAccount) => void;
-  /** Reserved for symmetry with the Contacts grid; DataTable reads [data-density] from an ancestor. */
-  density?: string;
   /**
    * Marks a row as coming from the platform DATABASE rather than the workspace (search-consolidation stage
    * 2). Optional, so the workspace-only callers are unchanged. Without it a database row is visually
    * identical to an owned one, and the grid would silently claim the workspace holds companies it does not.
    */
   isDatabaseRow?: (a: MaskedAccount) => boolean;
+  /**
+   * The toggleable column keys to show. Omitted ⇒ the default set, so the callers that don't offer a chooser
+   * are unchanged. (Density is NOT a prop: the shared DataTable reads [data-density] from an ancestor, so
+   * the PANE sets it on its wrapper — this grid taking a `density` it could only ignore was what made the
+   * Accounts tab silently drop the setting.)
+   */
+  visibleColumns?: string[];
 }) {
-  const columns: Column<MaskedAccount>[] = [
+  const shown = new Set(visibleColumns ?? DEFAULT_VISIBLE);
+  const allColumns: Column<MaskedAccount>[] = [
     {
       key: "name",
       header: "Company",
@@ -108,6 +126,57 @@ export function AccountsTable({
         ),
     },
     {
+      key: "subIndustry",
+      header: "Sub-industry",
+      width: 160,
+      sortValue: (a) => a.subIndustry ?? "",
+      cell: (a) => textCell(a.subIndustry),
+    },
+    {
+      key: "location",
+      header: "HQ location",
+      width: 170,
+      sortValue: (a) => [a.hqCity, a.hqCountry].filter(Boolean).join(", "),
+      cell: (a) => textCell([a.hqCity, a.hqCountry].filter(Boolean).join(", ") || null),
+    },
+    {
+      key: "technologies",
+      header: "Technologies",
+      width: 200,
+      sortValue: (a) => a.technologies.length,
+      cell: (a) =>
+        a.technologies.length === 0 ? (
+          <span className={styles.glyphNone}>—</span>
+        ) : (
+          // The first few plus a count, not the whole stack: a wide technology list would set the column's
+          // width for every row in the grid.
+          <span>
+            {a.technologies.slice(0, 2).join(", ")}
+            {a.technologies.length > 2 ? ` +${a.technologies.length - 2}` : ""}
+          </span>
+        ),
+    },
+    {
+      key: "founded",
+      header: "Founded",
+      align: "right",
+      width: 100,
+      sortValue: (a) => a.foundedYear ?? -1,
+      cell: (a) => (
+        <span className={styles.mono}>{a.foundedYear != null ? a.foundedYear : "—"}</span>
+      ),
+    },
+    {
+      key: "icp",
+      header: "ICP fit",
+      align: "right",
+      width: 100,
+      sortValue: (a) => a.icpFitScore ?? -1,
+      cell: (a) => (
+        <span className={styles.mono}>{a.icpFitScore != null ? a.icpFitScore : "—"}</span>
+      ),
+    },
+    {
       key: "contacts",
       header: "Contacts",
       align: "right",
@@ -124,9 +193,8 @@ export function AccountsTable({
     },
   ];
 
-  // density is accepted for parity with the Contacts grid; the shared DataTable reads [data-density] from the
-  // page wrapper, so it is referenced here only to keep the prop in the public interface.
-  void density;
+  // `name` is the row's identity and always shows; everything else answers to the chooser.
+  const columns = allColumns.filter((c) => c.key === "name" || shown.has(c.key));
 
   return (
     <DataTable

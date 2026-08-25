@@ -9,7 +9,11 @@ export {
   AccountAlumniSection,
   AccountDisplacementSection,
 } from "../components/AccountGraphSections";
-export { AccountsTable } from "../components/AccountsTable";
+export {
+  ACCOUNT_DEFAULT_VISIBLE_COLUMNS,
+  ACCOUNT_TOGGLEABLE_COLUMNS,
+  AccountsTable,
+} from "../components/AccountsTable";
 export { AccountTechnologySection } from "../components/AccountTechnologySections";
 export { HeadcountSection } from "../components/HeadcountSection";
 export { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";

@@ -10,10 +10,14 @@ import { ExternalLink } from "lucide-react";
 import styles from "../prospect.module.css";
 import {
   EMAIL_STATUS_LABELS,
+  OUTREACH_STATUS_LABELS,
   SENIORITY_LABELS,
+  companyLabel,
   dataHealthTone,
   displayName,
   maskedEmail,
+  phoneLineTypeLabel,
+  shortDate,
 } from "../types";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -80,15 +84,35 @@ export function QuickViewDrawer({
               </StatusBadge>
             </div>
             <div className={styles.fieldGrid}>
-              <Field label="Company" value={contact.emailDomain ?? "—"} />
+              {/* Company was showing the email DOMAIN under a "Company" label while the grid row beside it
+                  showed the account NAME — the same record reading two different ways. One helper now
+                  answers it for both, and the domain gets its own labelled field. */}
+              <Field label="Company" value={companyLabel(contact) ?? "—"} />
+              <Field label="Domain" value={contact.emailDomain ?? "—"} />
               <Field
                 label="Seniority"
                 value={contact.seniorityLevel ? SENIORITY_LABELS[contact.seniorityLevel] : "—"}
               />
               <Field label="Department" value={contact.department ?? "—"} />
               <Field label="Location" value={location} />
+              <Field label="Outreach" value={OUTREACH_STATUS_LABELS[contact.outreachStatus]} />
               <Field label="Email" value={maskedEmail(contact)} />
-              <Field label="Phone" value={contact.hasPhone ? "Locked — reveal" : "—"} />
+              <Field
+                label="Phone"
+                value={
+                  contact.hasPhone
+                    ? [
+                        "Locked — reveal",
+                        phoneLineTypeLabel(contact.phoneLineType ?? null) ?? undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "—"
+                }
+              />
+              {/* [S-10]: when the record was last verified is the judgement the preview exists to support. */}
+              <Field label="Last verified" value={shortDate(contact.lastVerifiedAt)} />
+              <Field label="Added" value={shortDate(contact.createdAt)} />
             </div>
           </section>
         </div>

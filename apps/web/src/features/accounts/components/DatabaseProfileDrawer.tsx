@@ -51,6 +51,21 @@ function PresenceChips({
   );
 }
 
+/** A single date as the profile shows it ("12 Mar 2026"), null when the source never said. */
+function profileDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Enum token → label ("c_suite" → "C suite"). Local rather than imported from the prospect slice: this
+ *  feature already sits at the cross-feature import budget (lint:cross-feature is a ratchet). */
+function humanize(v: string | null): string | null {
+  if (!v) return null;
+  return v.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /** A date range as the profile shows it. Null start means the source never said — not "year zero". */
 function period(startedOn: string | null, endedOn: string | null): string {
   const year = (d: string | null) => (d ? d.slice(0, 4) : null);
@@ -104,6 +119,20 @@ export function DatabasePersonProfileDrawer({
               hasMobile={q.data?.hasMobile}
             />
 
+            {/* The masked row already carried all of this and the drawer showed none of it — seniority, the
+                resolved city/country (rather than only the raw location string in the header), the employer's
+                domain and industry, and when the graph last learned anything about the record. */}
+            <div className={styles.fieldGrid}>
+              <Field label="Seniority" value={humanize(p.seniorityLevel)} />
+              <Field
+                label="Location"
+                value={[p.locationCity, p.locationCountry].filter(Boolean).join(", ") || null}
+              />
+              <Field label="Company domain" value={p.companyDomain} />
+              <Field label="Industry" value={p.companyIndustry} />
+              <Field label="Last updated" value={profileDate(p.updatedAt)} />
+            </div>
+
             <div className={styles.profileActions}>
               {p.inWorkspace ? (
                 <TpChip active>In your workspace</TpChip>
@@ -125,9 +154,11 @@ export function DatabasePersonProfileDrawer({
             {q.data && q.data.employment.length > 0 ? (
               <section className={styles.profileSection}>
                 <h3 className={styles.profileSectionTitle}>Experience</h3>
-                {q.data.employment.map((e) => (
+                {q.data.employment.map((e, i) => (
                   <div
-                    key={`${e.companyName ?? "?"}-${e.startedOn ?? "?"}-${e.title ?? "?"}`}
+                    // Index-suffixed: two roles at the same company with the same title and no known start
+                    // (the bare-edge case the import path mints) collided on the composite key alone.
+                    key={`${e.companyName ?? "?"}-${e.startedOn ?? "?"}-${e.title ?? "?"}-${i}`}
                     className={styles.timelineRow}
                   >
                     <div className={styles.fieldValue}>{e.title ?? "—"}</div>
@@ -142,15 +173,21 @@ export function DatabasePersonProfileDrawer({
             {q.data && q.data.education.length > 0 ? (
               <section className={styles.profileSection}>
                 <h3 className={styles.profileSectionTitle}>Education</h3>
-                {q.data.education.map((e) => (
+                {q.data.education.map((e, i) => (
                   <div
-                    key={`${e.schoolName ?? "?"}-${e.endedOn ?? "?"}`}
+                    // Index-suffixed: two degrees from the same school with the same end year (or two rows
+                    // whose dates the source never gave) produced identical keys.
+                    key={`${e.schoolName ?? "?"}-${e.endedOn ?? "?"}-${i}`}
                     className={styles.timelineRow}
                   >
                     <div className={styles.fieldValue}>{e.schoolName ?? "—"}</div>
                     <div className={styles.profileSub}>
-                      {[e.degree, e.fieldsOfStudy.join(", ")].filter(Boolean).join(" · ") ||
-                        period(e.startedOn, e.endedOn)}
+                      {/* Degree AND dates. The `||` here meant a row with a degree never showed when it was
+                          studied, and a row with dates never showed what was studied — each field hid the
+                          other rather than both being shown. */}
+                      {[e.degree, e.fieldsOfStudy.join(", "), period(e.startedOn, e.endedOn)]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </div>
                   </div>
                 ))}

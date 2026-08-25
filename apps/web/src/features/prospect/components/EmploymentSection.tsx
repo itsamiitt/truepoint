@@ -40,11 +40,13 @@ function StintRow({ stint }: { stint: EmploymentStintDto }) {
 
   return (
     <li className={styles.timelineItem}>
-      <div className={styles.fieldValue}>
-        {stint.company_name ?? "Unknown employer"}
-        {stint.is_current ? <StatusBadge tone="success">current</StatusBadge> : null}
+      <div className={styles.timelineMeta}>
+        <div className={styles.fieldValue}>
+          {stint.company_name ?? "Unknown employer"}
+          {stint.is_current ? <StatusBadge tone="success">current</StatusBadge> : null}
+        </div>
+        {detail ? <div className={styles.fieldLabel}>{detail}</div> : null}
       </div>
-      {detail ? <div className={styles.fieldLabel}>{detail}</div> : null}
     </li>
   );
 }

@@ -67,10 +67,14 @@ export function SignalsSection({ contactId }: { contactId: string }) {
       <ul className={styles.timeline}>
         {signals.map((s) => (
           <li key={`${s.signal_type}-${String(s.detected_at)}`} className={styles.timelineItem}>
-            <div className={styles.fieldValue}>
-              <StatusBadge tone={signalTone(s.signal_type)}>{label(s.signal_type)}</StatusBadge>
+            <div className={styles.timelineMeta}>
+              <div className={styles.fieldValue}>
+                <StatusBadge tone={signalTone(s.signal_type)}>{label(s.signal_type)}</StatusBadge>
+              </div>
+              <div className={styles.fieldLabel}>
+                {new Date(s.detected_at).toLocaleDateString()}
+              </div>
             </div>
-            <div className={styles.fieldLabel}>{new Date(s.detected_at).toLocaleDateString()}</div>
           </li>
         ))}
       </ul>

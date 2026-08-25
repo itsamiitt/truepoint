@@ -36,6 +36,10 @@ export interface ProspectSearch {
   hits: ProspectRow[];
   /** How many of `hits` come from the platform database (not yet in the workspace). */
   databaseCount: number;
+  /** True when the database half has further pages the grid cannot reach — `loadMore` pages the WORKSPACE
+   *  infinite query only, so the global half is one capped page. Lets the header say "top matches" rather
+   *  than presenting that page as everything the database holds. */
+  databaseHasMore: boolean;
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -200,6 +204,11 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     setQuery,
     hits,
     databaseCount,
+    // The database half is a SINGLE capped page — "Load more" pages the workspace infinite query only, so
+    // there is no way to reach a 51st database row. Surfaced so the header can say "top matches" instead of
+    // implying the list is everything the database holds. (Real pagination of the global half needs cursor
+    // plumbing through the merge and is tracked separately.)
+    databaseHasMore: Boolean(databaseSearch.data?.nextCursor),
     // With keepPreviousData above, isPending is true only on the genuine cold load (no previous rows to
     // show) — a filter edit keeps the old rows on screen while fetching, and a "load more" is deliberately
     // not a full-grid loading state either.

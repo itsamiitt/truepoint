@@ -130,8 +130,15 @@
   --tp-shadow-card-hover: 0 4px 12px rgba(17, 24, 39, 0.08);
 
   /* Z-index scale — replaces the scattered magic numbers (sticky bar 30 / slide-over 40 / scrim 50…) so
-     overlays always stack predictably: sticky < drawer < overlay/scrim < modal < popover < toast < command. */
+     overlays always stack predictably: sticky < bulkbar < drawer < overlay/scrim < modal < popover < toast
+     < command. */
   --tp-z-sticky: 30;
+  /* Floating selection/action bars (the Prospect bulk bar). Above sticky table chrome so it is never cut by
+     a sticky header, but BELOW every dismissable overlay: a bar sitting on the popover layer painted over
+     the record Drawer, the QuickView Drawer and its own Dialogs, which is the one stacking order a
+     selection bar must never have. Its own menus/dialogs are unaffected — Dialog/Drawer portal to <body>,
+     and a DropdownMenu inside the bar rides this context above page content. */
+  --tp-z-bulkbar: 35;
   --tp-z-drawer: 40;
   --tp-z-overlay: 50;
   --tp-z-modal: 60;

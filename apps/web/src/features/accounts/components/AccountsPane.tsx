@@ -14,6 +14,7 @@
 
 import {
   AppliedFilterChips,
+  ColumnChooser,
   SearchDrawer,
   SearchDrawerOpener,
   type SearchShell,
@@ -21,6 +22,8 @@ import {
 } from "@/components/search";
 import shellStyles from "@/components/search/search.module.css";
 import {
+  ACCOUNT_DEFAULT_VISIBLE_COLUMNS,
+  ACCOUNT_TOGGLEABLE_COLUMNS,
   AccountFilterPanel,
   AccountsTable,
   activeChips,
@@ -28,7 +31,7 @@ import {
   useAccountFacetCounts,
 } from "@/features/prospect/entries/accounts";
 import type { AccountFacetKey, MaskedAccount } from "@leadwolf/types";
-import { EmptyState, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
+import { EmptyState, SegmentedControl, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,6 +50,11 @@ const COUNT_FIELDS: AccountFacetKey[] = [
   "employee_band",
 ];
 
+const DENSITIES = [
+  { value: "comfortable", label: "Comfortable" },
+  { value: "compact", label: "Compact" },
+];
+
 export function AccountsPane({ shell }: { shell: SearchShell }) {
   const router = useRouter();
   const search = useAccountsSearch({
@@ -58,6 +66,10 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
   // The same debounce-commit free-text pattern the People pane uses: a local mirror committed to the query
   // 300ms after the last keystroke, re-synced when the query changes externally (URL restore / back).
   const [text, setText] = useState(search.query.text ?? "");
+  // Density was People-only: this pane never set [data-density], which is what the shared DataTable reads,
+  // so switching to the Accounts tab silently dropped the user's compact setting.
+  const [density, setDensity] = useState("comfortable");
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(ACCOUNT_DEFAULT_VISIBLE_COLUMNS);
   useEffect(() => setText(search.query.text ?? ""), [search.query.text]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: debounce-commit keyed on the local input.
   useEffect(() => {
@@ -68,7 +80,7 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
   }, [text]);
 
   return (
-    <div className={shellStyles.page} data-collapsed={shell.collapsed}>
+    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density={density}>
       <SearchDrawer
         collapsed={shell.collapsed}
         isOverlay={shell.isOverlay}
@@ -83,16 +95,31 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
         <div className={styles.indexHead}>
           {/* Only visible while the rail is off-canvas (≤768px, collapsed). */}
           <SearchDrawerOpener onOpen={shell.toggle} />
-          <TpInput
-            type="search"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Search companies by name or domain…"
-            aria-label="Search companies"
-          />
+          {/* The field is width:100% by DS contract, so it needs a shrinkable flex parent of its own or it
+              refuses to give ground and the row overflows. */}
+          <div className={styles.indexSearch}>
+            <TpInput
+              type="search"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Search companies by name or domain…"
+              aria-label="Search companies"
+            />
+          </div>
           <WorkspaceScopeControl
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
+          />
+          <ColumnChooser
+            columns={ACCOUNT_TOGGLEABLE_COLUMNS}
+            visibleColumns={visibleColumns}
+            onVisibleColumnsChange={setVisibleColumns}
+          />
+          <SegmentedControl
+            items={DENSITIES}
+            value={density}
+            onChange={setDensity}
+            aria-label="Row density"
           />
           <TpButton
             variant="ghost"
@@ -155,7 +182,7 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
               if (domain !== undefined) shell.openProfile("company", domain);
               else router.push(`/companies/${account.id}`);
             }}
-            density="comfortable"
+            visibleColumns={visibleColumns}
           />
           {search.hasMore && (
             <div className={styles.loadMore}>
