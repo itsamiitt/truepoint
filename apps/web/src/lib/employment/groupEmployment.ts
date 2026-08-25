@@ -73,13 +73,18 @@ export interface CompanyGroup {
   isBareEdge: boolean;
 }
 
-/** The identity a stint groups on. Prefer the API's opaque key; fall back to the folded display name. */
-function keyOf(stint: EmploymentStintInput): string {
+/**
+ * The identity a stint groups on. Prefer the API's opaque key; fall back to the folded display name.
+ *
+ * `index` is what makes the no-key-no-name case correct: every such stint becomes its OWN group. A shared
+ * constant here (which is what this did at first) folds every anonymous employer into one company block,
+ * asserting that two unnamed employers are the same employer — which nothing in the record supports, and
+ * which is the exact failure the named-fallback leg exists to avoid.
+ */
+function keyOf(stint: EmploymentStintInput, index: number): string {
   if (stint.groupKey) return stint.groupKey;
   const name = stint.companyName?.trim().toLowerCase();
-  // No key AND no name: every such stint is its own group. Folding them together would assert that two
-  // unnamed employers are the same employer, which nothing in the record supports.
-  return name ? `name:${name}` : "unknown";
+  return name ? `name:${name}` : `unknown:${index}`;
 }
 
 /** Newest first within a company: current roles lead, then latest start, unknown starts last. */
@@ -93,15 +98,22 @@ function byRecency(a: EmploymentStintInput, b: EmploymentStintInput): number {
   return bk - ak;
 }
 
-/** How much a stint actually asserts — used to keep the better of two refinements of one role. */
+/**
+ * How much a stint actually asserts — used to keep the better of two refinements of one role.
+ *
+ * PRECISION DOMINATES, and the weights enforce it rather than merely suggesting it. `sourceCount` is
+ * unbounded, so adding it raw let a year-precision row corroborated by four sources beat the month-precision
+ * row that actually refined it — keeping the vaguer assertion, which is the opposite of the point. It is now
+ * a tie-breaker capped below the precision bonus.
+ */
 function specificity(stint: EmploymentStintInput): number {
   let score = 0;
-  if (stint.startPrecision && stint.startPrecision !== "year") score += 2;
-  if (stint.startedOn) score += 1;
-  if (stint.endedOn) score += 1;
-  if (stint.department) score += 1;
-  if (stint.location) score += 1;
-  score += stint.sourceCount ?? 0;
+  if (stint.startPrecision && stint.startPrecision !== "year") score += 100;
+  if (stint.startedOn) score += 10;
+  if (stint.endedOn) score += 10;
+  if (stint.department) score += 2;
+  if (stint.location) score += 2;
+  score += Math.min(stint.sourceCount ?? 0, 5);
   return score;
 }
 
@@ -176,12 +188,12 @@ export function groupStints(
   now: Date = new Date(),
 ): CompanyGroup[] {
   const byCompany = new Map<string, EmploymentStintInput[]>();
-  for (const stint of stints) {
-    const key = keyOf(stint);
+  stints.forEach((stint, index) => {
+    const key = keyOf(stint, index);
     const bucket = byCompany.get(key);
     if (bucket) bucket.push(stint);
     else byCompany.set(key, [stint]);
-  }
+  });
 
   const groups: CompanyGroup[] = [];
   for (const [key, bucket] of byCompany) {

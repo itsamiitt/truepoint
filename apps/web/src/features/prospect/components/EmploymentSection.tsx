@@ -37,8 +37,12 @@ export function EmploymentSection({ contactId }: { contactId: string }) {
           isPrimary: s.is_primary,
           startedOn: s.started_on,
           endedOn: s.ended_on,
-          startPrecision: null,
-          endPrecision: null,
+          // Passed through, never defaulted: a year-only assertion is stored as YYYY-01-01, so hardcoding
+          // these to null makes "2018 – 2021" render as "Jan 2018 – Jan 2021 · 3y" — a month and a tenure
+          // the source never gave. Absent (an older API build) still reads as "precision unknown", which
+          // dates.ts treats as month-precision — the same shape this path had before it shipped precision.
+          startPrecision: s.start_precision ?? null,
+          endPrecision: s.end_precision ?? null,
           confidence: s.confidence,
           sourceCount: s.source_count,
         })),

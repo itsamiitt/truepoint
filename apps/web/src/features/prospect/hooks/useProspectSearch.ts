@@ -152,9 +152,14 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     staleTime: 30_000,
   });
 
+  // The `databaseQuery !== null` guard is load-bearing. `keepPreviousData` keeps the LAST successful page
+  // on a query that is now DISABLED, so without it the grid went on showing the database rows from before
+  // a workspace-only filter was applied — rows that match neither that filter nor anything else — directly
+  // under a notice saying the database is not being searched. (The fallback query key compounds it: it
+  // hashes identically to the unfiltered query's key.)
   const hits = useMemo(
-    () => mergeRows(owned, databaseSearch.data?.hits ?? []),
-    [owned, databaseSearch.data],
+    () => mergeRows(owned, databaseQuery === null ? [] : (databaseSearch.data?.hits ?? [])),
+    [owned, databaseSearch.data, databaseQuery],
   );
   const databaseCount = hits.length - owned.length;
 

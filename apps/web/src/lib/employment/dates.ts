@@ -85,18 +85,25 @@ export function dateRange(span: DateSpan): string | null {
 }
 
 /**
- * Duration between two dates in "2y 2m" form. `endedOn` null + `isCurrent` measures to `now`.
+ * Duration between two dates in "2y 2m" form. A null `endedOn` measures to `now` only when the role is
+ * CURRENT; a closed role with no end date has no knowable duration.
  *
- * Returns null — never a guess — when the start is unknown OR was asserted only to the year: "2018" could be
- * eleven months of difference either way, and a tenure is exactly the kind of number a rep repeats out loud.
+ * Returns null — never a guess — when the start is unknown, or when EITHER end was asserted only to the
+ * year: "2018" could be eleven months of difference either way, and a tenure is exactly the kind of number a
+ * rep repeats out loud.
  */
 export function duration(span: DateSpan, now: Date = new Date()): string | null {
-  if (span.startPrecision === "year") return null;
+  // Either end asserted only to the year makes the result a guess with up to eleven months of slack in it.
+  // Guarding the START alone was not enough: a month-precision start against a year-precision end
+  // understates by up to eleven months while looking exact.
+  if (span.startPrecision === "year" || (span.endedOn && span.endPrecision === "year")) return null;
   const from = absMonths(span.startedOn);
   if (from === null) return null;
+  // Only a CURRENT role runs to now. `ended_on IS NULL` with `is_current = false` is a legal and common
+  // state — a past role whose end the source never gave — and measuring that to today reported a decade-long
+  // tenure at a job the person had already left.
   const to =
-    absMonths(span.endedOn) ??
-    (span.isCurrent || !span.endedOn ? now.getFullYear() * 12 + now.getMonth() : null);
+    absMonths(span.endedOn) ?? (span.isCurrent ? now.getFullYear() * 12 + now.getMonth() : null);
   if (to === null) return null;
   const months = to - from;
   if (months < 0) return null;

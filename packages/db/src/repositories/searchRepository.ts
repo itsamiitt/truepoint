@@ -31,9 +31,11 @@ import type {
   ContactQuery,
   FacetKey,
   MaskedContact,
+  PhoneLineType,
   SuggestQuery,
   Suggestion,
 } from "@leadwolf/types";
+import { ageDaysSince, computeContactDataQuality } from "@leadwolf/types";
 import { type SQL, and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withReplicaTx, withTenantTx } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
@@ -222,26 +224,25 @@ function clauseCondition(
             : sql`(${contacts.emailEnc} IS NOT NULL AND ${contacts.phoneEnc} IS NOT NULL AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)`,
         );
       case "do_not_contact":
-        // Suppression/DNC, matched on the SAME three rungs as suppressionRepository.suppressedContactIds —
-        // contact_id, email blind index, email domain. Matching all three matters: contact_id alone
-        // under-suppresses badly, because the common case is a person suppressed by EMAIL whose workspace
-        // copy carries no suppression row of its own.
+        // THIS SURFACE CANNOT SHOW SUPPRESSED RECORDS AT ALL, so there is no useful filter to build here —
+        // and the reason is a decision made deliberately upstream, not a gap.
         //
-        // Scope comes from RLS, not from a predicate here: the suppression_read policy exposes exactly
-        // global + this tenant + this workspace, and this search always runs inside withTenantTx. The three
-        // partial indexes added in migration 0094 (idx_suppression_{email_blind_index,domain,contact}) exist
-        // for precisely this query — the schema comment names "enforcing suppression at search" as the case
-        // they were built for.
+        // buildWhere ANDs `NOT_SUPPRESSED_SET`/`_PROBE` into EVERY search, count and facet query, at one
+        // chokepoint, precisely so a count can never promise rows the list will not show. A suppressed
+        // contact is therefore invisible to this repository by construction.
         //
-        // Until now this fell through to `default` and returned undefined, so the shipped "Do not contact"
-        // control silently changed nothing: a user filtering FOR suppressed records to clean them up, or
-        // AGAINST them before an export, got the unfiltered list either way and no indication of it.
-        return is(sql`EXISTS (
-          SELECT 1 FROM suppression_list sl
-          WHERE sl.contact_id = ${contacts.id}
-             OR (sl.email_blind_index IS NOT NULL AND sl.email_blind_index = ${contacts.emailBlindIndex})
-             OR (sl.domain IS NOT NULL AND sl.domain = ${contacts.emailDomain})
-        )`);
+        //   do_not_contact = false ⇒ "not on the DNC list". Already guaranteed by that anti-join, so the
+        //                            clause is a no-op and correctly adds nothing.
+        //   do_not_contact = true  ⇒ "on the DNC list". Unsatisfiable here: any row matching a suppression
+        //                            rung has already been removed. `false` is the honest answer — the
+        //                            alternative (returning the unfiltered list, which is what fell through
+        //                            to `default` before) claims the opposite of what was asked.
+        //
+        // An earlier revision of this branch built the obvious `EXISTS(suppression_list …)` and it was
+        // exactly wrong: `EXISTS(...) AND NOT EXISTS(...)` over the same rungs is a contradiction, so it
+        // returned zero rows while looking like a working filter. The sidebar control is gone for the same
+        // reason (filterGroups.ts); surfacing suppressed records needs its own surface, not a search facet.
+        return want ? (sql`false` as SQL) : undefined;
       default:
         return undefined; // exhaustive — every boolFilterField above has a clause
     }
@@ -421,6 +422,11 @@ const MASKED = {
   emailDomain: contacts.emailDomain,
   emailStatus: contacts.emailStatus,
   phoneStatus: contacts.phoneStatus,
+  // The carrier classification (never the number) — non-PII, and the TCPA-relevant dial-risk signal the
+  // grid shows pre-reveal [S-04]. It is filterable (clauseCondition) and countable (FACET_EXPR); without it
+  // in the projection the column those exist for would render an em-dash on every row.
+  phoneLineType: contacts.phoneLineType,
+  accountId: contacts.accountId,
   // Flat presence by default; runSearch swaps these two columns to the child-EXISTS variants gate-on
   // (05 §5 — "∃ live child row", identical in steady state by CH-INV-1, correct for no-primary edges).
   hasEmail: hasEmailFlat,
@@ -465,16 +471,38 @@ type MaskedRow = {
 };
 
 function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedContact {
+  const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
+  const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
+  const hasEmail = r.hasEmail as boolean;
+  const hasPhone = r.hasPhone as boolean;
+  const lastVerifiedAt = (r.lastVerifiedAt as Date | null)?.toISOString() ?? null;
   return {
     id: r.id as string,
     firstName: r.firstName as string | null,
     lastName: r.lastName as string | null,
     jobTitle: r.jobTitle as string | null,
     emailDomain: r.emailDomain as string | null,
-    emailStatus: r.emailStatus as MaskedContact["emailStatus"],
-    phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
-    hasEmail: r.hasEmail as boolean,
-    hasPhone: r.hasPhone as boolean,
+    emailStatus,
+    phoneStatus,
+    phoneLineType: (r.phoneLineType as PhoneLineType | null) ?? null,
+    // Derived here rather than fetched: every input is already in this projection (presence flags, the two
+    // statuses, the last-verified age), and the fold is the same pure function contactRepository uses, so
+    // the Search grid's Data health column reads identically to the list-detail one [S-10]. Computing it in
+    // the mapper costs no extra query and no extra column.
+    dataHealth: computeContactDataQuality({
+      hasName: r.firstName !== null || r.lastName !== null,
+      hasEmail,
+      hasPhone,
+      hasTitle: r.jobTitle !== null,
+      hasCompany: r.accountId !== null || r.emailDomain !== null,
+      hasLocation: r.locationCountry !== null || r.locationCity !== null,
+      hasLinkedin: r.linkedinPublicId !== null || r.linkedinUrl !== null,
+      emailStatus,
+      phoneStatus,
+      ageDaysSinceVerified: ageDaysSince(lastVerifiedAt),
+    }),
+    hasEmail,
+    hasPhone,
     seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
     department: r.department as string | null,
     locationCountry: r.locationCountry as string | null,
@@ -484,7 +512,7 @@ function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedConta
     revealedTypes: r.revealedTypes as string[] as MaskedContact["revealedTypes"],
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
-    lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,
+    lastVerifiedAt,
     companyName: (r.companyName as string | null) ?? null,
     linkedinPublicId: (r.linkedinPublicId as string | null) ?? null,
     linkedinUrl: (r.linkedinUrl as string | null) ?? null,

@@ -208,13 +208,18 @@ export function accountFacetScope(field: string): AccountFacetScope {
   return EXTRA_SHARED_ACCOUNT_FIELDS.has(field) ? "both" : "workspace-only";
 }
 
-/** The fields on the ACTIVE query that the global company graph cannot answer, in sidebar order. */
+/**
+ * The fields on the ACTIVE query that the global company graph cannot answer, in sidebar order.
+ * FAILS CLOSED on an undeclared field — see the twin in filterGroups.ts for why that matters.
+ */
 export function accountWorkspaceOnlyFields(query: AccountQuery): string[] {
   const seen = new Set<string>();
   for (const clause of query.filters) {
     if (accountFacetScope(clause.field) === "workspace-only") seen.add(clause.field);
   }
-  return ALL_ACCOUNT_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+  const declared = ALL_ACCOUNT_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+  const known = new Set(declared);
+  return [...declared, ...[...seen].filter((f) => !known.has(f))];
 }
 
 /** Flat label lookup for a facet field (term/range), for chips + headings. */

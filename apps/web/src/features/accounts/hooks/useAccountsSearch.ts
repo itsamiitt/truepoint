@@ -101,8 +101,13 @@ export function useAccountsSearch(options: UseAccountsSearchOptions = {}): Accou
   const ownedRows = excludeOwned ? EMPTY_ACCOUNTS : owned.accounts;
 
   const rows = useMemo(
-    () => mergeAccountRows(ownedRows, databaseSearch.data?.hits ?? []),
-    [ownedRows, databaseSearch.data],
+    // The `databaseQuery !== null` guard is load-bearing — see the twin in useProspectSearch.
+    // `keepPreviousData` keeps the last successful page on a query that is now DISABLED, so without it the
+    // grid went on showing database companies from before a workspace-only filter was applied, under a
+    // notice saying the database is not being searched.
+    () =>
+      mergeAccountRows(ownedRows, databaseQuery === null ? [] : (databaseSearch.data?.hits ?? [])),
+    [ownedRows, databaseSearch.data, databaseQuery],
   );
 
   return {

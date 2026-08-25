@@ -68,13 +68,28 @@ const NULLIF_SENTINEL = (col: string) => sql`NULLIF(${sql.raw(col)}, '-infinity'
  * ONE RESPONSE — it carries no information about the company beyond "these rows are the same one", which is
  * exactly and only what grouping needs.
  *
- * The fallback leg matters as much as the primary: `master_company_id` is nullable (an unresolved employer),
- * and those rows group on `company_name_normalized` — the citext, legal-suffix-stripped name. Grouping on
- * the DISPLAY name instead would merge two distinct companies that share a name and split one company
- * written two ways.
+ * THE FALLBACK CHAIN matters as much as the primary leg, and every rung earns its place:
+ *   master_company_id  — the resolved company; the only leg that is a real identity.
+ *   company_name_normalized — an UNRESOLVED employer (the id is nullable). citext, legal-suffix-stripped, so
+ *                        one company written two ways still folds. Grouping on the DISPLAY name instead
+ *                        would merge two distinct companies that share a name.
+ *   company_name_raw   — normalized is ALSO nullable (only `id OR raw` is checked, and the unresolved-stint
+ *                        unique explicitly guards NOT NULL), so it is genuinely absent on some rows.
+ *   id                 — the backstop. Without it every row where all three are null COALESCEs to NULL, and
+ *                        `dense_rank() ORDER BY NULL` ties them ALL into one rank: two unrelated employers
+ *                        rendered as one company block. Falling back to the row makes each its own group,
+ *                        which is the honest answer when nothing identifies the employer.
+ *
+ * A company split across resolved and unresolved stints still gets two keys — visible, and better than the
+ * silent merge the id-only version risked; closing it belongs to ER, not to a display query.
  */
 const COMPANY_GROUP = sql`'g' || dense_rank() OVER (
-  ORDER BY COALESCE(e.master_company_id::text, 'name:' || e.company_name_normalized)
+  ORDER BY COALESCE(
+    e.master_company_id::text,
+    'name:' || e.company_name_normalized,
+    'raw:' || lower(e.company_name_raw),
+    'row:' || e.id::text
+  )
 )`;
 
 export const masterProfileReadRepository = {

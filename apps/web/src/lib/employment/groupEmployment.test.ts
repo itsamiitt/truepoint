@@ -114,6 +114,9 @@ describe("company identity", () => {
 
   test("unnamed, unkeyed stints are never folded into one employer", () => {
     // Nothing in the record says these two are the same company, so claiming it would be an invention.
+    // The first version of this test asserted `groups[0].roles` had length 2 — which is the MERGED outcome
+    // it was supposed to forbid, so it passed against a keyOf that folded every anonymous stint under one
+    // constant. Assert the group COUNT, which is the property the name actually claims.
     const groups = groupStints(
       [
         stint({ groupKey: null, companyName: null, title: "Analyst" }),
@@ -121,8 +124,11 @@ describe("company identity", () => {
       ],
       NOW,
     );
-    expect(groups[0]?.roles).toHaveLength(2);
-    expect(groups[0]?.companyName).toBeNull();
+    expect(groups).toHaveLength(2);
+    for (const group of groups) {
+      expect(group.roles).toHaveLength(1);
+      expect(group.companyName).toBeNull();
+    }
   });
 });
 
@@ -180,6 +186,58 @@ describe("sparse data degrades cleanly", () => {
     const groups = groupStints([stint({ title: "Engineer", isCurrent: true })], NOW);
     expect(groups[0]?.roles[0]?.duration).toBeNull();
     expect(groups[0]?.totalDuration).toBeNull();
+  });
+
+  test("a CLOSED role whose end the source never gave never runs to today", () => {
+    // `ended_on IS NULL` with `is_current = false` is legal and common — the person left, we were not told
+    // when. Measuring that to now reported a decade-plus tenure at a job they had already left.
+    const groups = groupStints(
+      [stint({ title: "Engineer", startedOn: "2010-01-01", endedOn: null, isCurrent: false })],
+      NOW,
+    );
+    expect(groups[0]?.roles[0]?.duration).toBeNull();
+    expect(groups[0]?.totalDuration).toBeNull();
+  });
+
+  test("a year-precision END is refused too, not just a year-precision start", () => {
+    // A month-precision start against a year-only end understates by up to eleven months while looking exact.
+    const groups = groupStints(
+      [
+        stint({
+          title: "Engineer",
+          startedOn: "2019-03-01",
+          startPrecision: "month",
+          endedOn: "2021-01-01",
+          endPrecision: "year",
+        }),
+      ],
+      NOW,
+    );
+    expect(groups[0]?.roles[0]?.duration).toBeNull();
+  });
+
+  test("precision beats corroboration when folding a refined role", () => {
+    // sourceCount is unbounded, so adding it raw let a year-precision row with several sources outweigh the
+    // month-precision row that actually refined it — keeping the vaguer of the two.
+    const groups = groupStints(
+      [
+        stint({
+          title: "Engineer",
+          startedOn: "2018-01-01",
+          startPrecision: "year",
+          sourceCount: 9,
+        }),
+        stint({
+          title: "Engineer",
+          startedOn: "2018-03-01",
+          startPrecision: "month",
+          sourceCount: 1,
+        }),
+      ],
+      NOW,
+    );
+    expect(groups[0]?.roles).toHaveLength(1);
+    expect(groups[0]?.roles[0]?.startedOn).toBe("2018-03-01");
   });
 
   test("a year-precision start never becomes a duration either", () => {

@@ -221,6 +221,14 @@ export const employmentStint = z.object({
   /** The '-infinity' "start unknown" sentinel is normalized away server-side; this is a real date or null. */
   started_on: z.string().nullable(),
   ended_on: z.string().nullable(),
+  /**
+   * How much the SOURCE actually asserted: 'year' | 'month' | 'day'. Load-bearing, not metadata — a
+   * year-only assertion is STORED as YYYY-01-01, so without this a client cannot tell "2018" from
+   * "January 2018" and will render a month, and compute a tenure, that nothing in the record supports.
+   * Optional: older clients ignore it, and a client that has it must refuse both at 'year'.
+   */
+  start_precision: z.string().nullable().optional(),
+  end_precision: z.string().nullable().optional(),
   is_current: z.boolean(),
   /** The ONE edge that drives the person's headline employer. */
   is_primary: z.boolean(),

@@ -522,6 +522,8 @@ contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
         seniority_level: s.seniorityLevel,
         started_on: s.startedOn,
         ended_on: s.endedOn,
+        start_precision: s.startPrecision,
+        end_precision: s.endPrecision,
         is_current: s.isCurrent,
         is_primary: s.isPrimary,
         confidence: s.confidence === null ? null : Number(s.confidence),

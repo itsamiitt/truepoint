@@ -71,8 +71,26 @@ describe("people filter scopes", () => {
     expect(fields).toContain("phone_line_type"); // [S-04] mobile-vs-landline, pre-reveal, TCPA-relevant
     expect(fields).toContain("last_verified_at"); // [S-10] verification recency
     expect(fields).toContain("job_change_at"); // [S-13] who has moved recently
-    expect(fields).toContain("do_not_contact"); // compliance — shipped, but did nothing until now
     expect(fields).toContain("is_revealed");
+  });
+
+  test("no `do_not_contact` control — this surface cannot answer it in either direction", () => {
+    // searchRepository.buildWhere excludes suppressed contacts from every search, count and facet query at
+    // one chokepoint, so "on the DNC list" is unsatisfiable here and "not on the DNC list" is already true
+    // of every row. The control shipped for months writing a clause the repository dropped (returning the
+    // unfiltered list); implementing that clause as written returns zero rows instead. Neither is a filter.
+    expect(peopleFacets.map((f) => f.field)).not.toContain("do_not_contact");
+  });
+
+  test("an undeclared field still suppresses the database half — the guard fails CLOSED", () => {
+    // `skill` is in FacetKey (so it validates and round-trips through a saved search or a shared ?f= URL)
+    // but has no sidebar control. This function is the ONLY thing standing between such a clause and the
+    // global query, which would reject it with a 400 rather than skipping cleanly.
+    const query: ContactQuery = {
+      ...PEOPLE_BASE,
+      filters: [{ kind: "term", field: "skill", op: "include", values: ["go"] }],
+    };
+    expect(workspaceOnlyFields(query)).toEqual(["skill"]);
   });
 
   test("the job-change filter is a job-change filter, not a signal filter", () => {

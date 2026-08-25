@@ -188,7 +188,12 @@ export const FILTER_GROUPS: FilterGroup[] = [
         label: "Never contacted",
         scope: "workspace-only",
       },
-      { kind: "bool", field: "do_not_contact", label: "Do not contact", scope: "workspace-only" },
+      // NO "Do not contact" CONTROL, and it is not an oversight. Search excludes suppressed contacts at a
+      // single chokepoint (searchRepository.buildWhere) so a count can never promise rows the list will not
+      // show — which means "on the DNC list" is unsatisfiable on this surface and "not on the DNC list" is
+      // already true of every row. The control shipped for months writing a clause the repository dropped,
+      // returning the unfiltered list either way; implementing that clause as written would have returned
+      // zero rows instead. Neither is a filter. See the do_not_contact case in searchRepository.
       {
         kind: "range",
         field: "last_activity_at",
@@ -291,13 +296,24 @@ export function facetScope(field: string): FacetScope {
   return ALL_FACETS.find((f) => f.field === field)?.scope ?? "workspace-only";
 }
 
-/** The fields on the ACTIVE query that the global database cannot answer, in sidebar order. */
+/**
+ * The fields on the ACTIVE query that the global database cannot answer, in sidebar order.
+ *
+ * FAILS CLOSED. An undeclared field — `skill` is one today: it is in `FacetKey`, so it validates and
+ * round-trips through a saved search or a shared `?f=` URL, but has no sidebar control — must still appear
+ * here, because this is now the ONLY thing standing between such a clause and the global query. Ordering by
+ * the registry alone would have silently dropped it from the result, and `toDatabaseQuery` would then have
+ * cast it to one of the shared fields and POSTed it, where the global contract rejects it with a 400.
+ * Declared fields keep sidebar order; anything unrecognised is appended.
+ */
 export function workspaceOnlyFields(query: ContactQuery): string[] {
   const seen = new Set<string>();
   for (const clause of query.filters) {
     if (facetScope(clause.field) === "workspace-only") seen.add(clause.field);
   }
-  return ALL_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+  const declared = ALL_FACETS.filter((f) => seen.has(f.field)).map((f) => f.field);
+  const known = new Set(declared);
+  return [...declared, ...[...seen].filter((f) => !known.has(f))];
 }
 
 /** Flat label lookup for a facet field (term/bool/range), for chips + headings. */
