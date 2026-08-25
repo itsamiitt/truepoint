@@ -57,6 +57,19 @@ const MECHANISM = [
 
 const ALLOW = /earned-currency-ok:/;
 
+/** One combined pattern, deciding whether a file is worth scanning line by line.
+ *
+ *  The first version pre-filtered on `/earn|bount|point|reward/i` and barely filtered anything: `point` also
+ *  matches `endpoint`, `entrypoint`, `breakpoint` and `pointer`, so in an API codebase 901 of 2620 files (34%)
+ *  survived and were then line-scanned against seven regexes each. Measured cost: 29.8s. Building the filter
+ *  FROM the real patterns instead means a file is only opened line-by-line when one of them can actually
+ *  match. A gate that adds half a minute to every build is a gate someone eventually deletes — and deleting
+ *  it costs the rule, not the runtime. */
+const ANY_PATTERN = new RegExp(
+  [...COPY, ...MECHANISM].map(({ re }) => `(?:${re.source})`).join("|"),
+  "i",
+);
+
 function sourceFiles(dir, out = []) {
   let entries;
   try {
@@ -80,7 +93,7 @@ let scanned = 0;
 for (const file of files) {
   const raw = readFileSync(file, "utf8");
   scanned += 1;
-  if (!/earn|bount|point|reward/i.test(raw)) continue; // cheap pre-filter
+  if (!ANY_PATTERN.test(raw)) continue; // see ANY_PATTERN — a loose pre-filter is no filter at all
   const lines = raw.split(/\r?\n/);
   // A FILE-level exemption in the header, for the files that legitimately enumerate these patterns: the
   // portal's own copy guards define them as regexes and would otherwise be reported by a scanner they exist
