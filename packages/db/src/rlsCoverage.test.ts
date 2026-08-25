@@ -227,9 +227,25 @@ describe("RLS covers hand-authored tables too (the pgTable blind spot)", () => {
   test("partition CHILDREN are excluded by shape, and every one has a known parent", () => {
     // Children are declared `CREATE TABLE x_default PARTITION OF x DEFAULT` — no column list — so the
     // balanced-paren scan above never sees them, which is the correct outcome for the wrong-looking reason.
-    // They inherit the parent's ACL via mirror_partition_acl (0102) and carry the parent's tenant_id, so
-    // demanding a policy of them would demand one that must not exist. Asserted here so the exclusion is a
-    // stated rule rather than a lucky property of the regex.
+    // Demanding a POLICY of them would demand one that must not exist: a child carries the parent's
+    // tenant_id, and parent-routed access is governed by the parent's policies. Asserted here so the
+    // exclusion is a stated rule rather than a lucky property of the regex.
+    //
+    // WHAT THIS EXCLUSION DOES NOT MEAN, corrected 2026-08-25. This comment used to justify the exclusion
+    // partly on children inheriting "the parent's ACL via mirror_partition_acl (0102)". That is true and it
+    // is the opposite of reassuring: an ACL is GRANTS, and mirroring the parent's grants is precisely what
+    // gives leadwolf_app SELECT/INSERT on every child. RLS is NOT inherited alongside it — PostgreSQL applies
+    // the policies of the table NAMED IN THE QUERY, and `CREATE TABLE ... PARTITION OF` does not copy
+    // relrowsecurity. So children were reachable BY NAME with no policy applied at all, and this guard
+    // excluded them from coverage on reasoning that conflated the two mechanisms. Measured, as leadwolf_app
+    // with workspace A's GUC set: `SELECT note FROM activities` returned A's row, `SELECT note FROM
+    // activities_2026_08` returned A's and B's.
+    //
+    // Children are now held to RLS ENABLED (with no policy — which denies the app role every row while the
+    // parent keeps governing parent-routed access), applied by rls/zzPartitionInheritance.sql to existing
+    // children and by ensure_month_partitions to every new one. That property is a catalog fact, so it is
+    // enforced where catalog facts can be read — packages/db/test/partitionRls.itest.ts — not here in a test
+    // that only scans migration text. The exclusion below remains correct; it is narrower than it looked.
     const sql = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
       .map((f) => readFileSync(join(MIGRATIONS_DIR, f), "utf8"))
