@@ -179,6 +179,41 @@ const ADJUDICATED = [
       "the series is maintained but has no reader yet. dataQualitySnapshotRepository.insert writes it, the retention engine covers it (retention_class_policies carries a 730-day data_quality_snapshots policy) — only the admin READ surface is unbuilt, which this method's own doc calls a follow-up ('Latest-per-workspace is a follow-up'). Writer ahead of its screen, not rot.",
   },
   {
+    match: "accountChildRepository.overlayExtensionsForAccounts",
+    verdict:
+      "the read half of a migration still in its WRITE phase. Only dual-write and backfill methods have callers (applyAccountDomainWrite, backfillAccountDomain/HqLocation, the counts and the missing-row finders); reads still come off the flat accounts.domain/hq_* caches, byte-identical. This is the reader the account_read_from_child cutover will use, and its own gate helper (accountReadFromChildEnabledForScope) has no consumer either — consistent, not stranded.",
+  },
+  {
+    match: "importStagingRepository.countStaged",
+    verdict:
+      "its own doc calls it 'chunk planning / diagnostics'. The live import path uses createStagingTable, copyRows, dedupWithinFile, readChunkBand and stagingTableName; chunk planning derives its bands without a total-row count. A diagnostic with no diagnostic surface.",
+  },
+  {
+    match: "enrichmentJobRepository.findContactCandidatesByMatchKeys",
+    verdict:
+      "the repository half of the dark bulk-enrich matcher. Its core counterparts createOverlayMatcher and createMasterGraphMatcher are exported from the barrel and consumed by nothing either, and bulk enrichment is gated behind BULK_ENRICHMENT_ENABLED plus the per-tenant flag. A whole matcher path built ahead of its enablement, not a stray method.",
+  },
+  {
+    match: "enrichmentJobRepository.getJobRowsByOutcome",
+    verdict:
+      "same dark bulk-enrich surface as findContactCandidatesByMatchKeys — a per-outcome row read for a job-detail screen that the enablement has not reached yet.",
+  },
+  {
+    match: "masterCompanyReadRepository.findHqRegionTx",
+    verdict:
+      "its doc says the HQ-region JOIN is 'a JOIN the grid does not need and the profile does'. The grid's projection is the one that ships; the profile view that would want the region has not been wired to it.",
+  },
+  {
+    match: "emailEventRepository.listByContact",
+    verdict:
+      "email events are INGESTED and nothing else — ingest() is the only method with a caller. There is no per-contact email-history surface, so neither this read nor countByType has a screen behind it.",
+  },
+  {
+    match: "outcomeMetricsRepository.actionCounts",
+    verdict:
+      "per-action counts over usage_event, with no consumer. Note the dependency: usage_event is written only while USAGE_EVENTS_ENABLED is on (decisions.md #9), so this query would return an empty picture today regardless of who called it. Surface it after that gate is settled, not before.",
+  },
+  {
     match: "crm*",
     verdict:
       "the CRM connector module is dark behind CRM_SYNC_ENABLED (9 tables). Uncalled methods are the expected state of an unshipped module, not rot.",
