@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2463,
-  "fileSetHash": "sha256:5ae106d4e8f7be3f2fed090c2963d6dbc4545a9676ae565287033747dced17fb",
+  "fileCount": 2464,
+  "fileSetHash": "sha256:37fa1fb752e9b37555b9299b76bcf55e4685a843ff49f0a3c74ebf752cc91896",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3351,6 +3351,7 @@
       "packages/db/src/schema/watchlists.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/schema/workerOutbox.ts",
+      "packages/db/src/searchIntentScope.test.ts",
       "packages/db/src/seed.ts",
       "packages/db/test/accountChildren.backfill.itest.ts",
       "packages/db/test/accountChildren.dualwrite.itest.ts",

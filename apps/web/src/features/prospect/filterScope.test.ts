@@ -146,6 +146,11 @@ describe("people filter scopes", () => {
     // intent, which is X-04, a DEFERRED NON-GOAL. This facet reads only job-change detections, and the
     // repository's subquery is scoped to signal_type='job_change' to match. If a general "signal recency"
     // facet ever appears here, it needs a recorded decision first — not a quiet widening of this one.
+    //
+    // The permission and its limit are recorded: docs/strategy/decisions.md, open-decision register entry 8
+    // (2026-08-25). This is the CLIENT half of the guard — it stops the control appearing. The SQL half is
+    // packages/db/src/searchIntentScope.test.ts, which stops the query widening underneath a control that
+    // already exists. Neither catches the other's failure mode, so both stay.
     const signalish = peopleFacets.filter(
       (f) => f.field.includes("signal") || f.field.includes("intent"),
     );

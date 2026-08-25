@@ -298,7 +298,11 @@ function rangeSpec(field: string): { col: SQL; kind: "number" | "timestamp" } | 
       // SCOPED TO signal_type='job_change' ON PURPOSE. intent_signals also holds web_visit,
       // keyword_search and content_engagement — third-party behavioural intent, which is X-04, a DEFERRED
       // NON-GOAL. This filter is deliberately not a general "signal recency" filter, and must not be
-      // widened into one without a recorded decision.
+      // widened into one without a recorded decision. That the narrow read is permitted at all is itself
+      // a recorded decision: docs/strategy/decisions.md, open-decision register entry 8 (2026-08-25).
+      // Enforced, not merely asked for — ../searchIntentScope.test.ts fails the build if this scoping is
+      // dropped, if a producer-less signal type appears anywhere in this module, or if the intentSignals
+      // table object is imported (which would put a clause beyond the reach of a raw-SQL scan).
       return {
         col: sql`(SELECT max(s.detected_at) FROM intent_signals s
                    WHERE s.contact_id = ${contacts.id} AND s.signal_type = 'job_change')`,

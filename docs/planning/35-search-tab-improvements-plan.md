@@ -13,17 +13,23 @@
 > contacts, which store none of this). Migration 0141 adds the three reverse-lookup indexes "worked at X"
 > needed; the other four were already indexed by 0135, which shipped ahead of the query side.
 >
-> **`is_hiring` was dropped, and should stay dropped until D-6 lands.** `master_job_postings` has no
+> **`is_hiring` was dropped, and stays dropped until D-6 lands.** `master_job_postings` has no
 > producer ("gated on D-6, licensed postings feed"), no person link, and no index for cross-company
 > filtering — the filter would return zero rows for every query on every workspace. It is blocked on a data
 > decision, not on engineering: when the feed lands, the table already has its writer and read routes, and
-> the filter is a small follow-up. Decisions **D1** (global-half pagination) and **D2** (null-cliff semantics) shipped with
+> the filter is a small follow-up. Recorded as entry **9** of the open-decision register in
+> `docs/strategy/decisions.md` so it is picked up with the feed rather than rediscovered here.
+>
+> Decisions **D1** (global-half pagination) and **D2** (null-cliff semantics) shipped with
 > their documented defaults. **D5** was resolved in a way that removes the question: the group key is a
 > per-response `dense_rank` computed in SQL, so no Layer-0 id and no hash of one crosses the API boundary.
-> **D4** stands with one narrow exception now in the code, flagged for review: a "Job change detected"
-> filter reads `intent_signals` scoped to `signal_type='job_change'` only, on the reading that our own
-> job-change detection is [S-13] (a named target) rather than [X-04] intent data. The scoping is enforced in
-> the query, its index and a test; if that reading is wrong, revert that one facet.
+> **D4 is resolved** (2026-08-25, `docs/strategy/decisions.md` entry **8**): the "Job change detected"
+> filter may read `intent_signals`, because our own job-change detection is [S-13] — a named target — and
+> not the [X-04] "intent / content engagement" family the deferral actually names. The permission is
+> narrow and now enforced rather than remembered: the read stays scoped to `signal_type='job_change'`,
+> and `packages/db/src/searchIntentScope.test.ts` fails the build on an unscoped read, on any
+> producer-less signal type reaching the filter path, or on the Drizzle table object being imported to
+> route around a raw-SQL scan. Widening it needs its own decisions.md entry first.
 
 ## Context
 
@@ -136,7 +142,10 @@ Each = repo dispatch-table entry + contract key in `packages/types` + FacetDef +
 - **D1 — Global-half pagination**: "Load more" never pages the database half (capped at 50). Real fix = cursor support on `POST /search/database`(+companies) + client merge-pagination. Default: honest caption in Phase 1, pagination backlogged.
 - **D2 — Null-cliff semantics**: drop-global-with-notice (default, conservative) vs run global half with the supported filter subset (shows rows not matching all filters — needs product sign-off).
 - **D3 — Phase 3d scope**: join-backed filters + custom_fields filtering are planned but gated.
-- **D4 — Signals/intent filters excluded** per [X-04] non-goal; confirm no exception intended.
+- **D4 — Signals/intent filters excluded** per [X-04] non-goal. **Resolved 2026-08-25** with one
+  named exception: the `job_change_at` recency filter, scoped to `signal_type='job_change'` — first-party
+  [S-13] detection, not purchased intent. `docs/strategy/decisions.md` entry 8 carries the reasoning and
+  the standing constraint; `packages/db/src/searchIntentScope.test.ts` enforces it.
 - **D5 — groupKey design**: salted hash (default) vs per-response ordinal — security to confirm no Layer-0 identifier leak.
 - **D6 — Phantom-stint merge** could hide genuinely distinct stints; mitigated by the conservative merge rule + showing confidence/source_count [A-01].
 
