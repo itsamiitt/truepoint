@@ -584,3 +584,121 @@ pass silently if it falls — they demand the budget be tightened instead.
    self-service is a real requirement. Nothing was changed unilaterally: security has final say on redirect
    gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
    repository-call-site audit — there is nowhere correct to call them from yet.
+
+8. **Global suppression has THREE writers, and the STAFF one is the narrowest.** (2026-08-24.) Found by
+   auditing `packages/core` for exported functions nothing references. An earlier version of this entry said
+   "two writers" and implied address-level global suppression did not exist; both were wrong, and the
+   corrected picture is below.
+   - **Live, staff-initiated:** `POST /admin/compliance/suppression`
+     (`apps/api/src/features/admin/compliance.ts:273`) inlines `suppressionRepository.insert` with
+     `matchType: "domain"` hardcoded, and its contract (`addGlobalSuppressionSchema`) rejects `@` outright.
+     Audit action `suppress.add.global`.
+   - **Live, automated:** `dsarFanoutRepository.addGlobalSuppression(tx, emailBlindIndex, reason)`
+     (`packages/db/src/repositories/dsarRepository.ts:236`) writes `scope='global', match_type='email'` with a
+     BLIND INDEX, and is called on consent withdrawal (`consent.ts:72`, reason `consent_withdrawn`) and on
+     DSAR delete (`deleteFanout.ts:112`, reason `dsar:<id>`). Audit action `suppression.add`.
+   - **Unused:** `addGlobalSuppression` in `packages/core/src/email/governance.ts` accepts exactly one of
+     `{email, domain}`, blind-indexes the email, and audits as `email.global_suppression.add`. No caller.
+   - **So the capability is NOT missing** — an individual address IS globally suppressible, and two compliance
+     flows do it every day. What is missing is a STAFF-INITIATED address-level suppression: the only surface a
+     human operator has is domain-only, so a staff member asked to suppress one person must either block their
+     whole employer or wait for a consent/DSAR event to do it.
+   - **Three audit actions for one logical operation** (`suppress.add.global`, `suppression.add`,
+     `email.global_suppression.add`), so the platform audit log cannot be queried for "global suppressions"
+     without knowing all three strings. That is the sharper half of this entry.
+   - **Why it matters structurally:** three code paths writing a compliance-critical table is the drift hazard
+     this codebase names in its own words (migration 0136 refused to duplicate the title taxonomy in SQL for
+     exactly this reason). A future fix to one path silently misses the others.
+   **Decide:** (a) point the admin route at the core verb and widen its contract to accept an email — staff
+   gain address-level suppression, and two of the three paths collapse into one audit action; or (b) confirm
+   domain-only is the intended STAFF policy, delete the unused core function, and reconcile the audit action
+   names so the log is queryable. Not changed unilaterally: suppression is a compliance control and CLAUDE.md
+   rule 3 applies.
+9. **`usage_events` has no tenant half in the code.** (2026-08-24,
+   `scripts/audit-feature-flag-coherence.mjs`.) Migration 0088 seeds `provenance_events` and `usage_events`,
+   describes them as "the per-tenant halves of three DUAL GATES", and
+   `apps/api/src/features/admin/routes.ts:1428-1443` presents each to staff as a paired per-tenant flag.
+   Neither key has an `isFlagEnabledForTenant` call anywhere. **Only one of the two is a gap** — this entry
+   originally claimed both were, and that was wrong; the correction is below.
+
+   **`provenance_events` — NOT a gap. Seeded ahead of its consumer, exactly as 0088 says.** That flag gates
+   OVERLAY events only (`entity_type` contact|account), and 0088's own asymmetry note states Layer-0
+   `master_*` events "ride the env half ALONE" because Layer 0 has no tenant to key on. **Every
+   `provenance_event` writer that exists today is Layer-0**: `enrichmentEvidence` (person), `runImport`
+   (person, company), `landSourcePayload` and `forgeSyncRepository`. `revealContact`'s
+   `PROVENANCE_EVENTS_ENABLED` check is a Layer-0 READ (`badgeFor(tx, "person", …)`). No overlay writer has
+   been built — the `contact`/`account` entity types in `consent.ts`, `deleteFanout.ts` and `fanoutSignals.ts`
+   are audit-log and notification writes, a different table. So env-only gating is CORRECT here, and the
+   tenant flag is waiting for a writer, the same "seeded ahead of its consumer" pattern recorded for
+   `masterJobPostingsRepository.upsertPosting`. **Add the tenant read when the first overlay writer lands, not
+   before.**
+
+   **`usage_events` — a real gap.** `usage_event` rows carry tenant and workspace, 0088 calls the flag a
+   "per-tenant rollout gate for usage_event emission", and all four emitters gate on the env switch alone:
+   `packages/core/src/prospect/lists.ts:396`, `packages/core/src/reveal/revealContact.ts:417`,
+   `apps/api/src/features/contacts-from-database/routes.ts:49`,
+   `apps/api/src/features/contacts-resolve/routes.ts:69`. Flipping `USAGE_EVENTS_ENABLED` therefore starts
+   emission for EVERY tenant at once, which is the staged rollout the dual gate exists to make possible, and
+   the per-tenant control staff can see does nothing.
+   - Cost is small and the codebase already solved the hot-path question: the two `apps/api` sites can use
+     `apps/api/src/lib/gateMemo.ts` (5s in-process + 30s shared read-through, with invalidation), and the two
+     core sites sit on paths that already hold a tenant scope.
+   - Migration 0119 later set `global_enabled = true` on every defined flag, so adding the read makes the
+     tenant half default to ON; the seed's own `false` no longer applies. Whoever wires it must choose the
+     intended default explicitly rather than inherit it.
+   **Decide:** (a) add the tenant-half read at the four `usage_events` emitters; or (b) accept env-only gating
+   for it, and remove `flagKey: "usage_events"` from the admin listing so staff are not shown a dead control.
+   Either way `provenance_events` needs no change now.
+
+## 10. `user_sessions` has no RLS by design, but a customer-surface path now reads it as `leadwolf_app`
+
+**Status:** open — needs a human decision. Surfaced again 2026-08-25 while sweeping every `tenant_id` table
+for RLS coverage (the sweep that found the partition bypass fixed in the same session).
+
+**THIS GAP WAS ALREADY KNOWN, and I initially wrote this entry as though it were not.** It is registered as
+audit 32 §9.3-1, carried in `rlsCoverage.test.ts`'s `DOCUMENTED_EXCEPTIONS` precisely so it stays "VISIBLE and
+countable rather than dissolving into the 82 tables that are fine", and `applyMigrations` states both the
+mechanism and the preferred remedy: user_sessions "deliberately KEEPS the grant — the workspace-admin
+session-management path reads it via withTenantTx (bounded by a workspace_members join). Its no-RLS gap (a RAW
+query bypasses the join) wants an RLS policy rather than a revoke — a separate follow-up." The register was
+right, and it named the hazard class before I found an instance of it. What is new below is that instance —
+`revokeInTx`, an UPDATE keyed on the session id alone, which is exactly the "RAW query bypasses the join"
+shape — plus a comment in the same feature asserting the opposite of the register. Read option (b) with the
+register's verdict in mind: a revoke was already considered and rejected, because the admin path needs the
+grant.
+
+**What is true.** `user_sessions` is one of very few tables carrying `tenant_id`/`workspace_id` with no RLS
+policy at all, and that is deliberate and recorded. `packages/db/src/rls/auth.sql` states it: the user-scoped
+auth tables (`user_sessions`/`user_mfa_methods`/`trusted_devices`/`auth_email_tokens`) are auth-service-owned
+and keyed by `user_id`, read by the auth service under its own privileged connection BEFORE any tenant is
+chosen. A tenant-predicate policy is close to circular there: you look the session up in order to learn which
+tenant it belongs to. The runtime backs this up — the default pool connects as the DB owner and only
+`withTenantTx` drops to `leadwolf_app`.
+
+**What has changed since that was written.** `packages/core/src/auth/adminSessions.ts` — the workspace-admin
+session-management surface — reads and writes `user_sessions` INSIDE `withTenantTx`, i.e. as `leadwolf_app`,
+which the "auth-service-owned" rationale does not contemplate. Two comments in the one feature disagreed about
+whether the table is gated:
+
+- `revokeAllForMemberInTx` was right: "RLS does not gate user_sessions, so the membership check is the
+  caller's responsibility."
+- `revokeMemberSession` said it re-used "the RLS-scoped read", which was false. Corrected in this session.
+
+The app role additionally holds SELECT/INSERT on the table through the schema-wide grant. Nothing reachable
+reads it cross-tenant today, and the stored credential material is not usable if read — the session `id` is an
+internal reference (the cookie carries the refresh token) and only the token's SHA-256 hash is stored. What a
+cross-tenant read would expose is `user_id`, `tenant_id`, `ip_address`, `user_agent` and timestamps: who is
+logged in, from where, on what device, in which org. IP addresses are personal data under GDPR, so this is a
+compliance question as well as an isolation one (09-compliance.md).
+
+**What was done now, deliberately narrow:** `revokeInTx` is scoped by `workspaceId` instead of session id
+alone, so the guarantee no longer depends on its single caller having called `findActiveInWorkspace` first,
+and an itest pins it (it fails when the predicate is removed). The false comment is corrected. **The security
+model itself was not changed** — adding RLS to an authentication table is not a call to make without a human.
+
+**Decide:** (a) add a workspace-scoped policy to `user_sessions` — verified compatible with all three
+tenant-tx methods, and the owner-connected auth path bypasses it since these policies are ENABLE-not-FORCE; or
+(b) keep the table ungated and instead REVOKE the app role's grants on it, moving the admin session surface to
+a privileged seam; or (c) accept the status quo now that the predicates are explicit, and record in
+`rls/auth.sql` that a customer-surface path legitimately touches the table so the next reader is not misled by
+the "auth-service-owned" framing.
