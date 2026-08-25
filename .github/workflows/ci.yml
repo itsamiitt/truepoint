@@ -245,6 +245,14 @@ jobs:
           done
           exit "${status}"
 
+      # The design system's behavioural suite: overlay focus management and the composite-widget
+      # keyboard models. It needs its own step because these files are named *.domtest.tsx, which the
+      # find above deliberately does not match: registering happy-dom replaces global ReadableStream/
+      # Request/Response, and sharing one bun process with the API suites fails ten of them. Same split
+      # as *.itest.ts. See packages/ui/src/test/dom.ts.
+      - name: Design-system DOM tests (overlays + keyboard)
+        run: bun run test:dom
+
   itests:
     name: Integration tests — *.itest.ts on Postgres + Redis (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
@@ -347,10 +355,3 @@ jobs:
         run: bun run --filter '*' typecheck
       - name: Acceptance + API contract tests
         run: bun test
-
-      # The design system's behavioural suite: overlay focus management and the composite-widget keyboard
-      # models. Separate because happy-dom replaces global ReadableStream/Request/Response and bun shares one
-      # process across a run, so these files are named *.domtest.tsx to stay out of the default discovery
-      # above (the same split as *.itest.ts). See packages/ui/src/test/dom.ts.
-      - name: Design-system DOM tests
-        run: bun run test:dom
