@@ -120,8 +120,19 @@ for (const file of sourceFiles(ROOT)) {
     // The helper is applied at the loop that wraps the insert, which can sit a few lines above the .values(
     // call, so look at the enclosing region rather than the single line. Generous on purpose: this check is
     // about "did anyone think about the ceiling here", not about a precise dataflow proof.
+    //
+    // IMPORT LINES ARE EXCLUDED FROM THAT WINDOW, and they have to be. `import { sliceForBindLimit } from
+    // "./bindLimit.ts"` mentions the helper without applying it, and in a SHORT file the import block sits
+    // within twelve lines of everything — so any file that bounded one insert silently exempted every other
+    // insert near its imports. Demonstrated before this line was written: a repository whose only mention of
+    // the helper was its import, with a plain `.values(rows.map(…))` beneath it, was counted as bounded and
+    // the run exited 0. All eleven genuinely-bounded sites in this repo carry a NON-import mention in their
+    // window, so excluding imports keeps every one of them and closes the hole.
     const from = Math.max(0, line - 12);
-    const region = lines.slice(from, line + 4).join("\n");
+    const region = lines
+      .slice(from, line + 4)
+      .filter((l) => !/^\s*import\b/.test(l))
+      .join("\n");
     if (region.includes(HELPER)) {
       bounded += 1;
       continue;
