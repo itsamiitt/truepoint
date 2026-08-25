@@ -124,6 +124,13 @@ news/social feeds. See 04-opportunity-scores.md.
   through `tail` beside other output, and never assume `--write` finished the job** — run
   `bunx biome check <file>` on its own line afterwards and require `No fixes applied.` Otherwise CI's `lint`
   step is the only thing that catches it, i.e. after the push.
+  **Git Bash MANGLES `git show <rev>:<path>` on Windows.** MSYS path conversion rewrites
+  `origin/main:.github/workflows/ci.yml` into `origin\main;.github\workflows\ci.yml`, and git answers
+  `fatal: ambiguous argument`. Prefix the command with `MSYS_NO_PATHCONV=1`. The trap is not the error, it is
+  the error being HIDDEN: run it with `2>/dev/null` — which is a reflex when a file may not exist — and the
+  fatal disappears, leaving empty output that reads exactly like "that path is not in this revision". On
+  2026-08-24 that produced a confident wrong conclusion about which workflow file was on `main`. Same rule as
+  above: if a command's output is empty, prove it ran before believing what the emptiness seems to say.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
