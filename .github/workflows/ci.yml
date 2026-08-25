@@ -151,6 +151,12 @@ jobs:
       # that the interface requires.
       - name: Type-checking reaches every test file
         run: bun run lint:typecheck-coverage
+      # @leadwolf/config validates at IMPORT, so a REQUIRED var missing from the production template is a boot
+      # failure, not a missing feature — the process dies with a bare `Required` list naming the key and
+      # nothing naming the file that should have carried it. Five of the 154 schema entries are truly
+      # required (no .default/.optional); this asserts the template still carries all of them.
+      - name: Required env vars appear in the production template
+        run: bun run lint:env-template
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
       # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every

@@ -60,7 +60,16 @@
 // SANDBOX_CASES below do. No change to either gate was required — only noticing that "cannot be tested"
 // actually meant "cannot be tested the way the other five are".
 //
-// All seven script gates are therefore covered.
+// TWELVE gates are covered as of 2026-08-25, every one of them proven by a plant rather than by inspection.
+//
+// A `reject` regex is the other half of a plant, set only where a gate's job is to TELL TWO THINGS APART. The
+// env-template fixture declares one var that must be reported and one look-alike that must not, so a gate
+// that flagged everything it saw would pass a plain plant while being useless. Proven the same way as the
+// gates themselves: deleting the required/optional distinction from lint:env-template makes it report 134
+// vars instead of 5, and this file names it — "failed for the right reason but ALSO reported
+// PROBE_OPTIONAL_THING". Worth recording that the break took THREE attempts to apply (the search string kept
+// missing the escaped `\(` in the source), and each failed attempt silently "passed" the mechanism it was
+// meant to test. A plant that was never planted proves exactly nothing, which is this file's whole subject.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -118,6 +127,31 @@ const SANDBOX_CASES = [
         join(dir, "deploy", "env.production.template"),
         "PROBE_SELFTEST_ENABLED=true\n",
       );
+    },
+  },
+  {
+    gate: "lint:env-template",
+    script: "scripts/lint-env-template-coverage.mjs",
+    // Two declarations, and only ONE of them may be reported. PROBE_REQUIRED_SECRET has no .default/.optional
+    // and is absent from the template, so it must be named. PROBE_OPTIONAL_THING is equally absent but carries
+    // a .default(), so naming it would be a false positive — the fixture asserts the distinction the gate
+    // exists to make, not merely that it can produce output.
+    expect: /PROBE_REQUIRED_SECRET/,
+    reject: /PROBE_OPTIONAL_THING/,
+    build(dir) {
+      mkdirSync(join(dir, "packages", "config", "src"), { recursive: true });
+      mkdirSync(join(dir, "deploy"), { recursive: true });
+      writeFileSync(
+        join(dir, "packages", "config", "src", "env.ts"),
+        [
+          "const schema = z.object({",
+          "    PROBE_REQUIRED_SECRET: z.string().min(1),",
+          '    PROBE_OPTIONAL_THING: z.string().default("x"),',
+          "});",
+          "",
+        ].join("\n"),
+      );
+      writeFileSync(join(dir, "deploy", "env.production.template"), "SOMETHING_ELSE=1\n");
     },
   },
 ];
@@ -382,6 +416,15 @@ for (const testCase of SANDBOX_CASES) {
     if (!testCase.expect.test(result.output)) {
       failures.push(
         `${testCase.gate} failed, but its output did not match ${testCase.expect} — so it failed for some\n    OTHER reason, and this case proved nothing about the planted shape.\n    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
+      );
+      continue;
+    }
+    // `reject` is the other half of a plant, for gates whose job is to TELL TWO THINGS APART. A fixture can
+    // contain a violation and a look-alike that must NOT be reported; without this, a gate that flags
+    // everything it sees passes its plant while being useless. Only cases that need the distinction set it.
+    if (testCase.reject && testCase.reject.test(result.output)) {
+      failures.push(
+        `${testCase.gate} failed for the right reason but ALSO reported ${testCase.reject}, which the fixture\n    planted as a look-alike that must be ignored. The gate does not distinguish the two.\n    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
       );
       continue;
     }
