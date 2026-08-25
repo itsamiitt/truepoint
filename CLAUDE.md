@@ -83,6 +83,11 @@ news/social feeds. See 04-opportunity-scores.md.
   **`bun run verify` runs every one of the cheap ones in a single pass**, status first, failing output in
   full, and — because this repo has been bitten by it — distinguishing UNAVAILABLE (a tool that could not run)
   from PASS, exiting non-zero for both. Use it before pushing; it is the closest local proxy for the gates job.
+  **A bare `bun test` AT THE REPO ROOT reports 2 failures that are not yours.** Bun discovers `cascade/`'s two
+  suites, and cascade is a self-contained sub-project whose dependencies install under `cascade/` — so they
+  error with `Cannot find package 'hono'` / `@electric-sql/pglite`. That is the separation working, not a
+  broken gate: CI's unit step globs `find packages apps` and never sees them, and cascade has its own CI job.
+  Run the monorepo's units the way CI does, or run cascade's with `cd cascade && bun install && bun test`.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
