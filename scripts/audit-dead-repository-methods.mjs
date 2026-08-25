@@ -159,6 +159,26 @@ const ADJUDICATED = [
       "no per-contact consent HISTORY surface exists. The DSAR access report deliberately reports a footprint COUNT (assembleAccessReport's consentRecords is a number, from its own query), and contactMergeRepository counts rows the same way. Whether an access report should carry full consent detail is a legal/product question, not a missing call.",
   },
   {
+    match: "salesNavLinkRepository.findExisting",
+    verdict:
+      "superseded by insertDedup, which is what the callers use. A find-then-insert pair is racy by construction; the atomic dedup insert is the correct primitive and this one is the leftover half of the pattern it replaced.",
+  },
+  {
+    match: "customFieldRepository.getDefinitionById",
+    verdict:
+      "the surfaces read definitions in bulk (listDefinitions, listDefinitionsByEntity) and resolve one from that set. A fetch-one-by-id has no screen behind it — same shape as retentionClassPolicyRepository.getPolicy.",
+  },
+  {
+    match: "emailEventRepository.countByType",
+    verdict:
+      "only an itest calls it (emailIsolation.itest.ts). No production consumer. Note the near-miss when triaging this: grepping the bare method name surfaces activityRepository.countByTypeForWorkspace, which is a DIFFERENT repository and is live — the name collision makes this one look called when it is not.",
+  },
+  {
+    match: "platformAdminRepository.recentDataQualitySnapshots",
+    verdict:
+      "the series is maintained but has no reader yet. dataQualitySnapshotRepository.insert writes it, the retention engine covers it (retention_class_policies carries a 730-day data_quality_snapshots policy) — only the admin READ surface is unbuilt, which this method's own doc calls a follow-up ('Latest-per-workspace is a follow-up'). Writer ahead of its screen, not rot.",
+  },
+  {
     match: "crm*",
     verdict:
       "the CRM connector module is dark behind CRM_SYNC_ENABLED (9 tables). Uncalled methods are the expected state of an unshipped module, not rot.",
