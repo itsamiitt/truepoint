@@ -39,6 +39,7 @@ const GATES = [
   { name: "alias-aware import cycles", cmd: ["bun", "run", "lint:alias-cycles"] },
   { name: "typecheck reaches every test", cmd: ["bun", "run", "lint:typecheck-coverage"] },
   { name: "required env vars in template", cmd: ["bun", "run", "lint:env-template"] },
+  { name: "commits name an outcome", cmd: ["bun", "run", "lint:outcome-tags"] },
   { name: "batch insert bounds", cmd: ["bun", "run", "lint:batch-inserts"] },
   { name: "queue consumers", cmd: ["bun", "run", "lint:queue-consumers"] },
   { name: "gates can still fail", cmd: ["bun", "run", "lint:gates-selftest"] },
