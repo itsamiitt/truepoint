@@ -36,6 +36,24 @@ on:
   schedule:
     # 03:17 UTC — off the hour on purpose. GitHub's scheduler queues heavily at :00 and a cron that competes
     # with every other repo's midnight job is the one that silently starts skipping runs.
+    #
+    # AND OFF-THE-HOUR IS NOT ENOUGH: a scheduled run can still be delayed indefinitely or DROPPED entirely
+    # under load, and GitHub guarantees nothing about when — or whether — one fires. Observed 2026-08-25: this
+    # workflow was `state: active` on the default branch, 03:17 came and went, and 22 minutes later no run
+    # existed. Nothing anywhere reported that.
+    #
+    # SO HERE IS THE HOLE THIS FILE DOES NOT CLOSE, stated rather than left to be discovered: the "Confirm the
+    # suites actually RAN" step proves the soaks executed WHEN THIS WORKFLOW RUNS. It cannot prove the workflow
+    # ran. A nightly that silently stops firing reports nothing, looks exactly like a nightly that keeps
+    # passing, and its first symptom is a performance regression nobody caught — the same failure this file was
+    # written to fix, one level up.
+    #
+    # If you depend on these numbers (TP-2/TP-6 gate the 1M→2M published-ceiling raise), CHECK that a run
+    # exists rather than assuming one did. A dispatch is always available:
+    #     gh workflow run nightly.yml --ref main
+    # Closing it properly needs a monitor on a RELIABLE trigger — a push-triggered CI step reading this
+    # workflow's last-run age and complaining past ~48h. That needs `actions: read` in ci.yml and is a scope
+    # decision, not a drive-by edit.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
