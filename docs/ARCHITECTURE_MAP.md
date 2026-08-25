@@ -1559,3 +1559,17 @@ flowchart TD
   `--tp-ink-4` as text 93, nine exported components rendering unstyled outside `apps/auth`. The response was
   to give the load-bearing ones gates (`classCoverage`, `rawPxBudget`, the `.domtest.tsx` suite) rather than
   to restate them in prose. If you are about to write a UI rule down, write a check instead.
+
+  2026-08-25 refresh (merge of the docs-portal rework, ed7eb22a): 2435 → 2446 files, unassigned still **0**.
+  Eleven source files arrive in the existing `shared["apps/doc/features"]` area — the `assistant/` slice
+  (`answer.ts` + test, `intents.ts`, `AssistantMessage`/`SupportAssistant`, `index.ts`) and api-reference's
+  `guideSections.ts` + test and `sidebarEntries.ts`. (`assistant.module.css` is not counted: the file-set hash
+  tracks source extensions only.)
+
+  The merge collided with this session's UI work in exactly one place, and the resolution is worth knowing
+  because both sides were right. That commit reworked the docs portal while still calling `PageIntro`; this
+  session had deleted `PageIntro` as a fork of the DS `PageHeader` (12 callers against the DS component's
+  zero). Resolved by keeping the incoming `GuideBody` — which the `/docs` index and every `/docs/[slug]` guide
+  now share, so they cannot drift apart in heading scale or measure — and rendering its header through
+  `PageHeader`. The spacer div this session had wrapped the body in went with it: each `GuideBody` section
+  already carries `padding: var(--tp-space-8) 0`, so keeping both would have double-counted the gap.

@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2435,
-  "fileSetHash": "sha256:526611f9340913401772705a45b7217b9b8ec4ad6421192187d11f63bf3aa34c",
+  "fileCount": 2446,
+  "fileSetHash": "sha256:2eb8cbbd4ae87d128c935ef399a094efd5c85bf2f34d842e9b787c3919dd250a",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2706,6 +2706,7 @@
       "apps/doc/src/app/trust/page.tsx"
     ],
     "apps/doc/components": [
+      "apps/doc/src/components/AssistantContext.tsx",
       "apps/doc/src/components/AvailabilityBadge.tsx",
       "apps/doc/src/components/ButtonLink.tsx",
       "apps/doc/src/components/CodeBlock.tsx",
@@ -2756,9 +2757,19 @@
       "apps/doc/src/features/api-reference/components/DocsShell.tsx",
       "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
       "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
+      "apps/doc/src/features/api-reference/components/GuideBody.tsx",
       "apps/doc/src/features/api-reference/components/GuidePage.tsx",
       "apps/doc/src/features/api-reference/components/SnippetTabs.tsx",
+      "apps/doc/src/features/api-reference/guideSections.test.ts",
+      "apps/doc/src/features/api-reference/guideSections.ts",
       "apps/doc/src/features/api-reference/index.ts",
+      "apps/doc/src/features/api-reference/sidebarEntries.ts",
+      "apps/doc/src/features/assistant/answer.test.ts",
+      "apps/doc/src/features/assistant/answer.ts",
+      "apps/doc/src/features/assistant/components/AssistantMessage.tsx",
+      "apps/doc/src/features/assistant/components/SupportAssistant.tsx",
+      "apps/doc/src/features/assistant/index.ts",
+      "apps/doc/src/features/assistant/intents.ts",
       "apps/doc/src/features/changelog/components/ChangelogPage.tsx",
       "apps/doc/src/features/changelog/index.ts",
       "apps/doc/src/features/datasets/components/DatasetPage.tsx",
