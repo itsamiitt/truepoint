@@ -167,6 +167,14 @@ jobs:
       #
       # Fail-open on the API call itself for the same reason: a fork PR whose token cannot read Actions
       # metadata must not turn red over a monitoring nicety.
+      #
+      # WHAT IT DOES NOT TELL YOU: it counts ANY run, including a workflow_dispatch. So it answers "did the
+      # soak run recently", not "is the SCHEDULE working" — and a cron that has quietly stopped can hide
+      # behind manual dispatches indefinitely. That is the right trade for the thing being protected (the
+      # TP-2/TP-6 numbers exist either way, and those are what gate the ceiling raise), but if the question
+      # you actually have is whether the cron fires, filter on `.event == "schedule"` instead. Verified on the
+      # runner 2026-08-25: it read a dispatch from 10h earlier and stayed quiet, which is exactly this
+      # behaviour.
       - name: Nightly soak still firing?
         if: always()
         continue-on-error: true
