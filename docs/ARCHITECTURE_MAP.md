@@ -405,6 +405,14 @@ apps/                           # deployable processes (thin transport adapters)
   `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
   `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
   cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound is 1 search, not one per digit));
+  every facet carries a **`scope`** (`both` | `workspace-only`) and `FacetScopeBadge` renders it: the two
+  narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`) DERIVE from that one
+  declaration and return the fields they dropped, so the badge, the `ScopeNotice` above the grid and the
+  query actually sent cannot drift — before it, 13 of 20 People controls deleted the whole database half of
+  the results with nothing on screen saying so (`filterScope.test.ts` is the gate);
+  **result columns** (`columnRegistry.ts` — which columns each grid offers and which are on by default, kept
+  alias-free so `bun test` can reach it; `peopleColumns.tsx`/`AccountsTable.tsx` render them, the shared
+  `components/search/ColumnChooser` toggles them);
   **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
@@ -421,8 +429,22 @@ apps/                           # deployable processes (thin transport adapters)
   overlay ≤768px with scrim + focus return + `inert`), `SearchTabs`, `useDrawerCollapsed`
   (localStorage `tp.search.drawer`, read in an effect — reading at render is a hydration mismatch),
   `useSearchTab` + `searchTabUrlState` (the `?tab` codec, which writes without touching either pane's
-  query params — the property `searchTabUrlState.test.ts` asserts). It sits outside `features/` so both
-  panes and the composer can import it without closing an import cycle.
+  query params — the property `searchTabUrlState.test.ts` asserts), `ColumnChooser` (both grids' column
+  toggle; sorting stays with each pane's own toolbar because sort values are query-shaped and the two
+  queries are different types) and `ScopeNotice` (says which active filters are suppressing the
+  platform-database half). It sits outside `features/` so both panes and the composer can import it without
+  closing an import cycle.
+- **shared:** `components/employment/` — `EmploymentHistory`, the grouped (company-block) career view over
+  the pure `lib/employment/` grouping + precision-aware date rules. `master_employment` is one row per
+  (person, company, start), so a promotion is a second row at one employer; grouping is what stops that
+  rendering as two unrelated entries with the company name printed twice. The opaque `group_key` both
+  employment contracts now carry is a per-response `dense_rank` computed in SQL, so grouping never rests on
+  the printed name (which would merge two same-named companies and split one written two ways) and no
+  Layer-0 id crosses the API boundary. Rendered by `features/prospect`'s `EmploymentSection` and
+  `features/accounts`' `DatabaseProfileDrawer`.
+- **shared:** `components/data-health/` — `DataHealthCell` (score pill + freshness band), rendered by both
+  the list-detail members table and the Search people grid; it lives here because a feature slice may not
+  import another one (`lint:cross-feature`).
 
 #### accounts — *the Accounts pane + the routed company profile* (was `features/companies`, MI-1)
 - **web:** `features/accounts/` — `AccountsPane.tsx` (the Accounts tab: firmographic filter panel in the
