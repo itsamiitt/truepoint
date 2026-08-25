@@ -649,3 +649,44 @@ pass silently if it falls — they demand the budget be tightened instead.
    **Decide:** (a) add the tenant-half read at the four `usage_events` emitters; or (b) accept env-only gating
    for it, and remove `flagKey: "usage_events"` from the admin listing so staff are not shown a dead control.
    Either way `provenance_events` needs no change now.
+
+## 10. `user_sessions` has no RLS by design, but a customer-surface path now reads it as `leadwolf_app`
+
+**Status:** open — needs a human decision. Raised 2026-08-25 while sweeping every `tenant_id` table for RLS
+coverage (the sweep that found the partition bypass fixed in the same session).
+
+**What is true.** `user_sessions` is one of very few tables carrying `tenant_id`/`workspace_id` with no RLS
+policy at all, and that is deliberate and recorded. `packages/db/src/rls/auth.sql` states it: the user-scoped
+auth tables (`user_sessions`/`user_mfa_methods`/`trusted_devices`/`auth_email_tokens`) are auth-service-owned
+and keyed by `user_id`, read by the auth service under its own privileged connection BEFORE any tenant is
+chosen. A tenant-predicate policy is close to circular there: you look the session up in order to learn which
+tenant it belongs to. The runtime backs this up — the default pool connects as the DB owner and only
+`withTenantTx` drops to `leadwolf_app`.
+
+**What has changed since that was written.** `packages/core/src/auth/adminSessions.ts` — the workspace-admin
+session-management surface — reads and writes `user_sessions` INSIDE `withTenantTx`, i.e. as `leadwolf_app`,
+which the "auth-service-owned" rationale does not contemplate. Two comments in the one feature disagreed about
+whether the table is gated:
+
+- `revokeAllForMemberInTx` was right: "RLS does not gate user_sessions, so the membership check is the
+  caller's responsibility."
+- `revokeMemberSession` said it re-used "the RLS-scoped read", which was false. Corrected in this session.
+
+The app role additionally holds SELECT/INSERT on the table through the schema-wide grant. Nothing reachable
+reads it cross-tenant today, and the stored credential material is not usable if read — the session `id` is an
+internal reference (the cookie carries the refresh token) and only the token's SHA-256 hash is stored. What a
+cross-tenant read would expose is `user_id`, `tenant_id`, `ip_address`, `user_agent` and timestamps: who is
+logged in, from where, on what device, in which org. IP addresses are personal data under GDPR, so this is a
+compliance question as well as an isolation one (09-compliance.md).
+
+**What was done now, deliberately narrow:** `revokeInTx` is scoped by `workspaceId` instead of session id
+alone, so the guarantee no longer depends on its single caller having called `findActiveInWorkspace` first,
+and an itest pins it (it fails when the predicate is removed). The false comment is corrected. **The security
+model itself was not changed** — adding RLS to an authentication table is not a call to make without a human.
+
+**Decide:** (a) add a workspace-scoped policy to `user_sessions` — verified compatible with all three
+tenant-tx methods, and the owner-connected auth path bypasses it since these policies are ENABLE-not-FORCE; or
+(b) keep the table ungated and instead REVOKE the app role's grants on it, moving the admin session surface to
+a privileged seam; or (c) accept the status quo now that the predicates are explicit, and record in
+`rls/auth.sql` that a customer-surface path legitimately touches the table so the next reader is not misled by
+the "auth-service-owned" framing.
