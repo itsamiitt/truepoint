@@ -21,6 +21,18 @@
 // shape; re-serializing it here to diff would duplicate that shape in a second place and the two would
 // drift. If the file set matches, the map was generated from this tree.
 //
+// IT RUNS ON `push` ONLY, and the distinction is worth stating because the obvious generalisation is wrong.
+// On a `pull_request` event GitHub checks out a MERGE of the head with its base, so the tree carries files
+// from `main` the branch never saw; this gate failed exactly that way on its first live run — 11 "extra"
+// files while main sat 75 files ahead. It cannot pass there, because the artifact is derived from the WHOLE
+// TREE and the author cannot regenerate it for a base they have not merged.
+//
+// That does NOT make every artifact-vs-tree gate push-only. `lint:lockfile` compares a committed artifact
+// too, but against a BOUNDED counterpart (bun.lock ↔ package.json), so on a merge ref it asks a real
+// question: would the merged result be consistent? A PR editing package.json while main edits bun.lock SHOULD
+// fail there. The rule is about SCOPE, not about artifacts: a whole-tree derivation belongs on `push`, a
+// bounded pair belongs on both.
+//
 // Run: `node scripts/lint-arch-map.mjs` (wired as `bun run lint:arch-map`). Fix: `bun run arch:map`.
 
 import { readFileSync } from "node:fs";
