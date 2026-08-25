@@ -42,6 +42,7 @@ import type { AccountRow } from "../accountRows";
 import styles from "../accounts.module.css";
 import { exportAccountsCsv } from "../export";
 import { useAccountsSearch } from "../hooks/useAccountsSearch";
+import { AccountsSort } from "./AccountsSort";
 
 /** The fixed-option firmographic facets that get live counts in the rail (POST /account-search/facets). */
 const COUNT_FIELDS: AccountFacetKey[] = [
@@ -112,6 +113,7 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
           />
+          <AccountsSort query={search.query} onChange={search.setQuery} />
           <ColumnChooser
             columns={ACCOUNT_TOGGLEABLE_COLUMNS}
             visibleColumns={visibleColumns}

@@ -167,6 +167,21 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
     ],
   },
   {
+    id: "fit",
+    title: "Fit",
+    facets: [
+      // Supported by accountSearchRepository's range dispatch since ICP scoring landed, but never offered
+      // in the sidebar — "show me only my best-fit accounts" was a question the panel could not ask.
+      {
+        kind: "range",
+        field: "icp_fit_score",
+        label: "ICP fit score",
+        valueKind: "number",
+        scope: "workspace-only",
+      },
+    ],
+  },
+  {
     id: "location",
     title: "Location",
     facets: [
