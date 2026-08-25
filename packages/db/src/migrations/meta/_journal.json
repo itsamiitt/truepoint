@@ -974,6 +974,13 @@
       "when": 1787796120000,
       "tag": "0139_validation_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1787796180000,
+      "tag": "0140_partition_rls",
+      "breakpoints": true
     }
   ]
 }
