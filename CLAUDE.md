@@ -185,7 +185,7 @@ The doc's `services/*` are **modules, not directories**. Do not create a `servic
 | graph | `packages/db/src/schema/masterGraph.ts` + `masterGraphRepository` (Layer 0, no tenant key); ER in `packages/forge-core` |
 | ingest | the `forge` Postgres schema (`raw_captures → parsed_records → verified_records → sync`), `/api/v1/ingest`, the `import_jobs` trio |
 | verify | `verification_jobs` + the `reverification` / `reverification_sweep` queues in `apps/workers` |
-| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. |
+| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. **Rule 5 is upheld by THREE mechanisms, not one** — grep for `fieldProvenance` alone and a compliant path looks like a gap: (1) `field_provenance` jsonb, written via `planFieldWrite` on the import and enrichment paths; (2) `sourceImportRepository.append` with `sourceName: "database"`, which is how a REVEAL records that a copied channel came from the TruePoint graph; (3) on Layer-0, `source_records` + `field_provenance` + `match_links`, written **only** by the opt-in CONTRIBUTE-TO path — `masterGraphRepository` states that MATCH-AGAINST writes none of them and a LINK mutates nothing at all. |
 | entitlements | `subscriptions`, `billing_cycles`, `plan_templates.features`, `tenant_feature_flags`, `credit_ledger` (+ `entitlement`, Phase 1) |
 | fraud | not built (Phase 3) |
 | compliance | `suppression_list`, `consent_records`, `dsar_requests`, `retention_*`, the `dsar` queue |
