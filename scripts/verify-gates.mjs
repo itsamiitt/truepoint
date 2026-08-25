@@ -41,6 +41,7 @@ const GATES = [
   { name: "required env vars in template", cmd: ["bun", "run", "lint:env-template"] },
   { name: "commits name an outcome", cmd: ["bun", "run", "lint:outcome-tags"] },
   { name: "no earned currency (rule 7)", cmd: ["bun", "run", "lint:earned-currency"] },
+  { name: "architecture map is current", cmd: ["bun", "run", "lint:arch-map"] },
   { name: "batch insert bounds", cmd: ["bun", "run", "lint:batch-inserts"] },
   { name: "queue consumers", cmd: ["bun", "run", "lint:queue-consumers"] },
   { name: "gates can still fail", cmd: ["bun", "run", "lint:gates-selftest"] },

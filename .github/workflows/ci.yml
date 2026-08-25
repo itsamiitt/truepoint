@@ -174,6 +174,13 @@ jobs:
       # so the patterns match EARNING one, plus the schema shapes copy patterns cannot see.
       - name: No contributor-earned currency
         run: bun run lint:earned-currency
+      # docs/architecture-map.json is the machine-readable navigation index agents read to find code by
+      # feature. A freshness check already existed — but as a Claude Code STOP HOOK, which fires on one
+      # agent's machine at task end. Nothing checked it here, and the committed map was 8 files behind the
+      # tree while every run stayed green. Compares fileSetHash via the hook's own buildMap(), so a git
+      # checkout or a reinstall cannot trip it.
+      - name: Architecture map is current
+        run: bun run lint:arch-map
       # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
       # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
       # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every
