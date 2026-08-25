@@ -76,7 +76,18 @@ news/social feeds. See 04-opportunity-scores.md.
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
   `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
   `bun run lint:secrets` · `bun run lint:roving-tabindex` · `bun run lint:design-tokens` ·
-  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run db:migrate`.
+  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run lint:queue-consumers` ·
+  `bun run lint:alias-cycles` · `bun run lint:typecheck-coverage` · `bun run lint:env-template` ·
+  `bun run lint:outcome-tags` · `bun run lint:earned-currency` · `bun run lint:gates-selftest` ·
+  `bun run db:migrate`.
+  **`bun run verify` runs every one of the cheap ones in a single pass**, status first, failing output in
+  full, and — because this repo has been bitten by it — distinguishing UNAVAILABLE (a tool that could not run)
+  from PASS, exiting non-zero for both. Use it before pushing; it is the closest local proxy for the gates job.
+  **A bare `bun test` AT THE REPO ROOT reports 2 failures that are not yours.** Bun discovers `cascade/`'s two
+  suites, and cascade is a self-contained sub-project whose dependencies install under `cascade/` — so they
+  error with `Cannot find package 'hono'` / `@electric-sql/pglite`. That is the separation working, not a
+  broken gate: CI's unit step globs `find packages apps` and never sees them, and cascade has its own CI job.
+  Run the monorepo's units the way CI does, or run cascade's with `cd cascade && bun install && bun test`.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
@@ -85,6 +96,22 @@ news/social feeds. See 04-opportunity-scores.md.
   `secrets` scans tracked files for credential shapes and for this product's PII formats
   (`.csv`/`.xlsx`/`.xls`/`.rdb`). The last two carry a declared escape hatch (`lint-secrets-ok:`,
   `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
+  **The seven added 2026-08-24/25, each for a rule that existed only as prose:** `queue-consumers` — a queue
+  with a producer and no worker parks jobs for ever; `alias-cycles` — depcruise's `no-circular` runs with no
+  `tsConfig`, so an import cycle built out of `@/…` edges is invisible to the rule that forbids it, and its
+  clean bill of health was a one-off measurement rather than a check; `typecheck-coverage` — `turbo run
+  typecheck typecheck:tests` treats an UNDEFINED task as nothing to do, so 18 test files in three workspaces
+  were type-checked by nothing (adding the task surfaced four real errors); `env-template` — `@leadwolf/config`
+  validates at import, so a REQUIRED var missing from `deploy/env.production.template` is a boot failure with a
+  bare `Required` list naming no file; `outcome-tags` — rule 1, scoped to the commits under review because 96%
+  of the last 300 carry a tag but only 36% of the last 1000, so judging history would be red on arrival;
+  `earned-currency` — rule 7 across the whole product rather than just `apps/doc`, matching EARNING a credit
+  and the schema shapes (`points_balance`, `awardPoints`) while leaving the purchased-credit ledger alone;
+  `gates-selftest` — plants a violation per gate and requires each to fail on it and go green again. That last
+  one is the load-bearing one: **13 gates are proven able to fail on every build**, because a lint rule that
+  cannot fail is indistinguishable from one that passes, and this repo has produced at least seven of those.
+  Escape hatches follow the same idiom (`feature-flag-ok:`, `batch-insert-bounds-ok:`, `roving-tabindex-ok:`,
+  `earned-currency-ok:`, `no-outcome:`) — a reason, never a bare suppression.
   **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
   were listed here but never actually enforced. All of them are steps in the gates job now.
   **`bun run lint` on a pre-2026-08-22 Windows checkout reports ~1,599 errors, and 1,582 of them are the
@@ -115,6 +142,34 @@ news/social feeds. See 04-opportunity-scores.md.
   `role=`/attribute rather than the element, so the directive goes inside the JSX attribute list. Prose first,
   directive last; a wrapped comment between them makes it bind to nothing and biome says `suppressions/unused`
   while the rule keeps firing.
+  **`biome check --write` SILENTLY REFUSES the unsafe fixes, and `useTemplate` is one of them.** It prints
+  `× Some errors were emitted while applying fixes.` and changes nothing; only `--write --unsafe` rewrites
+  them. The two that bite here are `lint/style/useTemplate` (a `` `a` + `b` `` concatenation of template
+  literals — very easy to write in a multi-line error message) and `lint/style/noUnusedTemplateLiteral`. This
+  broke three branches at once on 2026-08-24: the safe `--write` was run, its output piped through `tail`, and
+  the SCRIPT's own `ok` line printed underneath was read as the formatter passing. **Never read a format check
+  through `tail` beside other output, and never assume `--write` finished the job** — run
+  `bunx biome check <file>` on its own line afterwards and require `No fixes applied.` Otherwise CI's `lint`
+  step is the only thing that catches it, i.e. after the push.
+  **Git Bash MANGLES `git show <rev>:<path>` on Windows.** MSYS path conversion rewrites
+  `origin/main:.github/workflows/ci.yml` into `origin\main;.github\workflows\ci.yml`, and git answers
+  `fatal: ambiguous argument`. Prefix the command with `MSYS_NO_PATHCONV=1`. The trap is not the error, it is
+  the error being HIDDEN: run it with `2>/dev/null` — which is a reflex when a file may not exist — and the
+  fatal disappears, leaving empty output that reads exactly like "that path is not in this revision". On
+  2026-08-24 that produced a confident wrong conclusion about which workflow file was on `main`. Same rule as
+  above: if a command's output is empty, prove it ran before believing what the emptiness seems to say.
+  **Do NOT author a script with a shell heredoc — write the file with an editor.** Backslash escapes written
+  into a `cat > f <<'EOF'` heredoc arrive mangled, quoted delimiter or not: `\n` becomes a real newline, `\b`
+  a backspace character, `\(` loses its backslash. On 2026-08-25 this cost six cycles in one session and never
+  once appeared as an error — the damage always looked like a RESULT:
+  · a regex built as `` `\\b${name}` `` matched nothing, so a runbook audit reported all 12 env switches
+    missing when every one was present;
+  · a `content:` string carrying `\n` produced a real newline inside a JS string literal, so the script failed
+    to PARSE — and the run "proved" a mechanism it had never reached;
+  · three separate attempts to plant a deliberate failure planted nothing, and each silently "passed".
+  A heredoc is fine for prose (commit messages, PR bodies) — the trap is code containing escapes. If one is
+  unavoidable, assert the string survived: read the file back and require a distinctive substring before
+  trusting the run. `scripts/audit-dead-repository-methods.mjs`'s verdict writer does that and says why.
 - **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
   env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
   production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
@@ -157,7 +212,7 @@ The doc's `services/*` are **modules, not directories**. Do not create a `servic
 | graph | `packages/db/src/schema/masterGraph.ts` + `masterGraphRepository` (Layer 0, no tenant key); ER in `packages/forge-core` |
 | ingest | the `forge` Postgres schema (`raw_captures → parsed_records → verified_records → sync`), `/api/v1/ingest`, the `import_jobs` trio |
 | verify | `verification_jobs` + the `reverification` / `reverification_sweep` queues in `apps/workers` |
-| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. |
+| confidence | `field_provenance` jsonb + `packages/core/src/prospect/fieldProvenance.ts` (the pure fold). Decay curves are Phase 2 — not built. **Rule 5 is upheld by THREE mechanisms, not one** — grep for `fieldProvenance` alone and a compliant path looks like a gap: (1) `field_provenance` jsonb, written via `planFieldWrite` on the import and enrichment paths; (2) `sourceImportRepository.append` with `sourceName: "database"`, which is how a REVEAL records that a copied channel came from the TruePoint graph; (3) on Layer-0, `source_records` + `field_provenance` + `match_links`, written **only** by the opt-in CONTRIBUTE-TO path — `masterGraphRepository` states that MATCH-AGAINST writes none of them and a LINK mutates nothing at all. |
 | entitlements | `subscriptions`, `billing_cycles`, `plan_templates.features`, `tenant_feature_flags`, `credit_ledger` (+ `entitlement`, Phase 1) |
 | fraud | not built (Phase 3) |
 | compliance | `suppression_list`, `consent_records`, `dsar_requests`, `retention_*`, the `dsar` queue |
