@@ -2,6 +2,16 @@
 
 **Outcomes advanced:** [S-09] [S-10] [S-13] [S-04] [S-08] [A-01]. No new services or search engines — everything extends the existing SearchPort/repository dispatch tables and the declarative filter-group model.
 
+> **Status (2026-08-25):** Phases 1, 2, 3a, 3b and 3c are **implemented and pushed** on
+> `claude/search-tab-improvements-plan-6l2jp1`. Phase **3d remains unstarted** — it is gated on decision
+> **D3** below. Decisions **D1** (global-half pagination) and **D2** (null-cliff semantics) shipped with
+> their documented defaults. **D5** was resolved in a way that removes the question: the group key is a
+> per-response `dense_rank` computed in SQL, so no Layer-0 id and no hash of one crosses the API boundary.
+> **D4** stands with one narrow exception now in the code, flagged for review: a "Job change detected"
+> filter reads `intent_signals` scoped to `signal_type='job_change'` only, on the reading that our own
+> job-change detection is [S-13] (a named target) rather than [X-04] intent data. The scoping is enforced in
+> the query, its index and a test; if that reading is wrong, revert that one facet.
+
 ## Context
 
 The Search tab (`apps/web` → `/search`, People + Accounts panes) has three problem areas, all confirmed by code audit:
