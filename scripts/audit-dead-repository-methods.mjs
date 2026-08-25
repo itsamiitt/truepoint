@@ -5,6 +5,26 @@
 //
 // Method-level, not module-level, because the repository objects themselves are all imported somewhere — the
 // dark part is always a method hanging off a live object.
+//
+// ── WHAT A FINDING HERE DOES *NOT* MEAN ────────────────────────────────────────────────────────────────────
+// This answers exactly one question: does this SYMBOL have a caller? It cannot answer "is this CAPABILITY
+// missing", and on 2026-08-24 two findings were written up as though it could. Both were wrong, both in the
+// same direction, and both were caught only by asking a second question this script never asks:
+//
+//   WHAT ELSE WRITES THIS TABLE, OR SERVES THIS NEED, UNDER A DIFFERENT NAME?
+//
+//   • `governance.addGlobalSuppression` has no caller — true. It was written up as "staff cannot suppress an
+//     individual address". False: `dsarFanoutRepository.addGlobalSuppression` writes exactly that row under a
+//     different name, and two compliance flows call it daily. The real gap was narrower — no STAFF-initiated
+//     address suppression — and a fix aimed at the wrong claim would have missed it.
+//   • The `provenance_events` tenant flag is read by nothing — true. It was written up as a broken dual gate.
+//     False: it gates OVERLAY events, no overlay writer exists yet, and migration 0088 states that Layer-0
+//     events ride the env half alone. It is seeded AHEAD of its consumer, deliberately.
+//
+// So treat every row below as a LEAD. Before concluding that anything is missing: grep the TABLE, grep the
+// COLUMN, and read the nearest migration's prose — this codebase routinely lands a writer ahead of its caller
+// and says so at the definition. The ADJUDICATED register exists so that judgement, once made, is recorded
+// rather than re-derived.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
@@ -102,6 +122,96 @@ const ADJUDICATED = [
     match: "providerCallRepository.spendSinceByProvider",
     verdict:
       "unused refinement, not a broken brake — the aggregate spendSince IS the daily spend guard, called by enrichContact, enrichContactV2 and refreshAccount. Only the per-provider breakdown has no consumer.",
+  },
+  {
+    match: "authAllowedOriginsRepository.*",
+    verdict:
+      "blocked on a design decision, not neglect — AUTH-036 cannot be wired as its tracker describes: three of the four redirect call sites have no tenant at check time, and the fourth is gated by a CORS preflight that carries no credentials. Written up in docs/planning/auth-platform/MANAGED_ORIGINS_BLOCKER.md and recorded as decisions.md #7. There is nowhere correct to call these from yet.",
+  },
+  {
+    match: "revealJobRepository.requeueFailedRows",
+    verdict:
+      "unexposed, and not casually exposable. Bulk reveal is a confirm-before-spend money path; re-queuing rows in place would re-enter spend without a fresh confirmation. The shipped job-control surface (cancelAndRelease, pauseRunning, resumePaused, listFailedContactIds) instead LISTS failed contacts so a new, confirmed job can be submitted. Wiring an in-place retry is a spend-path product decision.",
+  },
+  {
+    match: "mailboxRepository.markError",
+    verdict:
+      "the durable failure IS recorded — markReauthRequired has callers and is the state that needs surfacing. markError would flip status to a generic 'error' on a transient provider blip, and its CRM sibling documents exactly why that is undesirable. Whether transient failures should be visible at all is an ops question, not a missing call.",
+  },
+  {
+    match: "providerConfigRepository.listEnabled",
+    verdict:
+      "superseded by the sibling list(), which selects the enabled column and lets callers filter. Enablement is default-true column semantics, so a pre-filtered variant saves nothing a caller does not already have.",
+  },
+  {
+    match: "sessionRepository.findActiveById",
+    verdict:
+      "sessions are never looked up by id. Every path resolves one by findByRefreshTokenHash on the hashed lw_refresh cookie, which is the design: a merely-present cookie must never count as a valid session. A by-id lookup has no caller because it has no legitimate caller.",
+  },
+  {
+    match: "featureFlagRepository.overridesForFlag",
+    verdict:
+      "the shipped admin surfaces read overrides per TENANT (overridesForTenant, overrideFor) or all at once (allOverrides). A per-FLAG view of which tenants override it is not a screen that exists.",
+  },
+  {
+    match: "consentRepository.listForContact",
+    verdict:
+      "no per-contact consent HISTORY surface exists. The DSAR access report deliberately reports a footprint COUNT (assembleAccessReport's consentRecords is a number, from its own query), and contactMergeRepository counts rows the same way. Whether an access report should carry full consent detail is a legal/product question, not a missing call.",
+  },
+  {
+    match: "salesNavLinkRepository.findExisting",
+    verdict:
+      "superseded by insertDedup, which is what the callers use. A find-then-insert pair is racy by construction; the atomic dedup insert is the correct primitive and this one is the leftover half of the pattern it replaced.",
+  },
+  {
+    match: "customFieldRepository.getDefinitionById",
+    verdict:
+      "the surfaces read definitions in bulk (listDefinitions, listDefinitionsByEntity) and resolve one from that set. A fetch-one-by-id has no screen behind it — same shape as retentionClassPolicyRepository.getPolicy.",
+  },
+  {
+    match: "emailEventRepository.countByType",
+    verdict:
+      "only an itest calls it (emailIsolation.itest.ts). No production consumer. Note the near-miss when triaging this: grepping the bare method name surfaces activityRepository.countByTypeForWorkspace, which is a DIFFERENT repository and is live — the name collision makes this one look called when it is not.",
+  },
+  {
+    match: "platformAdminRepository.recentDataQualitySnapshots",
+    verdict:
+      "the series is maintained but has no reader yet. dataQualitySnapshotRepository.insert writes it, the retention engine covers it (retention_class_policies carries a 730-day data_quality_snapshots policy) — only the admin READ surface is unbuilt, which this method's own doc calls a follow-up ('Latest-per-workspace is a follow-up'). Writer ahead of its screen, not rot.",
+  },
+  {
+    match: "accountChildRepository.overlayExtensionsForAccounts",
+    verdict:
+      "the read half of a migration still in its WRITE phase. Only dual-write and backfill methods have callers (applyAccountDomainWrite, backfillAccountDomain/HqLocation, the counts and the missing-row finders); reads still come off the flat accounts.domain/hq_* caches, byte-identical. This is the reader the account_read_from_child cutover will use, and its own gate helper (accountReadFromChildEnabledForScope) has no consumer either — consistent, not stranded.",
+  },
+  {
+    match: "importStagingRepository.countStaged",
+    verdict:
+      "its own doc calls it 'chunk planning / diagnostics'. The live import path uses createStagingTable, copyRows, dedupWithinFile, readChunkBand and stagingTableName; chunk planning derives its bands without a total-row count. A diagnostic with no diagnostic surface.",
+  },
+  {
+    match: "enrichmentJobRepository.findContactCandidatesByMatchKeys",
+    verdict:
+      "the repository half of the dark bulk-enrich matcher. Its core counterparts createOverlayMatcher and createMasterGraphMatcher are exported from the barrel and consumed by nothing either, and bulk enrichment is gated behind BULK_ENRICHMENT_ENABLED plus the per-tenant flag. A whole matcher path built ahead of its enablement, not a stray method.",
+  },
+  {
+    match: "enrichmentJobRepository.getJobRowsByOutcome",
+    verdict:
+      "same dark bulk-enrich surface as findContactCandidatesByMatchKeys — a per-outcome row read for a job-detail screen that the enablement has not reached yet.",
+  },
+  {
+    match: "masterCompanyReadRepository.findHqRegionTx",
+    verdict:
+      "its doc says the HQ-region JOIN is 'a JOIN the grid does not need and the profile does'. The grid's projection is the one that ships; the profile view that would want the region has not been wired to it.",
+  },
+  {
+    match: "emailEventRepository.listByContact",
+    verdict:
+      "email events are INGESTED and nothing else — ingest() is the only method with a caller. There is no per-contact email-history surface, so neither this read nor countByType has a screen behind it.",
+  },
+  {
+    match: "outcomeMetricsRepository.actionCounts",
+    verdict:
+      "per-action counts over usage_event, with no consumer. Note the dependency: usage_event is written only while USAGE_EVENTS_ENABLED is on (decisions.md #9), so this query would return an empty picture today regardless of who called it. Surface it after that gate is settled, not before.",
   },
   {
     match: "crm*",
