@@ -442,12 +442,12 @@ for (const testCase of CASES) {
     // lint:batch-inserts produced 40 findings, nearly all false. Where a fixture also plants a LOOK-ALIKE —
     // the COMPLIANT form the gate must stay quiet about — `reject` asserts the gate told them apart. Set only
     // where there is a distinction worth making.
-    if (testCase.reject && testCase.reject.test(withPlant.output)) {
+    if (testCase.reject?.test(withPlant.output)) {
       failures.push(
-        `${testCase.gate} failed for the right reason but ALSO reported ${testCase.reject}, which the fixture\n` +
-          "    planted as a COMPLIANT look-alike it must ignore. The gate does not distinguish the two, so its\n" +
-          "    findings cannot be trusted even when it is right.\n" +
-          `    output : ${withPlant.output.trim().split("\n").slice(0, 3).join(" | ")}`,
+        `${testCase.gate} failed for the right reason but ALSO reported ${testCase.reject}, which the fixture
+    planted as a COMPLIANT look-alike it must ignore. The gate does not distinguish the two, so its
+    findings cannot be trusted even when it is right.
+    output : ${withPlant.output.trim().split("\n").slice(0, 3).join(" | ")}`,
       );
       continue;
     }
@@ -493,7 +493,7 @@ for (const testCase of SANDBOX_CASES) {
     // `reject` is the other half of a plant, for gates whose job is to TELL TWO THINGS APART. A fixture can
     // contain a violation and a look-alike that must NOT be reported; without this, a gate that flags
     // everything it sees passes its plant while being useless. Only cases that need the distinction set it.
-    if (testCase.reject && testCase.reject.test(result.output)) {
+    if (testCase.reject?.test(result.output)) {
       failures.push(
         `${testCase.gate} failed for the right reason but ALSO reported ${testCase.reject}, which the fixture\n    planted as a look-alike that must be ignored. The gate does not distinguish the two.\n    output : ${result.output.trim().split("\n").slice(0, 3).join(" | ")}`,
       );
