@@ -702,3 +702,59 @@ tenant-tx methods, and the owner-connected auth path bypasses it since these pol
 a privileged seam; or (c) accept the status quo now that the predicates are explicit, and record in
 `rls/auth.sql` that a customer-surface path legitimately touches the table so the next reader is not misled by
 the "auth-service-owned" framing.
+
+## 11. The Sales-Nav link harvest is automatic, and rule 4 says collection must be user-initiated
+
+**Status:** open — needs a human decision. Raised 2026-08-25 while checking what the extension's `alarms`
+permission drives. Nothing here is live: `LINKEDIN_LINK_CAPTURE_ENABLED` is unset (the endpoint refuses), the
+extension itself is dark behind `CHROME_EXTENSION_ENABLED`, and neither switch appears in
+`deploy/env.production.template`. This is a decision to take calmly, not an incident.
+
+**What the code does.** On a Sales Navigator search/list page, the content script harvests the result-row
+anchor hrefs and posts them in batches of up to 200:
+
+- `apps/extension/src/content/index.ts` — `evaluate(url)` calls `harvest(url)` when `pageType` is
+  `sales_search`, i.e. on NAVIGATION. `settle(url)` calls it again when the DOM goes quiet on the same page,
+  which is what makes a scroll load more rows and send them ("a settle re-harvest (lazy rows, scroll) sends
+  ONLY new URLs" — the dedup set exists precisely because this repeats as the user scrolls).
+- `apps/extension/src/content/adapters/linkedin/index.ts:harvestLinks` — visible-DOM anchors only, deduped,
+  absolute URLs, "nothing else off the page".
+- `apps/api/src/features/ingest/routes.ts:104` — `POST /api/v1/ingest/linkedin-links` writes ONLY the fetch
+  registry (`source_fetch_registry`, migration 0118) and never fetches inline.
+
+**No user gesture is involved at any point.** Opening the page and scrolling it are the triggers.
+
+**What the rules say.** CLAUDE.md rule 4 forbids, as a hard constraint, "background/bulk scraping of LinkedIn
+or other logged-in sites" and "collection beyond user-initiated actions in the extension". The extension's own
+design documents say the same in stronger words: 00-executive-summary "Capture is user-initiated and
+consent-gated — no background scraping"; 01a "visible-DOM anchor harvest + **user-initiated only**";
+09-product-architecture "**on a user gesture** extract the visible DOM".
+
+**Why this was not caught by the compliance note.** `docs/planning/extension-intelligence-loop.md` states
+"Captures remain user-initiated (hard constraint 4 upheld)". That sentence is TRUE and it is about the wrong
+thing: the CAPTURE path (a `CapturedRecord` posted to `/ingest`) is indeed gesture-driven. The link harvest is
+a different path with a different payload, and the note is silent about it. Rule 4's clause is about
+COLLECTION, not about captures.
+
+**The honest case for the current design**, which a decision should weigh rather than dismiss: the payload is
+URLs only — no names, no titles, no contact fields; the URLs are anchors already rendered on a page the user
+chose to open and is looking at; nothing is fetched inline; the server canonicalizes and drops unrecognised
+forms; the whole path is rate-limited by URL volume and dark twice over. It is a long way from the Sales
+Navigator EXTRACTION service that decisions.md (b) rejected outright, which proposed pulling profile FIELDS
+through a third-party extraction vendor.
+
+**The case that it still needs a decision:** rule 4 does not say "no bulk extraction of fields", it says no
+bulk scraping and no collection beyond user-initiated actions. A scroll-driven loop that sends 200 URLs per
+batch, repeatedly, from a logged-in site, is automatic collection whatever the payload is. And the rule's own
+enforcement clause is explicit: "Changes here require a human decision recorded in decisions.md." No such
+decision exists for this path — I looked.
+
+**Decide:** (a) require a gesture — harvest only when the user invokes it (a toolbar/panel action on a list
+page), which matches every design document and costs one entry point; or (b) authorise the automatic harvest
+explicitly HERE, narrowing rule 4 in CLAUDE.md to say that URL-only registration from a page the user is
+viewing is not "collection", so the next reader is not left to infer it; or (c) drop the harvest path and keep
+fetch-on-view only. Whichever is chosen, `VIEW_FETCH` deserves the same sentence: it fires on merely VIEWING a
+profile or company page, is likewise not user-initiated, and is likewise URL-only.
+
+**Not changed in this commit.** Ripping out a dark feature is a product decision, and so is narrowing a hard
+constraint. Rule 6 says surface the conflict rather than reinterpret it, which is what this entry does.
