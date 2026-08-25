@@ -23,6 +23,7 @@
     "lint:typecheck-coverage": "node scripts/lint-typecheck-coverage.mjs",
     "lint:env-template": "node scripts/lint-env-template-coverage.mjs",
     "lint:outcome-tags": "node scripts/lint-outcome-tags.mjs",
+    "lint:earned-currency": "node scripts/lint-earned-currency.mjs",
     "lint:batch-inserts": "node scripts/lint-batch-insert-bounds.mjs",
     "lint:queue-consumers": "node scripts/lint-queue-consumers.mjs",
     "lint:gates-selftest": "node scripts/lint-gates-selftest.mjs",

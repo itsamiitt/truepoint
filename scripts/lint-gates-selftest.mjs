@@ -217,6 +217,30 @@ const CASES = [
     reject: /probeOk\.module\.css/,
   },
   {
+    gate: "lint:earned-currency",
+    script: "scripts/lint-earned-currency.mjs",
+    dir: `apps/web/src/features/${TAG}`,
+    name: "Probe.tsx",
+    content: 'export const copy = "Earn 5 credits for each contribution you verify.";\n',
+    // The COMPLIANT look-alike, and this gate needs one more than most: rule 7 forbids an EARNED currency
+    // while the shipped credit ledger is a PURCHASED settlement unit, so the word "credits" is everywhere in
+    // legitimate copy. A gate that banned the word would be deleted within a week. "Data points verified" is
+    // in here too — `points` is an ordinary English word and only an accruing points BALANCE is the mechanism
+    // rule 7 names.
+    extra: {
+      name: "ProbeOk.tsx",
+      content: `export const okCopy = {
+  balance: "You have 250 credits remaining.",
+  buy: "Buy credits",
+  spend: "Revealing this contact costs 1 credit.",
+  history: "Credit ledger",
+  points: "Data points verified this month",
+};
+`,
+    },
+    reject: /ProbeOk\.tsx/,
+  },
+  {
     gate: "lint:cross-feature",
     script: "scripts/lint-cross-feature-imports.mjs",
     dir: `apps/admin/src/features/${TAG}`,
