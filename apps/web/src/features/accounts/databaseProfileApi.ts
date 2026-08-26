@@ -1,9 +1,8 @@
 // databaseProfileApi.ts — typed calls to the two GLOBAL profile routes (search-consolidation stage 3).
 //
-// Both are behind DATABASE_PROFILE_ENABLED and 404 while it is off, and a person/company that fails the
-// visibility predicate ALSO 404s — deliberately indistinguishable, so the response shape is not an
-// enumeration oracle. The client therefore cannot tell "gate off" from "no such profile" and must not try:
-// both render the same "profile unavailable" state.
+// Both are always on (the DATABASE_PROFILE_ENABLED release gate was removed 2026-08-25), and a
+// person/company that fails the visibility predicate 404s — indistinguishable from absent, deliberately, so
+// the response shape is not an enumeration oracle. The client renders one "profile unavailable" state.
 import { ApiError } from "@/features/prospect/entries/accounts";
 import { fetchWithAuth } from "@/lib/authClient";
 import { problemMessageFromBody } from "@/lib/problemMessage";

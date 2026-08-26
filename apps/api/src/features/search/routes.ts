@@ -167,7 +167,6 @@ searchRoutes.post("/database/companies/facets", async (c) => {
  * oracle. The rate limit is the other half of that guard — a slug is guessable.
  */
 searchRoutes.get("/database/people/:slug", async (c) => {
-  if (!env.DATABASE_PROFILE_ENABLED) throw new NotFoundError("Not enabled.");
   const workspaceId = requireWorkspace(c, "Select a workspace to view this profile.");
   await checkDatabaseProfileRate(c.get("claims").sub);
   const profile = await readDatabasePersonProfile(
@@ -180,7 +179,6 @@ searchRoutes.get("/database/people/:slug", async (c) => {
 
 /** GET /search/database/companies/:domain — the company twin of the route above. Same invariants. */
 searchRoutes.get("/database/companies/:domain", async (c) => {
-  if (!env.DATABASE_PROFILE_ENABLED) throw new NotFoundError("Not enabled.");
   const workspaceId = requireWorkspace(c, "Select a workspace to view this profile.");
   await checkDatabaseProfileRate(c.get("claims").sub);
   const profile = await readDatabaseCompanyProfile(

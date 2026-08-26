@@ -524,13 +524,9 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
-    // The GLOBAL profile reads — opening a full masked Layer-0 person/company profile WITHOUT first adding
-    // the record to a workspace (search-consolidation stage 3). While off, the two profile routes 404 and a
-    // database row in the grid is inert, exactly as before the cutover. Same explicit-"true"-only posture.
-    DATABASE_PROFILE_ENABLED: z
-      .string()
-      .optional()
-      .transform((v) => v === "true"),
+    // The GLOBAL profile reads (GET /search/database/people/:slug, /companies/:domain) are simply ON — the
+    // DATABASE_PROFILE_ENABLED release gate was removed 2026-08-25 (decisions.md: profiles open without
+    // saving). The control that stays is the per-caller cap below.
     // Per-caller cap on those profile reads. They take a public slug / registrable domain, so they are an
     // ENUMERATION surface; this bounds the velocity of a walk. Generous for a human clicking rows (a fast
     // session is single digits per minute), tight for a script.
