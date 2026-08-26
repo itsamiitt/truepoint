@@ -9,6 +9,7 @@ import { clientIpFromHeaders } from "@/lib/clientIp";
 import { passwordChangedEmail } from "@/lib/emails";
 import { sendAuthEmail } from "@/lib/mailer";
 import {
+  PASSWORD_MIN_LENGTH,
   assertCredentialNotLocked,
   completePasswordReset,
   recordCredentialFailure,
@@ -35,7 +36,10 @@ export async function completeReset(formData: FormData): Promise<void> {
   });
   const back = (err: string): never => redirect(`/reset?${carry.toString()}&error=${err}`);
 
-  if (password.length < 12) back("weak"); // fast client-side hint; completePasswordReset is the real gate
+  // Fast pre-check; completePasswordReset is the real gate. Reads the shared constant rather than repeating
+  // the number: the page's own minLength said 8 while this said 12, so the browser accepted a password the
+  // server then rejected as "weak" — the field's own rule contradicting the one that decides.
+  if (password.length < PASSWORD_MIN_LENGTH) back("weak");
   if (password !== confirm) back("mismatch");
 
   // Brute-force lockout on the reset code (W7), keyed separately (reset: namespace). The reset code is a

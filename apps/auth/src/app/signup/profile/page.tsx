@@ -4,7 +4,7 @@
 import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import styles from "@/shared/auth.module.css";
-import { getSignupTransaction } from "@leadwolf/auth";
+import { PASSWORD_MIN_LENGTH, getSignupTransaction } from "@leadwolf/auth";
 import { Alert, Badge, Button, Input, Label } from "@leadwolf/ui";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -67,7 +67,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
             required
             aria-invalid={sp.error === "invalid" ? "true" : undefined}
           />

@@ -4,6 +4,7 @@
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import styles from "@/shared/auth.module.css";
+import { PASSWORD_MIN_LENGTH } from "@leadwolf/auth";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { completeReset } from "./actions";
 
@@ -41,7 +42,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Search
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
             required
             autoFocus
             aria-invalid={errorMessage ? "true" : undefined}
@@ -54,7 +55,7 @@ export default async function ResetPage({ searchParams }: { searchParams: Search
             name="confirm"
             type="password"
             autoComplete="new-password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
             required
             aria-invalid={errorMessage ? "true" : undefined}
           />

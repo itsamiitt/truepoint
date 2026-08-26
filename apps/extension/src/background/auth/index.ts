@@ -16,6 +16,7 @@ import {
   randomNonce,
 } from "./companionTab.ts";
 import {
+  type RefreshResult,
   clearRefreshToken,
   loadRefreshToken,
   refreshTokens,
@@ -209,12 +210,44 @@ export class AuthModule {
     return this.refreshInFlight;
   }
 
+  /**
+   * Exchange the stored rotating token, and NEVER keep a token whose rotation outcome is unknown.
+   *
+   * This is the invariant a rotating-refresh-token client has to hold, and not holding it was the single most
+   * damaging bug in the extension. Rotation is committed SERVER-SIDE the moment the request is handled; the
+   * response carrying the replacement can still be lost — a dropped connection, the 10s timeout firing, or MV3
+   * terminating this service worker mid-flight, which it does after ~30s idle. The old code left the stale
+   * token in storage.session on any failure, so the next wake presented a token the server had already
+   * revoked. Inside session.ts's 30s grace that is forgiven; past it — and an alarm-driven wake is minutes
+   * later, not seconds — it is indistinguishable from a stolen token being replayed, and the server's response
+   * to a replay is `revokeAllSessionsForUser`. Not this session: EVERY session of that user, so one lost HTTP
+   * response signed the person out of the web app, the admin console and every other device they had open.
+   *
+   * So a failed refresh discards the token. The cost is real and much smaller: a transient network blip ends
+   * the extension's session and the user re-establishes through the companion tab, which this module's own
+   * header notes is instant while the web session is alive. We cannot tell "never reached the server" from
+   * "server rotated, reply lost" — and retrying would mean re-presenting the very token that is dangerous to
+   * present twice — so the safe branch is the only branch. A clean 401 lands here too, where clearing was
+   * already correct.
+   */
   private async doRefresh(scope?: { workspaceId?: string; tenantId?: string }): Promise<boolean> {
     const rt = await loadRefreshToken();
     if (!rt) {
       return false;
     }
-    await this.apply(await refreshTokens(rt, scope));
+    let rotated: RefreshResult;
+    try {
+      rotated = await refreshTokens(rt, scope);
+    } catch (err) {
+      // Discard BEFORE rethrowing: callers (switchWorkspace/switchOrg) swallow this to "keep the current
+      // session", and that must not leave the unproven token behind for the next wake to replay.
+      this.tokens.clear();
+      this.account = null;
+      await clearRefreshToken();
+      this.deps.onTokenChanged(null);
+      throw err;
+    }
+    await this.apply(rotated);
     return true;
   }
 

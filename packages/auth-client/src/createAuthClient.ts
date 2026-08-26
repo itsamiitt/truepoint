@@ -19,6 +19,7 @@ import { createPkcePair, randomState } from "./pkce.ts";
 import {
   type ElectionChannel,
   type ElectionDeps,
+  LOCK_TTL_MS,
   broadcastRefreshResult,
   parseRefreshMessage,
   releaseRefreshLock,
@@ -134,7 +135,18 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
       await silentRefresh(); // no browser storage (SSR): behave as before
       return;
     }
-    if (!tryAcquireRefreshLock(deps)) return; // another tab is doing it
+    if (!tryAcquireRefreshLock(deps)) {
+      // Another tab is refreshing. Losing the election used to mean this tab simply stopped: its timer had
+      // already fired and nothing re-armed one, so if the winner's broadcast never arrived — the winner's
+      // refresh failed, its tab was closed mid-flight, or the BroadcastChannel message was missed — this tab
+      // sat with no timer at all until some component happened to fetch. Re-arm a short retry instead. It
+      // costs nothing in the common case (the broadcast lands first, adoptToken replaces this timer with the
+      // full-length one) and it means a lost broadcast degrades to a slightly late refresh rather than to
+      // waiting on the next user action.
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void scheduledRefresh(), LOCK_TTL_MS);
+      return;
+    }
     try {
       const ok = await silentRefresh();
       const token = ok ? getAccessToken() : null;
