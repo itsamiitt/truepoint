@@ -1,6 +1,6 @@
 # 00 — Decision and Scope
 
-> Status: **SPEC — awaiting operator approval.** No code written against this yet.
+> Status: **SHIPPED** (stages 1–5, 2026-08-21). Amended 2026-08-25 — see the Superseded note under #4.
 > Operator decision date: 2026-08-21. Supersedes the D-9 IA regroup for these surfaces.
 
 ## The decision
@@ -19,6 +19,12 @@ The operator directed, in session:
 4. **Add-to-workspace stops being a prerequisite for viewing a profile.** Any
    authenticated user may open the full masked profile of any visible person or
    company in the global database. Add-to-workspace remains as an optional action.
+
+   > **Superseded 2026-08-25** (`docs/strategy/decisions.md`): there is no add-to-workspace action any more.
+   > The reveal IS the save gesture — `POST /contacts/from-database/reveal` materializes the person and
+   > reveals one channel in one request — and `DATABASE_PROFILE_ENABLED` was removed: profiles are simply on,
+   > behind the `rl:dbprofile` enumeration limiter. A database person with no licensed channel cannot be saved
+   > from Search (accepted; "request contact info" is the named follow-up).
 
 ## What this reverses (CLAUDE.md rule 6 — surface, never silently reinterpret)
 

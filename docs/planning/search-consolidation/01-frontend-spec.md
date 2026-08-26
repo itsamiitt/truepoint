@@ -85,6 +85,15 @@ Because both key sets live in the same URL, switching tabs is a pure param write
 
 ## Filters
 
+> **Amended 2026-08-25 — two tiers.** The rail is now QUICK filters (always visible; exactly the facets
+> both the workspace and the global engine answer: title, location, company, industry, seniority, has
+> email, has phone — the `SHARED_*` sets in `databaseRows.ts`, pinned by `filterTiers.test.ts`) above
+> **All filters** (saved contacts only; accordions with persisted open state, hidden with a note in "Not
+> saved" scope). A saved-only filter that is active shows an inline notice with "Show everyone". Saved and
+> recent searches render below the filters. The keyword and AI boxes are one `SearchBox` with a "Describe"
+> mode. The typeahead is keyboard-operable and fires at 2 characters for Title. Vocabulary: All / Saved /
+> Not saved; "N saved · M more available".
+
 Only the Phase-1 **Build now** and **Derivable** rows are rendered. The Deferred set does not appear as disabled UI — it does not appear at all.
 
 **Semantics, stated in the UI.** OR within a facet, AND across facets, exclude is AND NOT. One line of helper copy under the "Filters" heading: `Matches all groups · any value within a group`. (Writing rules: sentence case, no filler, translation-ready — no concatenated sentence.)
@@ -112,7 +121,7 @@ Only the Phase-1 **Build now** and **Derivable** rows are rendered. The Deferred
 - **Sort** — server-side, bound to `query.sort`. People: `relevance | score_desc | created_desc` (existing contract). Accounts: `relevance | name_asc | headcount_desc | created_desc` (existing account contract).
 - **Total count** — from the count endpoint, rendered as `12,431 people · 3,180 in your workspace`, and `10,000+` when the server reports `capped`. Never print a loaded page size as if it were the dataset.
 - **Pagination** — cursor "Load more" (infinite-scroll class per `large-data.md`; the existing affordance is kept rather than swapped, so already-loaded pages stay in the query cache and scrolling back is instant).
-- **Bulk select** — checkbox column. Database rows become selectable for the actions that can address them (add to workspace, add to list after add); reveal and workspace mutations remain restricted to owned rows, disabled with a tooltip reason rather than hidden. "Select all N matching" stays a **criteria** selection handed to the backend, never an enumerated id array.
+- **Bulk select** — checkbox column. Database rows become selectable for the actions that can address them (add to workspace, add to list after add); reveal and workspace mutations remain restricted to owned rows, disabled with a tooltip reason rather than hidden. *(2026-08-25: bulk stays saved-contacts-only; a not-saved row's checkbox is disabled with the reason "Reveal to save this person first". Bulk reveal over not-saved people is deferred to its own decision.)* "Select all N matching" stays a **criteria** selection handed to the backend, never an enumerated id array.
 - **Row click** — opens the profile drawer. Never navigates away (design hard rule).
 
 ## Profile: drawer, with a shareable URL
@@ -131,6 +140,10 @@ The brief asked for a recommendation between side panel and route. **Recommendat
 **What a database profile shows** — Layer-0 facts only: identity, headline, current title and employer, location, employment history, education, skills, languages, firmographics of the employer, `has email` / `has phone` presence badges, and provenance/confidence. **It shows no workspace-overlay facts at all** — no owner, no stage, no tags, no activities, no notes, no reveal state. Those render only when the record is in the caller's workspace, at which point the owned-record drawer is what opens. This is not a UI choice; it is the ownership boundary (`truepoint-data` ownership-and-sharing) made structural — Layer-0 has no workspace column, so the global drawer has nothing workspace-scoped to leak.
 
 **Actions on a database profile** — `Add to workspace` (primary), `Copy profile URL`, `Open on LinkedIn`. Reveal is **not** offered until the record is in the workspace; the reveal path is unchanged and stays credit-gated.
+
+> **Superseded 2026-08-25:** the profile's actions are `Reveal email · Ncr` / `Reveal phone · Ncr` (each
+> one request that saves the person AND reveals the channel — `DatabaseProfileRevealActions`), the revealed
+> value shown inline, a "Saved to your workspace" chip, and `Open profile`. There is no add.
 
 ## States
 

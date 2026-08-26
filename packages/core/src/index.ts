@@ -148,6 +148,8 @@ export {
 export {
   materializeContactFromMaster,
   type MaterializeBy,
+  type MaterializeResult,
+  type MasterPresence,
 } from "./ingestion/materializeFromMaster.ts";
 export { names, splitLocation, str } from "./ingestion/personFields.ts";
 export {
@@ -222,6 +224,14 @@ export {
 } from "./import/artifactWriter.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
+// Reveal IS the save gesture on Search (decisions.md 2026-08-25 [S-06][S-04]): materialize a database person
+// and reveal one channel in one call. Deps are injectable so the ordering is unit-tested without a database.
+export {
+  revealFromDatabase,
+  type RevealFromDatabaseDeps,
+  type RevealFromDatabaseInput,
+  type RevealFromDatabaseResult,
+} from "./reveal/revealFromDatabase.ts";
 // No-charge "view already-revealed data" reads (Phase 1 single + Phase 2 batch): decrypt ONLY the fields this
 // workspace owns a reveal claim for, so already-revealed contacts show instantly without re-charging.
 export { getRevealedContact, getRevealedContactsBatch } from "./reveal/getRevealedContact.ts";

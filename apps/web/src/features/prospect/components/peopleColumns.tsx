@@ -21,12 +21,11 @@ import {
   SENIORITY_LABELS,
   companyLabel,
   displayName,
-  emailGlyphFor,
+  emailGlyphForRow,
   phoneLineTypeLabel,
   profileHref,
   shortDate,
 } from "../types";
-import { AddToWorkspaceButton } from "./AddToWorkspaceButton";
 import type { RowBulkAction } from "./BulkActionBar";
 import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
@@ -44,6 +43,8 @@ export interface PeopleColumnDeps {
   /** The ids selectable right now (owned rows only — a database row has no contact id to act on). */
   shownIds: string[];
   onRevealed: (id: string) => void;
+  /** A not-saved row's reveal landed: the person is a workspace contact now — flip the row in place. */
+  onMaterialized: (slug: string, row: ProspectRow) => void;
   onRowAction: (id: string, action: RowBulkAction) => void;
 }
 
@@ -55,6 +56,7 @@ export function buildPeopleColumns({
   selectionStore,
   shownIds,
   onRevealed,
+  onMaterialized,
   onRowAction,
 }: PeopleColumnDeps): Column<ProspectRow>[] {
   return [
@@ -73,6 +75,7 @@ export function buildPeopleColumns({
           store={selectionStore}
           id={c.id}
           label={`Select ${displayName(c)}`}
+          disabledReason={c.databaseSlug ? "Reveal to save this person first" : undefined}
           className={styles.rowCheck}
         />
       ),
@@ -89,13 +92,12 @@ export function buildPeopleColumns({
               <span className={styles.name}>
                 {displayName(c)}
                 {c.databaseSlug ? (
-                  // The People grid used to mark a database row only by swapping its row-actions menu for an
-                  // "Add" button, so a row the workspace does NOT hold read as one it did. The chip carries
-                  // the word, so the distinction never rests on colour alone (WCAG 2.2 AA) — and it matches
-                  // the Accounts grid, which has always had it. [A-01]
+                  // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place the
+                  // grid says which side a row is on — its reveal is what saves it (decisions.md 2026-08-25).
+                  // Matches the Accounts grid's chip. [A-01]
                   <>
                     {" "}
-                    <TpChip>In database</TpChip>
+                    <TpChip>Not saved</TpChip>
                   </>
                 ) : null}
               </span>
@@ -163,7 +165,7 @@ export function buildPeopleColumns({
       width: 76,
       sortValue: (c) => c.emailStatus,
       cell: (c) => {
-        const g = emailGlyphFor(c);
+        const g = emailGlyphForRow(c);
         const cls =
           g.tone === "ok"
             ? styles.glyphOk
@@ -182,13 +184,27 @@ export function buildPeopleColumns({
     {
       key: "address",
       header: "Email",
-      cell: (c) => <RevealCell contact={c} field="email" onRevealed={onRevealed} />,
+      cell: (c) => (
+        <RevealCell
+          contact={c}
+          field="email"
+          onRevealed={onRevealed}
+          onMaterialized={onMaterialized}
+        />
+      ),
     },
     {
       key: "phone",
       header: "Phone",
       sortValue: (c) => (c.hasPhone ? 1 : 0),
-      cell: (c) => <RevealCell contact={c} field="phone" onRevealed={onRevealed} />,
+      cell: (c) => (
+        <RevealCell
+          contact={c}
+          field="phone"
+          onRevealed={onRevealed}
+          onMaterialized={onMaterialized}
+        />
+      ),
     },
     {
       // The TCPA-relevant mobile-vs-landline signal, pre-reveal ([S-04]): it is a classification, never the
@@ -242,7 +258,16 @@ export function buildPeopleColumns({
           role="presentation"
         >
           {c.databaseSlug ? (
-            <AddToWorkspaceButton slug={c.databaseSlug} name={displayName(c)} />
+            // A not-saved row has no list/tag/status — those are workspace facts; its save gesture is the
+            // reveal (decisions.md 2026-08-25). The menu keeps the honest email hint and the LinkedIn link.
+            <RowActions
+              contact={c}
+              onOpenLinkedin={
+                c.databaseUrl
+                  ? () => window.open(c.databaseUrl, "_blank", "noopener,noreferrer")
+                  : undefined
+              }
+            />
           ) : (
             <RowActions
               contact={c}

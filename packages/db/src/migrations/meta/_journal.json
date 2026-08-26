@@ -993,7 +993,14 @@
       "idx": 142,
       "version": "7",
       "when": 1787796300000,
-      "tag": "0142_user_sessions_refresh_hash_index",
+      "tag": "0142_contact_master_presence",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1787796360000,
+      "tag": "0143_user_sessions_refresh_hash_index",
       "breakpoints": true
     }
   ]

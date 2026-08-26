@@ -1,15 +1,19 @@
 // PeoplePane.tsx — the People half of the Search surface (04 §5, 11 §4.2, 24; search-consolidation 01): the
-// faceted sidebar (hosting Saved/Recent searches) driving a server ContactQuery, a top search box + AI NL
-// box, a results header with a sort + column-chooser toolbar, the results table (list only — sortable,
-// density-aware, masked glyphs, row-select, per-row overflow menu) with keyset "Load more", a lightweight
-// QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky bulk-action bar (the
-// full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch → searchUrlState), so
-// a view is shareable and restored on refresh/back. Composition only; data + masking + mutations come from
-// the slice (api/bulkActionsApi).
+// two-tier filter rail (hosting Saved/Recent searches under the filters) driving a server ContactQuery, ONE
+// search box with a "Describe" mode, a results header with a sort + column-chooser toolbar, the results
+// table (list only — sortable, density-aware, masked glyphs, row-select, per-row overflow menu) with keyset
+// "Load more", a lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the
+// sticky bulk-action bar (the full Phase-3 bulk surface). Search/filter state lives in the URL
+// (useProspectSearch → searchUrlState), so a view is shareable and restored on refresh/back. Composition
+// only; data + masking + mutations come from the slice (api/bulkActionsApi).
 //
 // It renders the SHELL GRID itself (drawer column + results column) rather than being placed inside one, so
-// the drawer wraps this pane's own filter panel. The Accounts pane does the same with its panel — one
+// the drawer wraps this pane's own filter rail. The Accounts pane does the same with its panel — one
 // drawer implementation, two panes, no shared mutable state between them.
+//
+// Two row states, one verb (decisions.md 2026-08-25): SAVED (in this workspace) and NOT SAVED (in the
+// TruePoint database). A not-saved row carries a "Not saved" chip, opens its full masked profile on click,
+// and its REVEAL is what saves it — there is no "Add to workspace" anywhere on this surface.
 //
 // HISTORY: this was ProspectPage, and it carried a `?scope=accounts` → /companies redirect from the MI-1
 // cutover. The search-consolidation decision (2026-08-21) folds Accounts back in as a TAB, so the redirect
@@ -34,7 +38,6 @@ import {
   StateSwitch,
   TableSkeleton,
   TpButton,
-  TpInput,
 } from "@leadwolf/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
@@ -51,11 +54,11 @@ import {
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
-import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
+import { useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { AiSearchBox } from "./AiSearchBox";
+import { resultHeadline } from "../resultHeadline";
 import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
@@ -68,13 +71,19 @@ import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.BulkActionBar), {
   ssr: false,
 });
+// The saved + recent searches block sits UNDER the filters and carries its own dialogs, menu and client — an
+// intent (PA-3), deferred so the quick tier + grid fit /search's 200kB First Load budget.
+const RailFooter = dynamic(() => import("./RailFooter").then((m) => m.RailFooter), {
+  ssr: false,
+  loading: () => null,
+});
 import type { ProspectRow } from "../databaseRows";
-import { FilterPanel } from "./FilterPanel";
+import { FilterRail } from "./FilterRail";
 import { ProspectToolbar } from "./ProspectToolbar";
+import { QuickStartPresets } from "./QuickStartPresets";
 import { QuickViewDrawer } from "./QuickViewDrawer";
-import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
-import { SaveSearchPanel } from "./SaveSearchPanel";
+import { SearchBox } from "./SearchBox";
 import { DEFAULT_VISIBLE_COLUMNS, TOGGLEABLE_COLUMNS, buildPeopleColumns } from "./peopleColumns";
 
 const DENSITIES = [
@@ -109,6 +118,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     markRevealed,
     patchRows,
     removeRows,
+    materializeRow,
   } = search;
   const queryClient = useQueryClient();
   const counts = useFacetCounts(query, COUNT_FIELDS);
@@ -166,12 +176,15 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
 
   const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
   const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
+  // Two different empties need two different words (design interaction rules): nothing asked yet vs. a
+  // filter that excluded everything.
+  const isPristine = !query.text && query.filters.length === 0;
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection). The page
   // holds only the STORE (identity-stable, costs no renders); the checkboxes and the bar host subscribe
   // themselves, so a toggle re-renders 1-2 checkboxes instead of the whole page (perf-audit P3.1).
   const selectionStore = useBulkSelectionStore();
-  // Only OWNED rows are selectable: bulk actions address contacts by id, and a database row has none.
+  // Only SAVED rows are selectable: bulk actions address contacts by id, and a not-saved row has none.
   const shownIds = useMemo(() => hits.filter((c) => !c.databaseSlug).map((c) => c.id), [hits]);
 
   // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
@@ -190,11 +203,12 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         selectionStore,
         shownIds,
         onRevealed: markRevealed,
+        onMaterialized: materializeRow,
         onRowAction: startRowAction,
       }),
     // The store is identity-stable, so selection changes no longer rebuild the columns (and with them every
     // cell of every row) — only new rows (shownIds) or new handlers do.
-    [selectionStore, shownIds, startRowAction, markRevealed],
+    [selectionStore, shownIds, startRowAction, markRevealed, materializeRow],
   );
 
   // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
@@ -215,15 +229,18 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         onClose={shell.close}
         tabs={shell.tabs}
       >
-        <FilterPanel
+        <FilterRail
           query={query}
           onChange={setQuery}
           counts={counts}
-          header={
-            <>
-              <SaveSearchPanel currentQuery={query} onApply={setQuery} />
-              <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
-            </>
+          scope={shell.workspace.scope}
+          footer={
+            <RailFooter
+              query={query}
+              onApply={setQuery}
+              recents={recent.recents}
+              onClearRecents={recent.clear}
+            />
           }
         />
       </SearchDrawer>
@@ -234,29 +251,23 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             {/* Visible only while the rail is off-canvas (≤768px, collapsed) — otherwise the toggle in the
                 rail itself is the way back, and two openers would be one too many. */}
             <SearchDrawerOpener onOpen={shell.toggle} />
+            {/* The People/Accounts switch lives in the rail; while the rail is collapsed it is mirrored
+                here so the tab is never out of reach (decisions.md 2026-08-25). */}
+            {shell.collapsed ? <span className={styles.headTabs}>{shell.tabs}</span> : null}
             <span className={styles.count}>
-              {loading
-                ? "Loading…"
-                : workspaceSkipped
-                  ? `${databaseCount.toLocaleString()}${
-                      databaseHasMore ? "+" : ""
-                    } in the database${
-                      hits.length - databaseCount > 0
-                        ? ` · ${(hits.length - databaseCount).toLocaleString()} already yours`
-                        : ""
-                    }`
-                  : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                      totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
-                    } in your workspace${
-                      databaseCount > 0
-                        ? // "N more in the database" read as the whole of what the database holds, while N is
-                          // only the single capped page the global half fetches — "Load more" pages the
-                          // workspace query alone. Say what is actually on screen.
-                          ` · ${databaseCount.toLocaleString()} from the database${
-                            databaseHasMore ? " (top matches)" : ""
-                          }`
-                        : ""
-                    }`}
+              {resultHeadline({
+                scope: shell.workspace.scope,
+                loading,
+                saved: workspaceSkipped
+                  ? hits.length - databaseCount
+                  : (totalCount ?? hits.length - databaseCount),
+                savedIsFloor: totalCapped || (totalCount === undefined && hasMore),
+                available: databaseCount,
+                // The database half is one capped page — "Load more" pages the workspace query alone — so
+                // more than it shows is a floor, never the whole of what the database holds.
+                availableIsFloor: databaseHasMore,
+                workspaceSkipped,
+              })}
             </span>
           </div>
           <div className={styles.headRight}>
@@ -277,14 +288,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         </div>
 
         <div className={styles.searchRow}>
-          <TpInput
-            type="search"
-            placeholder="Search name, title, company, email, LinkedIn…"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            aria-label="Search prospects"
-          />
-          <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
+          <SearchBox value={textInput} onChange={setTextInput} onApplyQuery={setQuery} />
           <WorkspaceScopeControl
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
@@ -299,7 +303,8 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           onClearAll={() => setQuery(clearAllFilters(query))}
         />
 
-        {/* Only when workspace-only filters are actually suppressing the database half. */}
+        {/* Only when workspace-only filters are actually suppressing the database half — say so, instead of
+            letting the not-saved half vanish silently. Moot when the scope already excludes it. */}
         <ScopeNotice
           fields={shell.workspace.includeDatabase ? databaseDroppedFields : []}
           labelFor={facetLabel}
@@ -315,25 +320,44 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             onRetry={reload}
             skeleton={<TableSkeleton rows={10} />}
             emptyState={
-              <EmptyState
-                icon={<Users size={28} />}
-                title="No matches"
-                description={
-                  workspaceSkipped
-                    ? "Nobody in the platform database matches this search. Try broadening the background filters."
-                    : "No contacts match this search. Adjust your filters or import more from the Import surface."
-                }
-              />
+              isPristine ? (
+                <div className={styles.emptyWrap}>
+                  <EmptyState
+                    icon={<Users size={28} />}
+                    title="Search the TruePoint database"
+                    description="Filter by title, location or company — or start from one of these."
+                  />
+                  <QuickStartPresets onApply={setQuery} />
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<Users size={28} />}
+                  title="No matches"
+                  description={
+                    workspaceSkipped
+                      ? "Nobody in the TruePoint database matches this search. Try broadening the background filters."
+                      : "No people match these filters."
+                  }
+                  action={
+                    <TpButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setQuery(clearAllFilters({ ...query, text: undefined }))}
+                    >
+                      Clear all filters
+                    </TpButton>
+                  }
+                />
+              )
             }
           >
             <DataTable
               columns={columns}
               rows={hits}
               rowKey={(c) => c.id}
-              // STAGE 3 — the un-gate. A database row used to be inert here ("add it first, then it behaves
-              // like any contact"); it now opens its full masked Layer-0 profile in a drawer, with
-              // add-to-workspace as one action ON that profile rather than the price of admission to it.
-              // An owned row still opens the lightweight QuickView, which hands off to RecordDetail.
+              // A not-saved row opens its full masked Layer-0 profile in a drawer (stage 3); its reveal — in
+              // the grid or in that drawer — is what saves it (decisions.md 2026-08-25). A saved row still
+              // opens the lightweight QuickView, which hands off to RecordDetail.
               onRowClick={(c) =>
                 c.databaseSlug ? shell.openProfile("person", c.databaseSlug) : setPreviewId(c.id)
               }
@@ -491,11 +515,8 @@ function ProspectBulkBar({
   );
 }
 
-/** Public entry: wraps the surface in the RevealStore so the grid + detail derive reveal state from one source. */
+/** Public entry. The RevealStore is provided by the Search composer — above both panes AND the profile
+ *  drawers — so a reveal made in a drawer and one made in the grid derive their state from one source. */
 export function PeoplePane({ shell }: { shell: SearchShell }) {
-  return (
-    <RevealStoreProvider>
-      <PeoplePaneInner shell={shell} />
-    </RevealStoreProvider>
-  );
+  return <PeoplePaneInner shell={shell} />;
 }

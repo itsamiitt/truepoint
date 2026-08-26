@@ -84,7 +84,7 @@ export function AccountsTable({
                 // cannot tell the two tones apart (WCAG 2.2 AA).
                 <>
                   {" "}
-                  <TpChip>In database</TpChip>
+                  <TpChip>Not saved</TpChip>
                 </>
               ) : null}
             </span>

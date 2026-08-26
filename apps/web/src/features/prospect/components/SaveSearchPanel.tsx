@@ -9,7 +9,6 @@ import type { ContactQuery, SavedSearch, SavedSearchVisibility } from "@leadwolf
 import {
   Dialog,
   DropdownMenu,
-  EmptyState,
   FieldGroup,
   TpButton,
   TpIconButton,
@@ -104,12 +103,7 @@ export function SaveSearchPanel({
         <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
           Loading…
         </span>
-      ) : searches.length === 0 ? (
-        <EmptyState
-          title="No saved searches"
-          description="Save the current filters to re-run them later."
-        />
-      ) : (
+      ) : searches.length === 0 ? null : (
         <ul
           style={{
             listStyle: "none",

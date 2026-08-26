@@ -5,8 +5,9 @@
 // WHAT IS DELIBERATELY ABSENT. No owner, stage, tags, activity timeline, notes or reveal state — and no
 // email or phone VALUE. Those are not omissions to fill in later: a global record has no workspace-scoped
 // facts (Layer 0 has no workspace column), and the channel values are the paid product, revealed only once
-// the record is in the workspace. `hasEmail`/`hasPhone`/`hasMobile` show that data EXISTS; the primary
-// action turns the row into a workspace contact, after which the ordinary owned-record drawer takes over.
+// the record is in the workspace. `hasEmail`/`hasPhone`/`hasMobile` show that data EXISTS; revealing one IS
+// the save gesture (decisions.md 2026-08-25): `DatabaseProfileRevealActions`, loaded from the prospect
+// slice's entry, materializes the person and reveals in one request. No "Add to workspace" — by decision.
 //
 // This module is loaded through next/dynamic (see SearchProfileHost) — it is only reachable on a row click,
 // so it has no business in the Search route's first load.
@@ -14,9 +15,10 @@
 
 import { EmploymentHistory } from "@/components/employment";
 import { groupStints } from "@/lib/employment/groupEmployment";
-import { Avatar, Drawer, EmptyState, StateSwitch, TpButton, TpChip } from "@leadwolf/ui";
+import { Avatar, Drawer, EmptyState, StateSwitch, TpChip } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ExternalLink, UserX } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMemo } from "react";
 import styles from "../accounts.module.css";
 import { fetchDatabaseCompanyProfile, fetchDatabasePersonProfile } from "../databaseProfileApi";
@@ -24,6 +26,15 @@ import { fetchDatabaseCompanyProfile, fetchDatabasePersonProfile } from "../data
 /** Profile reads are cheap, bounded and change slowly — hold them long enough that reopening a row the user
  *  just looked at is instant rather than a round trip (the PA-8 query-hygiene posture). */
 const PROFILE_QUERY_OPTS = { staleTime: 5 * 60_000, gcTime: 10 * 60_000, retry: 1 } as const;
+
+// The channel row reads the prospect slice's RevealStore. Loaded through the slice's named entry with
+// next/dynamic: this drawer is itself intent-deferred, and a static cross-feature import would spend the
+// lint:cross-feature ratchet (accounts → prospect) for a component that only renders on a row click.
+const DatabaseProfileRevealActions = dynamic(
+  () =>
+    import("@/features/prospect/entries/revealStore").then((m) => m.DatabaseProfileRevealActions),
+  { ssr: false },
+);
 
 function Field({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
@@ -81,11 +92,12 @@ function period(startedOn: string | null, endedOn: string | null): string {
 export function DatabasePersonProfileDrawer({
   slug,
   onClose,
-  onAddToWorkspace,
+  onMaterialized,
 }: {
   slug: string;
   onClose: () => void;
-  onAddToWorkspace: (slug: string) => void;
+  /** A reveal in this drawer saved the person (reveal-as-save) — let the composer refresh the grid. */
+  onMaterialized: (slug: string) => void;
 }) {
   const q = useQuery({
     queryKey: ["search", "database", "people", "profile", slug],
@@ -159,14 +171,11 @@ export function DatabasePersonProfileDrawer({
               <Field label="Last updated" value={profileDate(p.updatedAt)} />
             </div>
 
+            {/* Reveal IS the save gesture: each channel on file offers "Reveal email · Ncr", which
+                materializes the person and reveals in one request. No "Add to workspace" — by decision. */}
+            <DatabaseProfileRevealActions slug={slug} person={p} onMaterialized={onMaterialized} />
+
             <div className={styles.profileActions}>
-              {p.inWorkspace ? (
-                <TpChip active>In your workspace</TpChip>
-              ) : (
-                <TpButton size="sm" onClick={() => onAddToWorkspace(slug)}>
-                  Add to workspace
-                </TpButton>
-              )}
               <a
                 className={styles.marketsLink}
                 href={p.linkedinUrl}

@@ -72,7 +72,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2468 source files · 94 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 0
+> **2490 source files · 94 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 0
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **Unbucketed is now ZERO**, closing the last two —
 > `outcomeMetricsRepository` and `usageEventRepository` — which this banner had described for months as
@@ -277,14 +277,17 @@ apps/                           # deployable processes (thin transport adapters)
   0141 indexes both legs, since every pre-existing index on that table is person-keyed;
   `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
   core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
-  `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
+  `ingestion/materializeFromMaster.ts` (the save half of reveal-as-save → `landOverlayPerson`),
+  `reveal/revealFromDatabase.ts` (kill switch → materialize → `revealContact`, one call), `reveal/masterChannelFallback.ts`.
   web: ONE prospect search covers both — `databaseRows.ts` maps the workspace ContactQuery onto the graph's
   facets and adapts a database person into a grid row; `useProspectSearch` merges owned rows first, then
-  people the workspace does not hold, each carrying an `Add` action (`AddToWorkspaceButton`). There is no
-  separate Database tab: "already in my workspace" is a state of a row, not another surface.
-  api: `features/contacts-from-database/` — `POST /contacts/from-database`, the workspace-scoped write the `Add`
-  action posts to (transport only; the visibility policy and write discipline live in core's materializer, and one
-  row per explicit user gesture). Its own slice, so the read path `POST /search/database` and the write stay apart.
+  people the workspace does not hold, each marked `Not saved` — its REVEAL is what saves it (`RevealCell` →
+  `POST /contacts/from-database/reveal`, then `useProspectSearch.materializeRow` flips the row in place; decisions.md
+  2026-08-25). There is no separate Database tab: "already in my workspace" is a state of a row, not another surface.
+  api: `features/contacts-from-database/` — `POST /contacts/from-database` (the extension's save) and
+  `POST /contacts/from-database/reveal` (the Search surface's reveal-as-save, behind the money route's full guard chain;
+  transport only — the visibility policy and write discipline live in core's materializer, and one row per explicit
+  user gesture). Its own slice, so the read path `POST /search/database` and the write stay apart.
 - **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
@@ -406,7 +409,8 @@ apps/                           # deployable processes (thin transport adapters)
   reveal** (`useBulkSelection` — an external useSyncExternalStore store so a checkbox toggle re-renders 1-2
   subscribing checkboxes (`SelectionControls.tsx`) instead of the page, `BulkActionBar` (mounted via a
   subscribing host), `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
-  **filter rail** (`FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts` — the
+  **filter rail** (`FilterRail`/`AccountFilterPanel` — two tiers each: `QuickFilters` = the `scope: "both"` facets, then
+  "All filters" = the one-side-only groups, tagged (decisions.md 2026-08-25) — over `filterGroups.ts`/`accountFilterGroups.ts` — the
   MVP-era client-side `FilterRail` was deleted by the search-consolidation cutover, dead since the
   server-search rewrite; both panels now render inside the shared `components/search` drawer, with
   `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the shared progressive-exclude pattern
@@ -427,7 +431,7 @@ apps/                           # deployable processes (thin transport adapters)
   **result columns** (`columnRegistry.ts` — which columns each grid offers and which are on by default, kept
   alias-free so `bun test` can reach it; `peopleColumns.tsx`/`AccountsTable.tsx` render them, the shared
   `components/search/ColumnChooser` toggles them);
-  **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
+  **AI search** (`SearchBox`'s "Describe" mode + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
   `searchUrlState.ts` (shareable/bookmarkable query, `q`/`sort`/`f`); `savedSearchApi.ts` +
@@ -1287,7 +1291,8 @@ flowchart TD
 
   2026-08-21 refresh (search consolidation, stage 3 — profiles un-gated, + the bundle budget): 2225 → 2239
   files, no new domain. A search row now opens the FULL masked Layer-0 profile of a person or a company
-  without the record first being materialized into a workspace. Behind `DATABASE_PROFILE_ENABLED`.
+  without the record first being materialized into a workspace. Behind `DATABASE_PROFILE_ENABLED` at the time —
+  the gate was removed on 2026-08-25 (see that refresh).
 
   This is **net-new read surface, not a relaxed check** — there has never been a `GET /contacts/:id`, and
   the old "add it first" behaviour was three lines of frontend with nothing to open. Two invariants hold
@@ -1496,6 +1501,21 @@ flowchart TD
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
 
+  2026-08-26 refresh (main merged again, before landing): 2468 → 2490 files. Regenerated, not hand-merged.
+  Two notes worth leaving for the next person doing this.
+
+  **The banner's "unbucketed" count was stale on BOTH sides of the merge.** main's copy said 2 and this
+  branch's said 0; the generator says 0, and the generator is the only one of the three that measured
+  anything. The prose banner is hand-maintained while the JSON is generated, so it drifts silently whenever
+  someone updates one and not the other — read it as documentation, never as a measurement.
+
+  **The index migration was renumbered a SECOND time, 0142 → 0143.** It collided with main's
+  `0142_contact_master_presence` exactly as it had collided with `0140_search_recency_filter_indexes` on the
+  previous merge. This is the standing cost of a long-lived branch against an active main rather than a
+  defect: the migration's content has never changed, only its position. The renumber touches four places that
+  must move together — the file name, the journal entry, the SQL header comment, and the EXPECTED_DEFICIT
+  prose — and the deficit is now 102 (main's 0142, then ours at 0143).
+
   2026-08-26 refresh (main merged into the auth-audit branch): 2391 → 2468 files, and 93 → 94 domains. The
   jump is main's search-tab work arriving, not this branch's; the map was regenerated rather than hand-merged,
   which is the only correct way to resolve a conflict in a generated file. **Unbucketed went 2 → 0** — the
@@ -1676,3 +1696,44 @@ flowchart TD
   now share, so they cannot drift apart in heading scale or measure — and rendering its header through
   `PageHeader`. The spacer div this session had wrapped the body in went with it: each `GuideBody` section
   already carries `padding: var(--tp-space-8) 0`, so keeping both would have double-counted the gap.
+
+  2026-08-25 refresh (reveal IS the save gesture; profiles ungated; the two-tier rail — `docs/strategy/
+  decisions.md` 2026-08-25), landed on top of the 2026-08-22 search-tab and UI-remediation passes: 2464 → 2486
+  files, no domain added or removed (the code-bearing count reads 94 on regeneration), `unassigned` still 2.
+
+  - **`core/reveal/revealFromDatabase.ts`** — the one-call composition of the two existing verbs: kill switch
+    (`MASTER_CHANNEL_REVEAL_ENABLED`) → `materializeContactFromMaster` → `revealContact`. Deps are injectable;
+    `revealFromDatabase.test.ts` pins the ORDER (the gate refuses with zero writes; a person the graph does
+    not hold is a 404, never a half-saved contact; a reveal that fails after the landing keeps its class and
+    carries `contactId`). Route: `POST /contacts/from-database/reveal` in `features/contacts-from-database/`,
+    with the money route's full chain plus `checkCaptureRate`; `GET /credits/reveal-costs` carries the
+    `databaseReveal` capability bit. `DATABASE_PROFILE_ENABLED` is gone from `packages/config` and the two
+    profile routes; `rl:dbprofile` stays. `MASTER_CHANNEL_REVEAL_ENABLED` is in both env files and on the
+    `lint:prod-switches` allow-list — armed on purpose, it IS the acquisition gesture.
+  - **`apps/web`: there is no "Add to workspace" anywhere on Search.** `features/prospect/rowAffordances.ts`
+    is the one place that says what a row may do (`add: false` by type; a not-saved row's checkbox is disabled
+    with its reason). `RevealCell` reveals-and-saves on a not-saved row and `useProspectSearch.materializeRow`
+    flips the row IN PLACE (a per-pane map that `mergeRows` consults as its fourth argument — never a refetch of
+    the searches, never the `["prospect"]` root). The RevealStore is provided by
+    `features/search/components/SearchSurface.tsx` through `features/prospect/entries/pane.ts`; the person
+    profile drawer loads `DatabaseProfileRevealActions` from `entries/revealStore.ts` with next/dynamic, which
+    is what keeps `lint:cross-feature`'s apps/web ledger at its budget.
+  - **The rail is two tiers** (`components/FilterRail.tsx` replaces `FilterPanel.tsx`), derived from the
+    2026-08-22 `scope` declarations: `QuickFilters` — exactly the `scope: "both"` facets (`QUICK_FACETS`,
+    pinned by `filterTiers.test.ts`) — then `AllFiltersSection`, every group tagged with the one side it
+    searches ("Workspace only" / "Database only") and hidden under a scope that rules that side out; its
+    `AllFiltersBody` and the `RailFooter` are `next/dynamic`, which is what held `/search` at exactly 200kB First
+    Load before this merge. **Measured after it: 294kB, of which 192kB is the shared-by-all baseline** — the `/` route
+    (350 B of its own code) now weighs 192kB, so the perf-checklist's 200kB target is unreachable for ANY route.
+    The route-specific weight of `/search` (~102kB) is unchanged by this pass; the baseline moved when the Sentry
+    browser SDK arrived in `instrumentation-client.ts` (a 132kB shared chunk). That is a decision for the
+    observability owner (lazy-init, trim integrations, or re-baseline the budget), not something this pass silently
+    absorbed. `FacetTypeahead` is keyboard-operable through the pure `typeaheadKeys.ts` and takes a
+    `source` (the Background facets ask the global suggest endpoint); `SearchBox.tsx` merges the keyword box
+    and the retired `AiSearchBox` ("Describe" mode); `QuickStartPresets` and `resultHeadline.ts` carry the
+    copy; the boolean facets are the DS `SegmentedControl`. `AccountFilterPanel` got the same two tiers
+    (`AccountFacetControl`). Vocabulary everywhere: Saved / Not saved.
+  - **`0142_contact_master_presence`** — `contacts.master_has_email/master_has_phone`, written by
+    `landOverlayPerson` from the master row and OR-ed into the search projection's `hasEmail/hasPhone`, so
+    revealing one channel never makes the other read "—". No migration-time backfill (FORCE RLS would silently
+    zero it on a non-BYPASSRLS owner). `packages/db/test/contactFromDatabase.itest.ts` (CI) pins the landing half.

@@ -26,6 +26,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { ApiError, batchRevealedContacts, getRevealCosts, revealContact } from "../api";
+import { revealFromDatabase as revealFromDatabaseApi } from "../databaseSearchApi";
 
 export interface RevealAttempt {
   ok: boolean;
@@ -33,6 +34,17 @@ export interface RevealAttempt {
   /** Structured failure (mirrors useReveal): code discriminates insufficient_credits (402) / suppressed (403). */
   error?: string;
   code?: string;
+}
+
+/**
+ * A reveal-as-save attempt (decisions.md 2026-08-25). `contactId` is set whenever the person IS saved —
+ * including a reveal that failed AFTER the landing (402 credits) — so the row can flip honestly either way.
+ */
+export interface DatabaseRevealAttempt extends RevealAttempt {
+  contactId?: string;
+  outcome?: "created" | "updated" | "known";
+  /** Layer-0 channel presence (booleans, never values) — keeps the OTHER channel's reveal on offer. */
+  presence?: { hasEmail: boolean; hasPhone: boolean };
 }
 
 interface RevealState {
@@ -58,6 +70,10 @@ export interface RevealStore {
   refresh: (contactId: string) => void;
   /** Run a single reveal through the money path, merge the result optimistically, toast-free (caller toasts). */
   reveal: (contactId: string, revealType: RevealType) => Promise<RevealAttempt>;
+  /** Reveal IS the save gesture: materialize a DATABASE person + reveal one channel in ONE request. On success
+   *  the revealed data is cached under the NEW contact id; the caller flips the row. Keyed in-flight by the
+   *  grid's row id for the person (`db:<slug>`), so useIsRevealing(row.id, type) drives the same spinner. */
+  revealFromDatabase: (slug: string, revealType: RevealType) => Promise<DatabaseRevealAttempt>;
   /** Subscription primitives for the slice hooks below. */
   getState: () => RevealState;
   subscribe: (listener: () => void) => () => void;
@@ -180,6 +196,38 @@ function createRevealStore(onCreditsMoved: () => void): RevealStore {
         publish({ ...state, revealing });
       }
     },
+    async revealFromDatabase(slug, revealType) {
+      const key = `db:${slug}:${revealType}`;
+      if (pending.has(key)) return { ok: false, error: "A reveal is already in progress." };
+      pending.add(key);
+      publish({ ...state, revealing: new Set(state.revealing).add(key) });
+      try {
+        const res = await revealFromDatabaseApi(slug, revealType);
+        publish({ ...state, byId: mergeReveal(state.byId, res.contactId, revealType, res.reveal) });
+        hydrated.add(res.contactId);
+        onCreditsMoved();
+        return {
+          ok: true,
+          result: res.reveal,
+          contactId: res.contactId,
+          outcome: res.outcome,
+          presence: res.presence,
+        };
+      } catch (e) {
+        if (e instanceof ApiError) {
+          // The problem carries contactId when the landing committed before the reveal failed.
+          const contactId =
+            typeof e.extensions.contactId === "string" ? e.extensions.contactId : undefined;
+          return { ok: false, error: e.message, code: e.code, contactId };
+        }
+        return { ok: false, error: e instanceof Error ? e.message : "Reveal failed" };
+      } finally {
+        pending.delete(key);
+        const revealing = new Set(state.revealing);
+        revealing.delete(key);
+        publish({ ...state, revealing });
+      }
+    },
   };
   // Internal seam for the provider's one-time costs fetch.
   (store as RevealStore & { __setCosts: (c: RevealCosts) => void }).__setCosts = (c) =>
@@ -258,6 +306,17 @@ export function useRevealCosts(): RevealCosts | null {
     store.subscribe,
     () => store.getState().costs,
     () => null,
+  );
+}
+
+/** Whether reveal-as-save is on for this deployment (GET /credits/reveal-costs `databaseReveal`). False until
+ *  the costs load — the affordance appears with the prices, never before. */
+export function useDatabaseRevealEnabled(): boolean {
+  const store = useRevealStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () => store.getState().costs?.databaseReveal ?? false,
+    () => false,
   );
 }
 

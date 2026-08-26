@@ -2,11 +2,18 @@
 // and how the two halves' rows are merged.
 //
 // The merge rules look like bookkeeping and are not. Each one encodes which engine is the source of truth
-// for a given row, and getting it wrong makes people disappear from a search that should find them.
+// for a given row, and getting it wrong makes people disappear from a search that should find them — or,
+// after a reveal-as-save, makes the person the user just paid for jump or vanish mid-read.
 
 import { describe, expect, test } from "bun:test";
 import type { ContactQuery, MaskedContact, MaskedDatabasePerson } from "@leadwolf/types";
-import { mergeRows, toDatabaseQuery } from "./databaseRows.ts";
+import {
+  countDatabaseRows,
+  databasePersonToRow,
+  mergeRows,
+  ownedRowFromDatabase,
+  toDatabaseQuery,
+} from "./databaseRows.ts";
 
 const BASE: ContactQuery = { filters: [], sort: "relevance", limit: 50 };
 
@@ -59,6 +66,7 @@ function contact(over: Partial<MaskedContact> = {}): MaskedContact {
 }
 
 const IN_WORKSPACE = { contactId: "22222222-2222-4222-8222-222222222222", isRevealed: true };
+const NEW_ID = "33333333-3333-4333-8333-333333333333";
 
 describe("mergeRows — normal mode (both halves ran)", () => {
   test("a database person the workspace already holds is dropped", () => {
@@ -90,7 +98,7 @@ describe("mergeRows — workspace half skipped (a database-only filter)", () => 
   });
 
   test("…and reads as an owned row, not as a database one", () => {
-    // No databaseSlug ⇒ no "In database" chip and no "Add to workspace" button for a contact already in it.
+    // No databaseSlug ⇒ no "Not saved" chip and owned affordances for a contact already in the workspace.
     const rows = mergeRows([], [person({ inWorkspace: IN_WORKSPACE })], true);
     expect(rows[0]?.databaseSlug).toBeUndefined();
     expect(rows[0]?.id).toBe(IN_WORKSPACE.contactId);
@@ -101,6 +109,90 @@ describe("mergeRows — workspace half skipped (a database-only filter)", () => 
     const rows = mergeRows([], [person()], true);
     expect(rows[0]?.databaseSlug).toBe("jane-doe");
     expect(rows[0]?.id).toBe("db:jane-doe");
+  });
+});
+
+describe("reveal IS the save gesture — the in-place flip (decisions.md 2026-08-25)", () => {
+  const saved = ownedRowFromDatabase(
+    databasePersonToRow(person()),
+    NEW_ID,
+    { hasEmail: true, hasPhone: true },
+    "email",
+  );
+
+  test("ownedRowFromDatabase turns the database row into an OWNED row with the platform's presence", () => {
+    expect(saved.id).toBe(NEW_ID);
+    expect(saved.databaseSlug).toBeUndefined();
+    expect(saved.databaseUrl).toBeUndefined();
+    expect(saved.isRevealed).toBe(true);
+    expect(saved.revealedTypes).toEqual(["email"]);
+    // The OTHER channel stays on offer: the response said a phone is on file even though the person's
+    // masked row said no — the platform's booleans win over the search projection's.
+    expect(saved.hasPhone).toBe(true);
+    // Identity is kept, so the row does not visibly change shape.
+    expect(saved.linkedinPublicId).toBe("jane-doe");
+    expect(saved.firstName).toBe("Jane");
+  });
+
+  test("a reveal that FAILED after the landing still saves — unrevealed, button intact", () => {
+    const unrevealed = ownedRowFromDatabase(
+      databasePersonToRow(person()),
+      NEW_ID,
+      undefined,
+      undefined,
+    );
+    expect(unrevealed.id).toBe(NEW_ID);
+    expect(unrevealed.databaseSlug).toBeUndefined();
+    expect(unrevealed.isRevealed).toBe(false);
+    expect(unrevealed.revealedTypes).toEqual([]);
+    // No presence in a failed response: the row's own bits stand.
+    expect(unrevealed.hasEmail).toBe(true);
+    expect(unrevealed.hasPhone).toBe(false);
+  });
+
+  test("a materialized person renders IN PLACE of their database row", () => {
+    const rows = mergeRows([], [person()], false, new Map([["jane-doe", saved]]));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(NEW_ID);
+    expect(rows[0]?.databaseSlug).toBeUndefined();
+  });
+
+  test("…even once the database half refetches and reports them as in the workspace", () => {
+    // Without this the row would vanish from the grid (the normal dedup drops in-workspace people) until
+    // the OWNED half refetched — the person the user just paid for, gone mid-read.
+    const rows = mergeRows(
+      [],
+      [person({ inWorkspace: { contactId: NEW_ID, isRevealed: true } })],
+      false,
+      new Map([["jane-doe", saved]]),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(NEW_ID);
+  });
+
+  test("an owned refetch that lists the person wins — the copy is dropped, no duplicate", () => {
+    const rows = mergeRows(
+      [contact({ id: NEW_ID, linkedinPublicId: "jane-doe", isRevealed: true })],
+      [person({ inWorkspace: { contactId: NEW_ID, isRevealed: true } })],
+      false,
+      new Map([["jane-doe", saved]]),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(NEW_ID);
+  });
+
+  test("countDatabaseRows counts only rows still addressed by slug", () => {
+    const rows = mergeRows(
+      [contact()],
+      [
+        person(),
+        person({ linkedinPublicId: "john-roe", linkedinUrl: "https://linkedin.com/in/john-roe" }),
+      ],
+      false,
+      new Map([["jane-doe", saved]]),
+    );
+    expect(rows).toHaveLength(3);
+    expect(countDatabaseRows(rows)).toBe(1);
   });
 });
 
@@ -128,5 +220,16 @@ describe("toDatabaseQuery", () => {
     );
     expect(query).toBeNull();
     expect(droppedFields).toEqual(["owner"]);
+  });
+
+  test("an exclude clause keeps its sense", () => {
+    const { query } = toDatabaseQuery(
+      {
+        ...BASE,
+        filters: [{ kind: "term", field: "industry", op: "exclude", values: ["Retail"] }],
+      },
+      25,
+    );
+    expect(query?.filters[0]).toMatchObject({ kind: "term", op: "exclude", values: ["Retail"] });
   });
 });

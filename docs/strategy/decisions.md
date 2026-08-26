@@ -630,6 +630,47 @@ pass silently if it falls — they demand the budget be tightened instead.
    already has its writer and its read routes, so when a feed lands the filter is a small follow-up on top
    of the `database-only` facet machinery Phase 3d shipped — not a new surface.
 
+## 2026-08-25 — Reveal IS the save gesture on Search; profiles ungated; the rail gets a quick-filter tier (operator decision)
+
+The operator directed that on the Search surface (a) revealing a database person's email or phone
+**materializes them into the workspace in the same gesture** — there is no separate "Add to workspace" action
+anywhere in `apps/web` (the extension's `POST /contacts/from-database` is untouched); (b) the full masked
+profile opens without saving — `DATABASE_PROFILE_ENABLED` is removed from code, the `rl:dbprofile`
+enumeration limiter stays, and `MASTER_CHANNEL_REVEAL_ENABLED` becomes the runtime kill switch and a
+production prerequisite (it is now in `.env.example` and `deploy/env.production.template`); (c) the filter
+rail is restructured into a quick-filter tier — exactly the facets both the workspace and the global engine
+answer (title, location, company, industry, seniority, has email, has phone) — and an "All filters" tier
+where every group is tagged with the one side it searches ("Workspace only" / "Database only"), so a quick
+filter can never make people silently vanish. Landed on top of the 2026-08-22 facet-scope model: the tiers
+derive from each facet's `scope`, so the quick tier is `scope: "both"` by construction, and the notice above
+the grid is the shared `ScopeNotice` in both skip directions.
+
+This **supersedes** three lines of the 2026-08-21 search-consolidation spec (`00` #4 "Add-to-workspace
+remains as an optional action", `04` #2 "Reveal is not offered on a database profile", and #8's framing of the
+add as the gesture): a record no longer has to be in the workspace *before* reveal exists as a control — the
+reveal *is* the acquisition gesture, still one row per explicit click (hard constraint 4), still credit-gated,
+entitlement-capped and idempotent (`POST /contacts/from-database/reveal` carries the money route's full
+guard chain plus the capture-rate budget), with the same provenance row as the old add. The monetization
+boundary is unchanged: channel values are the product; profile facts are the shop window. The composed
+endpoint refuses BEFORE any write while the kill switch is off (409 `database_reveal_disabled`), so a
+switched-off deployment never accumulates half-saved, unrevealable contacts; a reveal that fails AFTER the
+landing leaves a saved, unrevealed contact and says so on the problem (`extensions.contactId`).
+
+Consequences recorded: (1) a database person with no licensed channel cannot be saved from Search (35 of 176
+visible people carry an email at decision time, 9 a phone) — accepted; a "request contact info" gesture is
+the named follow-up. (2) Bulk reveal over not-yet-saved people is deferred and needs its own decision (it is
+N acquisitions per gesture). (3) Title typeahead fires at 2 characters (ADR-0035's client rule said 3) — a
+bounded, cached deviation for `VP`/`HR`/`IT`-shaped titles; other facets stay at 3. (4) The rail's
+People/Accounts switch is mirrored in the results header while the drawer is collapsed; the drawer itself
+stays as decided on 2026-08-21. (5) The workspace copy carries no channel value until revealed, so the
+overlay projection cannot see that the OTHER channel is still there to reveal; presence is persisted on the
+contact (`master_has_email`/`master_has_phone`, migration 0142) rather than probed on the hot search path.
+
+Compliance (rule 3): data elements are the profile scalars the add already copied plus one licensed channel
+value copied on reveal (the existing slice-6 path); lawful basis unchanged (`MASTER_PERSON_VISIBLE`,
+licensed/co-op only); provenance row per materialization; suppression re-checked on the fallback's blind
+index inside `revealContact`; erasure path unchanged; no new PII collected.
+
 ---
 
 2026-08-26 — **ONE OPEN DECISION from the auth audit: whether to trade a rotation-replay window for a UX

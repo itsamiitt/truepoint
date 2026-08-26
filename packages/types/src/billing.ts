@@ -126,6 +126,13 @@ export const revealCostsSchema = z.object({
   email: z.number().int().min(0),
   phone: z.number().int().min(0),
   full_profile: z.number().int().min(0),
+  /**
+   * Whether a reveal may be made straight from a DATABASE row (reveal-as-save, decisions.md 2026-08-25):
+   * the server's MASTER_CHANNEL_REVEAL_ENABLED kill switch, surfaced here because the grid already loads
+   * this payload once per page — hiding the affordance while the switch is off therefore costs no extra
+   * request. ADDITIVE (defaults false): an older client ignores it and behaves exactly as before.
+   */
+  databaseReveal: z.boolean().default(false),
 });
 export type RevealCosts = z.infer<typeof revealCostsSchema>;
 

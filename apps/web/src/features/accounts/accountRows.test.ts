@@ -7,6 +7,7 @@
 // Pure unit test — no DB, no DOM.
 
 import { describe, expect, test } from "bun:test";
+import { ACCOUNT_QUICK_FACETS } from "@/features/prospect/entries/accounts";
 import type { AccountQuery, MaskedAccount, MaskedDatabaseCompany } from "@leadwolf/types";
 import { databaseCompanyToRow, mergeAccountRows, toDatabaseCompanyQuery } from "./accountRows.ts";
 
@@ -179,5 +180,20 @@ describe("databaseCompanyToRow", () => {
 
   test("its synthetic id is namespaced so it can never be mistaken for a workspace uuid", () => {
     expect(databaseCompanyToRow(company()).id).toBe("db:acme.com");
+  });
+});
+
+// ── The quick-tier promise (decisions.md 2026-08-25): every quick facet is one the global engine answers ──
+describe("the Accounts quick tier never skips the database half", () => {
+  test("a query from any quick facet still runs the global company search", () => {
+    for (const facet of ACCOUNT_QUICK_FACETS) {
+      const clause =
+        facet.kind === "range"
+          ? { kind: "range" as const, field: facet.field, gte: 1 }
+          : { kind: "term" as const, field: facet.field, op: "include" as const, values: ["x"] };
+      const { query, droppedFields } = toDatabaseCompanyQuery({ ...BASE, filters: [clause] }, 25);
+      expect(query).not.toBeNull();
+      expect(droppedFields).toEqual([]);
+    }
   });
 });

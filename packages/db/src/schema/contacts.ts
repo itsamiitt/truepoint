@@ -178,6 +178,12 @@ export const contacts = pgTable(
     // mobile-vs-landline gating signal (01 §5.3), set by the phone verifier. Nullable; validated app-edge
     // (the phoneLineType zod enum), no DB CHECK — consistent with phone_status.
     phoneLineType: varchar("phone_line_type", { length: 20 }),
+    // Layer-0 channel PRESENCE for a database-sourced contact (0139; reveal-as-save, decisions.md 2026-08-25):
+    // booleans only, never a value. The overlay copy carries no channel until it is revealed, and leadwolf_app
+    // cannot read master_* at query time, so the landing writes these and the search projection ORs them into
+    // hasEmail/hasPhone — the OTHER channel's reveal stays on offer after one is revealed. NULL = unknown.
+    masterHasEmail: boolean("master_has_email"),
+    masterHasPhone: boolean("master_has_phone"),
     locationCountry: varchar("location_country", { length: 100 }),
     locationCity: varchar("location_city", { length: 100 }),
     priorityScore: integer("priority_score"), // cache of latest scores.composite_score (M4)

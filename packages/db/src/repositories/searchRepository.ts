@@ -63,10 +63,16 @@ export interface SearchReadOpts {
 const emailChildExists = sql`EXISTS (SELECT 1 FROM ${contactEmails} ce WHERE ce.contact_id = ${contacts.id} AND ce.deleted_at IS NULL)`;
 const phoneChildExists = sql`EXISTS (SELECT 1 FROM ${contactPhones} cp WHERE cp.contact_id = ${contacts.id} AND cp.deleted_at IS NULL)`;
 // Boolean-typed projection variants (the MASKED select's hasEmail/hasPhone columns swap to these gate-on).
-const hasEmailFlat = sql<boolean>`${contacts.emailEnc} IS NOT NULL`;
-const hasPhoneFlat = sql<boolean>`${contacts.phoneEnc} IS NOT NULL`;
-const hasEmailChild = sql<boolean>`${emailChildExists}`;
-const hasPhoneChild = sql<boolean>`${phoneChildExists}`;
+// Each ORs in the Layer-0 PRESENCE bit the landing persisted (0139): a database-sourced contact carries no
+// channel VALUE until it is revealed, but the platform holds one — and "we can get you a phone" is exactly
+// what the reveal button asks. Without this, revealing a person's email made their phone read "—" on the
+// next refetch (reveal-as-save, decisions.md 2026-08-25). NULL (not database-sourced) folds to false.
+const masterHasEmail = sql`coalesce(${contacts.masterHasEmail}, false)`;
+const masterHasPhone = sql`coalesce(${contacts.masterHasPhone}, false)`;
+const hasEmailFlat = sql<boolean>`(${contacts.emailEnc} IS NOT NULL OR ${masterHasEmail})`;
+const hasPhoneFlat = sql<boolean>`(${contacts.phoneEnc} IS NOT NULL OR ${masterHasPhone})`;
+const hasEmailChild = sql<boolean>`(${emailChildExists} OR ${masterHasEmail})`;
+const hasPhoneChild = sql<boolean>`(${phoneChildExists} OR ${masterHasPhone})`;
 
 /** Gate-on `company` email-domain leg (05 §5, G16): match ANY live email's `email_domain` (idx §2.3), not
  *  just the flat primary's. RLS on contact_emails applies inside the correlated EXISTS. */

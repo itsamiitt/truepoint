@@ -1,10 +1,17 @@
-// filterGroups.ts — the declarative model for the Apollo/ZoomInfo-style filter sidebar (24): the collapsible
-// groups + their facets, and the pure, immutable helpers that read/update a server `ContactQuery` from UI
-// interactions (multi-select within a facet = OR; across facets = AND, enforced server-side). The rebuilt
-// FilterPanel renders from FILTER_GROUPS and calls these helpers; the removable pills + clear-all read
-// `activeChips`. Pure module — no React/DOM — so it is fully unit-tested. Only contract-backed facets appear
-// here (search.ts FacetKey/boolFilter/range); tags/lists, last-contacted channel, and job-change/hiring
-// signals need contract/data extensions and are intentionally deferred (documented follow-ups).
+// filterGroups.ts — the declarative model for the People filter rail (24; decisions.md 2026-08-25): the
+// facets in their two tiers — QUICK (always visible) and "All filters" (accordion groups) — and the pure,
+// immutable helpers that read/update a server `ContactQuery` from UI interactions (multi-select within a
+// facet = OR; across facets = AND, enforced server-side). FilterRail renders from QUICK_FACETS +
+// ALL_FILTER_GROUPS and calls these helpers; the removable pills + clear-all read `activeChips`. Pure module
+// — no React/DOM — so it is fully unit-tested. Only contract-backed facets appear here (search.ts
+// FacetKey/boolFilter/range); tags/lists, last-contacted channel and hiring signals need contract/data
+// extensions and are intentionally deferred (documented follow-ups).
+//
+// THE TIER RULE — what makes the rail simple for a first-time user: a QUICK facet is one BOTH engines answer
+// (`scope: "both"`), so a new user's first filter can never make half the list silently vanish. Everything
+// that searches one side only lives under "All filters", where each control carries its scope badge and the
+// group says which side it searches. `filterTiers.test.ts` pins the rule; `filterScope.test.ts` pins the
+// scope declarations themselves.
 
 import {
   type BoolFilterField,
@@ -30,12 +37,13 @@ export interface FacetOption {
  *
  * This is not decoration. `databaseRows.toDatabaseQuery` DERIVES its narrowing from these values, so the
  * badge the sidebar shows and the query the client actually sends can never disagree; and because the field
- * is required, a new facet cannot be added without someone deciding which engines can serve it.
+ * is required, a new facet cannot be added without someone deciding which engines can serve it. The tier a
+ * facet sits in is derived from it too: only a `both` facet may be a quick filter.
  *
  *   both           — the global graph carries this field too.
  *   workspace-only — an overlay-only signal (owner, outreach state, verification dates, ranges…). Applying
  *                    one means the user is interrogating their OWN pipeline, so the database half is
- *                    dropped rather than answered wrongly — and the pane now SAYS so.
+ *                    dropped rather than answered wrongly — and the pane SAYS so (ScopeNotice).
  *   database-only  — a Layer-0 SATELLITE fact (skills, languages, education, past employers). The mirror
  *                    image: the overlay holds none of it, and its role is REVOKEd from every `master_*`
  *                    table, so the WORKSPACE half is what gets skipped. Not a UI preference — reading those
@@ -52,6 +60,8 @@ export type FacetDef = { scope: FacetScope } & (
       /** options = fixed enum chips; typeahead = high-cardinality (suggest); owner = teammate picker (+ Me). */
       input: "options" | "typeahead" | "owner";
       options?: FacetOption[];
+      /** An EXAMPLE of the input ("e.g. VP Sales, CTO") for a typeahead — the label stays the label. */
+      placeholder?: string;
     }
   | { kind: "bool"; field: BoolFilterField; label: string }
   | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string }
@@ -61,6 +71,11 @@ export interface FilterGroup {
   id: string;
   title: string;
   facets: FacetDef[];
+  /**
+   * What EVERY facet in the group searches — the tier tag the rail shows on the group header, so a user
+   * knows which side a whole group narrows before opening it. `filterTiers.test.ts` holds each facet to it.
+   */
+  scope?: FacetScope;
 }
 
 /** Title-case a snake/space token: "c_suite" → "C Suite", "meeting_booked" → "Meeting Booked". */
@@ -75,13 +90,6 @@ const optionsOf = (values: readonly string[]): FacetOption[] =>
   values.map((v) => ({ value: v, label: humanize(v) }));
 
 /**
- * How a record ENTERED this workspace (slice 7). Two classes, and the distinction is the whole point:
- *  • USER-DECLARED — a system the customer connected (their CRM) or their own manual/extension entry.
- *  • PLATFORM-SOURCED — anything TruePoint acquired (`linkedin_api`, `pdl`, `coresignal`, `coop`, `forge`).
- *    Which vendor the platform buys from is internal, so these are deliberately NOT offered as separate
- *    filter values; a record sourced that way reads as the TruePoint database, which is what it is.
- */
-/**
  * The carrier line types worth offering as a filter [S-04]. The enum has fourteen values; these are the four
  * that change what a rep DOES — a mobile can be texted and is the TCPA-sensitive case, a landline usually
  * reaches a desk or switchboard, and VoIP is the one most likely to be a dead number. The rest (pager, uan,
@@ -95,6 +103,13 @@ const PHONE_LINE_TYPE_FACET_OPTIONS: FacetOption[] = [
   { value: "personal", label: "Personal" },
 ];
 
+/**
+ * How a record ENTERED this workspace (slice 7). Two classes, and the distinction is the whole point:
+ *  • USER-DECLARED — a system the customer connected (their CRM) or their own manual/extension entry.
+ *  • PLATFORM-SOURCED — anything TruePoint acquired (`linkedin_api`, `pdl`, `coresignal`, `coop`, `forge`).
+ *    Which vendor the platform buys from is internal, so these are deliberately NOT offered as separate
+ *    filter values; a record sourced that way reads as the TruePoint database, which is what it is.
+ */
 const SOURCE_FACET_OPTIONS: FacetOption[] = [
   { value: "manual", label: "Manual entry" },
   { value: "chrome_extension", label: "Browser extension" },
@@ -105,21 +120,66 @@ const SOURCE_FACET_OPTIONS: FacetOption[] = [
   { value: "sales_navigator", label: "Sales Navigator export" },
 ];
 
-// ── The five groups (only contract-backed facets) ──────────────────────────────────────────────────────
-export const FILTER_GROUPS: FilterGroup[] = [
+// ── Tier 1: QUICK filters — exactly the facets both engines answer, in the order a rep reaches for them ──
+export const QUICK_FACETS: FacetDef[] = [
   {
-    id: "person",
-    title: "Person",
+    kind: "term",
+    field: "title",
+    label: "Title",
+    input: "typeahead",
+    placeholder: "e.g. VP Sales, CTO",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "location",
+    label: "Location",
+    input: "typeahead",
+    placeholder: "e.g. Bengaluru, London",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "company",
+    label: "Company",
+    input: "typeahead",
+    placeholder: "e.g. Freshworks",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "industry",
+    label: "Industry",
+    input: "typeahead",
+    placeholder: "e.g. Software",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "seniority",
+    label: "Seniority",
+    input: "options",
+    options: optionsOf(seniorityLevel.options),
+    scope: "both",
+  },
+  { kind: "bool", field: "has_email", label: "Has email", scope: "both" },
+  { kind: "bool", field: "has_phone", label: "Has phone", scope: "both" },
+];
+
+const QUICK_GROUP: FilterGroup = {
+  id: "quick",
+  title: "Quick filters",
+  facets: QUICK_FACETS,
+  scope: "both",
+};
+
+// ── Tier 2: "All filters" — every facet that searches ONE side only, grouped, each group tagged ─────────
+export const ALL_FILTER_GROUPS: FilterGroup[] = [
+  {
+    id: "person-details",
+    title: "Person details",
+    scope: "workspace-only",
     facets: [
-      { kind: "term", field: "title", label: "Title", input: "typeahead", scope: "both" },
-      {
-        kind: "term",
-        field: "seniority",
-        label: "Seniority",
-        input: "options",
-        options: optionsOf(seniorityLevel.options),
-        scope: "both",
-      },
       {
         kind: "term",
         field: "department",
@@ -127,15 +187,13 @@ export const FILTER_GROUPS: FilterGroup[] = [
         input: "typeahead",
         scope: "workspace-only",
       },
-      { kind: "term", field: "location", label: "Location", input: "typeahead", scope: "both" },
     ],
   },
   {
-    id: "company",
-    title: "Company",
+    id: "company-details",
+    title: "Company details",
+    scope: "workspace-only",
     facets: [
-      { kind: "term", field: "company", label: "Company", input: "typeahead", scope: "both" },
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead", scope: "both" },
       {
         kind: "term",
         field: "technology",
@@ -177,6 +235,7 @@ export const FILTER_GROUPS: FilterGroup[] = [
   {
     id: "engagement",
     title: "Engagement",
+    scope: "workspace-only",
     facets: [
       {
         kind: "term",
@@ -211,6 +270,7 @@ export const FILTER_GROUPS: FilterGroup[] = [
   {
     id: "data-signals",
     title: "Data signals",
+    scope: "workspace-only",
     facets: [
       {
         kind: "term",
@@ -220,8 +280,6 @@ export const FILTER_GROUPS: FilterGroup[] = [
         options: optionsOf(emailStatus.options),
         scope: "workspace-only",
       },
-      { kind: "bool", field: "has_email", label: "Has email", scope: "both" },
-      { kind: "bool", field: "has_phone", label: "Has phone", scope: "both" },
       // The carrier classification, filterable pre-reveal — "mobile only" is the dial-risk question, and it
       // is TCPA-relevant [S-04]. The value was already on every masked row and nothing could filter it.
       {
@@ -246,21 +304,24 @@ export const FILTER_GROUPS: FilterGroup[] = [
     // skips the workspace half. Values come from the global suggest endpoint, not the workspace one.
     id: "background",
     title: "Background",
+    scope: "database-only",
     facets: [
       {
         kind: "term",
         field: "skill",
         label: "Skill",
         input: "typeahead",
+        placeholder: "e.g. Kubernetes",
         scope: "database-only",
       },
       {
-        // "has EVER worked at X" — distinct from the Company facet above, which is the CURRENT employer.
+        // "has EVER worked at X" — distinct from the quick Company facet, which is the CURRENT employer.
         // This is what makes "ex-Stripe people" askable.
         kind: "term",
         field: "past_company",
         label: "Past employer",
         input: "typeahead",
+        placeholder: "e.g. Stripe",
         scope: "database-only",
       },
       {
@@ -289,6 +350,7 @@ export const FILTER_GROUPS: FilterGroup[] = [
   {
     id: "source",
     title: "Source & recency",
+    scope: "workspace-only",
     facets: [
       {
         kind: "term",
@@ -336,6 +398,9 @@ export const FILTER_GROUPS: FilterGroup[] = [
   },
 ];
 
+/** Every group, quick tier first — the flat registry the lookups, chips and scope tests read. */
+export const FILTER_GROUPS: FilterGroup[] = [QUICK_GROUP, ...ALL_FILTER_GROUPS];
+
 /** Every facet, flattened — the lookups below and the narrowing map both read this. */
 const ALL_FACETS: FacetDef[] = FILTER_GROUPS.flatMap((g) => g.facets);
 
@@ -350,12 +415,12 @@ export function facetScope(field: string): FacetScope {
 /**
  * The fields on the ACTIVE query that the global database cannot answer, in sidebar order.
  *
- * FAILS CLOSED. An undeclared field — `skill` is one today: it is in `FacetKey`, so it validates and
- * round-trips through a saved search or a shared `?f=` URL, but has no sidebar control — must still appear
- * here, because this is now the ONLY thing standing between such a clause and the global query. Ordering by
- * the registry alone would have silently dropped it from the result, and `toDatabaseQuery` would then have
- * cast it to one of the shared fields and POSTed it, where the global contract rejects it with a 400.
- * Declared fields keep sidebar order; anything unrecognised is appended.
+ * FAILS CLOSED. An undeclared field is in `FacetKey`, so it validates and round-trips through a saved search
+ * or a shared `?f=` URL, but has no sidebar control — it must still appear here, because this is the ONLY
+ * thing standing between such a clause and the global query. Ordering by the registry alone would have
+ * silently dropped it from the result, and `toDatabaseQuery` would then have cast it to one of the shared
+ * fields and POSTed it, where the global contract rejects it with a 400. Declared fields keep sidebar order;
+ * anything unrecognised is appended.
  */
 export function workspaceOnlyFields(query: ContactQuery): string[] {
   return activeFieldsWithScope(query, "workspace-only");
@@ -402,6 +467,54 @@ function optionLabel(field: string, value: string): string {
   }
   return value;
 }
+
+// ── Quick-start presets (the first-run empty state) ─────────────────────────────────────────────────────
+// Enum-backed and built ONLY from quick facets, so each one returns rows from both engines on any
+// workspace — a preset that quietly narrowed to saved contacts would teach a new user the wrong rule on
+// their very first click. `filterTiers.test.ts` holds every preset to that.
+export interface QuickStartPreset {
+  id: string;
+  label: string;
+  query: ContactQuery;
+}
+
+const PRESET_BASE: ContactQuery = { filters: [], sort: "relevance", limit: 50 };
+
+export const QUICK_START_PRESETS: QuickStartPreset[] = [
+  {
+    id: "csuite-email",
+    label: "Founders & CEOs with an email",
+    query: {
+      ...PRESET_BASE,
+      filters: [
+        { kind: "term", field: "seniority", op: "include", values: ["c_suite"] },
+        { kind: "bool", field: "has_email", value: true },
+      ],
+    },
+  },
+  {
+    id: "vp-phone",
+    label: "VPs with a phone number",
+    query: {
+      ...PRESET_BASE,
+      filters: [
+        { kind: "term", field: "seniority", op: "include", values: ["vp"] },
+        { kind: "bool", field: "has_phone", value: true },
+      ],
+    },
+  },
+  {
+    id: "director-email",
+    label: "Directors with an email",
+    query: {
+      ...PRESET_BASE,
+      filters: [
+        { kind: "term", field: "seniority", op: "include", values: ["director"] },
+        { kind: "bool", field: "has_email", value: true },
+      ],
+    },
+  },
+];
 
 // ── Immutable query helpers ─────────────────────────────────────────────────────────────────────────────
 function isTerm(c: FilterClause, field: FacetKey, op: TermOp): boolean {
@@ -564,6 +677,8 @@ export function hasActiveFilters(query: ContactQuery): boolean {
 /** A removable pill: a label + a pure remover that returns the query without that one selection. */
 export interface ActiveChip {
   id: string;
+  /** The facet field the chip belongs to — lets a caller group or badge chips by scope. */
+  field: string;
   label: string;
   remove: (query: ContactQuery) => ContactQuery;
 }
@@ -577,6 +692,7 @@ export function activeChips(query: ContactQuery): ActiveChip[] {
       for (const v of c.values) {
         chips.push({
           id: `t:${c.field}:${c.op}:${v}`,
+          field: c.field,
           label: `${prefix}${facetLabel(c.field)}: ${optionLabel(c.field, v)}`,
           remove: (q) => toggleTermValue(q, c.field, c.op, v),
         });
@@ -584,6 +700,7 @@ export function activeChips(query: ContactQuery): ActiveChip[] {
     } else if (c.kind === "bool") {
       chips.push({
         id: `b:${c.field}`,
+        field: c.field,
         label: `${facetLabel(c.field)}: ${c.value ? "Yes" : "No"}`,
         remove: (q) => setBool(q, c.field, undefined),
       });
@@ -596,6 +713,7 @@ export function activeChips(query: ContactQuery): ActiveChip[] {
         .join(" · ");
       chips.push({
         id: `r:${c.field}`,
+        field: c.field,
         label: `${facetLabel(c.field)}: ${parts}`,
         remove: (q) => setRange(q, c.field, undefined, undefined),
       });

@@ -20,8 +20,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
-import { type ProspectRow, mergeRows, toDatabaseQuery } from "../databaseRows";
+import { useCallback, useMemo, useState } from "react";
+import { type ProspectRow, countDatabaseRows, mergeRows, toDatabaseQuery } from "../databaseRows";
 import { searchDatabase } from "../databaseSearchApi";
 import { databaseOnlyFields } from "../filterGroups";
 import { prospectKeys } from "../keys";
@@ -29,17 +29,18 @@ import { searchContacts } from "../searchApi";
 import { paramsToQuery, queryToSearchString } from "../searchUrlState";
 
 const PAGE_SIZE = 50;
+const NO_ROWS: ReadonlyMap<string, ProspectRow> = new Map();
 
 export interface ProspectSearch {
   query: ContactQuery;
   setQuery: (next: ContactQuery) => void;
   /** Workspace contacts FIRST, then people from the platform database the workspace does not hold. */
   hits: ProspectRow[];
-  /** How many of `hits` come from the platform database (not yet in the workspace). */
+  /** How many of `hits` are NOT saved (still addressed by slug). */
   databaseCount: number;
   /** True when the database half has further pages the grid cannot reach — `loadMore` pages the WORKSPACE
-   *  infinite query only, so the global half is one capped page. Lets the header say "top matches" rather
-   *  than presenting that page as everything the database holds. */
+   *  infinite query only, so the global half is one capped page. Lets the header render the number as a
+   *  floor rather than presenting that page as everything the database holds. */
   databaseHasMore: boolean;
   /** The active workspace-only filter fields that caused the database half to be skipped (empty when it
    *  ran). The pane renders these as an explicit notice — the global half used to vanish in silence. */
@@ -58,6 +59,9 @@ export interface ProspectSearch {
   patchRows: (ids: string[], patch: (row: ContactHit) => ContactHit) => void;
   /** Drop rows from the cached owned pages (e.g. archived out of the workspace) without a refetch. */
   removeRows: (ids: string[]) => void;
+  /** A database person just became a workspace contact through a reveal (reveal-as-save): render the owned
+   *  row IN PLACE of the database row, and refresh only the aggregates that count rows by side. */
+  materializeRow: (slug: string, row: ProspectRow) => void;
 }
 
 export interface UseProspectSearchOptions {
@@ -67,9 +71,9 @@ export interface UseProspectSearchOptions {
    *  nobody saw. The Search composer mounts ONE pane, so that reason is gone; the option stays for callers
    *  that genuinely want a URL-derived query without a request.) */
   enabled?: boolean;
-  /** From the shell's workspace-scope control: "In workspace" turns the GLOBAL half off entirely. */
+  /** From the shell's workspace-scope control: "Saved" turns the GLOBAL half off entirely. */
   includeDatabase?: boolean;
-  /** "New to me": drop the OWNED half so only people the workspace does not hold are listed. */
+  /** "Not saved": drop the OWNED half so only people the workspace does not hold are listed. */
   excludeOwned?: boolean;
 }
 
@@ -115,7 +119,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
 
   const search = useInfiniteQuery<SearchPage<ContactHit>>({
     queryKey,
-    // "New to me" turns the owned half OFF at the source rather than filtering its rows out afterwards:
+    // "Not saved" turns the owned half OFF at the source rather than filtering its rows out afterwards:
     // paying for a search whose every row is about to be discarded is the wrong kind of thorough.
     enabled: enabled && !excludeOwned && !workspaceSkipped,
     initialPageParam: null,
@@ -136,7 +140,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
-  // In "New to me" the owned engine is disabled above, so its cache may still hold a previous page — read
+  // In "Not saved" the owned engine is disabled above, so its cache may still hold a previous page — read
   // through excludeOwned rather than off search.data, or stale owned rows would linger in a mode whose whole
   // point is that there are none.
   // `workspaceSkipped` joins `excludeOwned` here for the same reason: `keepPreviousData` hands back the last
@@ -170,6 +174,14 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     staleTime: 30_000,
   });
 
+  // REVEAL-AS-SAVE (decisions.md 2026-08-25): slug → the owned row a database person became this session.
+  // Component state, not the query cache, on purpose: the database half's cached pages are the SERVER's
+  // answer and keep saying "not in workspace" until they refetch, while this is the client's knowledge that
+  // the person is saved now. `mergeRows` consults it so the row flips in place instead of vanishing
+  // (dedup) or jumping to the saved section mid-read; an owned refetch that lists the person wins and the
+  // entry is simply never read again. Kept across query edits — a saved person is saved everywhere.
+  const [materialized, setMaterialized] = useState<ReadonlyMap<string, ProspectRow>>(NO_ROWS);
+
   // The `databaseQuery !== null` guard is load-bearing. `keepPreviousData` keeps the LAST successful page
   // on a query that is now DISABLED, so without it the grid went on showing the database rows from before
   // a workspace-only filter was applied — rows that match neither that filter nor anything else — directly
@@ -181,15 +193,20 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
         owned,
         databaseQuery === null ? [] : (databaseSearch.data?.hits ?? []),
         workspaceSkipped,
+        materialized,
       ),
-    [owned, databaseSearch.data, databaseQuery, workspaceSkipped],
+    [owned, databaseSearch.data, databaseQuery, workspaceSkipped, materialized],
   );
-  const databaseCount = hits.length - owned.length;
+  // Counted off the merged rows, not `hits.length - owned.length`: a row flipped in place by a reveal is
+  // saved now and must not read as "more available".
+  const databaseCount = useMemo(() => countDatabaseRows(hits), [hits]);
 
   // Written straight into the cache rather than into a parallel useState, so a patched row survives a
   // remount and stays consistent with what a later refetch replaces it with. patchRows/removeRows are the
   // bulk-mutation counterparts (perf-audit P3.3b): a bulk action whose outcome is known client-side edits
-  // the cached pages in place instead of refetching every loaded page.
+  // the cached pages in place instead of refetching every loaded page. A materialized row lives outside the
+  // cache (above), so each also applies to that map — a status change or an archive on a person saved this
+  // session must land on the row the user can see.
   const patchRows = useCallback(
     (ids: string[], patch: (row: ContactHit) => ContactHit) => {
       const idSet = new Set(ids);
@@ -204,6 +221,15 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
             })),
           },
       );
+      setMaterialized((prev) => {
+        let next: Map<string, ProspectRow> | null = null;
+        for (const [slug, row] of prev) {
+          if (!idSet.has(row.id)) continue;
+          if (next === null) next = new Map(prev);
+          next.set(slug, { ...row, ...patch(row) });
+        }
+        return next ?? prev;
+      });
     },
     [qc, queryKey],
   );
@@ -222,6 +248,15 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
             })),
           },
       );
+      setMaterialized((prev) => {
+        let next: Map<string, ProspectRow> | null = null;
+        for (const [slug, row] of prev) {
+          if (!idSet.has(row.id)) continue;
+          if (next === null) next = new Map(prev);
+          next.delete(slug);
+        }
+        return next ?? prev;
+      });
     },
     [qc, queryKey],
   );
@@ -233,15 +268,28 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     [patchRows],
   );
 
+  const materializeRow = useCallback(
+    (slug: string, row: ProspectRow) => {
+      setMaterialized((prev) => new Map(prev).set(slug, row));
+      // Only the aggregates that count rows BY SIDE move: the saved total, the facet counts and the
+      // not-saved count. Never the two searches (the row is already on screen, flipped in place) and never
+      // the ["prospect"] root (perf-audit P3.3 — that refetches every loaded page of every open query).
+      void qc.invalidateQueries({ queryKey: prospectKeys.contactCount(query) });
+      void qc.invalidateQueries({ queryKey: ["prospect", "contact-facets"] });
+      void qc.invalidateQueries({ queryKey: ["prospect", "database-count"] });
+    },
+    [qc, query],
+  );
+
   return {
     query,
     setQuery,
     hits,
     databaseCount,
     // The database half is a SINGLE capped page — "Load more" pages the workspace infinite query only, so
-    // there is no way to reach a 51st database row. Surfaced so the header can say "top matches" instead of
-    // implying the list is everything the database holds. (Real pagination of the global half needs cursor
-    // plumbing through the merge and is tracked separately.)
+    // there is no way to reach a 51st database row. Surfaced so the header renders the number as a floor
+    // instead of implying the list is everything the database holds. (Real pagination of the global half
+    // needs cursor plumbing through the merge and is tracked separately.)
     databaseHasMore: Boolean(databaseSearch.data?.nextCursor),
     // Non-empty ⇒ the database half was skipped because these filters only exist on the workspace overlay.
     databaseDroppedFields: narrowing.droppedFields,
@@ -271,5 +319,6 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     markRevealed,
     patchRows,
     removeRows,
+    materializeRow,
   };
 }

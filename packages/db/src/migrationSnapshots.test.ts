@@ -213,21 +213,26 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  sized for billions). They are the reverse-lookup direction over master_employment, which every existing
  *  index on that table misses: the two that touch a company are partial on `is_current` and on
  *  `master_company_id IS NULL` respectively, so "has EVER worked at X" was served by neither. Absorbed by
- *  the next rebaseline.
- *
- *  100 → 101 for 0142_user_sessions_refresh_hash_index — the cheapest entry on this list: one CREATE INDEX,
- *  no table, no column, no policy. Hand-authored for the same stale-baseline reason as 0137-0141, and it adds
- *  a PLAIN btree index on user_sessions.refresh_token_hash beside the partial-unique one already there. Both
- *  are needed and neither replaces the other: the partial index carries the UNIQUENESS of a live hash (its
- *  `WHERE revoked_at IS NULL` clause is the constraint boundary, not an optimisation), while
- *  findByRefreshTokenHash's second lookup deliberately omits that predicate — it must see revoked rows,
- *  because a hit on one is how reuse detection recognises a replayed token. A partial index cannot serve a
- *  query lacking its predicate, so that lookup had always been a seq scan of a table that grows per login AND
- *  per ~14-minute rotation. Numbered 0142 rather than 0140: it was authored as 0140 on a branch cut before
- *  0140/0141 landed on main, and renumbering at merge is the only way two migration streams reconcile.
- *  Declared in schema/auth.ts too, so the schema and the database do not drift. Absorbed by the next
- *  rebaseline. */
-const EXPECTED_DEFICIT = 101;
+ *  the next rebaseline. */
+// 100 → 101 for 0142_contact_master_presence (decisions.md 2026-08-25) — two ADDITIVE nullable booleans on
+// contacts, which IS in the drizzle barrel, so `generate` could have produced the snapshot; it cannot do so
+// retroactively (the 2026-08-04 correction above) and the chain stopped at 0107 (0137). Same category as
+// 0091/0094: hand-authored, additive, its snapshot owed to the eventual rebaseline.
+
+// 101 → 102 for 0143_user_sessions_refresh_hash_index — the cheapest entry on this list: one CREATE INDEX,
+// no table, no column, no policy. Hand-authored for the same stale-baseline reason as 0137-0142, adding a
+// PLAIN btree index on user_sessions.refresh_token_hash beside the partial-unique one already there. Both
+// are needed and neither replaces the other: the partial index carries the UNIQUENESS of a live hash (its
+// `WHERE revoked_at IS NULL` clause is the constraint boundary, not an optimisation), while
+// findByRefreshTokenHash's second lookup deliberately omits that predicate — it must see revoked rows,
+// because a hit on one is how reuse detection recognises a replayed token. A partial index cannot serve a
+// query lacking its predicate, so that lookup had always been a seq scan of a table that grows per login
+// AND per ~14-minute rotation. RENUMBERED TWICE (0140 → 0142 → 0143): it was authored as 0140 on a branch
+// cut before main landed 0140/0141, then collided again with 0142_contact_master_presence on the next
+// merge. That is the standing cost of a long-lived branch against an active main, not a defect — the
+// content never changed, only its position in the chain. Declared in schema/auth.ts too, so the schema and
+// the database do not drift.
+const EXPECTED_DEFICIT = 102;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

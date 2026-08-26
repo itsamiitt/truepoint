@@ -139,7 +139,8 @@ House posture, matching `BULK_IMPORT_ENABLED`: explicit-`"true"`-only, so
 | Gate | Guards | Default |
 |---|---|---|
 | `DATABASE_COMPANY_SEARCH_ENABLED` | the Accounts tab's global half + `N3`/`N4` routes | off |
-| `DATABASE_PROFILE_ENABLED` | the two profile routes `N1`/`N2` and the un-gated row click | off |
+| ~~`DATABASE_PROFILE_ENABLED`~~ | **removed 2026-08-25** — the profile routes are simply on; the `rl:dbprofile` limiter is the control that stays | — |
+| `MASTER_CHANNEL_REVEAL_ENABLED` | reveal-as-save (`POST /contacts/from-database/reveal`) and the database-row reveal buttons (`databaseReveal` on `GET /credits/reveal-costs`) — an ops kill switch, now in `.env.example` and `deploy/env.production.template` | on (required in production) |
 
 Gate-off behaviour is **honest degradation, not breakage**: the Accounts tab shows
 owned accounts only; a database row click does nothing, exactly as today. Both routes

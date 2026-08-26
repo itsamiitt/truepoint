@@ -1,5 +1,5 @@
 // useTypeahead.ts — debounced, server-driven typeahead for a filter facet (24 §3.4). Fires only after a
-// 300ms pause and ≥3 chars.
+// 300ms pause and once the term is long enough for its facet.
 //
 // The per-term memo this kept in a `useRef(new Map())` is now the query cache keyed by (field, term), which
 // makes it shared across every mount of the same facet and bounded by RQ's garbage collection — the ref map
@@ -14,7 +14,10 @@ import { useEffect, useState } from "react";
 import { prospectKeys } from "../keys";
 import { suggestDatabaseField, suggestField } from "../searchApi";
 
-const MIN_CHARS = 3;
+const MIN_CHARS_DEFAULT = 3;
+/** Title is the one facet where two letters are a real query — "VP", "HR", "IT". A recorded deviation from
+ *  ADR-0035's client rule of 3 (decisions.md 2026-08-25); bounded by the same debounce + cache. */
+const MIN_CHARS: Partial<Record<FacetKey, number>> = { title: 2 };
 const DEBOUNCE_MS = 300;
 
 /**
@@ -25,6 +28,7 @@ const DEBOUNCE_MS = 300;
 export type TypeaheadSource = "workspace" | "database";
 
 export function useTypeahead(field: FacetKey, source: TypeaheadSource = "workspace") {
+  const minChars = MIN_CHARS[field] ?? MIN_CHARS_DEFAULT;
   const [query, setQuery] = useState("");
   // The debounce still belongs here: it decides WHEN a term becomes a request, which is a property of typing,
   // not of fetching. RQ then dedupes and caches whatever terms come out of it.
@@ -35,7 +39,7 @@ export function useTypeahead(field: FacetKey, source: TypeaheadSource = "workspa
     return () => clearTimeout(timer);
   }, [query]);
 
-  const term = debounced.length >= MIN_CHARS ? debounced : "";
+  const term = debounced.length >= minChars ? debounced : "";
   const result = useQuery<Suggestion[]>({
     // `source` is part of the KEY: the two endpoints answer the same (field, term) differently, so sharing
     // one cache entry would serve workspace values to a database facet and vice versa.
@@ -56,6 +60,8 @@ export function useTypeahead(field: FacetKey, source: TypeaheadSource = "workspa
     suggestions: term ? (result.data ?? []) : [],
     // Typing past the threshold should read as "loading" from the keystroke, not from the request that starts
     // 300ms later — otherwise the panel shows an empty list in the gap.
-    loading: query.trim().length >= MIN_CHARS && (query.trim() !== debounced || result.isFetching),
+    loading: query.trim().length >= minChars && (query.trim() !== debounced || result.isFetching),
+    /** How many characters this facet needs before it asks the server — the picker says so instead of nothing. */
+    minChars,
   };
 }

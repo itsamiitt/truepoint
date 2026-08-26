@@ -30,19 +30,20 @@ export function SearchProfileHost({
   kind,
   profileKey,
   onClose,
-  onAddToWorkspace,
+  onMaterialized,
 }: {
   kind: ProfileKind;
   profileKey: string;
   onClose: () => void;
-  onAddToWorkspace: (slug: string) => void;
+  /** A database person became a workspace contact through a reveal in the drawer (reveal-as-save). */
+  onMaterialized: (slug: string) => void;
 }) {
   if (kind === "person") {
     return (
       <DatabasePersonProfileDrawer
         slug={profileKey}
         onClose={onClose}
-        onAddToWorkspace={onAddToWorkspace}
+        onMaterialized={onMaterialized}
       />
     );
   }

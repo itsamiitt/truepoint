@@ -20,6 +20,8 @@ export { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 export { useAccountSearch } from "../hooks/useAccountSearch";
 export { useAccountTechnologies } from "../hooks/useAccountTechnologies";
 export {
+  ACCOUNT_ALL_FILTER_GROUPS,
+  ACCOUNT_QUICK_FACETS,
   accountFacetScope,
   accountWorkspaceOnlyFields,
   activeChips,

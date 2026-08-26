@@ -1,11 +1,16 @@
-// accountFilterGroups.ts — the declarative model for the firmographic (company-level) filter sidebar: the
-// collapsible groups + their facets, and the pure, immutable helpers that read/update a server `AccountQuery`
-// from UI interactions (multi-select within a facet = OR; across facets = AND, enforced server-side). The
-// AccountFilterPanel renders from ACCOUNT_FILTER_GROUPS and calls these helpers; the removable pills + clear-all
-// read `activeChips`. This mirrors filterGroups.ts (the Contacts sibling) exactly in shape; the helpers are
-// replicated (not imported) because the Contacts helpers are typed to ContactQuery/FacetKey, while these are
-// typed to AccountQuery/AccountTermField. Pure module — no React/DOM — so it is fully unit-tested. Only
+// accountFilterGroups.ts — the declarative model for the firmographic (company-level) filter rail: the facets
+// in their two tiers — QUICK (always visible) and "All filters" (accordion groups) — and the pure, immutable
+// helpers that read/update a server `AccountQuery` from UI interactions (multi-select within a facet = OR;
+// across facets = AND, enforced server-side). The AccountFilterPanel renders from ACCOUNT_QUICK_FACETS +
+// ACCOUNT_ALL_FILTER_GROUPS and calls these helpers; the removable pills + clear-all read `activeChips`. This
+// mirrors filterGroups.ts (the Contacts sibling) exactly in shape; the helpers are replicated (not imported)
+// because the Contacts helpers are typed to ContactQuery/FacetKey, while these are typed to
+// AccountQuery/AccountTermField. Pure module — no React/DOM — so it is fully unit-tested. Only
 // contract-backed firmographic facets appear here (the `accounts` table columns kept in clear for faceting).
+//
+// THE TIER RULE is the same as the People rail's (decisions.md 2026-08-25): a QUICK facet is one BOTH
+// engines answer (`scope: "both"`), so a first filter never makes the global companies silently vanish;
+// everything workspace-only lives under "All filters", tagged.
 
 import type { AccountFilterClause, AccountQuery, AccountTermField } from "@leadwolf/types";
 
@@ -20,7 +25,7 @@ export interface FacetOption {
 /**
  * WHICH ENGINE a facet can be answered by — see the same type in filterGroups.ts for the full reasoning.
  * `accountRows.toDatabaseCompanyQuery` derives its narrowing from these values, so the badge the sidebar
- * shows and the query the client sends cannot drift apart.
+ * shows and the query the client sends cannot drift apart. The tier a facet sits in derives from it too.
  */
 export type AccountFacetScope = "both" | "workspace-only";
 
@@ -38,6 +43,8 @@ export type AccountFacetDef = { scope: AccountFacetScope } & (
        */
       input: "options" | "typeahead" | "counts";
       options?: FacetOption[];
+      /** An EXAMPLE of the input ("e.g. Software") for a free-text or typeahead facet. */
+      placeholder?: string;
     }
   | { kind: "range"; field: string; label: string; valueKind: "number"; unit?: string }
 );
@@ -46,6 +53,8 @@ export interface AccountFilterGroup {
   id: string;
   title: string;
   facets: AccountFacetDef[];
+  /** What EVERY facet in the group searches — the tier tag on the group header. */
+  scope?: AccountFacetScope;
 }
 
 /** Title-case a snake/space token: "series_a" → "Series A", "mid_market" → "Mid Market". */
@@ -75,13 +84,62 @@ const FUNDING_STAGES = [
 
 const COMPANY_STAGES = ["startup", "smb", "mid_market", "enterprise"] as const;
 
-// ── The five firmographic groups (only contract-backed facets) ──────────────────────────────────────────
-export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
+// ── Tier 1: QUICK filters — exactly the facets the global company graph answers too ─────────────────────
+export const ACCOUNT_QUICK_FACETS: AccountFacetDef[] = [
+  {
+    kind: "term",
+    field: "industry",
+    label: "Industry",
+    input: "typeahead",
+    placeholder: "e.g. Software",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "hq_country",
+    label: "HQ country",
+    input: "typeahead",
+    placeholder: "e.g. India",
+    scope: "both",
+  },
+  {
+    kind: "term",
+    field: "hq_city",
+    label: "HQ city",
+    input: "typeahead",
+    placeholder: "e.g. Bengaluru",
+    scope: "both",
+  },
+  {
+    kind: "range",
+    field: "employee_count",
+    label: "Employees",
+    valueKind: "number",
+    scope: "both",
+  },
+  {
+    kind: "range",
+    field: "founded_year",
+    label: "Founded year",
+    valueKind: "number",
+    scope: "both",
+  },
+];
+
+const ACCOUNT_QUICK_GROUP: AccountFilterGroup = {
+  id: "quick",
+  title: "Quick filters",
+  facets: ACCOUNT_QUICK_FACETS,
+  scope: "both",
+};
+
+// ── Tier 2: "All filters" — workspace-only firmographics, grouped ───────────────────────────────────────
+export const ACCOUNT_ALL_FILTER_GROUPS: AccountFilterGroup[] = [
   {
     id: "industry",
-    title: "Industry",
+    title: "Industry details",
+    scope: "workspace-only",
     facets: [
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead", scope: "both" },
       {
         kind: "term",
         field: "sub_industry",
@@ -93,15 +151,9 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
   },
   {
     id: "size",
-    title: "Size & revenue",
+    title: "Revenue",
+    scope: "workspace-only",
     facets: [
-      {
-        kind: "range",
-        field: "employee_count",
-        label: "Employees",
-        valueKind: "number",
-        scope: "both",
-      },
       {
         // This control was labelled "Revenue" but bound to `company_stage`, so picking "Enterprise" filtered
         // by company stage under a Revenue heading — while `company_stage` ALSO appeared, correctly labelled,
@@ -119,6 +171,7 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
   {
     id: "technographics",
     title: "Technographics",
+    scope: "workspace-only",
     facets: [
       {
         kind: "term",
@@ -132,6 +185,7 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
   {
     id: "funding",
     title: "Funding & stage",
+    scope: "workspace-only",
     facets: [
       {
         kind: "term",
@@ -151,13 +205,6 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
       },
       {
         kind: "range",
-        field: "founded_year",
-        label: "Founded year",
-        valueKind: "number",
-        scope: "both",
-      },
-      {
-        kind: "range",
         field: "company_age",
         label: "Company age",
         valueKind: "number",
@@ -169,6 +216,7 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
   {
     id: "fit",
     title: "Fit",
+    scope: "workspace-only",
     facets: [
       // Supported by accountSearchRepository's range dispatch since ICP scoring landed, but never offered
       // in the sidebar — "show me only my best-fit accounts" was a question the panel could not ask.
@@ -181,14 +229,12 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
       },
     ],
   },
-  {
-    id: "location",
-    title: "Location",
-    facets: [
-      { kind: "term", field: "hq_country", label: "HQ country", input: "typeahead", scope: "both" },
-      { kind: "term", field: "hq_city", label: "HQ city", input: "typeahead", scope: "both" },
-    ],
-  },
+];
+
+/** Every group, quick tier first — the flat registry the lookups, chips and scope tests read. */
+export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
+  ACCOUNT_QUICK_GROUP,
+  ...ACCOUNT_ALL_FILTER_GROUPS,
 ];
 
 /** Every account facet, flattened — the lookups below and the narrowing map both read this. */
@@ -338,7 +384,7 @@ export function flipTermCondition(
   return addTermCondition(removeTermCondition(query, field, op, value), field, otherOp(op), value);
 }
 
-/** Count of active conditions whose field belongs to a group (drives the collapsed-header badge). */
+/** Count of active conditions/filters whose field belongs to a group (drives the collapsed-header badge). */
 export function groupActiveCount(query: AccountQuery, fields: string[]): number {
   const set = new Set(fields);
   let n = 0;
@@ -394,16 +440,21 @@ export function activeChips(query: AccountQuery): ActiveChip[] {
   const chips: ActiveChip[] = [];
   for (const c of query.filters) {
     if (c.kind === "term") {
-      const field = c.field;
       const prefix = c.op === "exclude" ? "Not " : "";
       for (const v of c.values) {
         chips.push({
           id: `t:${c.field}:${c.op}:${v}`,
           label: `${prefix}${facetLabel(c.field)}: ${optionLabel(c.field, v)}`,
-          remove: (q) => toggleTermValue(q, field, c.op, v),
+          remove: (q) => toggleTermValue(q, c.field, c.op, v),
         });
       }
-    } else if (c.kind === "range") {
+    } else if (c.kind === "bool") {
+      chips.push({
+        id: `b:${c.field}`,
+        label: `${facetLabel(c.field)}: ${c.value ? "Yes" : "No"}`,
+        remove: (q) => ({ ...q, filters: q.filters.filter((f) => f !== c) }),
+      });
+    } else {
       const parts = [
         c.gte !== undefined ? `≥ ${c.gte}` : null,
         c.lte !== undefined ? `≤ ${c.lte}` : null,
@@ -416,7 +467,6 @@ export function activeChips(query: AccountQuery): ActiveChip[] {
         remove: (q) => setRange(q, c.field, undefined, undefined),
       });
     }
-    // bool clauses have no firmographic facets in ACCOUNT_FILTER_GROUPS; they are skipped (none are produced).
   }
   return chips;
 }

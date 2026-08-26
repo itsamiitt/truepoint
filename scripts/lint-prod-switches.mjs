@@ -41,6 +41,13 @@ const INTENTIONALLY_ARMED = new Map([
       "exhaust the 10-connection tenant pool and stall every unrelated request. Not a dark feature — the " +
       "safer of the two behaviours, and the template documents it at the line.",
   ],
+  [
+    "MASTER_CHANNEL_REVEAL_ENABLED",
+    "Reveal serves the licensed Layer-0 channel value for a contact whose workspace copy carries none — the " +
+      "path reveal-as-save depends on (decisions.md 2026-08-25). Off, POST /contacts/from-database/reveal " +
+      "refuses with 409 before any write and the grid hides database-row reveal buttons, so the Search " +
+      "surface cannot save a person at all. Armed on purpose: this IS the product's acquisition gesture.",
+  ],
 ]);
 
 const envSource = readFileSync(ENV_SOURCE, "utf8");

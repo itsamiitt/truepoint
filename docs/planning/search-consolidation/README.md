@@ -1,6 +1,9 @@
 # Search Consolidation
 
-> **Status: SPEC — awaiting operator approval. No implementation code written.**
+> **Status: SHIPPED — stages 1–5 landed 2026-08-21. Amended 2026-08-25** (`docs/strategy/decisions.md`):
+> the reveal IS the save gesture (no "Add to workspace" anywhere in `apps/web`), the profile gate
+> `DATABASE_PROFILE_ENABLED` was removed, and the rail became two tiers (quick filters + "All filters").
+> Where a paragraph below says otherwise, the dated **Superseded** note beside it wins.
 > Operator decision 2026-08-21. Partially reverses D-9 (`docs/strategy/decisions.md`,
 > 2026-08-19).
 
