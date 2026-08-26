@@ -48,6 +48,11 @@ Written as a checklist so review can verify each one rather than trust prose.
    `Add to workspace`. A record must be in the workspace before reveal exists as a
    control — the shipped monetization boundary, untouched.
 
+   > **Superseded 2026-08-25** (`docs/strategy/decisions.md`): reveal IS offered on a not-saved row and
+   > on the profile, and it is the save gesture. The boundary is unchanged in substance — channel values are
+   > still the paid product, still credit-gated, entitlement-capped and idempotent — the ORDER moved: the
+   > reveal materializes first (`revealFromDatabase`: kill switch → landing → reveal), one person per click.
+
 3. **No workspace-overlay fact leaves its workspace.** A database profile shows no
    owner, stage, tags, activities, notes, scores, or reveal state. This is structural,
    not a UI choice: Layer-0 has **no workspace column**, so the global read has
@@ -77,6 +82,12 @@ Written as a checklist so review can verify each one rather than trust prose.
 8. **`POST /contacts/from-database` is unchanged** — `requireRole("owner","admin","member")`,
    `checkCaptureRate`, one row per explicit user gesture. Hard constraint 4 holds:
    nothing here introduces bulk or background acquisition.
+
+   > **Amended 2026-08-25:** a sibling `POST /contacts/from-database/reveal` exists with the money route's
+   > full chain (`requireRole` → `requireEntitlement("reveal_month")` → `revealRateLimit` → `idempotency`)
+   > PLUS `checkCaptureRate`. Still one row per explicit gesture; it refuses before any write while
+   > `MASTER_CHANNEL_REVEAL_ENABLED` is off (409 `database_reveal_disabled`). The add route stays for the
+   > extension.
 
 9. **No new contributor currency.** Nothing in this work creates points, bounties, or
    rewards. CLAUDE.md rule 7 untouched.

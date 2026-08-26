@@ -44,6 +44,11 @@
 
 Left rail of the Prospect surface (`11 §4.2`). Facet interactions:
 
+- **Two tiers (as built 2026-08-25, `docs/strategy/decisions.md`).** QUICK filters — always visible, and
+  exactly the facets both the workspace and the global engine answer (title, location, company, industry,
+  seniority, has email, has phone), so a quick filter can never make database people vanish — above
+  **All filters** (saved contacts only, accordions with persisted open state). A saved-only filter that is
+  active shows an inline notice with "Show everyone".
 - **Search-box-first facets.** Each high-cardinality facet renders as a search input with a suggestion
   dropdown ([§3](#3-typeahead--autocomplete-from-indexed-values)); selecting a suggestion adds an include/exclude chip.
 - **Multi-select** chips per facet with include/exclude (e.g. title **is** / **is not**).

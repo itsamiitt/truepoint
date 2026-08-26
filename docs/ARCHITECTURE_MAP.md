@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2245 source files · 89 code-bearing domains · 39 shared areas · 55 domain-vocabulary warnings · 2
+> **2350 source files · 93 code-bearing domains · 44 shared areas · 58 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unregistered repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — have a domain but no `REPO_DOMAIN` entry in the
@@ -244,11 +244,13 @@ apps/                           # deployable processes (thin transport adapters)
   `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database`;
   `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
   core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
-  `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
+  `ingestion/materializeFromMaster.ts` (the landing half of reveal-as-save → `landOverlayPerson`),
+  `reveal/revealFromDatabase.ts` (kill switch → landing → `revealContact`, one call), `reveal/masterChannelFallback.ts`.
   web: ONE prospect search covers both — `databaseRows.ts` maps the workspace ContactQuery onto the graph's
   facets and adapts a database person into a grid row; `useProspectSearch` merges owned rows first, then
-  people the workspace does not hold, each carrying an `Add` action (`AddToWorkspaceButton`). There is no
-  separate Database tab: "already in my workspace" is a state of a row, not another surface.
+  people the workspace does not hold, each carrying the same Email/Phone reveal buttons — the reveal IS the
+  save gesture (decisions.md 2026-08-25; `rowAffordances.ts` says what a row may do, `add: false` by type).
+  There is no separate Database tab: "already in my workspace" is a state of a row, not another surface.
   api: `features/contacts-from-database/` — `POST /contacts/from-database`, the workspace-scoped write the `Add`
   action posts to (transport only; the visibility policy and write discipline live in core's materializer, and one
   row per explicit user gesture). Its own slice, so the read path `POST /search/database` and the write stay apart.
@@ -371,14 +373,16 @@ apps/                           # deployable processes (thin transport adapters)
   reveal** (`useBulkSelection` — an external useSyncExternalStore store so a checkbox toggle re-renders 1-2
   subscribing checkboxes (`SelectionControls.tsx`) instead of the page, `BulkActionBar` (mounted via a
   subscribing host), `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
-  **filter rail** (`FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts` — the
+  **filter rail** (`FilterRail`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, two tiers
+  since 2026-08-25: `QuickFilters` + `AllFiltersSection`/`AllFiltersBody`, `AccordionGroup`, the per-kind
+  `FacetControl`/`FacetBoolControl`/`FacetRangeControl`/`AccountFacetControl`, `hooks/useOpenGroups.ts` — the
   MVP-era client-side `FilterRail` was deleted by the search-consolidation cutover, dead since the
   server-search rewrite; both panels now render inside the shared `components/search` drawer, with
   `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the shared progressive-exclude pattern
   `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
   `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
   cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound is 1 search, not one per digit));
-  **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
+  **AI search** (the `SearchBox` "Describe" mode + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
   `searchUrlState.ts` (shareable/bookmarkable query, `q`/`sort`/`f`); `savedSearchApi.ts` +
@@ -1180,7 +1184,8 @@ flowchart TD
 
   2026-08-21 refresh (search consolidation, stage 3 — profiles un-gated, + the bundle budget): 2225 → 2239
   files, no new domain. A search row now opens the FULL masked Layer-0 profile of a person or a company
-  without the record first being materialized into a workspace. Behind `DATABASE_PROFILE_ENABLED`.
+  without the record first being materialized into a workspace. Behind `DATABASE_PROFILE_ENABLED` at the
+  time — the gate was removed on 2026-08-25 (see that refresh).
 
   This is **net-new read surface, not a relaxed check** — there has never been a `GET /contacts/:id`, and
   the old "add it first" behaviour was three lines of frontend with nothing to open. Two invariants hold
@@ -1234,4 +1239,36 @@ flowchart TD
   One design-system change: `TpChip` gained an optional `removeLabel`. Its remove control had a hardcoded
   `aria-label="Remove"`, so an applied-filter row announced eight identical buttons and a screen-reader user
   could not tell which filter they were about to drop. Default unchanged.
+
+  2026-08-25 refresh (reveal IS the save gesture; profiles ungated; the two-tier rail — `docs/strategy/
+  decisions.md` 2026-08-25): 2245 → 2350 files (the count also absorbs the 2026-08-21 public developer portal
+  and API-market work, which shipped without a prose refresh), no new domain, `unassigned` still 2.
+
+  - **`core/reveal/revealFromDatabase.ts`** — the one-call composition of the two existing verbs: kill switch
+    (`MASTER_CHANNEL_REVEAL_ENABLED`) → `materializeContactFromMaster` → `revealContact`. Deps are injectable;
+    `revealFromDatabase.test.ts` pins the ORDER (the gate refuses with zero writes; a person the graph does
+    not hold is a 404, never a half-saved contact; a reveal that fails after the landing keeps its class and
+    carries `contactId`). Route: `POST /contacts/from-database/reveal` in `features/contacts-from-database/`,
+    with the money route's full chain plus `checkCaptureRate`; `GET /credits/reveal-costs` carries the
+    `databaseReveal` capability bit. `DATABASE_PROFILE_ENABLED` is gone from `packages/config` and the two
+    profile routes; `rl:dbprofile` stays. `MASTER_CHANNEL_REVEAL_ENABLED` is now in both env files.
+  - **`apps/web`: there is no "Add to workspace" anywhere on Search.** `features/prospect/rowAffordances.ts`
+    is the one place that says what a row may do (`add: false` by type; a not-saved row's checkbox is disabled
+    with its reason). `RevealCell` reveals-and-saves on a not-saved row and `useProspectSearch.materializeRow`
+    flips the row IN PLACE (a per-pane map `mergeRows` consults — never a refetch of the searches, never the
+    `["prospect"]` root). The RevealStore is provided by `features/search/components/SearchSurface.tsx` through
+    the new `features/prospect/entries/revealStore.ts`, so the person profile drawer
+    (`features/accounts/components/DatabaseProfileRevealActions.tsx`) reads the same store.
+  - **The rail is two tiers** (`components/FilterRail.tsx` replaces `FilterPanel.tsx`): `QuickFilters` — exactly
+    the facets both engines answer (`QUICK_FACETS` ⊆ the `SHARED_*` sets in `databaseRows.ts`, pinned by
+    `filterTiers.test.ts`) — then `AllFiltersSection` ("Saved contacts only"; its `AllFiltersBody` and the
+    `RailFooter` are `next/dynamic`, which is what holds `/search` at 200kB First Load). `FacetTypeahead` is
+    keyboard-operable through the pure `typeaheadKeys.ts`; `SearchBox.tsx` merges the keyword box and the
+    retired `AiSearchBox` ("Describe" mode); `WorkspaceOnlyNotice`, `QuickStartPresets` and `resultHeadline.ts`
+    carry the copy. `AccountFilterPanel` got the same two tiers (`AccountFacetControl`). Vocabulary
+    everywhere: Saved / Not saved. The dead MVP client-side filter model left `types.ts`.
+  - **`0139_contact_master_presence`** — `contacts.master_has_email/master_has_phone`, written by
+    `landOverlayPerson` from the master row and OR-ed into the search projection's `hasEmail/hasPhone`, so
+    revealing one channel never makes the other read "—". No migration-time backfill (FORCE RLS would silently
+    zero it on a non-BYPASSRLS owner). `packages/db/test/contactFromDatabase.itest.ts` (CI) pins the landing half.
 ```

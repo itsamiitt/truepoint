@@ -85,6 +85,9 @@ search · import · start sequence.
 
 ### 4.2 Prospect — *the single page* (M1–M3)
 One surface = **Search + Contacts + Accounts + Lists**.
+- **Left rail (as built 2026-08-25):** two tiers — QUICK filters (title, location, company, industry,
+  seniority, has email/phone — the facets the global graph answers too) always visible; **All filters**
+  (saved contacts only) in accordions. The original design, for reference:
 - **Left rail:** filter facets (title, seniority, department, account, headcount, industry, location,
   has-email/phone, **lead score**, `outreach_status`, list membership) + **Saved Views / Lists**
   (static & dynamic) selector. High-cardinality facets are **search-box typeahead** suggesting real indexed
