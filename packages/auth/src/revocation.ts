@@ -12,13 +12,14 @@
 import { env } from "@leadwolf/config";
 import Redis from "ioredis";
 import { recordAuthMetric } from "./authMetrics.ts";
+import { FAIL_OPEN_REDIS_OPTIONS } from "./redisOptions.ts";
 import { denyListDegradedLog } from "./revocationLog.ts";
 
 // Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is side-effect-free
 // (it is reachable from the auth Next app's module graph, and `next build` must not try to reach Redis).
 let _redis: Redis | undefined;
 // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
-const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL));
+const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL, FAIL_OPEN_REDIS_OPTIONS));
 const key = (sid: string): string => `revoked-sid:${sid}`;
 
 // AUTH-066: the deny-list fails OPEN on a Redis error (never 401 every request). That is correct but was

@@ -1,0 +1,27 @@
+-- 0140_user_sessions_refresh_hash_index.sql — a PLAIN index on user_sessions.refresh_token_hash, alongside the
+-- partial-unique one that already exists. HAND-AUTHORED (drizzle-kit generate is forbidden in this tree — see
+-- 0083_tan_wolfpack.sql for why a regen emits destructive nonsense for RLS/partition/expression DDL).
+--
+-- WHY. userRepository.findByRefreshTokenHash is deliberately TWO queries. The first filters
+-- `revoked_at IS NULL` and is served by uniq_user_sessions_refresh_token_hash, the PARTIAL unique index
+-- (schema/auth.ts) — that is the hot, common path and it is fine. The SECOND query is a bare equality with no
+-- revoked_at predicate, and it exists because it must: findActiveSessionOrDetectReuse treats a hit on a REVOKED
+-- row as refresh-token replay, so filtering it out would silently disable reuse detection.
+--
+-- A partial index cannot serve a query that lacks its predicate. So that second query has always been a
+-- SEQUENTIAL SCAN of user_sessions, and it runs on exactly the paths that are already unhappy: an expired
+-- token, a replayed token, the loser of a concurrent-rotation race, and every stale cookie that reaches
+-- redirectIfAuthenticated on an auth-origin entry page. The table gains a row per login AND per ~14-minute
+-- rotation and is pruned only at >30 days dead (retentionSweep.ts), so the scan cost grows with the retention
+-- window rather than with the number of live sessions — roughly 3,000 rows per actively-used device per month.
+--
+-- WHY NOT WIDEN THE PARTIAL INDEX INSTEAD. Its `WHERE revoked_at IS NULL` clause is not an optimisation, it is
+-- the UNIQUENESS boundary: a refresh-token hash is single-use among LIVE sessions, but historical revoked rows
+-- legitimately repeat nothing and must not be constrained. Dropping the predicate would make it a unique index
+-- over all history and could reject a lawful rotation. The two indexes serve different questions; both stay.
+--
+-- CONCURRENTLY is NOT used: applyMigrations runs each file inside a transaction and CREATE INDEX CONCURRENTLY
+-- cannot run in one. On the table sizes this is written for the plain build is short, and the retention sweep
+-- keeps it that way. If a deployment has let user_sessions grow large, build this by hand out-of-band first —
+-- the IF NOT EXISTS below then makes the migration a no-op.
+CREATE INDEX IF NOT EXISTS "idx_user_sessions_refresh_token_hash" ON "user_sessions" USING btree ("refresh_token_hash");

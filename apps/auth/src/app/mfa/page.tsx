@@ -3,6 +3,7 @@
 // hatch. TOTP (authenticator) is the default; a user who can't reach their authenticator can request an emailed
 // code (?method=email_otp, AUTH-025) — the TOTP path is unchanged, the email option is additive. Requires a
 // pending login transaction (else back to /login). SSR + WCAG AA.
+import { authPath } from "@/lib/authUrl";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
@@ -31,6 +32,12 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
     env.WEBAUTHN_ENABLED &&
     (await webauthnCredentialRepository.listSummaryForUser(txn.userId)).length > 0;
 
+  // No `footer` (the "Use a recovery code instead" escape hatch) is passed: /mfa/recovery has NO route and
+  // there is no recovery-code table — mfa.ts ships the generate/match primitives but mfaVerify.ts:2-3 defers
+  // the store to the M11 MFA depth. The link was a 404, so a user locked out of their authenticator was sent
+  // to a dead end rather than told the truth. Omitted until the flow exists, matching how login/page.tsx
+  // handles the unbuilt social-OAuth button (AUTH-015: hide now, build in the roadmap — never present a
+  // broken control). Restore the footer in the same change that adds the route.
   return (
     <AuthShell
       title="Two-step verification"
@@ -38,11 +45,6 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
         isEmailOtp
           ? "Enter the 6-digit code we emailed you."
           : "Enter the 6-digit code from your authenticator app."
-      }
-      footer={
-        <a className={styles.link} href="/mfa/recovery">
-          Use a recovery code instead
-        </a>
       }
     >
       <form action={submitMfa} noValidate>
@@ -90,7 +92,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
 
       {isEmailOtp ? (
         <div style={{ marginTop: "var(--tp-space-3)", textAlign: "center", fontSize: 14 }}>
-          <a className={styles.link} href="/mfa">
+          <a className={styles.link} href={authPath("/mfa")}>
             Use your authenticator instead
           </a>
         </div>

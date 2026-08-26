@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { env } from "@leadwolf/config";
 import { effectivePolicyRepository, sessionRepository } from "@leadwolf/db";
-import { InvalidTokenError } from "@leadwolf/types";
+import { ConcurrentRotationError, InvalidTokenError } from "@leadwolf/types";
 import { resolveMaxConcurrentSessions } from "./policy.ts";
 import { markManyRevoked, markRevoked } from "./revocation.ts";
 
@@ -209,11 +209,19 @@ export async function findActiveSessionOrDetectReuse(
   if (!session) throw new InvalidTokenError();
   if (session.revokedAt) {
     // A revoked token was presented: a benign rotation race inside the grace window, else a reuse attack →
-    // family revocation. Either way the presented token is rejected.
+    // family revocation. Either way the presented token is REJECTED — the difference is what the caller may
+    // then do to the refresh COOKIE.
     if (Date.now() - session.revokedAt.getTime() > REUSE_GRACE_MS) {
       await revokeAllSessionsForUser(session.userId);
+      throw new InvalidTokenError();
     }
-    throw new InvalidTokenError();
+    // Inside the grace window this is a concurrent refresh, and the grace already suppresses the family
+    // revocation above. It was still reported as a plain InvalidTokenError, so /token/refresh's catch cleared
+    // the cookie — and because that cookie is shared by app./admin./forge (host-scoped to the auth origin)
+    // while the client's rotation election is per-origin, the routine two-app race ended in a browser-wide
+    // sign-out whenever the loser's 401 landed after the winner's 200. Name the case so the caller can reject
+    // the token WITHOUT destroying a session that is demonstrably alive.
+    throw new ConcurrentRotationError();
   }
   if (session.expiresAt.getTime() < Date.now()) throw new InvalidTokenError();
   return session;

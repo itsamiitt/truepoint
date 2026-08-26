@@ -7,6 +7,7 @@ import {
   boolean,
   check,
   customType,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -216,6 +217,12 @@ export const userSessions = pgTable(
     refreshTokenHashIdx: uniqueIndex("uniq_user_sessions_refresh_token_hash")
       .on(t.refreshTokenHash)
       .where(sql`${t.revokedAt} IS NULL`),
+    // The SECOND lookup findByRefreshTokenHash performs — a bare equality with NO revoked_at predicate, which
+    // it needs because a hit on a revoked row is how reuse detection sees a replay. The partial index above
+    // cannot serve a query that omits its predicate, so this path seq-scanned the table until 0140 added this.
+    // The two coexist by design: the partial one carries the UNIQUENESS of a live hash, this one carries the
+    // lookup over all history. See 0140_user_sessions_refresh_hash_index.sql for the full reasoning.
+    refreshTokenHashAllIdx: index("idx_user_sessions_refresh_token_hash").on(t.refreshTokenHash),
   }),
 );
 

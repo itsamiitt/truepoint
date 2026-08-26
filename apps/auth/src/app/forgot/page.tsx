@@ -1,6 +1,7 @@
 // page.tsx — the "forgot password" request screen (17 §9). SSR, no-JS friendly: an email Input (prefilled
 // from ?email) posts to the requestReset action, carrying the app's PKCE/return context as hidden fields.
 // Enumeration-safe by design — after sending it renders one neutral confirmation regardless of existence.
+import { authPath } from "@/lib/authUrl";
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import styles from "@/shared/auth.module.css";
@@ -36,7 +37,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
         title="Check your email"
         subtitle="If an account exists for that address, we've emailed a reset link."
         footer={
-          <a className={styles.link} href={`/login?${carry}`}>
+          <a className={styles.link} href={authPath(`/login?${carry}`)}>
             Back to sign in
           </a>
         }
@@ -53,7 +54,7 @@ export default async function ForgotPage({ searchParams }: { searchParams: Searc
       title="Reset your password"
       subtitle="Enter your email and we'll send you a link to reset your password."
       footer={
-        <a className={styles.link} href={`/login?${carry}`}>
+        <a className={styles.link} href={authPath(`/login?${carry}`)}>
           Back to sign in
         </a>
       }

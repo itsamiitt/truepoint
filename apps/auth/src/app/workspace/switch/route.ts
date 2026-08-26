@@ -4,10 +4,15 @@
 // cookie. A bad/expired session → 401 (cookie cleared, reuse-rejection upstream); a workspace the user may
 // not access → 403 (the session stays valid). Cross-origin, credentialed (CORS to app origins).
 
-import { clearRefreshCookie, readRefreshTokenFromHeader, refreshCookie } from "@/lib/cookies";
+import {
+  clearRefreshCookie,
+  readRefreshTokenFromHeader,
+  refreshCookie,
+  shouldClearRefreshCookie,
+} from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { switchWorkspace } from "@leadwolf/auth";
-import { AppError, InvalidTokenError, workspaceSelectionSchema } from "@leadwolf/types";
+import { AppError, workspaceSelectionSchema } from "@leadwolf/types";
 
 // DUAL-READ (AUTH-074): accept both cookie names — the __Host- write flip must not break this route.
 const readRefreshCookie = (req: Request): string | null =>
@@ -48,9 +53,11 @@ export async function POST(req: Request): Promise<Response> {
     );
   } catch (err) {
     const headers = new Headers(cors);
-    // Only an invalid/expired session clears the cookie (reuse-rejection); a 403 (no access to the target)
-    // leaves the still-valid session intact so the user keeps their current workspace.
-    if (err instanceof InvalidTokenError)
+    // Only a genuinely invalid/expired session clears the cookie (reuse-rejection); a 403 (no access to the
+    // target) leaves the still-valid session intact so the user keeps their current workspace, and a switch
+    // that merely RACED a background refresh leaves it intact too — the session is alive and the browser
+    // already holds the winner's cookie. shouldClearRefreshCookie owns that whole decision.
+    if (shouldClearRefreshCookie(err))
       for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
     const status = err instanceof AppError ? err.status : 401;
     const code = err instanceof AppError ? err.code : "invalid_token";

@@ -1,6 +1,7 @@
 // cookies.ts — the auth-origin refresh cookie: HttpOnly · Secure · SameSite=Strict, scoped to the auth
 // host only. Same-site (under truepoint.in) means it still rides app-initiated fetches to auth.* (17 §1).
 import { env } from "@leadwolf/config";
+import { ConcurrentRotationError, InvalidTokenError } from "@leadwolf/types";
 import { cookies } from "next/headers";
 
 export const REFRESH_COOKIE = "lw_refresh";
@@ -82,6 +83,26 @@ export function refreshCookie(token: string, maxAgeSeconds: number): string {
 /** Clear the refresh cookie(s) — returns BOTH Set-Cookie directives; the caller appends each to its response. */
 export function clearRefreshCookie(): string[] {
   return buildClearRefreshCookies(env.AUTH_COOKIE_DOMAIN);
+}
+
+/**
+ * Should a failed refresh/switch DESTROY the refresh cookie? PURE, so the decision is unit-testable without a
+ * request — the three routes that clear it (/token/refresh, /workspace/switch, /org/switch) all call this.
+ *
+ * The answer is no for exactly one case, and getting it wrong is expensive in a way that is invisible from any
+ * single route. ONE host-scoped cookie serves app./admin./forge, while the client's anti-stampede rotation
+ * election is localStorage-backed and therefore per-origin — so two of those apps open in one browser routinely
+ * rotate the same cookie at the same time. The loser presents a token the winner replaced milliseconds ago.
+ * That is a live session, not a dead one; session.ts already forgives it for reuse-detection purposes inside
+ * REUSE_GRACE_MS. Clearing on it deleted the cookie all three apps depend on — and if that response landed
+ * after the winner's Set-Cookie, it signed the user out everywhere.
+ *
+ * Everything else still clears: an expired session, a genuine replay past the grace window, an unknown token.
+ * A 403 (`ForbiddenError` — no access to the target workspace/org) never reaches here as an InvalidTokenError
+ * and must leave the session intact, which the routes enforce by testing `instanceof InvalidTokenError` first.
+ */
+export function shouldClearRefreshCookie(err: unknown): boolean {
+  return err instanceof InvalidTokenError && !(err instanceof ConcurrentRotationError);
 }
 
 // The short-lived login-transaction cookie (auth-origin, HttpOnly, SameSite=Strict) that threads the

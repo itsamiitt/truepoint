@@ -2,6 +2,7 @@
 // to passwordless sign-in. SSR, no-JS friendly: the email shows as a Badge and a primary button posts to the
 // sendMagic action to mail a one-click link. After sending it switches to "check your email" + a resend
 // button (rate-limited server-side). Carries the app's PKCE/return context as hidden fields.
+import { authPath } from "@/lib/authUrl";
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
@@ -49,7 +50,7 @@ export default async function MagicPage({ searchParams }: { searchParams: Search
           : "We'll email you a one-click link to sign in — no password needed."
       }
       footer={
-        <a className={styles.link} href={`/login?${carry}`}>
+        <a className={styles.link} href={authPath(`/login?${carry}`)}>
           Use a different account
         </a>
       }

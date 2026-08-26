@@ -6,6 +6,7 @@ import { RateLimitedError } from "@leadwolf/types";
 import Redis from "ioredis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 import { type OpenGuard, guardDegradedLog, makeDegradedThrottle } from "./guardDegradedLog.ts";
+import { FAIL_OPEN_REDIS_OPTIONS } from "./redisOptions.ts";
 
 // One throttle for this module's fail-open markers (audit 32 · C11). Module-scoped on purpose: during a Redis
 // outage EVERY limiter in here opens at once, and the operator needs to know that, not to be told once per key.
@@ -17,7 +18,7 @@ const allowDegradedLog = makeDegradedThrottle();
 let _redis: Redis | undefined;
 const redis = (): Redis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
-  (_redis ??= new Redis(env.REDIS_URL, { enableOfflineQueue: false, maxRetriesPerRequest: 1 }));
+  (_redis ??= new Redis(env.REDIS_URL, FAIL_OPEN_REDIS_OPTIONS));
 
 let _ipLimiter: RateLimiterRedis | undefined;
 let _idLimiter: RateLimiterRedis | undefined;

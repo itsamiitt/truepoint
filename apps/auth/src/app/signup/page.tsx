@@ -1,6 +1,7 @@
 // page.tsx — Registration step 1: confirm the email to register (ADR-0020). Reached when the identifier step
 // finds no existing identity; the email arrives prefilled but stays editable. Submitting mails a 6-digit code
 // and advances to /verify. SSR, no-JS friendly, carries the app's PKCE/return context as hidden fields.
+import { authPath } from "@/lib/authUrl";
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import styles from "@/shared/auth.module.css";
@@ -33,7 +34,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Searc
       title="Create your account"
       subtitle="We'll email you a code to confirm it's you."
       footer={
-        <a className={styles.link} href={`/login?${carry}`}>
+        <a className={styles.link} href={authPath(`/login?${carry}`)}>
           Already have an account? Sign in
         </a>
       }

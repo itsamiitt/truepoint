@@ -121,6 +121,26 @@ export class InvalidTokenError extends AppError {
   }
 }
 
+/**
+ * A refresh token that was revoked by a rotation MOMENTS ago — a benign concurrent-refresh race, not a dead
+ * session and not a replay.
+ *
+ * This has to be its own type because the two cases demand OPPOSITE cookie handling and were indistinguishable
+ * before. The refresh cookie is host-scoped to the auth origin, so app./admin./forge share ONE cookie, while
+ * the client's anti-stampede election is localStorage-backed and therefore per-origin — two apps open in one
+ * browser cannot see each other's lock and both rotate. The loser presented a token the winner had just
+ * replaced, the route mapped that to InvalidTokenError, and its handler cleared the cookie: if the loser's 401
+ * landed after the winner's 200, the browser wiped the ONE cookie all three apps depend on and the user was
+ * signed out everywhere. session.ts already forgave the race for REUSE-DETECTION purposes (it skips the family
+ * revocation inside the grace window) — it just had no way to say so to the caller.
+ *
+ * Subclasses InvalidTokenError so every existing `instanceof InvalidTokenError` branch keeps behaving as it
+ * does today (401, same code on the wire — clients' silent-refresh recovery keys on that shape). The ONLY thing
+ * a handler may do differently is LEAVE THE COOKIE ALONE, because the session it points at is alive and the
+ * winner's rotated value is the current one.
+ */
+export class ConcurrentRotationError extends InvalidTokenError {}
+
 export class ForbiddenError extends AppError {
   constructor(code = "forbidden", detail?: string) {
     super({ status: 403, code, title: "Not allowed", detail });

@@ -15,3 +15,22 @@ export function authUrl(origin: string, path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${origin}${AUTH_BASE_PATH}${p}`;
 }
+
+/**
+ * The same prefix for an IN-PAGE link — `authPath("/forgot?x=1")` → `"/auth/forgot?x=1"`.
+ *
+ * AUTH-062 fixed the MAILED links and left the in-page ones broken, because the failure looks like a framework
+ * feature and is not one: `basePath` is applied by `next/link`, the router and `redirect()`, but NOT to a raw
+ * `<a href="/forgot">`, which the browser resolves against the ORIGIN. Served at auth.truepoint.in/auth/password,
+ * that anchor navigates to auth.truepoint.in/forgot — outside the basePath — and 404s. Nine anchors shipped that
+ * way, including the only route to the forgot-password screen ("Forgot password?" on /password), which is why
+ * password reset was unreachable even though the page and its action worked.
+ *
+ * A helper rather than `next/link` on purpose: these screens are server-rendered and no-JS-friendly by design
+ * (17 §2), so the correct href must be in the HTML with no client runtime involved, and the prefix must come
+ * from ONE constant that authUrl already shares — not from framework behaviour a future config change silently
+ * alters.
+ */
+export function authPath(path: string): string {
+  return authUrl("", path);
+}

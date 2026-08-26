@@ -1,6 +1,7 @@
 // page.tsx — Step 2A: the password screen. Email shows as a locked chip with a "change" back-link; the
 // PKCE/return context rides as hidden fields. SSR, no-JS friendly, keyboard-first, WCAG AA. Show/hide and
 // passkey prompt are progressive enhancements layered on top of this base render.
+import { authPath } from "@/lib/authUrl";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import styles from "@/shared/auth.module.css";
@@ -23,14 +24,14 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
     <AuthShell
       title="Enter your password"
       footer={
-        <a className={styles.link} href={`/forgot?${carry}`}>
+        <a className={styles.link} href={authPath(`/forgot?${carry}`)}>
           Forgot password?
         </a>
       }
     >
       <Badge className={styles.spaced}>
         <span>{email || "your account"}</span>
-        <a className={styles.link} href={`/login?${carry}`}>
+        <a className={styles.link} href={authPath(`/login?${carry}`)}>
           change
         </a>
       </Badge>

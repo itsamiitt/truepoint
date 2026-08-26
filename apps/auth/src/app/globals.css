@@ -23,6 +23,29 @@ body {
 }
 
 /*
+ * .tp-center-screen — the centered-viewport frame AuthShell renders into.
+ *
+ * This is a DELIBERATE COPY of the rule in @leadwolf/app-shell/shell.css, not an oversight. AuthShell adopted
+ * the class name when the auth origin moved onto the shared token system (4c3779a0), but apps/auth does not
+ * consume @leadwolf/app-shell — it is not in package.json and shell.css is not imported here — so the class
+ * resolved to NOTHING and every auth card rendered flush against the top-left corner of the window. That was
+ * the whole of the bug: <main> was an unstyled block and the card is width:100%/max-width:400px.
+ *
+ * Importing shell.css instead would fix it and bring 739 lines of app-shell chrome with it — a global `*`
+ * reset, its own body rule, app-wide scrollbar theming and the console nav frame — none of which the auth
+ * origin has, wants, or is designed against. Five lines are the smaller change. Keep the two in sync; the
+ * dvh/vh fallback pair matters (100vh alone sits under mobile browser chrome and pushes the card off-centre).
+ */
+.tp-center-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--tp-space-6);
+}
+
+/*
  * Auth motion (04 §8; brand "calm, not neon"): a gentle one-shot card rise on each step and a single error
  * shake. Opacity/transform only, ~150-350ms ease-out; both fully disabled under prefers-reduced-motion. (Bug 4.)
  */

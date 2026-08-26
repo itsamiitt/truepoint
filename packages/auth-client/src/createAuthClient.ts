@@ -244,16 +244,48 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
       setToken(data.accessToken, data.expiresIn);
     },
 
-    /** Fetch with the in-memory access token, attempting one silent refresh if it is missing/expired. */
+    /**
+     * Fetch with the in-memory access token, attempting one silent refresh if it is missing/expired, and ONE
+     * refresh-and-retry if the server answers 401 anyway.
+     *
+     * The retry is the part that was missing, and its absence was load-bearing. The client-side expiry check
+     * only knows what THIS tab believes; the server can reject a token the tab still considers fresh — the two
+     * routine causes being a rotation performed by another tab or another app (the refresh cookie is shared
+     * across app./admin./forge while the rotation election is per-origin) and clock skew against the ≤30s
+     * tolerance in verifyAccessToken. Without a retry that 401 flowed straight out to AppShell, which reads a
+     * 401 on the session probe as a revocation and re-gates to login — so an ordinary race presented to the
+     * user as being signed out.
+     *
+     * Bounded to a single retry ON PURPOSE: if a fresh token is ALSO rejected the session really is gone, and
+     * looping would turn one dead session into a request storm against an auth origin that may already be the
+     * thing struggling. `silentRefresh` de-dups in flight, so N concurrent 401s share one rotation. A request
+     * with no body-less/idempotent guarantee is safe here because the first attempt provably did not succeed —
+     * a 401 is rejected at authn, before any handler runs.
+     */
     async fetchWithAuth(input: string, init: RequestInit = {}): Promise<Response> {
       let token = getAccessToken();
       if (!token) {
         await silentRefresh();
         token = getAccessToken();
       }
-      const headers = new Headers(init.headers);
-      if (token) headers.set("authorization", `Bearer ${token}`);
-      return fetch(input, { ...init, headers });
+      const send = (bearer: string | null): Promise<Response> => {
+        const headers = new Headers(init.headers);
+        if (bearer) headers.set("authorization", `Bearer ${bearer}`);
+        return fetch(input, { ...init, headers });
+      };
+
+      const res = await send(token);
+      if (res.status !== 401 || !token) return res;
+      // A stream body is consumed by the first attempt and cannot be replayed; hand back the 401 rather than
+      // re-sending a request whose body is now empty. Every other body type (string, FormData, URLSearchParams,
+      // Blob, ArrayBuffer) re-reads cleanly, and the overwhelming majority of callers send a JSON string.
+      if (init.body instanceof ReadableStream) return res;
+
+      // The server rejected a token we believed was live. Rotate once and replay.
+      if (!(await silentRefresh())) return res;
+      const refreshed = getAccessToken();
+      if (!refreshed || refreshed === token) return res;
+      return send(refreshed);
     },
 
     /** End the session: revoke + clear the refresh cookie on the auth origin (idempotent 204), drop the

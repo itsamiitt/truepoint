@@ -8,13 +8,14 @@
 
 import { env } from "@leadwolf/config";
 import Redis from "ioredis";
+import { FAIL_OPEN_REDIS_OPTIONS } from "./redisOptions.ts";
 
 // Lazy singleton — constructing ioredis opens a socket + retry loop; defer it so importing this module is
 // side-effect-free (it is reachable from the auth Next app's module graph, and `next build` must not hit Redis).
 let _redis: Redis | undefined;
 const redis = (): Redis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
-  (_redis ??= new Redis(env.REDIS_URL, { enableOfflineQueue: false, maxRetriesPerRequest: 1 }));
+  (_redis ??= new Redis(env.REDIS_URL, FAIL_OPEN_REDIS_OPTIONS));
 
 export type WebauthnCeremony = "register" | "authenticate";
 

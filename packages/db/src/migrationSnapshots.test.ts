@@ -199,8 +199,19 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  came and the table had no journal entry, which is the one place a reader looks to find out when it
  *  appeared. So the deficit grows by one to close a worse gap than the one it opens. `IF NOT EXISTS`
  *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
- *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 98;
+ *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  98 → 99 for 0140_user_sessions_refresh_hash_index — the cheapest entry on this list: one CREATE INDEX, no
+ *  table, no column, no policy. It is hand-authored for the same stale-baseline reason as 0137-0139, and it
+ *  adds a PLAIN btree index on user_sessions.refresh_token_hash beside the partial-unique one that was already
+ *  there. Both are needed and neither replaces the other: the partial index carries the UNIQUENESS of a live
+ *  hash (its `WHERE revoked_at IS NULL` clause is the constraint boundary, not an optimisation), while
+ *  findByRefreshTokenHash's second lookup deliberately omits that predicate — it must see revoked rows, because
+ *  a hit on one is how reuse detection recognises a replayed token. A partial index cannot serve a query
+ *  lacking its predicate, so that lookup had always been a seq scan of a table that grows per login AND per
+ *  ~14-minute rotation. Declared in schema/auth.ts too, so the schema and the database do not drift. Absorbed
+ *  by the next rebaseline. */
+const EXPECTED_DEFICIT = 99;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

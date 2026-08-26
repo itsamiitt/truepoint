@@ -2,7 +2,7 @@
 // carry the "/auth" basePath or it 404s. This is the regression test for the forgot-password reset link and
 // the magic link that dropped the prefix. If someone builds an auth URL without "/auth" again, this fails.
 import { describe, expect, it } from "bun:test";
-import { AUTH_BASE_PATH, authUrl } from "./authUrl.ts";
+import { AUTH_BASE_PATH, authPath, authUrl } from "./authUrl.ts";
 
 describe("authUrl", () => {
   it("prefixes the /auth basePath on an absolute origin (the reset-link shape)", () => {
@@ -30,6 +30,28 @@ describe("authUrl", () => {
   it("always contains the /auth basePath", () => {
     for (const path of ["/reset", "/magic/confirm", "/account/security", "/login"]) {
       expect(authUrl("https://auth.truepoint.in", path)).toContain(`${AUTH_BASE_PATH}/`);
+    }
+  });
+});
+
+// The in-page half of the same rule. `basePath` covers next/link, the router and redirect(); a raw <a href>
+// is resolved by the BROWSER against the origin, so an unprefixed one leaves the app. The "Forgot password?"
+// anchor on /password was exactly that, which is why password reset was unreachable.
+describe("authPath", () => {
+  it("prefixes the /auth basePath on the forgot-password link (the shape that 404'd)", () => {
+    const carry = new URLSearchParams({ email: "a@b.com", app_origin: "https://app.truepoint.in" });
+    expect(authPath(`/forgot?${carry}`)).toBe(
+      "/auth/forgot?email=a%40b.com&app_origin=https%3A%2F%2Fapp.truepoint.in",
+    );
+  });
+
+  it("prefixes a bare path with no query", () => {
+    expect(authPath("/mfa")).toBe("/auth/mfa");
+  });
+
+  it("never returns a path that would resolve outside the basePath", () => {
+    for (const path of ["/login", "/forgot", "/mfa", "/mfa/recovery"]) {
+      expect(authPath(path).startsWith(`${AUTH_BASE_PATH}/`)).toBe(true);
     }
   });
 });
