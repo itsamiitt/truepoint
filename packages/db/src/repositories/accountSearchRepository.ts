@@ -121,7 +121,12 @@ function clauseCondition(clause: AccountQuery["filters"][number]): SQL | undefin
         return undefined; // a contact-only facet — no column on accounts
     }
   }
-  if (clause.kind === "bool") return undefined; // accounts have no boolean data-signals
+  // Accounts carry no boolean data-signals, so a bool clause matches nothing and is dropped. The account
+  // filter panel offers no bool control and the AI parser only emits ContactQuery, so nothing in the product
+  // produces one — it can only arrive from a hand-edited URL. Worth knowing if that changes: a dropped
+  // clause UNDER-filters (more rows than asked for), so a bool control must never be added to the panel
+  // without a branch here to answer it.
+  if (clause.kind === "bool") return undefined;
   // range
   const col = rangeColumn(clause.field);
   if (!col) return undefined;

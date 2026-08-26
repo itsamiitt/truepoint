@@ -13,6 +13,7 @@ import {
   EmptyState,
   FieldGroup,
   FormSection,
+  PageHeader,
   StatTile,
   StateSwitch,
   StatusBadge,
@@ -101,7 +102,7 @@ export function OrganizationPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Organization</h1>
+      <PageHeader title="Organization" />
 
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         <div className={styles.page}>

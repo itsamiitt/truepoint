@@ -20,7 +20,7 @@ export function TurnstileWidget() {
         className="cf-turnstile"
         data-sitekey={SITE_KEY}
         data-theme="light"
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: "var(--tp-space-4)" }}
       />
     </>
   );

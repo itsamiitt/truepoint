@@ -9,14 +9,17 @@ import {
   recordCompleted,
   recordFailed,
   renderPromMetrics,
+  resetComplianceMetrics,
   resetCounters,
   resetImportMetrics,
+  setComplianceGauge,
   setImportGauge,
 } from "./metrics.ts";
 
 beforeEach(() => {
   resetCounters();
   resetImportMetrics();
+  resetComplianceMetrics();
 });
 
 test("counters accumulate per queue", () => {
@@ -68,6 +71,17 @@ test("import reaper counters + gauges render as leadwolf_import_* families (S-Q5
   // A zero gauge DOES render (a 0-violations reading is a real, asserted signal — unlike the honest-unknown
   // outbox lag, which omits on null).
   expect(text).toContain("leadwolf_import_jobs_accounting_violations 0");
+});
+
+test("compliance gauges render as leadwolf_compliance_* — including the zero reading (A-01)", () => {
+  setComplianceGauge("dsar_overdue", 0);
+  setComplianceGauge("dsar_oldest_overdue_seconds", 0);
+  const text = renderPromMetrics({ depths: [], outboxOldestPendingSeconds: null });
+  expect(text).toContain("# TYPE leadwolf_compliance_dsar_overdue gauge");
+  // The zero MUST render. A breach gauge that only appears when something is wrong makes a dead sweep and a
+  // clean system produce the same scrape, and the alert then goes quiet in exactly the case it exists for.
+  expect(text).toContain("leadwolf_compliance_dsar_overdue 0");
+  expect(text).toContain("leadwolf_compliance_dsar_oldest_overdue_seconds 0");
 });
 
 test("import metrics gauges are set (overwrite), counters accumulate", () => {

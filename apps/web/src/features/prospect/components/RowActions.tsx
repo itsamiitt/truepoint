@@ -67,8 +67,8 @@ export function RowActions({
   return (
     <DropdownMenu
       align="end"
-      trigger={({ toggle }) => (
-        <TpIconButton label="Row actions" onClick={toggle}>
+      trigger={({ toggle, props }) => (
+        <TpIconButton {...props} label="Row actions" onClick={toggle}>
           <MoreHorizontal size={16} />
         </TpIconButton>
       )}

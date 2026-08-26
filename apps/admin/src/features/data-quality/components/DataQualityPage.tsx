@@ -39,17 +39,24 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
       style={{
         border: "1px solid var(--tp-hairline-2)",
         borderRadius: 10,
-        padding: "12px 14px",
+        padding: "var(--tp-space-3) 14px",
         minWidth: 130,
         flex: "1 1 130px",
       }}
     >
-      <div style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 600, color: "var(--tp-ink)", marginTop: 2 }}>
+      <div style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</div>
+      <div
+        style={{
+          fontSize: "var(--tp-text-display)",
+          fontWeight: 600,
+          color: "var(--tp-ink)",
+          marginTop: 2,
+        }}
+      >
         {value}
       </div>
       {sub ? (
-        <div className="app-muted" style={{ fontSize: 11, marginTop: 2 }}>
+        <div className="app-muted" style={{ fontSize: "var(--tp-text-micro)", marginTop: 2 }}>
           {sub}
         </div>
       ) : null}
@@ -124,12 +131,29 @@ export function DataQualityPage() {
         </TpSelect>
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !rollup}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No quality snapshot"
+            description="No workspace has reported a data-health snapshot in this window."
+          />
+        }
+      >
         {rollup ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-6)" }}>
             <section>
               <h3 className="tp-section-title">Contact data health</h3>
-              <p className="app-muted" style={{ margin: "4px 0 12px", fontSize: 12 }}>
+              <p
+                className="app-muted"
+                style={{
+                  margin: "var(--tp-space-1) 0 var(--tp-space-3)",
+                  fontSize: "var(--tp-text-caption)",
+                }}
+              >
                 {rollup.workspaces.toLocaleString()} workspace
                 {rollup.workspaces === 1 ? "" : "s"} reporting · latest snapshot{" "}
                 {shortDate(rollup.latestAt)}
@@ -163,7 +187,10 @@ export function DataQualityPage() {
                 />
               </div>
               {rollup.total === 0 ? (
-                <p className="app-muted" style={{ marginTop: 12, fontSize: 13 }}>
+                <p
+                  className="app-muted"
+                  style={{ marginTop: "var(--tp-space-3)", fontSize: "var(--tp-text-body)" }}
+                >
                   No data-quality snapshots captured yet — the daily data-health sweep populates
                   this.
                 </p>
@@ -172,7 +199,14 @@ export function DataQualityPage() {
 
             <section>
               <h3 className="tp-section-title">Re-verification (last {data?.windowDays} days)</h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  margin: "var(--tp-space-3) 0",
+                }}
+              >
                 <Tile label="Runs" value={(totals?.runs ?? 0).toLocaleString()} />
                 <Tile label="Scanned" value={(totals?.scanned ?? 0).toLocaleString()} />
                 <Tile label="Re-verified" value={(totals?.reverified ?? 0).toLocaleString()} />

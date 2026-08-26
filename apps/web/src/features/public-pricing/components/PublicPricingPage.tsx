@@ -68,7 +68,7 @@ export function PublicPricingPage() {
                   {plans.map((plan) => {
                     const features = enabledFeatures(plan);
                     return (
-                      <Card key={plan.key} style={{ padding: 24 }}>
+                      <Card key={plan.key} style={{ padding: "var(--tp-space-6)" }}>
                         <div className={styles.planCard}>
                           <h3 className={styles.planName}>{plan.name}</h3>
                           <p className={styles.planMeta}>
@@ -108,7 +108,7 @@ export function PublicPricingPage() {
               {packs.length > 0 ? (
                 <div className={styles.packGrid}>
                   {packs.map((pack) => (
-                    <Card key={pack.key} style={{ padding: 20 }}>
+                    <Card key={pack.key} style={{ padding: "var(--tp-space-5)" }}>
                       <div className={styles.packCard}>
                         <div className={styles.packCredits}>
                           {pack.credits.toLocaleString()}

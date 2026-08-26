@@ -32,7 +32,7 @@ export function StatusBadge({
         border: "1px solid var(--tp-hairline-2)",
         background: "var(--tp-surface)",
         color: "var(--tp-ink-2)",
-        fontSize: 12,
+        fontSize: "var(--tp-text-caption)",
         lineHeight: 1.4,
         fontWeight: 500,
         whiteSpace: "nowrap",

@@ -16,6 +16,8 @@ import { MASTER_COMPANY_VISIBLE } from "./masterCompanyReadRepository.ts";
 import { MASTER_PERSON_VISIBLE } from "./masterPersonReadRepository.ts";
 
 export interface EmploymentStintRead {
+  /** See COMPANY_GROUP below — an opaque per-response company token, safe to ship. */
+  groupKey: string;
   companyName: string | null;
   companyDomain: string | null;
   title: string | null;
@@ -56,11 +58,46 @@ export interface HeadcountPointRead {
  */
 const NULLIF_SENTINEL = (col: string) => sql`NULLIF(${sql.raw(col)}, '-infinity'::date)::text`;
 
+/**
+ * A stable, opaque token identifying the COMPANY a stint belongs to, so a client can group the promotion
+ * ("Finance Manager" then "Finance Director" at one employer) under one company block. [S-09]
+ *
+ * It is a `dense_rank` over the company identity rather than that identity itself, and the difference is the
+ * point: `master_company_id` is a Layer-0 identifier that deliberately never crosses the API boundary, and a
+ * salted hash of it would still be a per-install-stable handle on a graph node. A rank is an ordinal WITHIN
+ * ONE RESPONSE — it carries no information about the company beyond "these rows are the same one", which is
+ * exactly and only what grouping needs.
+ *
+ * THE FALLBACK CHAIN matters as much as the primary leg, and every rung earns its place:
+ *   master_company_id  — the resolved company; the only leg that is a real identity.
+ *   company_name_normalized — an UNRESOLVED employer (the id is nullable). citext, legal-suffix-stripped, so
+ *                        one company written two ways still folds. Grouping on the DISPLAY name instead
+ *                        would merge two distinct companies that share a name.
+ *   company_name_raw   — normalized is ALSO nullable (only `id OR raw` is checked, and the unresolved-stint
+ *                        unique explicitly guards NOT NULL), so it is genuinely absent on some rows.
+ *   id                 — the backstop. Without it every row where all three are null COALESCEs to NULL, and
+ *                        `dense_rank() ORDER BY NULL` ties them ALL into one rank: two unrelated employers
+ *                        rendered as one company block. Falling back to the row makes each its own group,
+ *                        which is the honest answer when nothing identifies the employer.
+ *
+ * A company split across resolved and unresolved stints still gets two keys — visible, and better than the
+ * silent merge the id-only version risked; closing it belongs to ER, not to a display query.
+ */
+const COMPANY_GROUP = sql`'g' || dense_rank() OVER (
+  ORDER BY COALESCE(
+    e.master_company_id::text,
+    'name:' || e.company_name_normalized,
+    'raw:' || lower(e.company_name_raw),
+    'row:' || e.id::text
+  )
+)`;
+
 export const masterProfileReadRepository = {
   /** Employment history for a visible person, most recent first. Bounded. */
   async employmentForSlugTx(tx: Tx, slug: string, limit: number): Promise<EmploymentStintRead[]> {
     const rows = (await tx.execute(sql`
       SELECT e.company_name_raw, e.title, e.location, e.is_current, e.is_primary,
+             ${COMPANY_GROUP} AS group_key,
              ${NULLIF_SENTINEL("e.started_on")} AS started_on,
              e.ended_on::text AS ended_on, e.start_precision, e.end_precision,
              mc.primary_domain AS company_domain, mc.name AS company_name
@@ -72,6 +109,7 @@ export const masterProfileReadRepository = {
        LIMIT ${limit}
     `)) as unknown as Array<Record<string, unknown>>;
     return rows.map((r) => ({
+      groupKey: r.group_key as string,
       companyName: (r.company_name as string | null) ?? (r.company_name_raw as string | null),
       companyDomain: r.company_domain as string | null,
       title: r.title as string | null,

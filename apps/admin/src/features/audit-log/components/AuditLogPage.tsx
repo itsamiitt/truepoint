@@ -136,10 +136,10 @@ export function AuditLogPage() {
       <div
         style={{
           display: "flex",
-          gap: 8,
+          gap: "var(--tp-space-2)",
           alignItems: "flex-end",
           flexWrap: "wrap",
-          marginBottom: 16,
+          marginBottom: "var(--tp-space-4)",
         }}
       >
         <FilterField label="Action" htmlFor="audit-f-action" grow>
@@ -208,12 +208,14 @@ export function AuditLogPage() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 8,
-              marginTop: 16,
+              gap: "var(--tp-space-2)",
+              marginTop: "var(--tp-space-4)",
             }}
           >
             {loadMoreError ? (
-              <span style={{ color: "var(--danger)", fontSize: 13 }}>{loadMoreError}</span>
+              <span style={{ color: "var(--danger)", fontSize: "var(--tp-text-body)" }}>
+                {loadMoreError}
+              </span>
             ) : null}
             <TpButton variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
               {loadingMore ? "Loading…" : loadMoreError ? "Retry" : "Load more"}
@@ -242,11 +244,11 @@ function FilterField({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
+        gap: "var(--tp-space-1)",
         flex: grow ? "1 1 180px" : undefined,
       }}
     >
-      <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
+      <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
     </label>
   );

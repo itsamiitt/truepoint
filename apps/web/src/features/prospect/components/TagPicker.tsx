@@ -117,12 +117,12 @@ export function TagPicker({
 
       <Popover
         align="start"
-        trigger={({ toggle: toggleOpen, open }) => (
+        trigger={({ toggle: toggleOpen, props }) => (
           <TpButton
+            {...props}
             variant="ghost"
             size="sm"
             leftIcon={<TagIcon size={14} />}
-            aria-expanded={open}
             onClick={() => {
               if (!open && all === null) void load();
               toggleOpen();
@@ -161,7 +161,9 @@ export function TagPicker({
                 />
               ))}
               {all !== null && all.length === 0 ? (
-                <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>No tags yet.</span>
+                <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                  No tags yet.
+                </span>
               ) : null}
             </div>
           )}
@@ -189,6 +191,9 @@ export function TagPicker({
               </TpButton>
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: "var(--tp-space-2)" }}>
+              {/* Raw <button> on purpose: this is a colour SWATCH — an 18px round fill whose only content is
+                  the colour itself. No DS control renders one; TpIconButton would impose a 32px ghost square
+                  and drop the fill. It carries type/aria-label/aria-pressed itself. */}
               {TAG_COLOR_OPTIONS.map((c) => (
                 <button
                   key={c}

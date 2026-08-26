@@ -9,7 +9,7 @@ import type { FacetKey } from "@leadwolf/types";
 import { TpInput } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
 import type { TermOp } from "../filterGroups";
-import { useTypeahead } from "../hooks/useTypeahead";
+import { type TypeaheadSource, useTypeahead } from "../hooks/useTypeahead";
 
 export function FacetTypeahead({
   field,
@@ -18,6 +18,7 @@ export function FacetTypeahead({
   onAdd,
   op = "include",
   autoFocus = false,
+  source = "workspace",
 }: {
   field: FacetKey;
   label: string;
@@ -28,8 +29,10 @@ export function FacetTypeahead({
   op?: TermOp;
   /** Focus the field on mount — set when the user just opened the exclude block. */
   autoFocus?: boolean;
+  /** Which endpoint supplies values — a `database-only` facet must say so. */
+  source?: TypeaheadSource;
 }) {
-  const { query, setQuery, suggestions, loading } = useTypeahead(field);
+  const { query, setQuery, suggestions, loading } = useTypeahead(field, source);
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const showMenu = open && query.trim().length >= 3;
@@ -62,11 +65,23 @@ export function FacetTypeahead({
         >
           <div className="tp-ui-menu">
             {loading ? (
-              <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
+              <div
+                style={{
+                  padding: "8px 10px",
+                  color: "var(--tp-ink-3)",
+                  fontSize: "var(--tp-text-body)",
+                }}
+              >
                 Searching…
               </div>
             ) : hits.length === 0 ? (
-              <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
+              <div
+                style={{
+                  padding: "8px 10px",
+                  color: "var(--tp-ink-3)",
+                  fontSize: "var(--tp-text-body)",
+                }}
+              >
                 No matches
               </div>
             ) : (
@@ -85,7 +100,9 @@ export function FacetTypeahead({
                   }}
                 >
                   <span style={{ flex: 1 }}>{s.displayLabel}</span>
-                  <span style={{ color: "var(--tp-ink-4)", fontSize: 12 }}>
+                  {/* ink-2, not ink-3: the row is a .tp-ui-menu-item, whose hover paints --nav-hover-fill,
+                      where ink-3 scores 4.39:1 and misses AA. ink-2 clears it on both surfaces. */}
+                  <span style={{ color: "var(--tp-ink-2)", fontSize: "var(--tp-text-caption)" }}>
                     {s.count.toLocaleString()}
                   </span>
                 </button>

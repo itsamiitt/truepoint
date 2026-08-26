@@ -83,9 +83,11 @@ export function ValidationRulesPage() {
     header: "",
     cell: (r) =>
       r.builtin ? (
-        <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>built-in</span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+          built-in
+        </span>
       ) : (
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
           <TpButton variant="secondary" onClick={() => openEdit(r)}>
             Edit
           </TpButton>
@@ -175,7 +177,7 @@ export function ValidationRulesPage() {
         title="Delete rule"
         description={deleteTarget ? `Delete "${deleteTarget.name}"? This is audited.` : ""}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDeleteTarget(null)} disabled={busy}>
               Cancel
             </TpButton>

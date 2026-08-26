@@ -6,6 +6,7 @@
 import {
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpInput,
@@ -51,7 +52,7 @@ export function WorkspaceGeneralPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Workspace</h1>
+      <PageHeader title="Workspace" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         <FormSection title="General" description="Your workspace identity and default data region.">
           <FieldGroup label="Name" htmlFor="ws-name">

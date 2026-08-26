@@ -39,8 +39,26 @@ import { join } from "node:path";
  * under every form field and the eyebrow on every page header, in every app — and both are unambiguously
  * text rather than the placeholder/icon cases that make up much of the remainder. The ratchet is what
  * noticed: it failed demanding the budget be tightened, which is the whole point of the equality assertion.
+ *
+ * 95 → 93: the Combobox's empty-results line and its option hints moved to `--tp-ink-3` while the widget was
+ * rebuilt around the ARIA combobox pattern. Both are read as text. The ratchet failed the DS rebuild for
+ * being one usage lighter than declared, which is exactly the behaviour that keeps this number honest —
+ * it costs a line to update and buys the guarantee that the count never silently grows back.
+ *
+ * 93 → 14: the apps/web sweep took 71 of that app's 79 (79 → 8), and apps/auth's remaining 4 came out
+ * alongside it. apps/web is the surface a paying user is in all day, and its usages were the bulk of the
+ * count. Every one was decided per SURFACE rather than replaced wholesale: the labels, hints, counts,
+ * timestamps and footnotes (.kpiLabel, .note, .footnote, .fieldLabel, .threadTime, .sectionHint, …) went to
+ * `--tp-ink-3`, and the two sitting on `--tp-surface-3` / `--nav-hover-fill` — where ink-3 is 4.43:1 and
+ * 4.39:1, still under AA — went to `--tp-ink-2` instead. That distinction is the whole reason this was a
+ * ratchet and not a codemod.
+ *
+ * The 8 still in apps/web are the exempt cases the header describes, and are meant to stay: two
+ * `border-color:` declarations the regex matches only as a substring of "border-color"; four decorative
+ * glyphs sitting beside their own visible label (.tp-ws-caret, .cardTitleIcon, .groupChevron,
+ * .connectNoteIcon); and LinksTable's two em-dash empty-cell placeholders. The other 6 are packages/ui.
  */
-const INK4_TEXT_BUDGET = 95;
+const INK4_TEXT_BUDGET = 14;
 
 /**
  * BOTH spellings, which is the correction that produced this file.
@@ -50,11 +68,18 @@ const INK4_TEXT_BUDGET = 95;
  * between `color:` and `var(`. That is 23 further usages, including every one in apps/admin and apps/auth,
  * which had made those two apps look entirely clean. A ratchet is only as honest as its scan, and one that
  * silently misses a whole syntax gives exactly the false assurance it exists to prevent.
+ *
+ * THIRD spelling, found the same way (2026-08-25): `var(--tp-ink-4, #9ca3af)` — the token WITH a fallback,
+ * which is how apps/extension has to write every token because a content script runs where tokens.css was
+ * never loaded. The pattern below ended at `)` immediately after the token name, so all 26 of that app's
+ * usages matched zero times and the comment under ROOTS confidently called it "at zero". It was not: it was
+ * unreadable. The optional `[^)]*` is the whole fix, and it is the second time this file's scan has been the
+ * thing that was wrong rather than the count.
  */
-const INK4_AS_TEXT = /color:\s*"?var\(--tp-ink-4\)"?/g;
+const INK4_AS_TEXT = /color:\s*"?var\(--tp-ink-4[^)]*\)"?/g;
 
-/** Every surface that paints. apps/forge, apps/extension and apps/doc are at zero and are listed anyway —
- *  the point of a ratchet is that a first usage shows up as a failure, not as a silent drift. */
+/** Every surface that paints. Listed whether or not they currently use the token — the point of a ratchet is
+ *  that a first usage shows up as a failure, not as a silent drift. */
 const ROOTS = [
   "apps/web/src",
   "apps/admin/src",

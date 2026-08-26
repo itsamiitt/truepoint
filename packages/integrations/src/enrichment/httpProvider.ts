@@ -12,11 +12,15 @@
 //   • response size cap (ENRICH_PROVIDER_MAX_RESPONSE_BYTES) before JSON.parse;
 //   • redirect: "error" — a vendor response never silently re-routes egress off the allowlist.
 // Status taxonomy (the crm-sync/hubspotHttp.ts idiom): 429 → rate_limited (+ Retry-After surfaced as
-// retryAfterMs, zero cost); other 4xx/5xx → error (zero cost; the breaker counts it); a 2xx with no
-// extractable fields → PAID miss (vendors charge per lookup). The vendor payload is untrusted input —
-// extract() string-narrows every value before it can reach storage.
+// retryAfterMs — seconds OR HTTP-date, via core's retryAfterFromHeaders — zero cost); a status the
+// vendor DOCUMENTS as a definitive no-match (VendorSpec.noMatchStatuses, e.g. PDL's 404) → an honest
+// zero-cost MISS (answers the request hash, no breaker strike, no re-buy); every other 4xx/5xx → error
+// (zero cost; the breaker counts it); a 2xx with no extractable fields → PAID miss (vendors charge per
+// lookup). The vendor payload is untrusted input — extract() string-narrows every value before it can
+// reach storage.
 
 import { env } from "@leadwolf/config";
+import { retryAfterFromHeaders } from "@leadwolf/core";
 import type { EnrichRequest, EnrichmentProvider, ProviderResult } from "@leadwolf/core";
 import type { EnrichCapability, EnrichField } from "@leadwolf/types";
 
@@ -116,14 +120,13 @@ export interface VendorSpec {
    *  answers matchStatus NO_MATCH and bills nothing) overrides this, or our own spend counters — which
    *  feed the daily budget gate — throttle enrichment against money never spent. */
   isBillable?(json: unknown): boolean;
-}
-
-/** Parse a Retry-After header (seconds form; the delta every enrichment vendor uses) to ms. */
-function retryAfterMs(headers: Record<string, string> | undefined): number | undefined {
-  const raw = headers?.["retry-after"];
-  if (!raw) return undefined;
-  const seconds = Number(raw);
-  return Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : undefined;
+  /** HTTP statuses this vendor documents as a DEFINITIVE no-match (PDL/Clearbit/Coresignal answer 404
+   *  "person not found") → a zero-cost `miss`: marks the provider ANSWERED for the request hash (no
+   *  re-buy on a retry) and never strikes the breaker. OPT-IN PER VENDOR, never a blanket rule: for
+   *  ZoomInfo/Apollo a no-match is a 200 body (matchStatus NO_MATCH / empty person), so a 404 there is
+   *  only ever a route/config failure — and a `miss` ledger row is immutable (the setWhere upgrade rule
+   *  covers rate_limited/error only), so misclassifying one silences that request hash forever. */
+  noMatchStatuses?: readonly number[];
 }
 
 export function vendorProvider(
@@ -178,9 +181,24 @@ export function vendorProvider(
           rawPayload: json,
           costMicros: 0,
           status: "rate_limited",
-          retryAfterMs: retryAfterMs(headers),
+          retryAfterMs: retryAfterFromHeaders(headers),
+          errorDetail: { detail: "http 429" },
         };
-      if (status >= 400) return { fields: [], rawPayload: json, costMicros: 0, status: "error" };
+      if (spec.noMatchStatuses?.includes(status)) {
+        // This vendor documents this status as a definitive "no match" — an honest MISS: marks the
+        // provider ANSWERED for this request hash so a later retry re-buys nothing, and it never
+        // strikes the breaker. Zero cost: vendors do not bill an HTTP-level no-match (the 2xx
+        // empty-payload paid-miss path below is the billed shape).
+        return { fields: [], rawPayload: json, costMicros: 0, status: "miss" };
+      }
+      if (status >= 400)
+        return {
+          fields: [],
+          rawPayload: json,
+          costMicros: 0,
+          status: "error",
+          errorDetail: { detail: `http ${status}` },
+        };
 
       const extracted = spec.extract(json, req.fields);
       const fields = Object.entries(extracted)

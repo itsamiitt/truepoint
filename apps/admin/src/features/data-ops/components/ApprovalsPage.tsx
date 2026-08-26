@@ -70,7 +70,7 @@ export function ApprovalsPage() {
     key: "actions",
     header: "",
     cell: (r) => (
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
         <TpButton variant="secondary" onClick={() => open(r, "approve")}>
           Approve
         </TpButton>
@@ -154,7 +154,7 @@ export function ApprovalsPage() {
             : ""
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setTarget(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -170,9 +170,11 @@ export function ApprovalsPage() {
       >
         <label
           htmlFor="approval-reason"
-          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            Reason (audited)
+          </span>
           <TpTextarea
             id="approval-reason"
             value={reason}

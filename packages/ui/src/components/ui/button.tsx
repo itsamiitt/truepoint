@@ -1,48 +1,62 @@
-// button.tsx — the action button (shadcn pattern: Radix Slot + CVA), themed from TruePoint tokens.
+// button.tsx — the action button (shadcn shape: Radix Slot + `asChild`, so a link can wear a button).
 // Primary = Ink fill + white text (never Cobalt); outline/ghost/link cover the secondary auth actions.
+//
+// Styled from primitives.css (.tp-ui-btn), NOT Tailwind utilities. The utilities only resolved in apps/auth
+// — the one app that loads tailwindcss + theme.css — so in web/admin/forge this component put class names in
+// the DOM with no CSS behind them and rendered as unstyled markup. It now shares TpButton's exact visual
+// contract (36px, same variants, same tokens); the two differ only in that this one takes `asChild`.
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { type VariantProps, cva } from "class-variance-authority";
 import type { ButtonHTMLAttributes } from "react";
 import { forwardRef } from "react";
 import { cn } from "../../cn.ts";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-[var(--tp-btn-700)]",
-        outline:
-          "border border-input bg-background text-foreground hover:bg-[var(--nav-hover-fill)]",
-        ghost: "text-foreground hover:bg-[var(--nav-hover-fill)]",
-        link: "text-foreground underline underline-offset-2 hover:text-muted-foreground",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3",
-        full: "h-10 w-full px-4",
-      },
-    },
-    defaultVariants: { variant: "default", size: "default" },
-  },
-);
+type Variant = "default" | "outline" | "ghost" | "link" | "destructive";
+type Size = "default" | "sm" | "full";
 
-export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+/** shadcn variant name → the .tp-ui-btn modifier that paints it. */
+const VARIANT_CLASS: Record<Variant, string> = {
+  default: "tp-ui-btn--primary",
+  outline: "tp-ui-btn--secondary",
+  ghost: "tp-ui-btn--ghost",
+  link: "tp-ui-btn--link",
+  destructive: "tp-ui-btn--danger",
+};
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: Variant;
+  size?: Size;
   asChild?: boolean;
 }
 
+/** Kept as a named export for call sites that style a non-button element to match (e.g. an anchor). */
+export function buttonVariants({
+  variant = "default",
+  size = "default",
+  className,
+}: { variant?: Variant; size?: Size; className?: string } = {}): string {
+  return cn(
+    "tp-ui-btn",
+    VARIANT_CLASS[variant],
+    size === "sm" && "tp-ui-btn--sm",
+    size === "full" && "tp-ui-btn--full",
+    className,
+  );
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, type, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
-      <Comp ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />
+      <Comp
+        ref={ref}
+        // `asChild` renders someone else's element (usually an <a>) — a `type` attribute there is invalid.
+        type={asChild ? undefined : (type ?? "button")}
+        className={buttonVariants({ variant, size, className })}
+        {...props}
+      />
     );
   },
 );
 Button.displayName = "Button";
-
-export { buttonVariants };

@@ -5,7 +5,7 @@ import { Skeleton, TableSkeleton } from "@leadwolf/ui";
 
 export default function SearchLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
       <Skeleton width={200} height={20} />
       <TableSkeleton rows={10} />
     </div>

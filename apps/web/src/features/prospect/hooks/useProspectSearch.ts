@@ -23,6 +23,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { type ProspectRow, mergeRows, toDatabaseQuery } from "../databaseRows";
 import { searchDatabase } from "../databaseSearchApi";
+import { databaseOnlyFields } from "../filterGroups";
 import { prospectKeys } from "../keys";
 import { searchContacts } from "../searchApi";
 import { paramsToQuery, queryToSearchString } from "../searchUrlState";
@@ -36,6 +37,16 @@ export interface ProspectSearch {
   hits: ProspectRow[];
   /** How many of `hits` come from the platform database (not yet in the workspace). */
   databaseCount: number;
+  /** True when the database half has further pages the grid cannot reach — `loadMore` pages the WORKSPACE
+   *  infinite query only, so the global half is one capped page. Lets the header say "top matches" rather
+   *  than presenting that page as everything the database holds. */
+  databaseHasMore: boolean;
+  /** The active workspace-only filter fields that caused the database half to be skipped (empty when it
+   *  ran). The pane renders these as an explicit notice — the global half used to vanish in silence. */
+  databaseDroppedFields: string[];
+  /** The MIRROR: active Layer-0 satellite fields (skill, school, …) that caused the WORKSPACE half to be
+   *  skipped. Non-empty ⇒ the grid is showing the platform database, with owned matches marked. */
+  workspaceDroppedFields: string[];
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -94,11 +105,19 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   // Memoized because the factory returns a NEW array each call: without this `markRevealed` below would be
   // rebuilt on every render, and it is passed down to the grid rows.
   const queryKey = useMemo(() => prospectKeys.contactSearch(query), [query]);
+
+  // The MIRROR of the database-half narrowing below: a Layer-0 satellite filter (skill, school, field of
+  // study, language) cannot be answered by the overlay at all — `leadwolf_app` is REVOKEd from every
+  // `master_*` table, so asking is a privilege denial, not an empty result. When one is active the WORKSPACE
+  // half is what gets skipped, and the global half becomes the whole answer.
+  const workspaceDroppedFields = useMemo(() => databaseOnlyFields(query), [query]);
+  const workspaceSkipped = workspaceDroppedFields.length > 0;
+
   const search = useInfiniteQuery<SearchPage<ContactHit>>({
     queryKey,
     // "New to me" turns the owned half OFF at the source rather than filtering its rows out afterwards:
     // paying for a search whose every row is about to be discarded is the wrong kind of thorough.
-    enabled: enabled && !excludeOwned,
+    enabled: enabled && !excludeOwned && !workspaceSkipped,
     initialPageParam: null,
     // A filter edit is a NEW cache key; without this the grid unmounted to a skeleton on every edit and
     // repopulated ("strobing"). Holding the previous key's rows while the fresh search lands is the same
@@ -120,19 +139,28 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   // In "New to me" the owned engine is disabled above, so its cache may still hold a previous page — read
   // through excludeOwned rather than off search.data, or stale owned rows would linger in a mode whose whole
   // point is that there are none.
+  // `workspaceSkipped` joins `excludeOwned` here for the same reason: `keepPreviousData` hands back the last
+  // successful page of a query that is now DISABLED, so reading off `search.data` would leave the pre-filter
+  // workspace rows on screen under a notice saying the workspace is not being searched.
   const owned = useMemo(
-    () => (excludeOwned ? [] : (search.data?.pages.flatMap((page) => page.hits) ?? [])),
-    [search.data, excludeOwned],
+    () =>
+      excludeOwned || workspaceSkipped
+        ? []
+        : (search.data?.pages.flatMap((page) => page.hits) ?? []),
+    [search.data, excludeOwned, workspaceSkipped],
   );
 
   // THE PLATFORM DATABASE, in the SAME list (Layer-0-as-database). A sales-intelligence search is one
   // filtered list of people; whether a row is already in the workspace is a property of the row, not a
   // different screen. The database half runs as its own query so a slow/failed global search can never
   // stall or break the workspace results — it simply contributes nothing.
-  const databaseQuery = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
+  const narrowing = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
+  const databaseQuery = narrowing.query;
   const databaseSearch = useQuery({
     queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
-    // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…).
+    // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…). Which filters
+    // caused that is reported through `databaseDroppedFields` so the pane can say so instead of the global
+    // half simply disappearing.
     enabled: enabled && includeDatabase && databaseQuery !== null,
     // Same no-blank treatment as the owned half above: a filter edit keeps the previous database rows on
     // screen while the fresh search lands, instead of the merged grid losing its bottom half per edit.
@@ -142,9 +170,19 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     staleTime: 30_000,
   });
 
+  // The `databaseQuery !== null` guard is load-bearing. `keepPreviousData` keeps the LAST successful page
+  // on a query that is now DISABLED, so without it the grid went on showing the database rows from before
+  // a workspace-only filter was applied — rows that match neither that filter nor anything else — directly
+  // under a notice saying the database is not being searched. (The fallback query key compounds it: it
+  // hashes identically to the unfiltered query's key.)
   const hits = useMemo(
-    () => mergeRows(owned, databaseSearch.data?.hits ?? []),
-    [owned, databaseSearch.data],
+    () =>
+      mergeRows(
+        owned,
+        databaseQuery === null ? [] : (databaseSearch.data?.hits ?? []),
+        workspaceSkipped,
+      ),
+    [owned, databaseSearch.data, databaseQuery, workspaceSkipped],
   );
   const databaseCount = hits.length - owned.length;
 
@@ -200,10 +238,24 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     setQuery,
     hits,
     databaseCount,
+    // The database half is a SINGLE capped page — "Load more" pages the workspace infinite query only, so
+    // there is no way to reach a 51st database row. Surfaced so the header can say "top matches" instead of
+    // implying the list is everything the database holds. (Real pagination of the global half needs cursor
+    // plumbing through the merge and is tracked separately.)
+    databaseHasMore: Boolean(databaseSearch.data?.nextCursor),
+    // Non-empty ⇒ the database half was skipped because these filters only exist on the workspace overlay.
+    databaseDroppedFields: narrowing.droppedFields,
+    workspaceDroppedFields,
     // With keepPreviousData above, isPending is true only on the genuine cold load (no previous rows to
     // show) — a filter edit keeps the old rows on screen while fetching, and a "load more" is deliberately
     // not a full-grid loading state either.
-    loading: search.isPending && enabled,
+    // A DISABLED query sits at `status: "pending"` forever in TanStack Query v5, so this must account for
+    // every reason the workspace half might not be running or the pane hangs on a skeleton that never
+    // resolves. Latent before the workspace half could be skipped (the `excludeOwned` path usually reused a
+    // warm cache key); reachable the moment a satellite filter is applied on a cold cache.
+    loading: workspaceSkipped
+      ? databaseSearch.isPending && enabled && includeDatabase
+      : search.isPending && enabled && !excludeOwned,
     error: search.error
       ? search.error instanceof Error
         ? search.error.message

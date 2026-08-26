@@ -70,6 +70,9 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
       let landed = 0;
       let skipped = 0;
       let unavailable = 0;
+      // The smallest fleet cooldown horizon any fetch reported this tick (unavailable + retryAfterMs) —
+      // a HINTED outage backs the sweep off immediately for exactly that long, no 5-tick streak needed.
+      let minRetryAfterMs: number | undefined;
       // Persons first (they DERIVE company targets), then companies — so a company minted this tick can be
       // fetched next tick, not starved.
       for (const kind of ["person", "company"] as const) {
@@ -90,7 +93,15 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
             });
             if (result.outcome === "landed" || result.outcome === "duplicate") landed += 1;
             else skipped += 1;
-            if (result.outcome === "unavailable") unavailable += 1;
+            if (result.outcome === "unavailable") {
+              unavailable += 1;
+              if (result.retryAfterMs !== undefined) {
+                minRetryAfterMs = Math.min(
+                  minRetryAfterMs ?? Number.POSITIVE_INFINITY,
+                  result.retryAfterMs,
+                );
+              }
+            }
             // Notify any workspace that viewed this URL in the extension and is waiting for the refresh
             // (chrome-extension/15 §13). Dark until REALTIME_SSE_ENABLED; a no-op when no one is interested.
             await notifyInterestedWorkspaces(redis, target.normalizedUrl, result.outcome);
@@ -108,6 +119,19 @@ export function makeProcessLinkedinLinkFetch(redis: IORedis) {
       // Streak accounting: an all-unavailable non-empty tick bumps the streak; anything landing resets it.
       if (landed > 0) {
         await redis.del(BACKOFF_KEY);
+      } else if (unavailable > 0 && minRetryAfterMs !== undefined) {
+        // HINTED backoff (the classifier's throttle/outage horizon): the fleet said when to come back —
+        // believe it now instead of burning 4 more ticks' registry clocks to prove the streak. Clamped so
+        // one bad header can't silence the sweep beyond the origin-cooldown ceiling.
+        const seconds = Math.min(
+          Math.max(60, Math.ceil(minRetryAfterMs / 1000)),
+          Math.ceil(env.ENRICH_ORIGIN_COOLDOWN_MAX_MS / 1000),
+        );
+        await redis.set(BACKOFF_SKIP_KEY, "1", "EX", seconds);
+        await redis.del(BACKOFF_KEY);
+        log.warn("linkedin link fetch: origin fleet throttled/cooling — backing off on its hint", {
+          backoffSeconds: seconds,
+        });
       } else if (unavailable > 0 && unavailable === skipped) {
         const streak = await redis.incr(BACKOFF_KEY);
         if (streak >= BACKOFF_AFTER_CONSECUTIVE_UNAVAILABLE) {

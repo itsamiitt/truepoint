@@ -160,7 +160,7 @@ export function TenantPurchases({
         empty={!!purchases && purchases.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No purchases.
           </p>
         }
@@ -178,7 +178,7 @@ export function TenantPurchases({
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setConfirm(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -188,12 +188,14 @@ export function TenantPurchases({
           </div>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
           <label
             htmlFor="refund-reason"
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Reason
+            </span>
             <TpSelect
               id="refund-reason"
               value={reason}
@@ -207,8 +209,11 @@ export function TenantPurchases({
               ))}
             </TpSelect>
           </label>
-          <label htmlFor="refund-note" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
+          <label
+            htmlFor="refund-note"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+          >
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
               Note {reason === "other" ? "(required)" : "(optional)"}
             </span>
             <TpInput

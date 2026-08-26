@@ -139,7 +139,7 @@ export function TenantActions({
   return (
     <>
       {/* Buttons are hidden when the caller's role lacks the capability (the api still enforces it). */}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
         {canMaybe("tenants:credits") ? (
           <TpButton variant="secondary" onClick={openCredit}>
             Adjust credits
@@ -168,7 +168,7 @@ export function TenantActions({
             : `Suspend ${tenant.name}. Members lose access until reactivated. This is audited.`
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setStatusOpen(false)} disabled={busy}>
               Cancel
             </TpButton>
@@ -184,9 +184,11 @@ export function TenantActions({
       >
         <label
           htmlFor="tenant-status-reason"
-          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            Reason (audited)
+          </span>
           <TpTextarea
             id="tenant-status-reason"
             value={reason}
@@ -205,7 +207,7 @@ export function TenantActions({
         title="Adjust credits"
         description={`Apply a signed credit adjustment to ${tenant.name}. Current balance ${tenant.revealCreditBalance}. Positive grants, negative debits. This is audited.`}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setCreditOpen(false)} disabled={busy}>
               Cancel
             </TpButton>
@@ -215,12 +217,12 @@ export function TenantActions({
           </div>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
           <label
             htmlFor="tenant-credit-delta"
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
               Amount (+ grant / − debit)
             </span>
             <TpInput
@@ -234,9 +236,11 @@ export function TenantActions({
           </label>
           <label
             htmlFor="tenant-credit-reason"
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Reason (audited)
+            </span>
             <TpTextarea
               id="tenant-credit-reason"
               value={reason}
@@ -256,7 +260,7 @@ export function TenantActions({
         title="Apply plan"
         description={`Apply a plan template to ${tenant.name} — sets the plan, seat & workspace limits, and feature entitlements. Current plan ${tenant.plan}. This is audited.`}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setPlanOpen(false)} disabled={busy}>
               Cancel
             </TpButton>
@@ -268,9 +272,11 @@ export function TenantActions({
       >
         <label
           htmlFor="tenant-plan-key"
-          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Plan template</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            Plan template
+          </span>
           {templates === null ? (
             <span className="app-muted">Loading templates…</span>
           ) : templates.length === 0 ? (

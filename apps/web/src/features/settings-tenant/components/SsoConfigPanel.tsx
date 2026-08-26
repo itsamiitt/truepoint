@@ -11,6 +11,7 @@ import {
   EmptyState,
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpInput,
@@ -149,7 +150,7 @@ export function SsoConfigPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Single sign-on</h1>
+      <PageHeader title="Single sign-on" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {forbidden ? (
           <EmptyState

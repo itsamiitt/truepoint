@@ -8,6 +8,7 @@ import {
   Avatar,
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpInput,
@@ -72,7 +73,7 @@ export function ProfilePanel() {
 
   return (
     <section className={styles.panel}>
-      <h1 className="tp-settings-title">Profile</h1>
+      <PageHeader title="Profile" />
 
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {data && draft ? (

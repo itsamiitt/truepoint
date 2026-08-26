@@ -4,6 +4,7 @@
 // hold their own view state and talk to the backend via api.
 "use client";
 
+import { PageHeader } from "@leadwolf/ui";
 import styles from "../compliance.module.css";
 import { DsarForm } from "./DsarForm";
 import { SuppressionForm } from "./SuppressionForm";
@@ -12,13 +13,10 @@ import { SuppressionList } from "./SuppressionList";
 export function CompliancePage() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Compliance & data</h1>
-        <p className={styles.subtitle}>
-          Compliance is built-in, not bolted on: suppression is unbypassable and every request is
-          honored at the source.
-        </p>
-      </header>
+      <PageHeader
+        title="Compliance & data"
+        subtitle="Compliance is built-in, not bolted on: suppression is unbypassable and every request is honored at the source."
+      />
 
       <SuppressionForm />
       <SuppressionList />

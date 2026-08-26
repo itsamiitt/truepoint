@@ -9,6 +9,7 @@ import {
   Card,
   type Column,
   DataTable,
+  EmptyState,
   PageContainer,
   PageHeader,
   StatTile,
@@ -129,7 +130,18 @@ export function SystemHealthPage() {
         subtitle="Service status, the live job queues, and the bulk-enrichment job sample."
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !health}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No health report"
+            description="The health endpoint returned nothing for this environment."
+          />
+        }
+      >
         {health ? (
           <>
             <h3 className="tp-section-title">Services</h3>

@@ -51,16 +51,18 @@ export function EducationSection({ contactId }: { contactId: string }) {
           const span = years(row.started_on, row.ended_on);
           return (
             <li key={row.id} className={styles.timelineItem}>
-              <div className={styles.fieldValue}>
-                {row.school_name ?? "Unknown institution"}
-                {!row.resolved ? (
-                  // The institution string is what the source said; ER has not matched it to a node yet.
-                  <span className={styles.fieldLabel}> · unverified</span>
-                ) : null}
-              </div>
-              <div className={styles.fieldLabel}>
-                {[row.degree, row.fields_of_study.join(", "), span].filter(Boolean).join(" · ")}
-                {row.completed ? "" : " · current"}
+              <div className={styles.timelineMeta}>
+                <div className={styles.fieldValue}>
+                  {row.school_name ?? "Unknown institution"}
+                  {!row.resolved ? (
+                    // The institution string is what the source said; ER has not matched it to a node yet.
+                    <span className={styles.fieldLabel}> · unverified</span>
+                  ) : null}
+                </div>
+                <div className={styles.fieldLabel}>
+                  {[row.degree, row.fields_of_study.join(", "), span].filter(Boolean).join(" · ")}
+                  {row.completed ? "" : " · current"}
+                </div>
               </div>
             </li>
           );

@@ -66,8 +66,12 @@ something different, update the code to match.
 
 The TruePoint logo mark is **three rising chevrons** — only the apex chevron in
 Cobalt, the lower two in ink. The canonical implementation is `Brandmark` in
-`apps/web/src/components/shell/Logo.tsx` (Brand Kit v1.0) — reuse/copy it, never
-redraw or approximate:
+`packages/app-shell/src/Logo.tsx`, exported from **`@leadwolf/app-shell`** alongside
+`Wordmark` and `Logo` (Brand Kit v1.0). Import it — never redraw or approximate:
+
+```jsx
+import { Brandmark, Wordmark, Logo } from '@leadwolf/app-shell'
+```
 
 ```jsx
 // Logo.tsx — canonical geometry (viewBox 0 0 100 100, fill="none", rounded caps/joins)
@@ -75,7 +79,7 @@ redraw or approximate:
 // …two lower chevrons in currentColor (ink); `reversed` variant for dark backgrounds
 ```
 
-Exact paths, stroke width, and spacing live in `Logo.tsx` and
+Exact paths, stroke width, and spacing live in `packages/app-shell/src/Logo.tsx` and
 `Guidelines/TruePoint Brand Kit.html` — read them before placing the mark. App-icon
 treatments come from the exported assets in `Guidelines/assets` — don't hand-build
 containers.
@@ -84,19 +88,29 @@ containers.
 
 The wordmark is **two-weight**: "True" at weight 400 + "Point" at 700–800, one
 colour — never a single uniform weight. Canonical implementation: `Wordmark` in
-`apps/web/src/components/shell/Logo.tsx`; the spec is in the Brand Kit.
+`packages/app-shell/src/Logo.tsx` (`@leadwolf/app-shell`); the spec is in the Brand Kit.
 
 ### Brand Colour
 
 | Token | Resolved value | Use for |
 |---|---|---|
-| `--tp-cobalt` | `#2563c9` | Primary fill, icon container, active indicator |
-| `--tp-cobalt-700` | `#1e4fa3` | Active nav text, accent text |
-| `--tp-cobalt-50` | `#e9f0fc` | Active nav tint, hover backgrounds |
-| `--tp-cobalt-tint` | `#5b8def` | Lighter highlight, focus rings |
+| `--tp-cobalt` | `#2563c9` | Primary fill, icon container, the active-nav **glyph** |
+| `--tp-cobalt-700` | `#1e4fa3` | Accent text where cobalt must be readable |
+| `--tp-cobalt-50` | `#e9f0fc` | Faint cobalt tint |
+| `--tp-cobalt-tint` | `#5b8def` | Lighter cobalt highlight |
 
 Never hardcode hex. Always use the token. Cobalt is never used as body text
 on a white background — fills and active states only.
+
+**Focus rings are NOT cobalt.** The one ring is `--focus-ring` (`#9ca3af`, a subtle
+grey), applied globally by `:focus-visible` in `tokens.css`. `--tp-cobalt-tint` is a
+fill/highlight colour and has no role in focus.
+
+**The active nav item is a surface fill, not a cobalt tint.** It paints
+`background: var(--tp-surface-3)` with `color: var(--tp-ink)` and the **glyph** in
+`var(--tp-cobalt)` — a subtle fill only, no cobalt background, no accent bar. This is
+the same spec as patterns.md "Sidebar"; the two agree, and `--nav-active-fill`
+(`#e8e8e8`) is a legacy token the shipped shell does not read.
 
 ### Typography
 
@@ -116,14 +130,21 @@ the fonts "automatically".
 | Score / numeric | 13px | 600 + tabular-nums |
 | Row subtitle | 11–12px | 400 |
 
+Sizes above are the ladder, not literals to type: every one of them has a token in the
+`--tp-text-*` scale (11 micro / 12 caption / 13 body / 14 label / 16 title). See
+tokens.md.
+
 ### Iconography
 
 Icons are **lucide-react glyphs rendered through the DS `Icon` wrapper**
 (`@leadwolf/ui`): consistent `strokeWidth 1.75` default, sized by context (see
-tokens.md). Pick an existing lucide glyph for the semantic you need — do not
-hand-draw SVGs or introduce a parallel icon set; the logo mark (`Logo.tsx`) is the
-only custom-drawn SVG. Check `Guidelines/` for exported icon assets before
-introducing a new glyph.
+tokens.md). `Icon` accepts an `IconComponent` — a *structural* type that lucide glyphs
+satisfy — so `@leadwolf/ui` itself does not depend on `lucide-react`; the glyph comes
+from the consuming app (or from `@leadwolf/app-shell`, which does depend on it). Pick
+an existing lucide glyph for the semantic you need — do not hand-draw SVGs or
+introduce a parallel icon set; the logo mark
+(`packages/app-shell/src/Logo.tsx`) is the only custom-drawn SVG. Check `Guidelines/`
+for exported icon assets before introducing a new glyph.
 
 ```jsx
 import { Icon } from '@leadwolf/ui'

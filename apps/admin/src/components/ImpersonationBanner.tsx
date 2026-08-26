@@ -79,11 +79,11 @@ export function ImpersonationBanner() {
         zIndex: 50,
         display: "flex",
         alignItems: "center",
-        gap: 12,
-        padding: "8px 16px",
+        gap: "var(--tp-space-3)",
+        padding: "var(--tp-space-2) var(--tp-space-4)",
         background: "var(--danger-700)",
         color: "var(--tp-on-fill)",
-        fontSize: 13,
+        fontSize: "var(--tp-text-body)",
         fontWeight: 500,
       }}
     >

@@ -7,6 +7,7 @@
 
 import { listOrgs, switchOrg } from "@/lib/authClient";
 import { sharedKeys } from "@/lib/queryKeys";
+import { TpButton } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import styles from "./WorkspaceSwitcher.module.css";
@@ -68,9 +69,11 @@ export function OrgSwitcher() {
 
   return (
     <div className={styles.root} ref={rootRef}>
-      <button
+      {/* The DS button base wearing the shared `tp-ws-switcher` skin, which is declared after
+          primitives.css in globals.css and so still owns the geometry (34px, full width, 7px radius). */}
+      <TpButton
+        variant="secondary"
         className="tp-ws-switcher"
-        type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() =>
@@ -84,7 +87,7 @@ export function OrgSwitcher() {
         <span className="tp-ws-caret" aria-hidden="true">
           ▾
         </span>
-      </button>
+      </TpButton>
 
       {open && (
         // biome-ignore lint/a11y/useSemanticElements: listbox is an ARIA composite widget with no native element.

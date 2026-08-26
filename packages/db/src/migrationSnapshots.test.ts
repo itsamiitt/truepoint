@@ -201,17 +201,33 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
  *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
  *
- *  98 → 99 for 0140_user_sessions_refresh_hash_index — the cheapest entry on this list: one CREATE INDEX, no
- *  table, no column, no policy. It is hand-authored for the same stale-baseline reason as 0137-0139, and it
- *  adds a PLAIN btree index on user_sessions.refresh_token_hash beside the partial-unique one that was already
- *  there. Both are needed and neither replaces the other: the partial index carries the UNIQUENESS of a live
- *  hash (its `WHERE revoked_at IS NULL` clause is the constraint boundary, not an optimisation), while
- *  findByRefreshTokenHash's second lookup deliberately omits that predicate — it must see revoked rows, because
- *  a hit on one is how reuse detection recognises a replayed token. A partial index cannot serve a query
- *  lacking its predicate, so that lookup had always been a seq scan of a table that grows per login AND per
- *  ~14-minute rotation. Declared in schema/auth.ts too, so the schema and the database do not drift. Absorbed
- *  by the next rebaseline. */
-const EXPECTED_DEFICIT = 99;
+ *  98 → 99 for 0140_search_recency_filter_indexes — the cheapest category of widening: INDEXES ONLY, no
+ *  schema change at all, so there is nothing for a snapshot to carry and nothing `generate` could have
+ *  emitted. Same reason as 0132: drizzle-kit produces only plain blocking CREATE INDEX, and all three of
+ *  these are PARTIAL and must be CONCURRENTLY on hot tables (contacts, intent_signals). The alternative —
+ *  shipping the filters they serve without them — makes a verification-recency or job-change filter scan
+ *  the RLS-visible workspace slice on the product's busiest read. Absorbed by the next rebaseline.
+ *
+ *  99 → 100 for 0141_past_employer_filter_indexes — same category as 0140: INDEXES ONLY, no schema change,
+ *  nothing `generate` could have emitted (all three are PARTIAL and must be CONCURRENTLY on Layer-0 tables
+ *  sized for billions). They are the reverse-lookup direction over master_employment, which every existing
+ *  index on that table misses: the two that touch a company are partial on `is_current` and on
+ *  `master_company_id IS NULL` respectively, so "has EVER worked at X" was served by neither. Absorbed by
+ *  the next rebaseline.
+ *
+ *  100 → 101 for 0142_user_sessions_refresh_hash_index — the cheapest entry on this list: one CREATE INDEX,
+ *  no table, no column, no policy. Hand-authored for the same stale-baseline reason as 0137-0141, and it adds
+ *  a PLAIN btree index on user_sessions.refresh_token_hash beside the partial-unique one already there. Both
+ *  are needed and neither replaces the other: the partial index carries the UNIQUENESS of a live hash (its
+ *  `WHERE revoked_at IS NULL` clause is the constraint boundary, not an optimisation), while
+ *  findByRefreshTokenHash's second lookup deliberately omits that predicate — it must see revoked rows,
+ *  because a hit on one is how reuse detection recognises a replayed token. A partial index cannot serve a
+ *  query lacking its predicate, so that lookup had always been a seq scan of a table that grows per login AND
+ *  per ~14-minute rotation. Numbered 0142 rather than 0140: it was authored as 0140 on a branch cut before
+ *  0140/0141 landed on main, and renumbering at merge is the only way two migration streams reconcile.
+ *  Declared in schema/auth.ts too, so the schema and the database do not drift. Absorbed by the next
+ *  rebaseline. */
+const EXPECTED_DEFICIT = 101;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

@@ -37,10 +37,17 @@ export default function ShellError({
         title="Something went wrong on this page"
         description="The page failed to load. Trying again usually resolves it — if it keeps happening, the reference below helps support trace it."
         action={
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "var(--tp-space-2)",
+            }}
+          >
             <TpButton onClick={reset}>Try again</TpButton>
             {error.digest ? (
-              <span style={{ color: "var(--tp-ink-3)", fontSize: 12 }}>
+              <span style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-caption)" }}>
                 Reference: {error.digest}
               </span>
             ) : null}

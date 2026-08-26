@@ -8,11 +8,10 @@
 
 import { AvailabilityBadge } from "@/components/AvailabilityBadge.tsx";
 import { Note } from "@/components/Note.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import { ReferenceTable } from "@/components/ReferenceTable.tsx";
 import { SAMPLE_NOTICE } from "@/content/datasets.ts";
 import type { Dataset } from "@/content/types.ts";
-import { PageContainer } from "@leadwolf/ui";
+import { PageContainer, PageHeader } from "@leadwolf/ui";
 import styles from "../datasets.module.css";
 
 export function DatasetPage({ dataset }: { dataset: Dataset }) {
@@ -22,11 +21,11 @@ export function DatasetPage({ dataset }: { dataset: Dataset }) {
 
   return (
     <PageContainer width="default">
-      <PageIntro
+      <PageHeader
         eyebrow="Dataset"
         title={dataset.name}
-        lede={dataset.summary}
-        badge={<AvailabilityBadge availability={dataset.availability} />}
+        subtitle={dataset.summary}
+        actions={<AvailabilityBadge availability={dataset.availability} />}
       />
 
       <section className={styles.section}>
@@ -52,7 +51,14 @@ export function DatasetPage({ dataset }: { dataset: Dataset }) {
 
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>Getting the real thing</h2>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--tp-ink-2)", maxWidth: "70ch" }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: "var(--tp-text-label)",
+            color: "var(--tp-ink-2)",
+            maxWidth: "70ch",
+          }}
+        >
           A sample of the actual file is delivered on request rather than published here, because a
           live extract has to be checked against the suppression list at the moment it is sent —
           something a static page cannot do. Write to{" "}

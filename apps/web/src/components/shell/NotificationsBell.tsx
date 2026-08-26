@@ -4,7 +4,7 @@
 // calm "You're all caught up." Dismiss on outside click + Escape so the panel never traps focus.
 "use client";
 
-import { TpIconButton } from "@leadwolf/ui";
+import { TpButton, TpIconButton } from "@leadwolf/ui";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styles from "./NotificationsBell.module.css";
@@ -58,25 +58,20 @@ export function NotificationsBell() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 8,
+              gap: "var(--tp-space-2)",
             }}
           >
             <span>Notifications</span>
             {unreadCount > 0 ? (
-              <button
-                type="button"
+              // The DS link variant IS this control (height auto, no padding, transparent fill); only the
+              // cobalt tone and the caption size are local to the panel head.
+              <TpButton
+                variant="link"
                 onClick={markAll}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  color: "var(--tp-cobalt)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
+                style={{ color: "var(--tp-cobalt)", fontSize: "var(--tp-text-caption)" }}
               >
                 Mark all read
-              </button>
+              </TpButton>
             ) : null}
           </div>
           {items.length === 0 ? (
@@ -109,7 +104,7 @@ export function NotificationsBell() {
             style={{
               display: "block",
               padding: "10px 14px",
-              fontSize: 12,
+              fontSize: "var(--tp-text-caption)",
               color: "var(--tp-cobalt)",
               textDecoration: "none",
               borderTop: "1px solid var(--tp-hairline)",

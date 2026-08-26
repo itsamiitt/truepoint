@@ -51,6 +51,16 @@
 > + core's origin router/`linkedinSourceClient` (POST `/api/linkedin/{profile,company}`), the customer
 > account-refresh lane (`account_refresh` queue behind `LINKEDIN_ACCOUNT_REFRESH_ENABLED`), the
 > attributes/headcount read surfaces + prospect-drawer UI, and the admin **data-sources** console.
+> **Third amendment (classification-aware failover):** the chain walk (`walkOriginChain`) now classifies
+> every failure via `core/reliability/sourceErrorClassifier` (the expo proxy's error contract —
+> VALIDATION/REQUEST_ERROR/QUEUE_*/POOL_DEAD/SHUTDOWN/AUTH/… + the LINKEDIN_* capture family), honors
+> Retry-After (seconds AND HTTP-date) as a per-origin in-process cooldown (`sourceLanding/originCooldowns.ts`,
+> clamped by `ENRICH_ORIGIN_COOLDOWN_MAX_MS`), gives 502-class faults one cheap jittered same-origin retry
+> (`ENRICH_ORIGIN_TRANSIENT_RETRIES`), fails over on AUTH/FORBIDDEN instead of stopping the chain, and
+> surfaces the smallest horizon as `unavailable{retryAfterMs}` so `fetchAndLandUrl`, the link-fetch sweep
+> (hinted skip-flag), and `linkedinApiProvider` (→ `rate_limited` into the waterfall + breaker horizon)
+> defer instead of burning attempts. `[CLASSIFICATION] http N retry_after cid` lands in
+> `provider_origins.last_error` for the console.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -62,22 +72,23 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2391 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2468 source files · 94 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 0
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
-> no domain by nature and are expected). **The two unbucketed repositories** —
-> `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
-> "Notes / unbucketed", not a registration backlog: `usageEventRepository` is written by three domains and
-> read by the entitlement gate, so any single home would be wrong, and `REPO_DOMAIN`'s own rule is that a
-> confidently wrong home is worse than an honest gap. *(This paragraph previously called them a registration
-> gap awaiting a generator edit, contradicting the section that explains why they are left alone. Corrected
-> 2026-08-22 — the reasoned entry is the one that holds.)* (`provenanceBadgeRepository` left this list
+> no domain by nature and are expected). **Unbucketed is now ZERO**, closing the last two —
+> `outcomeMetricsRepository` and `usageEventRepository` — which this banner had described for months as
+> deliberate gaps rather than a backlog. That framing was right at the time and the resolution does not
+> contradict it: the objection was never "nobody got round to it", it was that `usageEventRepository` is
+> written by three domains and read by the entitlement gate, so any single home would have been confidently
+> wrong, and `REPO_DOMAIN`'s own rule prefers an honest gap to a wrong answer. They are registered now
+> because the search-tab work gave them one. *(An earlier revision of this paragraph called them a
+> registration gap awaiting a generator edit, contradicting the section that explained why they were left
+> alone; corrected 2026-08-22, and now moot.)* (`provenanceBadgeRepository` left this list
 > when the intelligence-platform work registered it under `data-health`; `entitlementRepository` left it
 > when the entitlement work registered it; `masterProfileRepository` and the `linkedinCompanyRefresh` queue
 > never joined — the 0112–0115 change registered both under `master-sync` in the same commit, per the rule
 > that a Layer-0 module belongs to the one system-owned graph; `masterConfidencePolicyRepository` was
-> registered under `master-sync` in the same commit that created it, C9. The remaining two are not registered because
-> no existing domain is clearly right for them, and the generator's own rule is that a confidently wrong
-> home is worse than an honest gap.)
+> registered under `master-sync` in the same commit that created it, C9. The last two joined with the search
+> tab, which is what finally gave them a domain that was clearly right rather than merely available.)
 >
 > That is down from 155. The backlog was never misplaced code: it was **unregistered** code. The map keys a
 > repository off `REPO_DOMAIN`, a queue off `QUEUE_DOMAIN` and a package off an explicit leaf-package list,
@@ -119,7 +130,8 @@ packages/                       # side-effect-free libraries, each exported via 
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
                                 #   data-health · scoring · activity · outreach · email · search · ai · home · prospect ·
-                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark) ·
+                                #   sourceLanding (linkedin_api payload→Layer-0 landing, dark; + originCooldowns for the failover chain) ·
+                                #   reliability (Retry-After parser · source-error classifier · capped backoff) ·
                                 #   customFields · pipelineStages · savedSearches · webhooks · featureFlags · auth · sales-navigator
   auth/    src/                 # self-built auth primitives (no HTTP): login/mfa/registration/invitations/password(+policy/breach) /
                                 #   sso/switchWorkspace + ipBinding/ipAllowlist + sessionTimeout + revocation + auditEvent + log
@@ -223,11 +235,22 @@ apps/                           # deployable processes (thin transport adapters)
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
+- **core (reliability — shared retry/wait primitives, consumed by enrichment + sourceLanding):** `reliability/` —
+  `retryAfter.ts` (the ONE Retry-After parser: delta-seconds AND HTTP-date, injected clock),
+  `sourceErrorClassifier.ts` (pure verdict table over the expo proxy's error contract — classification +
+  bare-status → permanent(request|origin) | provider_miss | throttled(retryAfterMs) | transient |
+  source_down(cooldownMs)), `backoff.ts` (capped exponential, moved from crm-sync/reliability.ts which
+  re-exports it)
 - **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal/linkedin_api (dark
   until DPA'd keys; linkedin_api's base URL is env-supplied and joins the host allowlist at config time)** VendorSpecs over
-  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+  one HARDENED HTTP shape: https+host-allowlist, timeout, size cap; injectable fetch. Status taxonomy:
+  429 → rate_limited + Retry-After via core's parser; a vendor-DECLARED no-match status
+  (`VendorSpec.noMatchStatuses` — 404 on PDL/Clearbit/Coresignal; never blanket, ZoomInfo/Apollo no-match
+  is a 200 body) → definitive zero-cost miss (answered, no breaker strike, no re-buy); other 4xx/5xx → error) +
   `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
-  `provider_configs`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
+  `provider_configs`; the breaker also holds the 429 HORIZON key `enrich:breaker:limited:{p}` — a vendor
+  Retry-After blocks the provider fleet-wide without an error strike, capped by
+  `ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S`) + `zoominfoAuth.ts` (ZoomInfo alone authenticates with a ~60-min MINTED jwt from
   `/authenticate` — PKI-signed assertion or username/password — cached and re-minted pre-expiry behind the
   VendorSpec `resolveApiKey` seam; unconfigured ⇒ the same zero-cost `miss` as an absent key)
 - **core (linkedin_api landing, 0112-0115 — dark behind `LINKEDIN_SOURCE_LANDING_ENABLED`):** `sourceLanding/` —
@@ -244,7 +267,14 @@ apps/                           # deployable processes (thin transport adapters)
 - **THE PRODUCT DATABASE (Layer-0 read seams — `docs/planning/` Layer-0-as-database):** the same graph, read by
   customers. `masterPersonReadRepository` owns `MASTER_PERSON_VISIBLE` (visibility `licensed|coop` + unsuppressed +
   unmerged) — the read-side policy every seam inherits, materialized by 0121's `master_persons.visibility`;
-  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database`;
+  `masterPersonSearchRepository` is the global keyset/trgm search behind `POST /search/database` — its
+  `termCondition` dispatcher answers the flat person columns by trgm substring AND the SATELLITE facts
+  (skill · language · school · field of study · past employer) by correlated `EXISTS` over the Layer-0 edge
+  tables. Those match by CITEXT equality, never `ILIKE '%x%'`, which is what makes migration 0135's btrees
+  serve them (0135 shipped its indexes ahead of the query side and they had no readers until phase 3d);
+  `past_company` matches BOTH a resolved `master_company_id` and an unresolved `company_name_normalized`,
+  because the live import path mints bare edges carrying no name and unresolved stints carry no id —
+  0141 indexes both legs, since every pre-existing index on that table is person-keyed;
   `masterChannelReadRepository` serves LICENSED channel values to reveal (pay-once copy onto the overlay).
   core: `prospect/searchDatabase.ts` (withErTx search → withTenantTx `inWorkspace` flags),
   `ingestion/materializeFromMaster.ts` ("Add to workspace" → `landOverlayPerson`), `reveal/masterChannelFallback.ts`.
@@ -259,7 +289,9 @@ apps/                           # deployable processes (thin transport adapters)
   the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
   (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
   **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
-  (factory w/ Redis deps + throttle deferral) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
+  (factory w/ Redis deps + throttle deferral — jittered UP over the vendor delay, capped at
+  `ENRICH_MAX_DEFERRALS`, PARKED past `ENRICH_DEFER_MAX_DELAY_MS` so a daily-budget 86400s Retry-After
+  never piles up delayed jobs) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
   priority + verification knobs) · **admin:** provider stats block (30d hit/verified-valid/latency/cost per provider)
 
 #### enrichment-jobs — *bulk enrichment job UI* (web; ADR-0039)
@@ -381,6 +413,20 @@ apps/                           # deployable processes (thin transport adapters)
   `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
   `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
   cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound is 1 search, not one per digit));
+  every facet carries a **`scope`** (`both` | `workspace-only` | `database-only`) and `FacetScopeBadge`
+  renders it: the two narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`)
+  DERIVE from that one declaration and return the fields they dropped, so the badge, the `ScopeNotice` above
+  the grid and the query actually sent cannot drift — before it, 13 of 20 People controls deleted the whole
+  database half of the results with nothing on screen saying so (`filterScope.test.ts` is the gate).
+  **`database-only` is the mirror**, and it is a privilege boundary rather than a preference: the Background
+  group's facets (skill · past employer · school · field of study · language) are Layer-0 satellite facts,
+  and `leadwolf_app` is REVOKEd from every `master_*` table, so the *workspace* half is what gets skipped.
+  `mergeRows` then keeps in-workspace matches instead of deduping them away (`databaseRows.test.ts` pins it)
+  — dropping them would mean searching "ex-Stripe people" and getting back everyone except the ex-Stripe
+  people you already hold;
+  **result columns** (`columnRegistry.ts` — which columns each grid offers and which are on by default, kept
+  alias-free so `bun test` can reach it; `peopleColumns.tsx`/`AccountsTable.tsx` render them, the shared
+  `components/search/ColumnChooser` toggles them);
   **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
@@ -397,8 +443,23 @@ apps/                           # deployable processes (thin transport adapters)
   overlay ≤768px with scrim + focus return + `inert`), `SearchTabs`, `useDrawerCollapsed`
   (localStorage `tp.search.drawer`, read in an effect — reading at render is a hydration mismatch),
   `useSearchTab` + `searchTabUrlState` (the `?tab` codec, which writes without touching either pane's
-  query params — the property `searchTabUrlState.test.ts` asserts). It sits outside `features/` so both
-  panes and the composer can import it without closing an import cycle.
+  query params — the property `searchTabUrlState.test.ts` asserts), `ColumnChooser` (both grids' column
+  toggle; sorting stays with each pane's own toolbar because sort values are query-shaped and the two
+  queries are different types) and `ScopeNotice` (says which active filters are suppressing the OTHER
+  half — it takes a direction, because the narrowing runs both ways: workspace-only filters suppress the
+  platform database, and Layer-0 satellite filters suppress the workspace). It sits outside `features/` so both panes and the composer can import it without
+  closing an import cycle.
+- **shared:** `components/employment/` — `EmploymentHistory`, the grouped (company-block) career view over
+  the pure `lib/employment/` grouping + precision-aware date rules. `master_employment` is one row per
+  (person, company, start), so a promotion is a second row at one employer; grouping is what stops that
+  rendering as two unrelated entries with the company name printed twice. The opaque `group_key` both
+  employment contracts now carry is a per-response `dense_rank` computed in SQL, so grouping never rests on
+  the printed name (which would merge two same-named companies and split one written two ways) and no
+  Layer-0 id crosses the API boundary. Rendered by `features/prospect`'s `EmploymentSection` and
+  `features/accounts`' `DatabaseProfileDrawer`.
+- **shared:** `components/data-health/` — `DataHealthCell` (score pill + freshness band), rendered by both
+  the list-detail members table and the Search people grid; it lives here because a feature slice may not
+  import another one (`lint:cross-feature`).
 
 #### accounts — *the Accounts pane + the routed company profile* (was `features/companies`, MI-1)
 - **web:** `features/accounts/` — `AccountsPane.tsx` (the Accounts tab: firmographic filter panel in the
@@ -552,7 +613,12 @@ apps/                           # deployable processes (thin transport adapters)
   `planTitleFilter.ts` (selected values → an engine-agnostic match plan)
 - **search (pkg):** `fields.ts` (project rows → searchable facets), `inMemorySearchPort.ts` (dev/test adapter proving the
   contract: term filters, free-text, suggest, facet counts, keyset paging) · **types:** `search.ts` (the `SearchPort` contract)
-- **api:** `features/search/` — `routes.ts` (`/search/{contacts,suggest,facets}`), `searchPortProvider.ts` (wires the active port),
+- **api:** `features/search/` — `routes.ts` (`/search/{contacts,suggest,facets}` + the global half:
+  `/search/database{,/count,/suggest}`; **`/search/database/suggest` is a sibling of `/search/suggest`, not a
+  mode of it** — that one aggregates the caller's own `contacts` under RLS and stores no skills, schools or
+  languages, so it cannot answer the Background facets. It runs under `withErTx` and carries
+  `MASTER_PERSON_VISIBLE`, because a suggestion that exists only because one suppressed person holds it
+  confirms that person is in the database and its count says how many), `searchPortProvider.ts` (wires the active port),
   `searchReadCache.ts` (+test — the S5 generation-keyed read-through for facets/count/suggest; TTLs in env, keys fold
   `v{N}` from `lib/searchVersion.ts`, whose `bumpSearchVersion` binds @leadwolf/integrations `searchCacheBump.ts`
   (+test) — the shared fail-open INCR the workers also emit from register.ts on completed search-mutating jobs)
@@ -849,8 +915,21 @@ flowchart TD
   Tp-prefixed form `controls.tsx` + `form.tsx`, `Tabs`, overlays (`overlay.tsx` Dialog/Drawer; `floating.tsx` Popover/DropdownMenu/Tooltip),
   `Toast`, `DataTable`, `Combobox`, the page-scaffolding pair `PageHeader` (the one destination header) +
   `PageContainer` (the one page container — `width="fluid"|"default"|"narrow"`, always centred, so no surface can
-  re-invent its own max-width), and shadcn-pattern `components/ui/*` (now used by ALL four frontends: the auth
-  screens moved onto the shared tokens + primitives and no longer carry Tailwind utilities in app JSX).
+  re-invent its own max-width), and shadcn-pattern `components/ui/*` — which are styled from `primitives.css`,
+  **not** Tailwind utilities, because utilities only resolved in `apps/auth` and those components therefore
+  rendered unstyled in the other three apps.
+  `overlayStack.ts` is the module-level layer registry every overlay joins while open: it is what makes Escape
+  close only the top-most layer and the body-scroll lock reference-counted, neither of which a component can
+  decide alone. The overlays and composite widgets own their focus management and keyboard models (focus
+  trap + return, arrow/Home/End navigation, `aria-activedescendant`), so a hand-rolled one in an app is a
+  violation rather than a workaround.
+  **Tests** — `primitivesContrast.test.ts` / `inkFourContrast.test.ts` (colour), `classCoverage.test.ts` (every
+  `.tp-ui-*` a component references exists, and no component regresses to Tailwind utilities),
+  `rawPxBudget.test.ts` (no raw px where a `--tp-space-*` / `--tp-text-*` token exists — a gate at zero, not a
+  ratchet), `virtualWindow.test.ts`, plus the **behavioural** suite `components/*.domtest.tsx` with its
+  `test/dom.ts` harness. The `.domtest.tsx` suffix is deliberate: happy-dom replaces global
+  `ReadableStream`/`Request`/`Response` and bun shares one process across a run, so these must stay out of the
+  default `bun test` discovery — they run via `bun run test:dom` (a CI step), the same split as `*.itest.ts`.
 - **`packages/app-shell`** — the **shared Next.js app chrome** consumed by `apps/web`, `apps/admin` and
   `apps/forge`: `AppShellFrame` (rail column + sticky top bar + internally-scrolling content, owning mobile
   sidebar state, the desktop rail pin and the density context), `Sidebar`/`NavItem`/`UserRow`, `TopBar` (+
@@ -939,10 +1018,11 @@ flowchart TD
   (per-subject request budget charged post-verify; failed verifies billed to the IP backstop), `tenancy`,
   `error`, `rateLimit` (the unauthenticated per-IP backstop), `idempotency` (the DB uniques remain the real
   double-charge guard), `requireRole`/`requireOrgRole`/`requireCapability`, `platformAdmin`.
-- **`apps/auth`** — `instrumentation` + `bootSelfTest` + `middleware`; `app/*` screens + token endpoints + account-security;
+- **`apps/auth`** — `instrumentation` (Sentry init per runtime, then `bootSelfTest` under Node only — Sentry
+  first so a signing self-test failure is reported rather than lost) + `bootSelfTest` + `middleware`; `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/*` screens + token endpoints + account-security;
   `shared/*` (AuthShell/AccountShell/BrandLockup/OtpInput/SubmitButton/TurnstileWidget); `lib/*` (cookies, cors, mailer,
   `authFailure`, `domainResolver`, `finishLogin`, `requireUser`, `bootstrapAdmin`, `clientIp`, `completeMagic`/`completeSso`, `emails/*`).
-- **`apps/web`** — `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `prospect`, `companies`,
+- **`apps/web`** — `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/(shell)/*` destinations + `settings/*` routes (+ `import`, `prospect`, `companies`,
   `auth/callback` — the last three are one-release redirect pages from the search-consolidation cutover);
   `components/shell/*`
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
@@ -956,7 +1036,7 @@ flowchart TD
   `isUnavailable` 404/501 predicate that tells a dark backend apart from a real failure. Both were private
   per-slice copies (24 and 11 of them) until audit 32 F4; a new slice's data layer should import these
   rather than re-declare them.
-- **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
+- **`apps/admin`** — `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary); `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
   Brandmark) + `ImpersonationBanner` + `EntityPicker`/`TenantPicker`/`UserPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
 - **`apps/workers`** — `index.ts` (entry + bounded graceful drain), `register.ts` (composition root + producers +
   `/metrics` collection), `leaderLock.ts` (single-runner election for scheduled ticks), `health` (liveness/readiness w/
@@ -964,6 +1044,7 @@ flowchart TD
   `tuning`, `withDeadline`, `metrics`, `outboxRelay` — the leaderless ADR-0027 outbox drainer; see
   `docs/planning/worker-platform/`); queue processors bucketed to their feature (imports/enrichment/scoring/dsar/
   outreach) — see Notes for the undeclared queues. Queue itests in `apps/workers/test/`.
+- **`apps/forge`** — the operator console's app-root files: `instrumentation` + `sentry.shared.ts` (the one options object — PII off: no user info, no HTTP bodies, no local variables, no replay) + `instrumentation-client`/`sentry.server.config`/`sentry.edge.config` (one Sentry init per runtime) + `app/global-error.tsx` (last-resort App Router boundary).
 - **`apps/extension`** (MV3 browser extension, Vite + CRXJS; areas `apps/extension` · `…/background` · `…/content` ·
   `…/ui` · `…/shared` · `…/i18n`) — **`background/`** the service-worker hub (Zod message bus, `ApiClient` over `/api/v1`
   with RFC-9457 + Idempotency-Key, PKCE `AuthModule` with in-memory token, IndexedDB capture queue + alarm-driven
@@ -1008,9 +1089,10 @@ flowchart TD
   @electric-sql/pglite`, because cascade’s dependencies install under `cascade/`. That is the separation
   working, not a broken gate — run its suite with `cd cascade && bun install && bun test`. The monorepo’s
   own CI unit step globs `find packages apps`, so the two never collide there.
-- **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
-  — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
-  constraint, not a placement error.
+- **Framework-root files (5, NOT unassigned):** `apps/{admin,auth,web,forge}/next.config.mjs` +
+  `apps/auth/postcss.config.mjs` — framework-mandated app-root files that cannot live under `src/`. The
+  generator now buckets them into `shared["apps/<app>"]`, so they no longer appear in `unassigned[]`; this
+  note previously claimed they did. A framework constraint either way, never a placement error.
 - **Unmapped repositories (2, in `unassigned[]`):** `outcomeMetricsRepository`,
   `usageEventRepository` — the Phase-1 metering spine. (`provenanceBadgeRepository` and
   `entitlementRepository` were listed here and are no longer unassigned; `masterEducationRepository` never
@@ -1414,6 +1496,20 @@ flowchart TD
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
 
+  2026-08-26 refresh (main merged into the auth-audit branch): 2391 → 2468 files, and 93 → 94 domains. The
+  jump is main's search-tab work arriving, not this branch's; the map was regenerated rather than hand-merged,
+  which is the only correct way to resolve a conflict in a generated file. **Unbucketed went 2 → 0** — the
+  search tab gave `outcomeMetricsRepository` and `usageEventRepository` the domain that had been missing, so
+  the long-standing "deliberate gap" note above is retired rather than overruled.
+
+  One collision worth recording, because it is the failure mode two migration streams always produce and it
+  is silent if you only read your own branch: the audit's index migration was authored as **0140** on a branch
+  cut before main landed its own `0140_search_recency_filter_indexes` and `0141_past_employer_filter_indexes`.
+  Both sides were internally consistent; together they were two files claiming one number and a journal with
+  one `idx: 140`. Resolved by renumbering ours to **0142** — file, journal entry, the SQL header comment and
+  the `EXPECTED_DEFICIT` prose all moved together, and the deficit is 101 (main's two, then ours) rather than
+  either side's answer. Nothing about the migration's content changed; only its position in the chain.
+
   2026-08-26 refresh (auth audit follow-ups, 26b7bebb): 2390 → 2391 files —
   `packages/auth/src/revocationMemo.test.ts`, in the existing `shared["packages/auth"]` area. Unassigned
   holds at **2**.
@@ -1543,4 +1639,40 @@ flowchart TD
   migration is a per-surface design decision rather than a find-and-replace, because ink-3 clears AA on white
   and surface-2 but fails on surface-3 and nav-hover-fill. Worth knowing before styling anything in this app:
   reach for `--tp-ink-3`, and if the surface underneath is tinted, check the pair rather than assuming.
-```
+
+  2026-08-25 refresh (UI remediation — design-system rewrite + app sweeps): 2428 → 2435 files, and
+  **unassigned 2 → 0**. New files, all into existing shared areas: `packages/ui/src/components/overlayStack.ts`
+  (the overlay layer registry), `packages/ui/src/test/dom.ts` plus `components/overlay.domtest.tsx` and
+  `components/keyboard.domtest.tsx` (the package's first behavioural tests),
+  `packages/ui/src/classCoverage.test.ts`, `packages/ui/src/rawPxBudget.test.ts`,
+  `apps/auth/src/contrast.test.ts` (the one app that had no pair test — which is why its four illegible
+  `--tp-ink-4` usages went unnoticed) and
+  `apps/extension/src/content/hovercard/shadowTokens.test.ts`. One deletion:
+  `apps/doc/src/components/PageIntro.tsx`, a fork of `PageHeader` that had 12 callers to the DS component's
+  zero.
+
+  The two long-standing `unassigned` entries were never a placement violation — `usageEventRepository` and
+  `outcomeMetricsRepository` simply had no `REPO_DOMAIN` entry, so the map could not name their domain. Both
+  are the `usage_event` outcome-metric substrate and are now registered under `reports`, the destination that
+  reads them. Registering rather than renaming is the same call the `crm-sync` block above records: the file
+  names already follow the one-entity-per-repository rule.
+
+  What a reader should take from this beyond the file list: the audit behind it found that every rule with an
+  automated gate sat at 100% compliance and every rule enforced only by review had drifted — raw pixels 350+,
+  `--tp-ink-4` as text 93, nine exported components rendering unstyled outside `apps/auth`. The response was
+  to give the load-bearing ones gates (`classCoverage`, `rawPxBudget`, the `.domtest.tsx` suite) rather than
+  to restate them in prose. If you are about to write a UI rule down, write a check instead.
+
+  2026-08-25 refresh (merge of the docs-portal rework, ed7eb22a): 2435 → 2446 files, unassigned still **0**.
+  Eleven source files arrive in the existing `shared["apps/doc/features"]` area — the `assistant/` slice
+  (`answer.ts` + test, `intents.ts`, `AssistantMessage`/`SupportAssistant`, `index.ts`) and api-reference's
+  `guideSections.ts` + test and `sidebarEntries.ts`. (`assistant.module.css` is not counted: the file-set hash
+  tracks source extensions only.)
+
+  The merge collided with this session's UI work in exactly one place, and the resolution is worth knowing
+  because both sides were right. That commit reworked the docs portal while still calling `PageIntro`; this
+  session had deleted `PageIntro` as a fork of the DS `PageHeader` (12 callers against the DS component's
+  zero). Resolved by keeping the incoming `GuideBody` — which the `/docs` index and every `/docs/[slug]` guide
+  now share, so they cannot drift apart in heading scale or measure — and rendering its header through
+  `PageHeader`. The spacer div this session had wrapped the body in went with it: each `GuideBody` section
+  already carries `padding: var(--tp-space-8) 0`, so keeping both would have double-counted the gap.

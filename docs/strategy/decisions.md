@@ -555,6 +555,81 @@ Two standing ratchets exist so none of the above can quietly get worse while it 
 cross-feature at 9 (web) / 0 (everywhere else). Both fail the build if the number rises, and both refuse to
 pass silently if it falls — they demand the budget be tightened instead.
 
+6. **The email send-quota window: rolling 30 days, or the billing cycle?** (2026-08-22,
+   `packages/db/src/repositories/sendQuotaRepository.ts`.) Until now nothing reset `email_send_used` at all —
+   `resetPeriod` had no caller, so a tenant that hit its quota was blocked from sending forever. That part is
+   simply a bug and is fixed: `lock()` now rolls an elapsed window under the row lock it already holds.
+   What is NOT settled is the window's length. The method's own comment said "monthly/daily" and never chose,
+   so the fix ships a documented `SEND_QUOTA_PERIOD_DAYS = 30` — the choice that is defensible without knowing
+   the answer, because a rolling 30 days can never hand a tenant two windows' worth of sends inside one
+   calendar month, which is the direction that costs money.
+   **Decide:** keep the rolling window, or align it to the billing cycle (`billing_cycles`) so quota and
+   invoice describe the same period. If billing-aligned, the constant should be REPLACED by the cycle
+   boundary, not re-tuned — a unit test asserts the 30 deliberately, so changing the number alone fails the
+   build and sends the next reader here.
+
+7. **Managed callback origins (AUTH-036): platform-scoped, or post-authentication widening?** (2026-08-23,
+   `docs/planning/auth-platform/MANAGED_ORIGINS_BLOCKER.md`.) The auth tracker lists "wire the redirect/CORS
+   guards to `resolveAllowedOrigins`" as the next item. It is not a wiring task: three of the four call sites
+   validate the return origin before any tenant exists (the user has supplied only an email), and the fourth
+   is gated by a CORS preflight, which carries no credentials and so cannot be tenant-scoped even in
+   principle. Both obvious workarounds — unioning all tenants' origins, or resolving a tenant from a hint —
+   let an untrusted input choose which allow-list to validate against, which hands any tenant a redirect
+   target for everyone else's users.
+   **Decide:** (B) honour only the platform-NULL rows the table already carries, so the env floor becomes
+   bootstrap and platform origins extend it without a deploy — small, no cross-tenant widening possible, works
+   at every call site including the preflight; or (A) keep the env floor as the sole pre-auth gate and consult
+   per-tenant managed origins only after authentication has established the tenant — more work, and the
+   extension mint surface stays env-only regardless. Recommendation is (B) first, (A) only if tenant
+   self-service is a real requirement. Nothing was changed unilaterally: security has final say on redirect
+   gates. This is also why `authAllowedOriginsRepository`'s three methods show as dead in the
+   repository-call-site audit — there is nowhere correct to call them from yet.
+
+8. **RESOLVED 2026-08-25 — first-party job-change detection is [S-13], not [X-04].** The search tab's new
+   "Job change detected" range facet reads `intent_signals`, a table whose name and whose nine-value CHECK
+   both point at intent data. The question raised for a human was whether reading it at all breaches the
+   X-04 deferral. **Ruling: it does not, provided the read stays scoped to `signal_type = 'job_change'`.**
+   Three things settle it, none of them new judgement:
+   (a) the boundary is already drawn and this filter sits inside it —
+   `docs/planning/market-intelligence/03-scope-and-constraints.md` §1 defines X-04 as the
+   *"intent / content engagement"* family and person-level in-market inference, and §2's enforcement row
+   spells the ban out as "no intent family, no topic taxonomy, no surge scoring, no bidstream vendor";
+   a dated career event our own pipeline observed is none of those;
+   (b) `job_change` is the ONLY one of the nine types with a producer — `recordJobChange`
+   (`packages/core/src/data-health/recordJobChange.ts`), the S-13 sweep
+   (`apps/workers/src/queues/jobChangeSweep.ts`) and the source-landing employer transition
+   (`landSourcePayload.ts`). Two files already state this in prose
+   (`apps/api/src/features/account-intelligence/routes.ts`, `packages/core/src/prospect/profileIntel.ts`);
+   (c) the newer signal stores made the same call at the schema level: `tenant_signals` and
+   `signal_subscriptions` both carry a closed family vocabulary with a "deliberately NO 'intent'" comment.
+   **Standing constraint:** widening that read — a second signal type, an `OR`, or a general "signal
+   recency" facet — needs its own entry here first. It is no longer held by a comment:
+   `packages/db/src/searchIntentScope.test.ts` fails the build on an unscoped read, on any producer-less
+   type appearing in the filter path, on the account filter surface touching the table at all, and on the
+   Drizzle table object being imported (which would route around a raw-SQL scan). The client half —
+   no facet may be offered whose field names a signal or intent — is
+   `apps/web/src/features/prospect/filterScope.test.ts`.
+   **Rejected:** reading the deferral strictly, so that any `intent_signals` access is X-04. That is
+   defensible on the table's name and indefensible on its contents: it would delete search's only [S-13]
+   recency filter — a top-board outcome (13.6) — to avoid a filter over data we produce ourselves.
+   **Considered and deliberately NOT done:** narrowing the `intent_signals` CHECK (`schema/intel.ts`) to
+   the produced vocabulary, the way `tenant_signals` was authored. It is the stronger enforcement and it
+   remains available, but it alters a shipped tenant table on every workspace and needs its own `NOT VALID`
+   + validate posture and its own entry here; the ratchet above closes the actual defect path, which is an
+   edit to the query rather than an insert of a row nothing writes.
+
+9. **OPEN, blocked on D-6 — the `is_hiring` people filter.** Recorded here because it is currently
+   invisible outside a planning doc, and because it is *not* an engineering task waiting on effort.
+   `master_job_postings` has no producer ("gated on D-6, licensed postings feed" —
+   `docs/planning/market-intelligence/09-roadmap-and-decisions.md`, decision register D-6, job-postings
+   feed procurement), no person link, and no index supporting cross-company title/department filtering.
+   Built today the filter would return zero rows for every query on every workspace — the same defect class
+   as the `do_not_contact` control that shipped for months writing a clause the repository dropped. It was
+   therefore dropped from the search tab's Phase 3d rather than built dark.
+   **Decide (commercial, D-6):** procure the postings feed, or don't. Nothing else is blocking. The table
+   already has its writer and its read routes, so when a feed lands the filter is a small follow-up on top
+   of the `database-only` facet machinery Phase 3d shipped — not a new surface.
+
 ---
 
 2026-08-26 — **ONE OPEN DECISION from the auth audit: whether to trade a rotation-replay window for a UX

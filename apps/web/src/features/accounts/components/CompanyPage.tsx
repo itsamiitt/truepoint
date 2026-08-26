@@ -16,7 +16,7 @@ import {
   useAccountTechnologies,
 } from "@/features/prospect/entries/accounts";
 import type { MaskedAccount, TenantSignal } from "@leadwolf/types";
-import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import { EmptyState, PageHeader, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";
 import styles from "../accounts.module.css";
 import { useCompany, useWatchAccount } from "../hooks/useCompany";
@@ -83,27 +83,31 @@ function Header({ account }: { account: MaskedAccount }) {
   const { orgKind } = useAccountTechnologies(account.id, "develops");
   const copy = orgKindCopy(orgKind as never);
   const hq = [account.hqCity, account.hqCountry].filter(Boolean).join(", ");
+  // A <div>, not a <header>: the DS PageHeader renders the <header> now, and `.header` here is only the
+  // hairline-ruled band that also carries the attributes grid sitting below the title.
   return (
-    <header className={styles.header}>
-      <div className={styles.headerMain}>
-        <h1 className={styles.name}>{account.name}</h1>
-        {account.domain ? <span className={styles.domain}>{account.domain}</span> : null}
-      </div>
-      <div className={styles.headerActions}>
-        <TpButton
-          variant={watched ? "secondary" : "primary"}
-          size="sm"
-          onClick={toggle}
-          disabled={loading || toggling}
-        >
-          {watched ? "Watching" : "Watch"}
-        </TpButton>
-        <Link href={contactsHrefForCompany(account.domain ?? account.name)}>
-          <TpButton variant="ghost" size="sm">
-            View {account.contactCount > 0 ? account.contactCount : ""} contacts
-          </TpButton>
-        </Link>
-      </div>
+    <div className={styles.header}>
+      <PageHeader
+        title={account.name}
+        subtitle={account.domain ?? undefined}
+        actions={
+          <>
+            <TpButton
+              variant={watched ? "secondary" : "primary"}
+              size="sm"
+              onClick={toggle}
+              disabled={loading || toggling}
+            >
+              {watched ? "Watching" : "Watch"}
+            </TpButton>
+            <Link href={contactsHrefForCompany(account.domain ?? account.name)}>
+              <TpButton variant="ghost" size="sm">
+                View {account.contactCount > 0 ? account.contactCount : ""} contacts
+              </TpButton>
+            </Link>
+          </>
+        }
+      />
       <h2 className={styles.sectionTitle}>{copy.attributesTitle}</h2>
       <div className={styles.fieldGrid}>
         <Field label="Industry" value={show(account.industry)} />
@@ -113,7 +117,7 @@ function Header({ account }: { account: MaskedAccount }) {
         <Field label="Funding stage" value={humanizeToken(account.fundingStage)} />
         <Field label="Founded" value={show(account.foundedYear)} />
       </div>
-    </header>
+    </div>
   );
 }
 

@@ -34,7 +34,7 @@
 
 .note {
   font-size: 13px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   line-height: 1.5;
 }
 .connectNote {
@@ -50,6 +50,7 @@
   color: var(--tp-ink-3);
   line-height: 1.5;
 }
+/* ink-4 kept: decorative icon beside .connectNote's own visible text, not read on its own. */
 .connectNoteIcon {
   color: var(--tp-ink-4);
   display: inline-flex;
@@ -76,7 +77,7 @@
 }
 .scopeDesc {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   margin-left: 26px;
 }
 
@@ -117,7 +118,7 @@
   color: var(--tp-ink-2);
 }
 .muted {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .scopeTags {
   display: flex;

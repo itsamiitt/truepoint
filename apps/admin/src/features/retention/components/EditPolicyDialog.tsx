@@ -86,7 +86,7 @@ export function EditPolicyDialog({
           style={{
             display: "flex",
             gap: 10,
-            padding: 12,
+            padding: "var(--tp-space-3)",
             borderRadius: 8,
             background: "var(--tp-surface-3)",
             border: "1px solid var(--danger)",
@@ -94,7 +94,7 @@ export function EditPolicyDialog({
           }}
         >
           <AlertTriangle size={18} aria-hidden style={{ color: "var(--danger)", flexShrink: 0 }} />
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: "var(--tp-text-body)", lineHeight: 1.5 }}>
             This enables permanent deletion of <strong>{policy.dataClass}</strong> rows {ageClause}{" "}
             for tenants with the retention engine enabled. Deleted rows cannot be recovered.
           </p>
@@ -125,7 +125,7 @@ export function EditPolicyDialog({
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
         <FieldGroup label="TTL (days)" htmlFor="rp-ttl">
           <TpInput
             id="rp-ttl"

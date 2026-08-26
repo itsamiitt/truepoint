@@ -62,7 +62,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
               display: "flex",
               alignItems: "center",
               gap: "var(--tp-space-2)",
-              fontSize: 14,
+              fontSize: "var(--tp-text-label)",
             }}
             htmlFor="trust_device"
           >
@@ -76,7 +76,13 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           </Alert>
         ) : null}
         {isEmailOtp && sp.sent === "1" ? (
-          <p style={{ marginBottom: "var(--tp-space-4)", fontSize: 14, color: "var(--tp-ink-3)" }}>
+          <p
+            style={{
+              marginBottom: "var(--tp-space-4)",
+              fontSize: "var(--tp-text-label)",
+              color: "var(--tp-ink-3)",
+            }}
+          >
             We emailed a code to your address. It expires in 15 minutes.
           </p>
         ) : null}
@@ -91,7 +97,13 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
       </form>
 
       {isEmailOtp ? (
-        <div style={{ marginTop: "var(--tp-space-3)", textAlign: "center", fontSize: 14 }}>
+        <div
+          style={{
+            marginTop: "var(--tp-space-3)",
+            textAlign: "center",
+            fontSize: "var(--tp-text-label)",
+          }}
+        >
           <a className={styles.link} href={authPath("/mfa")}>
             Use your authenticator instead
           </a>

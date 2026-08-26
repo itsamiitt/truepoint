@@ -17,12 +17,50 @@
   top: 72px;
   max-height: calc(100vh - 92px);
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding-right: var(--tp-space-4);
   border-right: 1px solid var(--tp-hairline);
 }
 
+/* "Documentation · v1" — the rail names what it indexes and which contract it indexes, the way an internal
+   API catalogue labels a spec. */
+.sidebarHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--tp-space-2);
+  margin-bottom: var(--tp-space-3);
+}
+
+.sidebarEyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+
+.sidebarStamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tp-ink-3);
+}
+
+.sidebarFilter {
+  width: 100%;
+  margin-bottom: var(--tp-space-4);
+}
+
 .sidebarGroup {
   margin-bottom: var(--tp-space-5);
+}
+
+/* Groups are ruled apart rather than boxed — the design's flat, hairline-divided rail. The first needs no
+   rule: the filter box above it already closes that edge. */
+.sidebarGroup + .sidebarGroup {
+  padding-top: var(--tp-space-4);
+  border-top: 1px solid var(--tp-hairline);
 }
 
 .sidebarHeading {
@@ -43,7 +81,9 @@
 }
 
 .sidebarLink {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: var(--tp-space-2);
   padding: var(--tp-space-2) var(--tp-space-3);
   border-radius: var(--tp-radius-sm);
   font-size: 13.5px;
@@ -55,10 +95,47 @@
   background: var(--nav-hover-fill);
   color: var(--tp-ink);
 }
+/* The current page takes a cobalt indicator down its leading edge and a quiet fill — the design's rail
+   treatment. `inset` on box-shadow rather than a border so the entry does not shift by 2px when it becomes
+   current. The weight change is the second, non-colour signal; `aria-current` is the announced one. */
 .sidebarLink[aria-current="page"] {
-  background: var(--tp-cobalt-50);
-  color: var(--tp-cobalt-700);
+  background: var(--tp-surface-2);
+  color: var(--tp-ink);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--tp-cobalt);
+}
+
+/* The verb, as the word. It sits in a fixed column so the labels beside it line up, and it is ink/cobalt
+   rather than the design's green/blue pair: --success is a 3.3:1 fill tone and fails AA as text. */
+.sidebarMethod {
+  flex: 0 0 auto;
+  min-width: 30px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.sidebarMethodGet {
+  color: var(--tp-ink-2);
+}
+.sidebarMethodPost {
+  color: var(--tp-cobalt-700);
+}
+
+.sidebarEmpty {
+  margin: 0 0 var(--tp-space-4);
+  padding: 0 var(--tp-space-3);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--tp-ink-3);
+}
+
+/* Pinned to the foot of the rail, below whatever the list came to. `margin-top: auto` inside the flex
+   column, so it sits at the bottom on a tall viewport and simply follows the list on a short one. */
+.sidebarFoot {
+  margin-top: auto;
+  padding-top: var(--tp-space-4);
+  border-top: 1px solid var(--tp-hairline);
 }
 
 /* ── Facts strip (docs index) ─────────────────────────────────────────────────────────────────────────── */
@@ -129,6 +206,39 @@
   font-family: var(--font-mono);
   font-size: 12.5px;
   color: var(--tp-ink);
+}
+
+/* ── Guide sections ───────────────────────────────────────────────────────────────────────────────────── */
+/* The design's paired section: prose left, that section's samples pinned beside it, a hairline between one
+   section and the next. A section carrying no sample is one full-width reading column instead — an empty
+   right-hand gutter would read as a layout that failed to load. */
+
+.guideSplit,
+.guideSingle {
+  padding: var(--tp-space-8) 0;
+}
+.guideSplit + .guideSplit,
+.guideSplit + .guideSingle,
+.guideSingle + .guideSplit,
+.guideSingle + .guideSingle {
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.guideSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: var(--tp-space-8);
+  align-items: start;
+}
+
+.guideProse {
+  min-width: 0;
+}
+
+/* The section's own padding is its top spacing. Without this the first heading in each section adds its
+   space-8 on top of that and the rhythm doubles at every rule. */
+.guideProse > * > :first-child {
+  margin-top: 0;
 }
 
 /* ── Endpoint page ────────────────────────────────────────────────────────────────────────────────────── */
@@ -287,10 +397,13 @@
 }
 
 @media (max-width: 1100px) {
-  .split {
+  .split,
+  .guideSplit {
     grid-template-columns: 1fr;
     gap: var(--tp-space-6);
   }
+  /* Un-stuck as well as un-columned: a sticky panel in a single column pins itself over the prose it was
+     supposed to sit beside. */
   .aside {
     position: static;
   }

@@ -93,8 +93,10 @@ export function CaptureForm({
       style={{ display: "grid", gap: "var(--tp-space-3)" }}
     >
       <div style={{ display: "grid", gap: "var(--tp-space-1)" }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Capture a Sales Navigator link</span>
-        <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
+        <span style={{ fontSize: "var(--tp-text-body)", fontWeight: 600 }}>
+          Capture a Sales Navigator link
+        </span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
           Paste a LinkedIn / Sales Navigator URL. Assisted only — nothing is sent or automated on
           LinkedIn.
         </span>
@@ -128,7 +130,9 @@ export function CaptureForm({
         />
       </div>
       {urlInvalid ? (
-        <span style={{ fontSize: 12, color: "var(--danger)" }}>Enter a valid http(s) URL.</span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--danger)" }}>
+          Enter a valid http(s) URL.
+        </span>
       ) : null}
 
       <TpTextarea

@@ -9,13 +9,23 @@ export {
   AccountAlumniSection,
   AccountDisplacementSection,
 } from "../components/AccountGraphSections";
-export { AccountsTable } from "../components/AccountsTable";
+export {
+  ACCOUNT_DEFAULT_VISIBLE_COLUMNS,
+  ACCOUNT_TOGGLEABLE_COLUMNS,
+  AccountsTable,
+} from "../components/AccountsTable";
 export { AccountTechnologySection } from "../components/AccountTechnologySections";
 export { HeadcountSection } from "../components/HeadcountSection";
 export { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 export { useAccountSearch } from "../hooks/useAccountSearch";
 export { useAccountTechnologies } from "../hooks/useAccountTechnologies";
-export { activeChips, clearAllFilters } from "../accountFilterGroups";
+export {
+  accountFacetScope,
+  accountWorkspaceOnlyFields,
+  activeChips,
+  clearAllFilters,
+  facetLabel as accountFacetLabel,
+} from "../accountFilterGroups";
 export { orgKindCopy } from "../orgKindCopy";
 export { contactsHrefForCompany } from "../searchUrlState";
 // The slice's typed API error. Here rather than in the main barrel for the PA-2 reason above: the accounts

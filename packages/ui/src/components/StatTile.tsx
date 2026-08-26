@@ -21,11 +21,11 @@ export function StatTile({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: "var(--tp-space-2)",
         background: "var(--tp-surface-2)",
         border: "1px solid var(--tp-hairline-2)",
         borderRadius: "var(--radius)",
-        padding: 20,
+        padding: "var(--tp-space-5)",
         minWidth: 0,
         ...style,
       }}
@@ -35,9 +35,9 @@ export function StatTile({
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 12,
+          gap: "var(--tp-space-3)",
           color: "var(--tp-ink-3)",
-          fontSize: 13,
+          fontSize: "var(--tp-text-body)",
           fontWeight: 500,
         }}
       >
@@ -56,7 +56,9 @@ export function StatTile({
         {value}
       </div>
       {sublabel != null ? (
-        <div style={{ color: "var(--tp-ink-4)", fontSize: 13, lineHeight: 1.4 }}>{sublabel}</div>
+        <div style={{ color: "var(--tp-ink-4)", fontSize: "var(--tp-text-body)", lineHeight: 1.4 }}>
+          {sublabel}
+        </div>
       ) : null}
     </div>
   );

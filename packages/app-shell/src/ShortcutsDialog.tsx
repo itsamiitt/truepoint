@@ -43,14 +43,16 @@ export function ShortcutsDialog() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 16,
+              gap: "var(--tp-space-4)",
             }}
           >
-            <span style={{ fontSize: 14, color: "var(--tp-ink-2)" }}>{s.action}</span>
+            <span style={{ fontSize: "var(--tp-text-label)", color: "var(--tp-ink-2)" }}>
+              {s.action}
+            </span>
             <kbd
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: "var(--tp-text-caption)",
                 color: "var(--tp-ink-3)",
                 background: "var(--tp-surface-3)",
                 border: "1px solid var(--tp-hairline-2)",

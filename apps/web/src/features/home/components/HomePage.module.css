@@ -88,7 +88,7 @@
   font-weight: 500;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Widget grid (two columns; cards declare their own span) ──────────────────────────────────────── */
@@ -120,6 +120,7 @@
 }
 
 /* Muted inline glyph — no heavy bubble (keeps the header minimal). */
+/* ink-4 kept: decorative glyph sitting beside .cardTitle's own visible text, not read on its own. */
 .cardTitleIcon {
   display: inline-flex;
   align-items: center;
@@ -145,7 +146,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
 }
 
@@ -192,7 +193,7 @@
 }
 
 .rowMeta {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -223,7 +224,7 @@
 }
 
 .leadSub {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -291,7 +292,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .sparkTotal {
@@ -312,7 +313,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Sequence snapshot (compact metric grid) ──────────────────────────────────────────────────────── */
@@ -343,7 +344,7 @@
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .replyRate {
@@ -359,7 +360,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .replyRateValue {

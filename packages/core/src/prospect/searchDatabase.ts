@@ -6,13 +6,19 @@
 // The mapper is pure and the projection carries NO Layer-0 identifier: a hit is addressed by its public
 // LinkedIn slug/URL, which is also what "Add to workspace" takes.
 import {
+  type DatabaseSuggestField,
   type MasterPersonRow,
   contactRepository,
   masterPersonSearchRepository,
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
-import type { DatabaseQuery, MaskedDatabasePerson, SeniorityLevel } from "@leadwolf/types";
+import type {
+  DatabaseQuery,
+  MaskedDatabasePerson,
+  SeniorityLevel,
+  Suggestion,
+} from "@leadwolf/types";
 
 export interface DatabaseSearchScope {
   tenantId: string;
@@ -81,4 +87,24 @@ export async function countDatabase(
   // The cap is applied in SQL (a LIMIT subquery inside countPersonsTx), not here — capping the number after
   // an uncapped count would report a smaller figure while still paying to scan every matching row.
   return withErTx((tx) => masterPersonSearchRepository.countPersonsTx(tx, query));
+}
+
+/**
+ * Typeahead over the Layer-0 satellite values (skills, languages, schools) — the values behind the
+ * `database-only` filters, which the WORKSPACE suggest cannot serve: the overlay holds none of this data
+ * and its role is REVOKEd from every `master_*` table.
+ *
+ * `withErTx` only. No tenant transaction and no workspace context of any kind: these are global facts, the
+ * result is identical for every caller, and the visibility predicate inside the query is what keeps a
+ * suppressed or private person from being inferable from a value or its count.
+ */
+export async function suggestDatabase(
+  field: DatabaseSuggestField,
+  prefix: string,
+  limit: number,
+): Promise<Suggestion[]> {
+  const rows = await withErTx((tx) =>
+    masterPersonSearchRepository.suggestDatabaseValuesTx(tx, field, prefix, limit),
+  );
+  return rows.map((r) => ({ value: r.value, displayLabel: r.value, count: r.count }));
 }

@@ -120,7 +120,7 @@ export function SendStatusDashboard({
               ))}
             </ul>
 
-            <p className={styles.footnote} style={{ marginTop: 16 }}>
+            <p className={styles.footnote} style={{ marginTop: "var(--tp-space-4)" }}>
               Counts come from the outreach engine. The dedicated analytics pipeline (ClickHouse)
               ships post-MVP; until then the funnel reflects the sequence's send log.
             </p>

@@ -12,9 +12,12 @@
 // so it has no business in the Search route's first load.
 "use client";
 
+import { EmploymentHistory } from "@/components/employment";
+import { groupStints } from "@/lib/employment/groupEmployment";
 import { Avatar, Drawer, EmptyState, StateSwitch, TpButton, TpChip } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ExternalLink, UserX } from "lucide-react";
+import { useMemo } from "react";
 import styles from "../accounts.module.css";
 import { fetchDatabaseCompanyProfile, fetchDatabasePersonProfile } from "../databaseProfileApi";
 
@@ -51,6 +54,21 @@ function PresenceChips({
   );
 }
 
+/** A single date as the profile shows it ("12 Mar 2026"), null when the source never said. */
+function profileDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Enum token → label ("c_suite" → "C suite"). Local rather than imported from the prospect slice: this
+ *  feature already sits at the cross-feature import budget (lint:cross-feature is a ratchet). */
+function humanize(v: string | null): string | null {
+  if (!v) return null;
+  return v.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /** A date range as the profile shows it. Null start means the source never said — not "year zero". */
 function period(startedOn: string | null, endedOn: string | null): string {
   const year = (d: string | null) => (d ? d.slice(0, 4) : null);
@@ -75,6 +93,29 @@ export function DatabasePersonProfileDrawer({
     ...PROFILE_QUERY_OPTS,
   });
   const p = q.data?.person;
+
+  // This path's wire shape is camelCase and carries per-date precision + location, where the owned-contact
+  // path is snake_case and carries department/confidence instead. Both normalize to the grouping util's
+  // input, which is why one component renders either.
+  const employmentGroups = useMemo(
+    () =>
+      groupStints(
+        (q.data?.employment ?? []).map((e) => ({
+          groupKey: e.groupKey ?? null,
+          companyName: e.companyName,
+          companyDomain: e.companyDomain,
+          title: e.title,
+          location: e.location,
+          isCurrent: e.isCurrent,
+          isPrimary: e.isPrimary,
+          startedOn: e.startedOn,
+          endedOn: e.endedOn,
+          startPrecision: e.startPrecision,
+          endPrecision: e.endPrecision,
+        })),
+      ),
+    [q.data?.employment],
+  );
 
   return (
     <Drawer open onClose={onClose} width={480} side="right" title={p?.fullName ?? "Profile"}>
@@ -104,6 +145,20 @@ export function DatabasePersonProfileDrawer({
               hasMobile={q.data?.hasMobile}
             />
 
+            {/* The masked row already carried all of this and the drawer showed none of it — seniority, the
+                resolved city/country (rather than only the raw location string in the header), the employer's
+                domain and industry, and when the graph last learned anything about the record. */}
+            <div className={styles.fieldGrid}>
+              <Field label="Seniority" value={humanize(p.seniorityLevel)} />
+              <Field
+                label="Location"
+                value={[p.locationCity, p.locationCountry].filter(Boolean).join(", ") || null}
+              />
+              <Field label="Company domain" value={p.companyDomain} />
+              <Field label="Industry" value={p.companyIndustry} />
+              <Field label="Last updated" value={profileDate(p.updatedAt)} />
+            </div>
+
             <div className={styles.profileActions}>
               {p.inWorkspace ? (
                 <TpChip active>In your workspace</TpChip>
@@ -122,35 +177,34 @@ export function DatabasePersonProfileDrawer({
               </a>
             </div>
 
-            {q.data && q.data.employment.length > 0 ? (
+            {employmentGroups.length > 0 ? (
               <section className={styles.profileSection}>
                 <h3 className={styles.profileSectionTitle}>Experience</h3>
-                {q.data.employment.map((e) => (
-                  <div
-                    key={`${e.companyName ?? "?"}-${e.startedOn ?? "?"}-${e.title ?? "?"}`}
-                    className={styles.timelineRow}
-                  >
-                    <div className={styles.fieldValue}>{e.title ?? "—"}</div>
-                    <div className={styles.profileSub}>
-                      {e.companyName ?? "—"} · {period(e.startedOn, e.endedOn)}
-                    </div>
-                  </div>
-                ))}
+                {/* Grouped by company: several roles at one employer are one block with the titles in
+                    sequence, not repeated company lines. The grouping is pure and unit-tested (see
+                    lib/employment); this drawer only supplies the rows. */}
+                <EmploymentHistory groups={employmentGroups} />
               </section>
             ) : null}
 
             {q.data && q.data.education.length > 0 ? (
               <section className={styles.profileSection}>
                 <h3 className={styles.profileSectionTitle}>Education</h3>
-                {q.data.education.map((e) => (
+                {q.data.education.map((e, i) => (
                   <div
-                    key={`${e.schoolName ?? "?"}-${e.endedOn ?? "?"}`}
+                    // Index-suffixed: two degrees from the same school with the same end year (or two rows
+                    // whose dates the source never gave) produced identical keys.
+                    key={`${e.schoolName ?? "?"}-${e.endedOn ?? "?"}-${i}`}
                     className={styles.timelineRow}
                   >
                     <div className={styles.fieldValue}>{e.schoolName ?? "—"}</div>
                     <div className={styles.profileSub}>
-                      {[e.degree, e.fieldsOfStudy.join(", ")].filter(Boolean).join(" · ") ||
-                        period(e.startedOn, e.endedOn)}
+                      {/* Degree AND dates. The `||` here meant a row with a degree never showed when it was
+                          studied, and a row with dates never showed what was studied — each field hid the
+                          other rather than both being shown. */}
+                      {[e.degree, e.fieldsOfStudy.join(", "), period(e.startedOn, e.endedOn)]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </div>
                   </div>
                 ))}

@@ -51,6 +51,9 @@ export interface FetchAndLandResult {
   outcome: FetchAndLandOutcome;
   resolvedPersonId: string | null;
   resolvedCompanyId: string | null;
+  /** On `unavailable` from the fleet: the smallest cooldown horizon the walk saw (throttle/outage) —
+   *  callers (the sweep) can back off for exactly this long instead of guessing. */
+  retryAfterMs?: number;
 }
 
 export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAndLandResult> {
@@ -86,7 +89,14 @@ export async function fetchAndLandUrl(input: FetchAndLandInput): Promise<FetchAn
   if (result.status !== "ok") {
     const outcome = result.status === "rejected" ? "rejected" : "unavailable";
     await withPrivilegedTx((tx) => sourceFetchRegistryRepository.recordFetch(tx, reg.id, outcome));
-    return { outcome, resolvedPersonId: null, resolvedCompanyId: null };
+    return {
+      outcome,
+      resolvedPersonId: null,
+      resolvedCompanyId: null,
+      ...(result.status === "unavailable" && result.retryAfterMs !== undefined
+        ? { retryAfterMs: result.retryAfterMs }
+        : {}),
+    };
   }
 
   // Land (its own withErTx; idempotent on content hash).

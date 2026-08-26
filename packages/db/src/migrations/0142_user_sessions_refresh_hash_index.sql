@@ -1,4 +1,4 @@
--- 0140_user_sessions_refresh_hash_index.sql — a PLAIN index on user_sessions.refresh_token_hash, alongside the
+-- 0142_user_sessions_refresh_hash_index.sql — a PLAIN index on user_sessions.refresh_token_hash, alongside the
 -- partial-unique one that already exists. HAND-AUTHORED (drizzle-kit generate is forbidden in this tree — see
 -- 0083_tan_wolfpack.sql for why a regen emits destructive nonsense for RLS/partition/expression DDL).
 --

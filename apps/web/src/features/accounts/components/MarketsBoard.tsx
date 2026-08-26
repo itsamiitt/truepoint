@@ -9,9 +9,15 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { MarketSegment } from "@leadwolf/types";
-import { EmptyState, StateSwitch } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
+} from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
-import styles from "../accounts.module.css";
 
 interface SegmentsResponse {
   enabled: boolean;
@@ -74,7 +80,25 @@ function delta(n: number): string {
   return n > 0 ? `+${n.toLocaleString()}` : n.toLocaleString();
 }
 
+/** The Funding cell, unchanged from the hand-rolled table: "<rounds> · <amount>", or an em dash at zero. */
+function funding(r: IndustryRollup): string {
+  return r.fundingRounds > 0 ? `${r.fundingRounds} · ${money(r.fundingAmountMinor)}` : "—";
+}
+
 const WINDOW_MONTHS = 6;
+
+// Same five columns, same order, same left alignment and the same cell rendering the hand-rolled <table> had.
+// No `sortValue` anywhere ON PURPOSE: the board has never been column-sortable — `byIndustry` returns the rows
+// pre-ordered by (signals + funding rounds) desc, which is not any single column, so adding a sort control here
+// would be a new behaviour rather than a like-for-like port. Module scope, not inline: DataTable's sort memo
+// deliberately excludes `columns` from its deps, and a stable array keeps that honest.
+const COLUMNS: Column<IndustryRollup>[] = [
+  { key: "industry", header: "Industry", cell: (r) => r.label },
+  { key: "companies", header: "Companies", cell: (r) => r.companyCount.toLocaleString() },
+  { key: "headcount", header: "Headcount Δ", cell: (r) => delta(r.headcountDelta) },
+  { key: "funding", header: "Funding", cell: funding },
+  { key: "signals", header: "Signals", cell: (r) => r.signalCount.toLocaleString() },
+];
 
 export function MarketsBoard() {
   const query = useQuery({
@@ -85,13 +109,8 @@ export function MarketsBoard() {
   const rows = query.data ? byIndustry(query.data.segments) : [];
 
   return (
-    <section>
-      <div className={styles.indexHead}>
-        <h1 className="tp-settings-title" style={{ margin: 0 }}>
-          Markets
-        </h1>
-        <span className={styles.deptSummary}>last {WINDOW_MONTHS} months · whole database</span>
-      </div>
+    <PageContainer width="fluid">
+      <PageHeader title="Markets" subtitle={`Last ${WINDOW_MONTHS} months · whole database`} />
       <StateSwitch
         loading={query.isPending}
         error={query.error}
@@ -108,35 +127,11 @@ export function MarketsBoard() {
           />
         }
       >
-        <div className={styles.boardWrap}>
-          <table className={styles.board}>
-            <thead>
-              <tr>
-                <th>Industry</th>
-                <th>Companies</th>
-                <th>Headcount Δ</th>
-                <th>Funding</th>
-                <th>Signals</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.code || "unclassified"}>
-                  <td>{r.label}</td>
-                  <td>{r.companyCount.toLocaleString()}</td>
-                  <td>{delta(r.headcountDelta)}</td>
-                  <td>
-                    {r.fundingRounds > 0
-                      ? `${r.fundingRounds} · ${money(r.fundingAmountMinor)}`
-                      : "—"}
-                  </td>
-                  <td>{r.signalCount.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* DataTable, not a hand-rolled <table>: the old body was an UNBOUNDED rows.map over every industry
+            in the database. DataTable windows above 100 rows and renders identically below it, so the small
+            boards look exactly as they did and a large one stops filling the DOM. */}
+        <DataTable columns={COLUMNS} rows={rows} rowKey={(r) => r.code || "unclassified"} />
       </StateSwitch>
-    </section>
+    </PageContainer>
   );
 }

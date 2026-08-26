@@ -39,7 +39,7 @@ const columns: Column<SourceFetch>[] = [
     cell: (f) => (
       <div style={{ display: "flex", flexDirection: "column" }}>
         <span className="tp-cell-mono">{f.normalizedUrl}</span>
-        <span className="app-muted" style={{ fontSize: 12 }}>
+        <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
           {f.entityKind}
           {f.externalId ? ` · ${f.externalId}` : ""}
         </span>

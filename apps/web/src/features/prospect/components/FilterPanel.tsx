@@ -8,7 +8,7 @@
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
-import { TpButton, TpInput } from "@leadwolf/ui";
+import { TpButton, TpChip, TpInput } from "@leadwolf/ui";
 import { type ReactNode, useState } from "react";
 import {
   FILTER_GROUPS,
@@ -28,6 +28,7 @@ import {
 } from "../filterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
+import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
 import { TermOptionChips } from "./TermOptionChips";
@@ -107,6 +108,9 @@ function GroupSection({
 
   return (
     <section className={styles.group}>
+      {/* Raw <button>: an accordion section header, not an action button — full-bleed, justified, carrying a
+          count badge and a chevron. No TpButton variant is that shape, and `tp-ui-btn` would impose its own
+          height/padding. Accessible name comes from the visible title + badge. */}
       <button
         type="button"
         aria-expanded={open}
@@ -153,9 +157,18 @@ function FacetControl({
   counts?: Map<string, number>;
   owners: OwnerOption[];
 }) {
+  // Every control carries its own scope mark, so "this filter will not search the database" is visible
+  // before the click rather than only in the notice above the grid afterwards.
+  const scopeNote = <FacetScopeBadge scope={facet.scope} />;
   if (facet.kind === "bool")
     return (
-      <BoolControl field={facet.field} label={facet.label} query={query} onChange={onChange} />
+      <BoolControl
+        field={facet.field}
+        label={facet.label}
+        query={query}
+        onChange={onChange}
+        scopeNote={scopeNote}
+      />
     );
   if (facet.kind === "range")
     return (
@@ -166,10 +179,18 @@ function FacetControl({
         unit={facet.unit}
         query={query}
         onChange={onChange}
+        scopeNote={scopeNote}
       />
     );
   return (
-    <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} owners={owners} />
+    <TermFacet
+      facet={facet}
+      query={query}
+      onChange={onChange}
+      counts={counts}
+      owners={owners}
+      scopeNote={scopeNote}
+    />
   );
 }
 
@@ -180,12 +201,14 @@ function TermFacet({
   onChange,
   counts,
   owners,
+  scopeNote,
 }: {
   facet: Extract<FacetDef, { kind: "term" }>;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
   counts?: Map<string, number>;
   owners: OwnerOption[];
+  scopeNote?: ReactNode;
 }) {
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
@@ -201,12 +224,15 @@ function TermFacet({
       label={facet.label}
       conditions={conditions}
       excludeNoun="Contacts"
+      scopeNote={scopeNote}
       onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
       renderPicker={(op, autoFocus) =>
         facet.input === "typeahead" ? (
           <FacetTypeahead
             field={facet.field}
             label={facet.label}
+            // A database-only facet's values live in Layer-0, which the workspace suggest cannot see.
+            source={facet.scope === "database-only" ? "database" : "workspace"}
             op={op}
             autoFocus={autoFocus}
             selected={[...applied]}
@@ -227,6 +253,16 @@ function TermFacet({
   );
 }
 
+/**
+ * The Any/Yes/No pill for a bool facet — now the DS chip rather than a hand-rolled `.miniToggle`.
+ *
+ * TpChip and not SegmentedControl, even though a three-way single-select is what a radiogroup is for:
+ * SegmentedControl swaps the keyboard model (roving tabindex, arrows move AND select) for one that these
+ * pills never had, and `.tp-ui-segmented-item` paints --tp-ink-3 on --tp-surface-3 — 4.43:1, below AA, which
+ * would be a new contrast failure introduced by the pass that exists to remove them. TpChip keeps the current
+ * behaviour exactly (three independent tab stops, click to set) and its inactive pill is ink-2 on surface-3
+ * at 9.45:1.
+ */
 function MiniToggle({
   active,
   onClick,
@@ -237,14 +273,9 @@ function MiniToggle({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={styles.miniToggle}
-      data-active={active ? "true" : undefined}
-    >
+    <TpChip active={active} onClick={onClick}>
       {children}
-    </button>
+    </TpChip>
   );
 }
 
@@ -253,11 +284,13 @@ function BoolControl({
   label,
   query,
   onChange,
+  scopeNote,
 }: {
   field: BoolFilterField;
   label: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  scopeNote?: ReactNode;
 }) {
   const current = getBool(query, field);
   const opt = (value: boolean | undefined, text: string) => (
@@ -267,7 +300,10 @@ function BoolControl({
   );
   return (
     <div className={styles.facetRow}>
-      <span className={styles.facetLabel}>{label}</span>
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>{label}</span>
+        {scopeNote}
+      </span>
       <span className={styles.opToggle}>
         {opt(undefined, "Any")}
         {opt(true, "Yes")}
@@ -284,6 +320,7 @@ function RangeControl({
   unit,
   query,
   onChange,
+  scopeNote,
 }: {
   field: string;
   label: string;
@@ -291,6 +328,7 @@ function RangeControl({
   unit?: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  scopeNote?: ReactNode;
 }) {
   const { gte, lte } = getRange(query, field);
   // Keystrokes land in a draft and commit after a quiet 400ms (or on blur) — the query is the cache key for
@@ -306,9 +344,12 @@ function RangeControl({
   };
   return (
     <div className={styles.facet}>
-      <span className={styles.facetLabel}>
-        {label}
-        {unit ? ` (${unit})` : ""}
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>
+          {label}
+          {unit ? ` (${unit})` : ""}
+        </span>
+        {scopeNote}
       </span>
       <div className={styles.rangeRow}>
         <TpInput

@@ -62,8 +62,8 @@ export function OverrideDialog({
         </TpButton>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
+        <section style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-2)" }}>
           {flag.overrides.length === 0 ? (
             <EmptyState
               title="No overrides"
@@ -77,13 +77,17 @@ export function OverrideDialog({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
-                  padding: "8px 0",
+                  gap: "var(--tp-space-3)",
+                  padding: "var(--tp-space-2) 0",
                   borderBottom: "1px solid var(--tp-hairline-2)",
                 }}
               >
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{o.tenantId}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "var(--tp-text-caption)" }}
+                >
+                  {o.tenantId}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
                   <StatusBadge tone={o.enabled ? "success" : "danger"}>
                     {o.enabled ? "Forced on" : "Forced off"}
                   </StatusBadge>
@@ -101,8 +105,13 @@ export function OverrideDialog({
           )}
         </section>
 
-        <section style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <FieldGroup label="Tenant" htmlFor="ov-tenant" className="tp-ui-grow">
+        <section style={{ display: "flex", gap: "var(--tp-space-2)", alignItems: "flex-end" }}>
+          {/* A WRAPPING label rather than FieldGroup's sibling one: TenantPicker renders the DS Combobox,
+              whose trigger button it owns and gives no id, so `htmlFor` would have nothing to point at.
+              Same shape as apps/web's ReportsPage Combobox filters. */}
+          {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the DS Combobox nested inside TenantPicker — a component boundary the rule cannot follow */}
+          <label className="tp-ui-field-group tp-ui-grow">
+            <span className="tp-ui-field-label">Tenant</span>
             <TenantPicker
               id="ov-tenant"
               value={tenantId}
@@ -112,9 +121,10 @@ export function OverrideDialog({
                 setTenantName(name);
               }}
             />
-          </FieldGroup>
-          <FieldGroup label="Force">
+          </label>
+          <FieldGroup label="Force" htmlFor="ov-force">
             <TpSelect
+              id="ov-force"
               value={enabled}
               onChange={(e) => setEnabled(e.currentTarget.value as "true" | "false")}
             >

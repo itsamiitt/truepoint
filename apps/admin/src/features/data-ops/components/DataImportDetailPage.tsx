@@ -8,6 +8,7 @@
 import {
   type Column,
   DataTable,
+  EmptyState,
   PageContainer,
   PageHeader,
   StatTile,
@@ -66,14 +67,25 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
         }
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !detail}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="Import job not found"
+            description="No job matches this id — it may have aged out of retention."
+          />
+        }
+      >
         {detail ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-6)" }}>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: 16,
+                gap: "var(--tp-space-4)",
               }}
             >
               <StatTile label="Tenant" value={detail.tenantName} sublabel={detail.tenantId} />
@@ -91,7 +103,7 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
             </div>
 
             {detail.failedReason ? (
-              <div style={{ color: "var(--tp-ink-3)", fontSize: 13 }}>
+              <div style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-body)" }}>
                 Failure reason: {detail.failedReason}
               </div>
             ) : null}
@@ -100,9 +112,9 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
               <div
                 style={{
                   color: "var(--tp-ink)",
-                  fontSize: 14,
+                  fontSize: "var(--tp-text-label)",
                   fontWeight: 600,
-                  marginBottom: 8,
+                  marginBottom: "var(--tp-space-2)",
                 }}
               >
                 Chunks by status
@@ -115,9 +127,9 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
                 <div
                   style={{
                     color: "var(--tp-ink)",
-                    fontSize: 14,
+                    fontSize: "var(--tp-text-label)",
                     fontWeight: 600,
-                    marginBottom: 8,
+                    marginBottom: "var(--tp-space-2)",
                   }}
                 >
                   Why rows were rejected

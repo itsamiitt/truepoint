@@ -18,14 +18,15 @@
 }
 
 /* ── Filter rail ─────────────────────────────────────────────────────────────────────────────────────── */
+/* Both filter panels (People, Accounts) are hosted by SearchDrawer, whose .railCol owns the sticky
+   positioning and whose .railBody owns the scrollport. This panel therefore only stacks its groups — it
+   must NOT re-declare sticky/max-height/overflow: nesting a second scrollport inside .railBody produced
+   two scrollbars, and a `position: sticky` inside a scrolling flex item has nothing to stick to. */
 .rail {
-  position: sticky;
-  top: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  min-width: 0;
   padding-right: 4px;
 }
 .railHead {
@@ -58,6 +59,26 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--tp-ink-2);
+}
+/* Groups a facet's label with its scope badge so the pair stays together when the head row justifies its
+   ends (the exclude toggle sits at the far end). */
+.facetLabelRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* "Workspace only" — this control cannot be answered by the platform database. Quiet by design: it is a
+   scope note, not a warning, and it sits on controls the user is expected to use. */
+.scopeBadge {
+  flex: 0 0 auto;
+  font-size: var(--tp-text-micro);
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-3);
+  border-radius: var(--tp-radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 .chipWrap {
   display: flex;
@@ -175,7 +196,7 @@
 }
 .facetEmpty {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 /* ── Progressive exclude (term facets) ──────────────────────────────────────────────────────────────────
  * Include is the default and owns the full width; exclusion is one click away on the facet's label row and,
@@ -251,19 +272,8 @@
   text-transform: uppercase;
   color: var(--danger-700);
 }
-.excClose {
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  padding: 2px;
-  border: 0;
-  background: none;
-  color: var(--tp-ink-3);
-  cursor: pointer;
-}
-.excClose:hover {
-  color: var(--tp-ink);
-}
+/* .excClose is gone — the exclude panel's dismiss is a <TpIconButton>, which also gives it the 32px target
+   this 18px hand-rolled one missed (WCAG 2.2 SC 2.5.8). */
 .excNote {
   margin: 0;
   font-size: 11px;
@@ -359,21 +369,7 @@
   gap: 4px;
   flex-shrink: 0;
 }
-.miniToggle {
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  cursor: pointer;
-  border: 1px solid var(--tp-hairline-2);
-  background: var(--tp-surface);
-  color: var(--tp-ink-3);
-}
-.miniToggle[data-active="true"] {
-  background: var(--tp-ink);
-  color: var(--tp-surface);
-  border-color: var(--tp-ink);
-}
+/* .miniToggle is gone — the any/all/none pills are <TpChip active> now. */
 .addChip {
   font: inherit;
   font-size: 12px;
@@ -445,7 +441,7 @@
 }
 .title {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -471,10 +467,10 @@
   color: var(--warning);
 }
 .glyphNone {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .lock {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   display: inline-flex;
 }
 .headCheck,
@@ -542,7 +538,7 @@
 }
 .fieldLabel {
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .fieldValue {
   font-size: 13px;
@@ -576,7 +572,7 @@
 }
 .scoreCompositeLabel {
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .scoreParts {
   display: flex;
@@ -627,11 +623,16 @@
   margin-top: 5px;
   flex: 0 0 auto;
 }
+/* The text column of a timeline row. EVERY .timelineItem wraps its text in this — a row that drops two
+   sibling divs straight into .timelineItem inherits that element's `display: flex` ROW and renders its
+   headline and detail line side by side, squeezing both. Growing to fill is what lets long titles wrap
+   rather than push. */
 .timelineMeta {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .timelineType {
   font-size: 13px;
@@ -643,7 +644,7 @@
 }
 .timelineTime {
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .drawerActions {
@@ -658,7 +659,7 @@
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
-  z-index: var(--tp-z-popover, 50);
+  z-index: var(--tp-z-bulkbar);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -678,6 +679,23 @@
     opacity: 1;
     transform: translate(-50%, 0);
   }
+}
+/* On-fill skin for the DS buttons that sit ON this bar — passed as `className` to TpButton.
+   The bar's fill IS --tp-ink, and every DS button variant assumes a LIGHT surface: --ghost paints
+   --tp-ink-2 (1.72:1 here) and --link paints --tp-ink (1:1 — literally invisible). "Add to list",
+   "Enroll", the More trigger and "Clear" were all unreadable; only the primary, whose label is already
+   --tp-on-fill, and the hand-rolled .bulkLink survived.
+   Both rules are needed: re-colouring the label alone leaves the ghost HOVER painting --nav-hover-fill
+   behind white text (~1.07:1), which is worse than the state it fixes. The hover selector carries the same
+   (0,3,0) specificity as the DS's own, so it wins on source order — module chunks load after the global
+   primitives.css, which is the same assumption every other className passthrough in this app makes.
+   The right long-term fix is an on-fill variant in @leadwolf/ui; this is the app-side repair. */
+.bulkOnFill {
+  color: var(--tp-on-fill);
+}
+.bulkOnFill:not(:disabled):hover {
+  background: color-mix(in srgb, var(--tp-on-fill) 16%, transparent);
+  color: var(--tp-on-fill);
 }
 .bulkCount {
   font-size: 13px;
@@ -727,7 +745,7 @@
 }
 .dialogOr {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   text-align: center;
 }
 .dialogCheckRow {
@@ -758,7 +776,7 @@
 }
 .revealKey {
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .revealValue {
   display: flex;
@@ -827,7 +845,7 @@
   color: var(--tp-ink-2);
 }
 .revealHistoryMeta {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
 }
 .inlineAlert {

@@ -10,6 +10,7 @@ import {
   EmptyState,
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpCheckbox,
@@ -113,7 +114,7 @@ export function SecurityAccessPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Security &amp; access</h1>
+      <PageHeader title="Security & access" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {forbidden ? (
           <EmptyState

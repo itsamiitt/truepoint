@@ -42,7 +42,10 @@ export function EnrichmentRunsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="tp-cell-mono">{r.status}</span>
           {r.failedReason ? (
-            <span style={{ color: "var(--tp-ink-3)", fontSize: 12 }} title={r.failedReason}>
+            <span
+              style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-caption)" }}
+              title={r.failedReason}
+            >
               {r.failedReason}
             </span>
           ) : null}

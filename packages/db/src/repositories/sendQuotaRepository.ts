@@ -14,6 +14,38 @@ export interface QuotaSnapshot {
   used: number;
 }
 
+/**
+ * Length of the usage window, in days.
+ *
+ * `resetPeriod` was written for "the P6 retention/period sweep" and that sweep was never built, so NOTHING
+ * reset `email_send_used` — not a job, not a trigger, not a DEFAULT. Usage only ever went up. A tenant with a
+ * quota therefore burned it once and was blocked from sending FOREVER, with no operator action able to clear
+ * it short of hand-written SQL. It stayed invisible because `email_send_quota` has no default: every tenant is
+ * unlimited (NULL) until a platform admin calls setQuota, and the trap springs the moment one does.
+ *
+ * 30 days, not a calendar month, and this is an ASSUMPTION rather than a settled rule — the method's own
+ * comment says "monthly/daily" and never picked. Recorded in docs/strategy/decisions.md for a human: quota
+ * windows usually want to track the billing cycle, and if these quotas are meant to be billing-aligned this
+ * constant should be replaced by the cycle boundary rather than tuned. A rolling 30 days is the choice that
+ * is defensible without knowing the answer: it never grants a tenant two windows' worth of sends in one
+ * calendar month, which is the failure direction that costs money.
+ */
+export const SEND_QUOTA_PERIOD_DAYS = 30;
+
+const PERIOD_MS = SEND_QUOTA_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Has the usage window elapsed? Pure, exported, and unit-tested — the roll-over decision is the whole fix,
+ * so it is testable without a database.
+ *
+ * Boundary is inclusive (`>=`): a window that started exactly PERIOD_MS ago is over. A future periodStart
+ * (clock skew, or a row stamped ahead) reads as not-elapsed rather than throwing — the conservative
+ * direction, since the alternative is resetting a live counter on a bad timestamp.
+ */
+export function isPeriodElapsed(periodStart: Date, now: Date): boolean {
+  return now.getTime() - periodStart.getTime() >= PERIOD_MS;
+}
+
 /** The send-quota snapshot plus the period anchor — the GET /send-quota read DTO. */
 export interface QuotaReadout extends QuotaSnapshot {
   periodStart: Date;
@@ -38,11 +70,24 @@ export const sendQuotaRepository = {
    */
   async lock(tx: Tx, tenantId: string): Promise<QuotaSnapshot> {
     const rows = (await tx.execute(
-      sql`SELECT email_send_quota AS quota, email_send_used AS used
+      sql`SELECT email_send_quota AS quota, email_send_used AS used,
+                 email_send_period_start AS period_start
           FROM tenants WHERE id = ${tenantId} FOR UPDATE`,
-    )) as unknown as Array<{ quota: number | null; used: number }>;
+    )) as unknown as Array<{ quota: number | null; used: number; period_start: Date }>;
     if (rows.length === 0) throw new Error("tenant row not visible in scoped transaction");
     const r = rows[0]!;
+
+    // Roll the window here, under the lock we already hold, rather than from a sweep. A sweep is another
+    // thing that can be down, mis-scheduled, or never built — which is exactly how this counter came to have
+    // no reset at all. Rolling at the point of use is self-healing: the first send after the window elapses
+    // pays a single UPDATE, and a tenant whose workers were offline for a month is still correct on the next
+    // send. FOR UPDATE above already serializes this against concurrent sends, so no two of them can both
+    // observe the elapsed window and double-reset.
+    if (isPeriodElapsed(new Date(r.period_start), new Date())) {
+      await sendQuotaRepository.resetPeriod(tx, tenantId);
+      return { quota: r.quota === null ? null : Number(r.quota), used: 0 };
+    }
+
     return { quota: r.quota === null ? null : Number(r.quota), used: Number(r.used) };
   },
 
@@ -88,10 +133,16 @@ export const sendQuotaRepository = {
       )) as unknown as Array<{ quota: number | null; used: number; period_start: Date }>;
       if (rows.length === 0) throw new Error("tenant row not visible in scoped transaction");
       const r = rows[0]!;
+      // Report the EFFECTIVE usage. This read must agree with what the next send will do, and that send rolls
+      // an elapsed window to zero — so showing the stale pre-roll number here would tell a user they are out
+      // of quota while the very next send succeeds. Read-only on purpose: a GET does not write, so the actual
+      // reset still happens under the send's lock.
+      const periodStart = new Date(r.period_start);
+      const elapsed = isPeriodElapsed(periodStart, new Date());
       return {
         quota: r.quota === null ? null : Number(r.quota),
-        used: Number(r.used),
-        periodStart: new Date(r.period_start),
+        used: elapsed ? 0 : Number(r.used),
+        periodStart,
       };
     });
   },
@@ -109,8 +160,13 @@ export const sendQuotaRepository = {
   },
 
   /**
-   * Reset the usage window (the period roll-over: monthly/daily). Sets email_send_used = 0 and stamps
-   * email_send_period_start. Driven by the P6 retention/period sweep; tenant-targeted, idempotent per period.
+   * Reset the usage window: sets email_send_used = 0 and stamps email_send_period_start.
+   *
+   * Called by lock() when the window has elapsed, and available to a platform admin who needs to clear a
+   * counter by hand. It previously documented itself as "driven by the P6 retention/period sweep" — a sweep
+   * that was never built, which left this the only reset in the system and gave it no caller at all. Run it
+   * inside a transaction that holds the tenant row, or a concurrent send can consume against the pre-reset
+   * count.
    */
   async resetPeriod(tx: Tx, tenantId: string): Promise<void> {
     await tx.execute(

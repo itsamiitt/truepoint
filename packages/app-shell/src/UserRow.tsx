@@ -23,14 +23,10 @@ export function UserRow({
     <DropdownMenu
       align="start"
       side="top"
-      trigger={({ toggle, open }) => (
-        <button
-          type="button"
-          className="tp-user-trigger"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={toggle}
-        >
+      // `props` carries aria-haspopup/expanded/controls from the DS, so the relationship is wired in one
+      // place instead of being re-derived (and half-forgotten) at every trigger.
+      trigger={({ toggle, props }) => (
+        <button type="button" className="tp-user-trigger" {...props} onClick={toggle}>
           <Avatar name={email} size={28} />
           <span className="tp-user-meta">
             <span className="tp-user-email">{email ?? "Signed in"}</span>

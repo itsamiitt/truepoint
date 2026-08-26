@@ -7,26 +7,31 @@
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives.css": "./src/primitives.css",
-    "./theme.css": "./src/theme.css"
+    "./theme.css": "./src/theme.css",
+    "./package.json": "./package.json"
   },
+  "//sideEffects": "Only the stylesheets have side effects. Without this every consumer's bundler had to assume the 82-line barrel might, and kept the whole module graph — apps/web papered over it with a per-app optimizePackageImports, which the next consumer would have re-inherited.",
+  "sideEffects": ["*.css"],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@radix-ui/react-label": "2.1.10",
     "@radix-ui/react-slot": "1.3.0",
     "@tanstack/react-virtual": "^3.14.8",
-    "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.18.0",
     "tailwind-merge": "2.5.5"
   },
   "peerDependencies": {
-    "react": "^19"
+    "react": "^19",
+    "react-dom": "^19"
   },
   "devDependencies": {
-    "typescript": "5.7.2",
+    "@happy-dom/global-registrator": "^20.11.6",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "19.0.1",
-    "@types/react-dom": "19.0.2"
+    "@types/react-dom": "19.0.2",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "typescript": "5.7.2"
   }
 }

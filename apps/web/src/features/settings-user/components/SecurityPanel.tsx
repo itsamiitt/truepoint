@@ -14,7 +14,7 @@
 
 import { authSecurityUrl } from "@/lib/authLink";
 import { AUTH_ORIGIN } from "@/lib/publicConfig";
-import { FormSection, Icon } from "@leadwolf/ui";
+import { FormSection, Icon, PageHeader } from "@leadwolf/ui";
 import { ExternalLink, History, KeyRound, Monitor, ShieldCheck } from "lucide-react";
 import styles from "../settings-user.module.css";
 
@@ -27,7 +27,7 @@ function authLink(section: string): string {
 export function SecurityPanel() {
   return (
     <section className={styles.panel}>
-      <h1 className="tp-settings-title">Security</h1>
+      <PageHeader title="Security" />
 
       <div className={styles.managedNote}>
         <span className={styles.managedNoteIcon}>

@@ -346,6 +346,26 @@ export const appEnvSchema = z
     // the byte cap bounds an oversized/hostile response body before JSON.parse.
     ENRICH_PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     ENRICH_PROVIDER_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
+
+    // Data-source failover-chain error handling (expo.truepoint.in/docs §Errors & classifications; the
+    // sourceErrorClassifier verdict table). Per-class origin cooldown defaults — a Retry-After header
+    // always wins over these; the MAX clamp bounds any vendor-sent horizon so a bad header can never
+    // brick an origin for a day. TRANSIENT_RETRIES=0 restores the pre-classifier zero-retry failover.
+    ENRICH_ORIGIN_THROTTLE_FALLBACK_MS: z.coerce.number().int().positive().default(15_000),
+    ENRICH_ORIGIN_SHUTDOWN_COOLDOWN_MS: z.coerce.number().int().positive().default(30_000),
+    ENRICH_ORIGIN_POOL_DEAD_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
+    ENRICH_ORIGIN_SEAT_DEAD_COOLDOWN_MS: z.coerce.number().int().positive().default(600_000),
+    ENRICH_ORIGIN_COOLDOWN_MAX_MS: z.coerce.number().int().positive().default(3_600_000),
+    ENRICH_ORIGIN_TRANSIENT_RETRIES: z.coerce.number().int().nonnegative().default(1),
+    ENRICH_ORIGIN_TRANSIENT_RETRY_DELAY_MS: z.coerce.number().int().positive().default(300),
+    // Rate-limit horizon cap for the enrichment breaker (redisBreakerStore `limited` key) — bounds a
+    // vendor-sent Retry-After so one bad header can't block a provider fleet-wide for longer than this.
+    ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S: z.coerce.number().int().positive().default(86_400),
+    // All-throttled job deferral: max re-enqueues per original job, and the delay above which the job
+    // PARKS (returns unfilled; the ledger's rate_limited rows + the breaker horizon carry the state)
+    // instead of scheduling a delayed job — a daily-budget 86400s Retry-After must not pile up jobs.
+    ENRICH_MAX_DEFERRALS: z.coerce.number().int().nonnegative().default(3),
+    ENRICH_DEFER_MAX_DELAY_MS: z.coerce.number().int().positive().default(1_800_000),
     // Per-verification unit cost in micro-dollars folded into the daily budget as `verify:email:*` ledger
     // rows (waterfall v2 verify-before-accept). Default 0 — a self-hosted Reacher is infra cost, not
     // per-call spend; set when a metered hosted verifier is used.

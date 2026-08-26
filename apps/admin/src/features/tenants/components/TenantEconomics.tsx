@@ -7,7 +7,7 @@
 
 import { useStaffMe } from "@/lib/staffMe";
 import type { EconomicsTrendPoint, TenantEconomicsDetail } from "@leadwolf/types";
-import { StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
+import { EmptyState, StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { fetchTenantEconomics, fetchTenantEconomicsTrend } from "../api";
 import { shortDate } from "../format";
@@ -42,7 +42,7 @@ const PERIODS = [
 const GRID: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: 12,
+  gap: "var(--tp-space-3)",
 };
 
 export function TenantEconomics({ tenantId }: { tenantId: string }) {
@@ -93,8 +93,8 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 12,
+          gap: "var(--tp-space-3)",
+          marginBottom: "var(--tp-space-3)",
         }}
       >
         <h3 className="tp-section-title" style={{ margin: 0 }}>
@@ -113,9 +113,20 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
         </TpSelect>
       </div>
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !data}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No economics for this tenant"
+            description="Nothing was recorded in the selected window."
+          />
+        }
+      >
         {data ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
             <div style={GRID}>
               <StatTile
                 label={`Revenue · ${sinceDays}d`}
@@ -166,14 +177,20 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
                   display: "flex",
                   alignItems: "baseline",
                   justifyContent: "space-between",
-                  gap: 12,
+                  gap: "var(--tp-space-3)",
                   marginBottom: 6,
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tp-ink-2)" }}>
+                <span
+                  style={{
+                    fontSize: "var(--tp-text-body)",
+                    fontWeight: 600,
+                    color: "var(--tp-ink-2)",
+                  }}
+                >
                   Daily consumption
                 </span>
-                <span className="app-muted" style={{ fontSize: 12 }}>
+                <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                   {totalConsumed.toLocaleString()} credits · {totalReveals.toLocaleString()} reveals
                   · {sinceDays}d
                 </span>
@@ -198,7 +215,7 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
                   />
                 </svg>
               ) : (
-                <p className="app-muted" style={{ fontSize: 13 }}>
+                <p className="app-muted" style={{ fontSize: "var(--tp-text-body)" }}>
                   No credit consumption in this window.
                 </p>
               )}

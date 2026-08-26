@@ -75,6 +75,7 @@
     "provider-configs",
     "public-api",
     "public-pricing",
+    "reliability",
     "reports",
     "retention",
     "reveal",
@@ -111,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2391,
-  "fileSetHash": "sha256:2377cacf181798baab97e7db9d0b12491222c9ae13a140e9234269aaf09b8e5d",
+  "fileCount": 2468,
+  "fileSetHash": "sha256:6bb2d2710923fa68a028668d851dae2412b8e0ccb5a8de98d3c66571036ad746",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -146,6 +147,7 @@
         "apps/web/src/features/accounts/accountRows.ts",
         "apps/web/src/features/accounts/api.ts",
         "apps/web/src/features/accounts/components/AccountsPane.tsx",
+        "apps/web/src/features/accounts/components/AccountsSort.tsx",
         "apps/web/src/features/accounts/components/CompanyPage.tsx",
         "apps/web/src/features/accounts/components/DatabaseProfileDrawer.tsx",
         "apps/web/src/features/accounts/components/MarketsBoard.tsx",
@@ -478,7 +480,9 @@
       ],
       "workers": [
         "apps/workers/src/queues/dataRetentionSweep.ts",
-        "apps/workers/src/queues/dsar.ts"
+        "apps/workers/src/queues/dsar.ts",
+        "apps/workers/src/queues/dsarDeadlineSweep.test.ts",
+        "apps/workers/src/queues/dsarDeadlineSweep.ts"
       ],
       "integrations": []
     },
@@ -939,6 +943,7 @@
       "workers": [
         "apps/workers/src/queues/accountRefresh.ts",
         "apps/workers/src/queues/bulkEnrichment.ts",
+        "apps/workers/src/queues/enrichment.test.ts",
         "apps/workers/src/queues/enrichment.ts",
         "apps/workers/src/queues/firmographics.ts"
       ],
@@ -1535,6 +1540,7 @@
         "apps/web/src/features/prospect/bulkResourcesApi.ts",
         "apps/web/src/features/prospect/bulkReveal.test.ts",
         "apps/web/src/features/prospect/bulkReveal.ts",
+        "apps/web/src/features/prospect/columnRegistry.ts",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
         "apps/web/src/features/prospect/components/AccountGraphSections.tsx",
         "apps/web/src/features/prospect/components/AccountTechnologySections.tsx",
@@ -1549,6 +1555,7 @@
         "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/EducationSection.tsx",
         "apps/web/src/features/prospect/components/EmploymentSection.tsx",
+        "apps/web/src/features/prospect/components/FacetScopeBadge.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/HeadcountSection.tsx",
@@ -1573,6 +1580,8 @@
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/components/TermFacetField.tsx",
         "apps/web/src/features/prospect/components/TermOptionChips.tsx",
+        "apps/web/src/features/prospect/components/peopleColumns.tsx",
+        "apps/web/src/features/prospect/databaseRows.test.ts",
         "apps/web/src/features/prospect/databaseRows.ts",
         "apps/web/src/features/prospect/databaseSearchApi.ts",
         "apps/web/src/features/prospect/enrichApi.ts",
@@ -1582,6 +1591,8 @@
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
+        "apps/web/src/features/prospect/filterScope.test.ts",
+        "apps/web/src/features/prospect/gridColumns.test.ts",
         "apps/web/src/features/prospect/hooks/useAccountFacetCounts.ts",
         "apps/web/src/features/prospect/hooks/useAccountHeadcount.ts",
         "apps/web/src/features/prospect/hooks/useAccountSearch.ts",
@@ -1721,6 +1732,21 @@
       "workers": [],
       "integrations": []
     },
+    "reliability": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/reliability/backoff.ts",
+        "packages/core/src/reliability/retryAfter.test.ts",
+        "packages/core/src/reliability/retryAfter.ts",
+        "packages/core/src/reliability/sourceErrorClassifier.test.ts",
+        "packages/core/src/reliability/sourceErrorClassifier.ts"
+      ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "reports": {
       "web": [
         "apps/web/src/features/reports/api.ts",
@@ -1736,6 +1762,7 @@
         "apps/web/src/features/reports/components/IntentSection.tsx",
         "apps/web/src/features/reports/components/LeadScoreSection.tsx",
         "apps/web/src/features/reports/components/ReportsPage.tsx",
+        "apps/web/src/features/reports/components/RevealOutcomesSection.tsx",
         "apps/web/src/features/reports/components/TeamActivitySection.tsx",
         "apps/web/src/features/reports/export/downloadXlsx.ts",
         "apps/web/src/features/reports/export/exportData.test.ts",
@@ -1746,6 +1773,7 @@
         "apps/web/src/features/reports/hooks/useReports.ts",
         "apps/web/src/features/reports/index.ts",
         "apps/web/src/features/reports/keys.ts",
+        "apps/web/src/features/reports/revealOutcomes.test.ts",
         "apps/web/src/features/reports/rollups.ts",
         "apps/web/src/features/reports/types.ts"
       ],
@@ -1757,7 +1785,9 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/marketRollupRepository.ts",
-        "packages/db/src/repositories/reportsRepository.ts"
+        "packages/db/src/repositories/outcomeMetricsRepository.ts",
+        "packages/db/src/repositories/reportsRepository.ts",
+        "packages/db/src/repositories/usageEventRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/marketRollupSweep.ts"
@@ -2219,6 +2249,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/sourceLanding/backfillTitleFunction.test.ts",
+        "packages/core/src/sourceLanding/backfillTitleFunction.ts",
         "packages/core/src/sourceLanding/fetchAndLand.ts",
         "packages/core/src/sourceLanding/landSourcePayload.ts",
         "packages/core/src/sourceLanding/linkedinSourceClient.test.ts",
@@ -2229,6 +2261,8 @@
         "packages/core/src/sourceLanding/lookupInterest.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.test.ts",
         "packages/core/src/sourceLanding/mapLinkedinPayload.ts",
+        "packages/core/src/sourceLanding/originCooldowns.test.ts",
+        "packages/core/src/sourceLanding/originCooldowns.ts",
         "packages/core/src/sourceLanding/originRouter.ts",
         "packages/core/src/sourceLanding/refreshAccount.ts"
       ],
@@ -2420,7 +2454,12 @@
   "shared": {
     "apps/admin": [
       "apps/admin/next.config.mjs",
-      "apps/admin/src/contrast.test.ts"
+      "apps/admin/src/contrast.test.ts",
+      "apps/admin/src/instrumentation-client.ts",
+      "apps/admin/src/instrumentation.ts",
+      "apps/admin/src/sentry.edge.config.ts",
+      "apps/admin/src/sentry.server.config.ts",
+      "apps/admin/src/sentry.shared.ts"
     ],
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/ai-usage/page.tsx",
@@ -2455,6 +2494,7 @@
       "apps/admin/src/app/(shell)/trust-abuse/page.tsx",
       "apps/admin/src/app/(shell)/users/page.tsx",
       "apps/admin/src/app/callback/page.tsx",
+      "apps/admin/src/app/global-error.tsx",
       "apps/admin/src/app/layout.tsx",
       "apps/admin/src/app/page.tsx"
     ],
@@ -2525,8 +2565,13 @@
       "apps/auth/next.config.mjs",
       "apps/auth/postcss.config.mjs",
       "apps/auth/src/bootSelfTest.ts",
+      "apps/auth/src/contrast.test.ts",
+      "apps/auth/src/instrumentation-client.ts",
       "apps/auth/src/instrumentation.ts",
-      "apps/auth/src/middleware.ts"
+      "apps/auth/src/middleware.ts",
+      "apps/auth/src/sentry.edge.config.ts",
+      "apps/auth/src/sentry.server.config.ts",
+      "apps/auth/src/sentry.shared.ts"
     ],
     "apps/auth/app": [
       "apps/auth/src/app/.well-known/jwks.json/route.ts",
@@ -2553,6 +2598,7 @@
       "apps/auth/src/app/extension/refresh/route.ts",
       "apps/auth/src/app/forgot/actions.ts",
       "apps/auth/src/app/forgot/page.tsx",
+      "apps/auth/src/app/global-error.tsx",
       "apps/auth/src/app/layout.tsx",
       "apps/auth/src/app/login/actions.ts",
       "apps/auth/src/app/login/page.tsx",
@@ -2667,11 +2713,11 @@
       "apps/doc/src/app/trust/page.tsx"
     ],
     "apps/doc/components": [
+      "apps/doc/src/components/AssistantContext.tsx",
       "apps/doc/src/components/AvailabilityBadge.tsx",
       "apps/doc/src/components/ButtonLink.tsx",
       "apps/doc/src/components/CodeBlock.tsx",
       "apps/doc/src/components/Note.tsx",
-      "apps/doc/src/components/PageIntro.tsx",
       "apps/doc/src/components/Prose.tsx",
       "apps/doc/src/components/ReferenceTable.tsx",
       "apps/doc/src/components/SiteChrome.tsx",
@@ -2718,9 +2764,19 @@
       "apps/doc/src/features/api-reference/components/DocsShell.tsx",
       "apps/doc/src/features/api-reference/components/DocsSidebar.tsx",
       "apps/doc/src/features/api-reference/components/EndpointPage.tsx",
+      "apps/doc/src/features/api-reference/components/GuideBody.tsx",
       "apps/doc/src/features/api-reference/components/GuidePage.tsx",
       "apps/doc/src/features/api-reference/components/SnippetTabs.tsx",
+      "apps/doc/src/features/api-reference/guideSections.test.ts",
+      "apps/doc/src/features/api-reference/guideSections.ts",
       "apps/doc/src/features/api-reference/index.ts",
+      "apps/doc/src/features/api-reference/sidebarEntries.ts",
+      "apps/doc/src/features/assistant/answer.test.ts",
+      "apps/doc/src/features/assistant/answer.ts",
+      "apps/doc/src/features/assistant/components/AssistantMessage.tsx",
+      "apps/doc/src/features/assistant/components/SupportAssistant.tsx",
+      "apps/doc/src/features/assistant/index.ts",
+      "apps/doc/src/features/assistant/intents.ts",
       "apps/doc/src/features/changelog/components/ChangelogPage.tsx",
       "apps/doc/src/features/changelog/index.ts",
       "apps/doc/src/features/datasets/components/DatasetPage.tsx",
@@ -2790,6 +2846,7 @@
       "apps/extension/src/content/extract/guards.test.ts",
       "apps/extension/src/content/extract/guards.ts",
       "apps/extension/src/content/hovercard/index.ts",
+      "apps/extension/src/content/hovercard/shadowTokens.test.ts",
       "apps/extension/src/content/index.ts",
       "apps/extension/src/content/observer.test.ts",
       "apps/extension/src/content/observer.ts"
@@ -2838,14 +2895,20 @@
       "apps/forge/src/app/(shell)/source-fetches/page.tsx",
       "apps/forge/src/app/(shell)/sync-status/page.tsx",
       "apps/forge/src/app/auth/callback/page.tsx",
+      "apps/forge/src/app/global-error.tsx",
       "apps/forge/src/app/layout.tsx",
       "apps/forge/src/app/page.tsx",
       "apps/forge/src/components/shell/ForgeShell.tsx",
       "apps/forge/src/components/shell/navConfig.ts",
+      "apps/forge/src/instrumentation-client.ts",
+      "apps/forge/src/instrumentation.ts",
       "apps/forge/src/lib/authClient.ts",
       "apps/forge/src/lib/forgeGate.ts",
       "apps/forge/src/lib/publicConfig.ts",
-      "apps/forge/src/lib/staffMe.tsx"
+      "apps/forge/src/lib/staffMe.tsx",
+      "apps/forge/src/sentry.edge.config.ts",
+      "apps/forge/src/sentry.server.config.ts",
+      "apps/forge/src/sentry.shared.ts"
     ],
     "apps/forge-api": [
       "apps/forge-api/src/app.ts",
@@ -2910,8 +2973,13 @@
     "apps/web": [
       "apps/web/next.config.mjs",
       "apps/web/src/contrast.test.ts",
+      "apps/web/src/instrumentation-client.ts",
+      "apps/web/src/instrumentation.ts",
       "apps/web/src/noVendorNames.test.ts",
-      "apps/web/src/securityHeaders.test.ts"
+      "apps/web/src/securityHeaders.test.ts",
+      "apps/web/src/sentry.edge.config.ts",
+      "apps/web/src/sentry.server.config.ts",
+      "apps/web/src/sentry.shared.ts"
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
@@ -2966,13 +3034,22 @@
       "apps/web/src/app/(shell)/signals/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
       "apps/web/src/app/auth/extension/page.tsx",
+      "apps/web/src/app/global-error.tsx",
       "apps/web/src/app/import/page.tsx",
       "apps/web/src/app/layout.tsx",
       "apps/web/src/app/page.tsx",
-      "apps/web/src/app/providers.tsx"
+      "apps/web/src/app/providers.tsx",
+      "apps/web/src/app/sentry-check/SentryCheckButton.tsx",
+      "apps/web/src/app/sentry-check/page.tsx"
     ],
     "apps/web/components": [
+      "apps/web/src/components/data-health/DataHealthCell.tsx",
+      "apps/web/src/components/data-health/index.ts",
+      "apps/web/src/components/employment/EmploymentHistory.tsx",
+      "apps/web/src/components/employment/index.ts",
       "apps/web/src/components/search/AppliedFilterChips.tsx",
+      "apps/web/src/components/search/ColumnChooser.tsx",
+      "apps/web/src/components/search/ScopeNotice.tsx",
       "apps/web/src/components/search/SearchDrawer.tsx",
       "apps/web/src/components/search/SearchTabs.tsx",
       "apps/web/src/components/search/WorkspaceScopeControl.tsx",
@@ -3002,6 +3079,9 @@
       "apps/web/src/lib/authLink.test.ts",
       "apps/web/src/lib/authLink.ts",
       "apps/web/src/lib/credits.ts",
+      "apps/web/src/lib/employment/dates.ts",
+      "apps/web/src/lib/employment/groupEmployment.test.ts",
+      "apps/web/src/lib/employment/groupEmployment.ts",
       "apps/web/src/lib/eventStream.ts",
       "apps/web/src/lib/maybeList.ts",
       "apps/web/src/lib/problemMessage.ts",
@@ -3205,6 +3285,7 @@
       "packages/db/src/repositories/platformComplianceReads.ts",
       "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/repositories/platformTrustReads.ts",
+      "packages/db/src/repositories/sendQuotaPeriod.test.ts",
       "packages/db/src/repositories/subscriptionResetMath.test.ts",
       "packages/db/src/repositories/subscriptionResetMath.ts",
       "packages/db/src/rlsCoverage.test.ts",
@@ -3274,6 +3355,7 @@
       "packages/db/src/schema/watchlists.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/schema/workerOutbox.ts",
+      "packages/db/src/searchIntentScope.test.ts",
       "packages/db/src/seed.ts",
       "packages/db/test/accountChildren.backfill.itest.ts",
       "packages/db/test/accountChildren.dualwrite.itest.ts",
@@ -3308,6 +3390,7 @@
       "packages/db/test/crmSyncPersistence.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
+      "packages/db/test/databasePeopleFilters.itest.ts",
       "packages/db/test/dsarLayerZero.itest.ts",
       "packages/db/test/effectivePolicyResolve.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
@@ -3317,6 +3400,7 @@
       "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/enrichmentPolicy.itest.ts",
       "packages/db/test/erMerge.itest.ts",
+      "packages/db/test/eventOutboxRetention.itest.ts",
       "packages/db/test/featureFlags.itest.ts",
       "packages/db/test/fieldProvenancePin.itest.ts",
       "packages/db/test/forgeAuditChain.itest.ts",
@@ -3594,6 +3678,7 @@
       "packages/types/src/workerQueues.ts"
     ],
     "packages/ui": [
+      "packages/ui/src/classCoverage.test.ts",
       "packages/ui/src/cn.ts",
       "packages/ui/src/components/Avatar.tsx",
       "packages/ui/src/components/Card.tsx",
@@ -3612,7 +3697,10 @@
       "packages/ui/src/components/controls.tsx",
       "packages/ui/src/components/floating.tsx",
       "packages/ui/src/components/form.tsx",
+      "packages/ui/src/components/keyboard.domtest.tsx",
+      "packages/ui/src/components/overlay.domtest.tsx",
       "packages/ui/src/components/overlay.tsx",
+      "packages/ui/src/components/overlayStack.ts",
       "packages/ui/src/components/state.tsx",
       "packages/ui/src/components/ui/alert.tsx",
       "packages/ui/src/components/ui/badge.tsx",
@@ -3626,13 +3714,12 @@
       "packages/ui/src/components/virtualWindow.ts",
       "packages/ui/src/index.ts",
       "packages/ui/src/inkFourContrast.test.ts",
-      "packages/ui/src/primitivesContrast.test.ts"
+      "packages/ui/src/primitivesContrast.test.ts",
+      "packages/ui/src/rawPxBudget.test.ts",
+      "packages/ui/src/test/dom.ts"
     ]
   },
-  "unassigned": [
-    "packages/db/src/repositories/outcomeMetricsRepository.ts",
-    "packages/db/src/repositories/usageEventRepository.ts"
-  ],
+  "unassigned": [],
   "warnings": [],
   "dependencies": {
     "types": [],

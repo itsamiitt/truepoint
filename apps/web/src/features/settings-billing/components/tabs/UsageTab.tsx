@@ -26,7 +26,7 @@ export function UsageTab() {
   } = useUsageHistory();
 
   return (
-    <Card style={{ padding: 24 }}>
+    <Card style={{ padding: "var(--tp-space-6)" }}>
       <div className={styles.cardHead}>
         <span className={styles.cardLabel}>Usage history</span>
         <div className={styles.usageControls}>

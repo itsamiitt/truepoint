@@ -514,6 +514,7 @@ contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
     contactEmploymentResponse.parse({
       resolved: true,
       employment: stints.map((s) => ({
+        group_key: s.groupKey,
         company_name: s.companyName,
         org_kind: s.orgKind,
         title: s.title,
@@ -521,6 +522,8 @@ contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
         seniority_level: s.seniorityLevel,
         started_on: s.startedOn,
         ended_on: s.endedOn,
+        start_precision: s.startPrecision,
+        end_precision: s.endPrecision,
         is_current: s.isCurrent,
         is_primary: s.isPrimary,
         confidence: s.confidence === null ? null : Number(s.confidence),

@@ -26,6 +26,7 @@ import {
 } from "../accountFilterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
+import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
 import { TermOptionChips } from "./TermOptionChips";
@@ -93,6 +94,7 @@ function GroupSection({
   );
   return (
     <section className={styles.group}>
+      {/* Raw <button>: the same accordion section header as FilterPanel's — see the note there. */}
       <button
         type="button"
         aria-expanded={open}
@@ -135,6 +137,9 @@ function FacetControl({
   onChange: (q: AccountQuery) => void;
   counts?: Map<string, number>;
 }) {
+  // Every control carries its own scope mark, so "this filter will not search the database" is visible
+  // before the click rather than only in the notice above the grid afterwards.
+  const scopeNote = <FacetScopeBadge scope={facet.scope} />;
   if (facet.kind === "range")
     return (
       <RangeControl
@@ -143,9 +148,18 @@ function FacetControl({
         unit={facet.unit}
         query={query}
         onChange={onChange}
+        scopeNote={scopeNote}
       />
     );
-  return <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} />;
+  return (
+    <TermFacet
+      facet={facet}
+      query={query}
+      onChange={onChange}
+      counts={counts}
+      scopeNote={scopeNote}
+    />
+  );
 }
 
 function TermFacet({
@@ -153,17 +167,33 @@ function TermFacet({
   query,
   onChange,
   counts,
+  scopeNote,
 }: {
   facet: Extract<AccountFacetDef, { kind: "term" }>;
   query: AccountQuery;
   onChange: (q: AccountQuery) => void;
   counts?: Map<string, number>;
+  scopeNote?: ReactNode;
 }) {
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
   const typeaheadKey = facet.input === "typeahead" ? TYPEAHEAD_FACET_KEY[facet.field] : undefined;
+  // `counts` input: the options ARE the live facet counts. Used for a field that is a free-text display
+  // string with no suggest index (revenue_range), where a hardcoded chip list would be guesswork and a
+  // typeahead has nothing to query — this way the picker offers exactly the values the data contains,
+  // most common first.
+  const countOptions =
+    facet.input === "counts"
+      ? [...(counts ?? new Map())]
+          .filter(([key]) => key.startsWith(`${facet.field}:`))
+          .sort((a, b) => b[1] - a[1])
+          .map(([key]) => {
+            const value = key.slice(facet.field.length + 1);
+            return { value, label: value };
+          })
+      : null;
   // A value applied in EITHER direction is never offered again — it can never be both included and excluded.
-  const options = (facet.options ?? []).filter((o) => !applied.has(o.value));
+  const options = (countOptions ?? facet.options ?? []).filter((o) => !applied.has(o.value));
   const add = (op: TermOp, value: string) =>
     onChange(addTermCondition(query, facet.field, op, value));
 
@@ -198,6 +228,7 @@ function TermFacet({
       label={facet.label}
       conditions={conditions}
       excludeNoun="Accounts"
+      scopeNote={scopeNote}
       onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
       renderPicker={picker}
     />
@@ -251,12 +282,14 @@ function RangeControl({
   unit,
   query,
   onChange,
+  scopeNote,
 }: {
   field: string;
   label: string;
   unit?: string;
   query: AccountQuery;
   onChange: (q: AccountQuery) => void;
+  scopeNote?: ReactNode;
 }) {
   const { gte, lte } = getRange(query, field);
   // Same draft-buffer as the Contacts panel's RangeControl: the query is the cache key for the account search
@@ -268,9 +301,12 @@ function RangeControl({
   const fromInput = (s: string): number | undefined => (s ? Number(s) : undefined);
   return (
     <div className={styles.facet}>
-      <span className={styles.facetLabel}>
-        {label}
-        {unit ? ` (${unit})` : ""}
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>
+          {label}
+          {unit ? ` (${unit})` : ""}
+        </span>
+        {scopeNote}
       </span>
       <div className={styles.rangeRow}>
         <TpInput

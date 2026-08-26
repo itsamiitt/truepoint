@@ -16,7 +16,14 @@ import type React from "react";
 
 export const ink = "var(--tp-ink, #111827)";
 export const ink2 = "var(--tp-ink-2, #374151)";
+/** The muted TEXT colour. 4.83:1 on --tp-surface — the lightest ink that still clears WCAG 2.2 AA. */
 export const ink3 = "var(--tp-ink-3, #6b7280)";
+/**
+ * NOT FOR RUNNING TEXT. --tp-ink-4 is 2.54:1 on --tp-surface: it fails AA for body copy and fails the 3:1
+ * non-text minimum for anything a user has to operate. Legitimate uses are the ones the contrast minimums
+ * exempt or do not reach — a DISABLED control, and decoration. Muted copy, labels, captions, timestamps,
+ * metadata, avatar monograms and enabled icon glyphs are all TEXT or UI: they take `ink3`.
+ */
 export const ink4 = "var(--tp-ink-4, #9ca3af)";
 export const hairline = "var(--tp-hairline, #f0f0f0)";
 export const hairline2 = "var(--tp-hairline-2, #e5e7eb)";
@@ -54,12 +61,12 @@ export function SectionLabel({
           fontWeight: 600,
           letterSpacing: "0.06em",
           textTransform: "uppercase",
-          color: ink4,
+          color: ink3,
         }}
       >
         {children}
       </span>
-      {right ? <span style={{ fontSize: 11, color: ink4 }}>{right}</span> : null}
+      {right ? <span style={{ fontSize: 11, color: ink3 }}>{right}</span> : null}
     </div>
   );
 }
@@ -84,6 +91,9 @@ export function Button({
   disabled = false,
   busy = false,
   title,
+  buttonRef,
+  hasPopup,
+  expanded,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -92,14 +102,22 @@ export function Button({
   disabled?: boolean;
   busy?: boolean;
   title?: string;
+  /** For a trigger that has to be re-focused after its popup closes. Named, not `ref`, so it stays typed. */
+  buttonRef?: React.RefObject<HTMLButtonElement | null>;
+  /** Both of these together, or neither: a disclosure trigger must say what it opens AND whether it is open. */
+  hasPopup?: "menu" | "listbox" | "dialog";
+  expanded?: boolean;
 }): React.ReactElement {
   return (
     <button
       type="button"
+      ref={buttonRef}
       title={title}
       onClick={onClick}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
+      aria-haspopup={hasPopup}
+      aria-expanded={hasPopup ? Boolean(expanded) : undefined}
       style={{
         ...VARIANT[variant],
         width: full ? "100%" : undefined,
@@ -107,7 +125,7 @@ export function Button({
         minHeight: 32,
         padding: "7px 12px",
         borderRadius: "var(--radius, 8px)",
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: 600,
         fontFamily: "inherit",
         cursor: disabled || busy ? "default" : "pointer",
@@ -124,8 +142,13 @@ export type BadgeTone = "success" | "warning" | "muted";
 
 const TONE: Record<BadgeTone, { fg: string; bg: string; glyph: string }> = {
   // The glyph is not decoration: it is what carries the meaning for anyone who cannot separate the hues.
-  success: { fg: "var(--success, #059669)", bg: "rgba(5,150,105,0.10)", glyph: "✓" },
-  warning: { fg: "var(--warning, #d97706)", bg: "rgba(217,119,6,0.10)", glyph: "!" },
+  //
+  // The -700 tone on the -50 tint, not the base colour on an ad-hoc 10% wash: --success is 3.30:1 on white
+  // and --warning 3.19:1, which is fine behind a status dot and below the 4.5:1 floor for the LABEL, and
+  // tokens.css says exactly that ("Status colour on TEXT → the -700"). The DS ships these as a designed
+  // pair — --success-700 on --success-50 is 4.71:1, --warning-700 on --warning-50 is 4.62:1.
+  success: { fg: "var(--success-700, #15803d)", bg: "var(--success-50, #eaf6ee)", glyph: "✓" },
+  warning: { fg: "var(--warning-700, #b45309)", bg: "var(--warning-50, #fdf3e7)", glyph: "!" },
   muted: { fg: ink3, bg: surface3, glyph: "·" },
 };
 
@@ -168,7 +191,7 @@ export function Chip({ children }: { children: React.ReactNode }): React.ReactEl
         borderRadius: "var(--tp-radius-sm, 6px)",
         background: surface3,
         color: ink2,
-        fontSize: 11.5,
+        fontSize: 12,
       }}
     >
       {children}
@@ -185,7 +208,16 @@ export function Well({
   style?: React.CSSProperties;
 }): React.ReactElement {
   return (
-    <div style={{ background: surface2, borderRadius: 12, padding: 14, ...style }}>{children}</div>
+    <div
+      style={{
+        background: surface2,
+        borderRadius: "var(--tp-radius-card, 14px)",
+        padding: 14,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -217,7 +249,7 @@ export function Skeleton({
 
 /** A muted one-liner: the empty state for a section that simply has nothing to show. */
 export function Muted({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <div style={{ fontSize: 12.5, color: ink3, lineHeight: 1.5 }}>{children}</div>;
+  return <div style={{ fontSize: 13, color: ink3, lineHeight: 1.5 }}>{children}</div>;
 }
 
 /** The in-surface error, with the retry. Never a toast — an error about THIS panel belongs in it. */
@@ -280,8 +312,8 @@ export function KeyValue({
         borderBottom: `1px solid ${hairline}`,
       }}
     >
-      <span style={{ width: 96, flex: "none", fontSize: 12, color: ink4 }}>{label}</span>
-      <span style={{ flex: 1, fontSize: 12.5, color: ink2 }}>{children}</span>
+      <span style={{ width: 96, flex: "none", fontSize: 12, color: ink3 }}>{label}</span>
+      <span style={{ flex: 1, fontSize: 13, color: ink2 }}>{children}</span>
     </div>
   );
 }

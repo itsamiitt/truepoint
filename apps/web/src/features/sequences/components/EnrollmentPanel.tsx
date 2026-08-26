@@ -42,7 +42,7 @@ export function EnrollmentPanel({
 
   return (
     <Drawer open onClose={onClose} title={sequence.name} width={620}>
-      <p className={styles.cardHint} style={{ marginBottom: 16 }}>
+      <p className={styles.cardHint} style={{ marginBottom: "var(--tp-space-4)" }}>
         {SEQUENCE_STATUS_LABEL[sequence.status]} · {sequence.enrolledCount} enrolled ·{" "}
         {sequence.stepCount} step{sequence.stepCount === 1 ? "" : "s"}
       </p>

@@ -42,6 +42,7 @@ export function DocsSearch() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [search, setSearch] = useState<typeof SearchFn | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // The corpus is ~37 kB of prose — every guide, endpoint table and trust section, flattened. Statically
   // imported it lands in the chunk the root layout shares with EVERY page, so the landing page would pay for
@@ -49,9 +50,19 @@ export function DocsSearch() {
   // moment someone shows intent to search and cached for the rest of the session. Focus always precedes
   // typing (including via the "/" shortcut, which focuses), so in practice it has arrived before the first
   // keystroke; the panel says "Loading…" rather than "no matches" for the case where it has not.
+  //
+  // AND THE CHUNK CAN FAIL TO ARRIVE. This import had no rejection path, so a failed fetch — the ordinary
+  // case of a client left open across a deploy that has since expired the old chunk, plus every flaky
+  // network — left `search` null forever and the panel spinning on "Loading…" with nothing to act on. The
+  // rejection handler turns that into a state the reader can see, and because `load()` runs again on the
+  // next keystroke, typing IS the retry.
   const load = useCallback(() => {
     if (search) return;
-    void import("@/content/searchIndex.ts").then((module_) => setSearch(() => module_.searchDocs));
+    setLoadFailed(false);
+    void import("@/content/searchIndex.ts").then(
+      (module_) => setSearch(() => module_.searchDocs),
+      () => setLoadFailed(true),
+    );
   }, [search]);
 
   const hits = useMemo(() => (open && search ? search(query, LIMIT) : []), [open, search, query]);
@@ -200,7 +211,14 @@ export function DocsSearch() {
 
       {open && query.trim().length > 0 ? (
         <div className={styles.panel}>
-          {search === null ? (
+          {loadFailed ? (
+            // role="alert" because this one is not a result the reader can wait out: search is down until
+            // the chunk arrives, and nothing else on screen says so.
+            <p className={styles.empty} role="alert">
+              Search is unavailable — the index could not be loaded. Keep typing to try again, or
+              use the sidebar to browse the reference.
+            </p>
+          ) : search === null ? (
             <p className={styles.empty}>Loading…</p>
           ) : hits.length === 0 ? (
             <p className={styles.empty}>

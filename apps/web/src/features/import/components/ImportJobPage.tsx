@@ -198,7 +198,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 4,
+              gap: "var(--tp-space-1)",
               color: "var(--tp-ink-3)",
             }}
           >
@@ -232,7 +232,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
               <Spinner />
             </div>
           ) : (
-            <div className={styles.drawerBody} style={{ padding: 12 }}>
+            <div className={styles.drawerBody} style={{ padding: "var(--tp-space-3)" }}>
               <div className={styles.drawerStatusRow}>
                 <StatusBadge tone={stateTone(status)}>{stateShortLabel(status)}</StatusBadge>
               </div>
@@ -253,7 +253,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
               {summary ? (
                 <div>
                   <span className={styles.sectionLabel}>Results</span>
-                  <div className={styles.statGrid} style={{ marginTop: 8 }}>
+                  <div className={styles.statGrid} style={{ marginTop: "var(--tp-space-2)" }}>
                     <Stat label="Created" value={summary.created.toLocaleString()} />
                     <Stat label="Updated" value={summary.updated.toLocaleString()} />
                     <Stat label="Duplicates" value={summary.duplicates.toLocaleString()} />
@@ -281,13 +281,19 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
 
               {terminal && isV2 && rejectedCount > 0 ? (
                 mayDownloadArtifacts ? (
-                  <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
+                  <p
+                    className={styles.muted}
+                    style={{ margin: 0, fontSize: "var(--tp-text-body)" }}
+                  >
                     These files contain the affected rows’ contact data — handle and share them
                     securely.
                   </p>
                 ) : (
                   // 10 §2.1 artifact gate (creator ∪ elevated, member+): an honest line, not a hidden section.
-                  <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
+                  <p
+                    className={styles.muted}
+                    style={{ margin: 0, fontSize: "var(--tp-text-body)" }}
+                  >
                     Only the importer or a workspace admin can download the error files.
                   </p>
                 )

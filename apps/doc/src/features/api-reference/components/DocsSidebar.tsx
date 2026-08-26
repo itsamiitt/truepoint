@@ -1,68 +1,84 @@
 "use client";
 
-// DocsSidebar.tsx — the reference index.
+// DocsSidebar.tsx — the reference index, as the design's grouped rail: a filter box, Tools above the prose,
+// then the guides and the contract, each entry carrying a left cobalt indicator when it is the current page.
 //
-// Generated from the guide list and the endpoint contract, so adding either gives it navigation for free.
-// Client-side only to read the pathname for `aria-current` — the same reason SiteHeader is a client
-// component, and the same reason it matters: the highlight is the visual echo, the attribute is what a
-// screen reader actually announces.
+// Client-side for two reasons now. The pathname drives `aria-current` — the highlight is the visual echo, the
+// attribute is what a screen reader actually announces — and the filter box holds state. The filter is a pure
+// array scan over ~11 labels (sidebarEntries.ts), not a search: site search is the masthead combobox, which
+// reads body text and reaches every page on the site. This only narrows a list already on screen, which is
+// why it needs no listbox semantics — the links stay links, and there are simply fewer of them.
 
-import { ENDPOINTS } from "@/content/endpoints/index.ts";
-import { GUIDES } from "@/content/guides/index.ts";
+import { useAssistant } from "@/components/AssistantContext.tsx";
+import { TpButton, TpInput } from "@leadwolf/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import styles from "../api-reference.module.css";
-
-interface Entry {
-  readonly href: string;
-  readonly label: string;
-}
-
-const GUIDE_ENTRIES: readonly Entry[] = [
-  { href: "/docs", label: "Quickstart" },
-  ...GUIDES.map((guide) => ({ href: `/docs/${guide.slug}`, label: guide.title })),
-  // Neither of these is a Guide: one renders a console and one renders a generated document, so neither has
-  // a content module of blocks to be generated from.
-  { href: "/docs/playground", label: "Playground" },
-  { href: "/docs/machine-reference", label: "Machine reference" },
-];
-
-const ENDPOINT_ENTRIES: readonly Entry[] = ENDPOINTS.map((endpoint) => ({
-  href: `/docs/api/${endpoint.slug}`,
-  label: endpoint.title,
-}));
-
-function Group({
-  heading,
-  entries,
-  pathname,
-}: { heading: string; entries: readonly Entry[]; pathname: string }) {
-  return (
-    <div className={styles.sidebarGroup}>
-      <h2 className={styles.sidebarHeading}>{heading}</h2>
-      <ul className={styles.sidebarList}>
-        {entries.map((entry) => (
-          <li key={entry.href}>
-            <Link
-              href={entry.href}
-              className={styles.sidebarLink}
-              aria-current={pathname === entry.href ? "page" : undefined}
-            >
-              {entry.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+import { filterGroups } from "../sidebarEntries.ts";
 
 export function DocsSidebar() {
   const pathname = usePathname();
+  const assistant = useAssistant();
+  const [query, setQuery] = useState("");
+  const groups = filterGroups(query);
+
   return (
     <nav className={styles.sidebar} aria-label="Documentation">
-      <Group heading="Guides" entries={GUIDE_ENTRIES} pathname={pathname} />
-      <Group heading="API reference" entries={ENDPOINT_ENTRIES} pathname={pathname} />
+      <div className={styles.sidebarHead}>
+        <span className={styles.sidebarEyebrow}>Documentation</span>
+        <span className={styles.sidebarStamp}>v1</span>
+      </div>
+
+      <TpInput
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Filter this list"
+        aria-label="Filter documentation"
+        className={styles.sidebarFilter}
+      />
+
+      {groups.map((group) => (
+        <div key={group.heading} className={styles.sidebarGroup}>
+          <h2 className={styles.sidebarHeading}>{group.heading}</h2>
+          <ul className={styles.sidebarList}>
+            {group.entries.map((entry) => (
+              <li key={entry.href}>
+                <Link
+                  href={entry.href}
+                  className={styles.sidebarLink}
+                  aria-current={pathname === entry.href ? "page" : undefined}
+                >
+                  {entry.method ? (
+                    <span
+                      className={`${styles.sidebarMethod} ${
+                        entry.method === "GET" ? styles.sidebarMethodGet : styles.sidebarMethodPost
+                      }`}
+                    >
+                      {entry.method}
+                    </span>
+                  ) : null}
+                  {entry.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {groups.length === 0 ? (
+        <p className={styles.sidebarEmpty}>
+          Nothing in this list matches that. The masthead search reads the body of every page — try
+          it there, or ask the assistant.
+        </p>
+      ) : null}
+
+      <div className={styles.sidebarFoot}>
+        <TpButton variant="secondary" size="sm" full onClick={assistant.open}>
+          Ask the assistant
+        </TpButton>
+      </div>
     </nav>
   );
 }
