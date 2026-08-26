@@ -80,9 +80,7 @@ describe("doRefresh — the stored token is discarded whenever rotation is unpro
 
   it("drops the token on a 401 — it is provably dead", async () => {
     session.set(REFRESH_KEY, "rt-original");
-    stubFetch(
-      async () => new Response(JSON.stringify({ code: "invalid_token" }), { status: 401 }),
-    );
+    stubFetch(async () => new Response(JSON.stringify({ code: "invalid_token" }), { status: 401 }));
 
     const { auth } = moduleUnderTest();
     expect(await auth.refreshNow()).toBe(false);
@@ -108,7 +106,8 @@ describe("doRefresh — the stored token is discarded whenever rotation is unpro
       if (String(input).includes("/me")) return new Response("{}", { status: 200 });
       return new Response(
         JSON.stringify({
-          accessToken: "header.eyJzdWIiOiJ1IiwidGlkIjoidCIsInNpZCI6InMiLCJleHAiOjk5OTk5OTk5OTl9.sig",
+          accessToken:
+            "header.eyJzdWIiOiJ1IiwidGlkIjoidCIsInNpZCI6InMiLCJleHAiOjk5OTk5OTk5OTl9.sig",
           expiresIn: 900,
           refreshToken: "rt-rotated",
         }),

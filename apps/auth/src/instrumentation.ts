@@ -5,7 +5,9 @@
 // ioredis) out of the Edge bundle — the documented Next.js pattern for runtime-specific instrumentation.
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { runSigningKeySelfTest } = await import("./bootSelfTest.ts");
+    const { runMailTransportSelfTest, runSigningKeySelfTest } = await import("./bootSelfTest.ts");
     await runSigningKeySelfTest();
+    // Synchronous and dependency-free (it only reads env), so it cannot delay boot or fail the hook.
+    runMailTransportSelfTest();
   }
 }

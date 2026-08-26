@@ -38,6 +38,40 @@ const DEGRADED_LOG_INTERVAL_MS = 10_000;
 const NOT_REVOKED_MEMO_TTL_MS = 1_000;
 const notRevokedMemo = new Map<string, number>(); // sid → expiresAt
 
+// The memo needs a CEILING, because nothing else removes an entry. Only `markRevoked` deletes, and that fires
+// for the rare revoke — never for the ~100% of sids that are simply not revoked. Each of those inserted a key
+// that went logically stale after 1s and then sat in the map forever, so an apps/api process accumulated one
+// entry per distinct session id it had ever served, for the life of the process. Sessions rotate every ~14
+// minutes and each rotation mints a NEW sid, so the key space grows with time × active users rather than with
+// concurrent sessions: a slow, permanent leak that no request path would ever surface.
+//
+// A size trigger rather than a timer: an interval would keep an otherwise-idle process awake and needs
+// unref-ing to avoid holding the event loop open in tests and workers. The sweep is amortised over inserts and
+// is cheap precisely because the TTL is 1s — by the time the map is this large, essentially every entry in it
+// is already expired, so one pass reclaims nearly all of them. If a genuine burst leaves it still full, the
+// map is dropped outright: this is a NEGATIVE cache whose only job is saving a Redis round-trip, so discarding
+// it costs latency on the next check and nothing else. It can never turn a revoked session into an allowed one
+// — positive answers are not cached at all.
+export const NOT_REVOKED_MEMO_MAX = 10_000;
+
+/**
+ * Drop expired entries once `memo` reaches `max`; clear it outright if that was not enough.
+ *
+ * Takes the map rather than closing over it so the bound can be tested without Redis — the same shape
+ * `isRateLimitRejection` and `sessionsToEvict` use, and the only part of this module a unit test can reach.
+ */
+export function pruneNotRevokedMemo(
+  memo: Map<string, number>,
+  now: number,
+  max: number = NOT_REVOKED_MEMO_MAX,
+): void {
+  if (memo.size < max) return;
+  for (const [sid, expiresAt] of memo) {
+    if (expiresAt <= now) memo.delete(sid);
+  }
+  if (memo.size >= max) memo.clear();
+}
+
 /** Add a session id to the deny-list for the access-token lifetime (beyond that, any such token is expired). */
 export async function markRevoked(sessionId: string): Promise<void> {
   notRevokedMemo.delete(sessionId);
@@ -69,7 +103,11 @@ export async function isRevoked(sessionId: string): Promise<boolean> {
   }
   try {
     const revoked = (await redis().exists(key(sessionId))) === 1;
-    if (!revoked) notRevokedMemo.set(sessionId, Date.now() + NOT_REVOKED_MEMO_TTL_MS);
+    if (!revoked) {
+      const now = Date.now();
+      pruneNotRevokedMemo(notRevokedMemo, now);
+      notRevokedMemo.set(sessionId, now + NOT_REVOKED_MEMO_TTL_MS);
+    }
     recordAuthMetric("auth_revocation_check_total", { result: revoked ? "revoked" : "allowed" });
     return revoked;
   } catch (err) {

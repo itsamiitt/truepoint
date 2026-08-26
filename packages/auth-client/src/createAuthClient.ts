@@ -155,7 +155,17 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
           token,
           expiresIn: Math.max(1, Math.round((expiresAtMs - Date.now()) / 1000)),
         });
+        return;
       }
+      // WON the election and the refresh still failed. The likeliest cause is the race this whole mechanism
+      // cannot fully prevent: the election is localStorage-backed and therefore per-ORIGIN, while the refresh
+      // cookie is host-scoped to the auth origin and shared by app./admin./forge — so winning here only means
+      // winning among THIS app's tabs, and another app may have rotated the cookie a moment ago. That failure
+      // is transient by construction: the browser now holds the winner's rotated value, so the next attempt
+      // sends it and succeeds. Without a re-arm this tab had no timer at all and coasted on a token with ~60s
+      // left, relying on some component happening to fetch before it expired.
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void scheduledRefresh(), LOCK_TTL_MS);
     } finally {
       releaseRefreshLock(deps);
     }

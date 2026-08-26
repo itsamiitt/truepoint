@@ -34,3 +34,19 @@ export function devCaptureHost(smtpUrl: string): string | null {
 export function isDevCaptureTransport(smtpUrl: string): boolean {
   return devCaptureHost(smtpUrl) !== null;
 }
+
+/**
+ * The transport's HOSTNAME alone, or null if unparseable — the only part of an SMTP URL that is safe to log.
+ *
+ * Exists so the boot self-test can name the relay it is about to trust without ever touching the rest of the
+ * URL: the password component IS the provider API key (`smtps://resend:re_…@smtp.resend.com:465`), so logging
+ * the URL — or an error carrying it — would write a live credential to stdout and into whatever ships logs
+ * onward. Returning only the host makes the safe thing the easy thing at the call site.
+ */
+export function transportHost(smtpUrl: string): string | null {
+  try {
+    return new URL(smtpUrl).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
