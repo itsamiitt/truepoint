@@ -15,7 +15,12 @@ export { HeadcountSection } from "../components/HeadcountSection";
 export { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 export { useAccountSearch } from "../hooks/useAccountSearch";
 export { useAccountTechnologies } from "../hooks/useAccountTechnologies";
-export { activeChips, clearAllFilters } from "../accountFilterGroups";
+export {
+  ACCOUNT_QUICK_FACETS,
+  activeChips,
+  clearAllFilters,
+  isAccountWorkspaceOnlyField,
+} from "../accountFilterGroups";
 export { orgKindCopy } from "../orgKindCopy";
 export { contactsHrefForCompany } from "../searchUrlState";
 // The slice's typed API error. Here rather than in the main barrel for the PA-2 reason above: the accounts

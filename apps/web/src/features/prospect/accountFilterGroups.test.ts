@@ -19,9 +19,9 @@ import {
 const base: AccountQuery = { filters: [], sort: "relevance", limit: 50 };
 
 describe("accountFilterGroups model", () => {
-  test("ACCOUNT_FILTER_GROUPS covers the five firmographic groups + their facet fields", () => {
+  test("ACCOUNT_FILTER_GROUPS covers both tiers (quick first) + their facet fields", () => {
     const ids = ACCOUNT_FILTER_GROUPS.map((g) => g.id);
-    expect(ids).toEqual(["industry", "size", "technographics", "funding", "location"]);
+    expect(ids).toEqual(["quick", "industry", "technographics", "funding"]);
     const fields = ACCOUNT_FILTER_GROUPS.flatMap((g) => g.facets.map((f) => f.field));
     for (const required of [
       "industry",

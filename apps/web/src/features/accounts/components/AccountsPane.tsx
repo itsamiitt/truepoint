@@ -76,7 +76,12 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
         onClose={shell.close}
         tabs={shell.tabs}
       >
-        <AccountFilterPanel query={search.query} onChange={search.setQuery} counts={counts} />
+        <AccountFilterPanel
+          query={search.query}
+          onChange={search.setQuery}
+          counts={counts}
+          scope={shell.workspace.scope}
+        />
       </SearchDrawer>
 
       <section className={styles.indexMain}>

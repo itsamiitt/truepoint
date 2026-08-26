@@ -1,4 +1,5 @@
-// WorkspaceScopeControl.tsx — All / Only mine / Exclude mine (search-consolidation 02 §Workspace-status).
+// WorkspaceScopeControl.tsx — All / Saved / Not saved (search-consolidation 02 §Workspace-status; the
+// vocabulary is decisions.md 2026-08-25's: SAVED = in this workspace, NOT SAVED = in the TruePoint database).
 //
 // This resolves into WHICH ENGINE RUNS rather than into a filter clause, and that is the whole design:
 //
@@ -10,7 +11,8 @@
 // count exact. In All mode the merged grid is two concatenated sorted lists (owned rows always above global
 // ones) — an honest wart inherited from the People tab, and unfixable without either bridging every owned
 // record to Layer 0 or tearing down the leadwolf_app REVOKE wall. Anyone who needs a true sort has the two
-// single-population modes; the labelled divider in the grid keeps All mode legible rather than mysterious.
+// single-population modes; the "Not saved" chip on each database row keeps All mode legible rather than
+// mysterious.
 //
 // It is NOT a field on the global query contract: "is this in MY workspace" is a fact about the caller, not
 // about the company, and putting it in the contract would invite a workspace-dependent predicate into a
@@ -32,8 +34,8 @@ export function parseWorkspaceScope(raw: string | null | undefined): WorkspaceSc
 
 const ITEMS = [
   { value: "all", label: "All" },
-  { value: "mine", label: "In workspace" },
-  { value: "exclude", label: "New to me" },
+  { value: "mine", label: "Saved" },
+  { value: "exclude", label: "Not saved" },
 ];
 
 export function WorkspaceScopeControl({
@@ -48,7 +50,7 @@ export function WorkspaceScopeControl({
       items={ITEMS}
       value={scope}
       onChange={(v) => onChange(v as WorkspaceScope)}
-      aria-label="Filter by whether records are already in your workspace"
+      aria-label="Show everyone, only saved contacts, or only people not yet saved"
     />
   );
 }

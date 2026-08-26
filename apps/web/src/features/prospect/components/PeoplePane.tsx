@@ -35,7 +35,6 @@ import {
   Tooltip,
   TpButton,
   TpChip,
-  TpInput,
 } from "@leadwolf/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
@@ -56,8 +55,8 @@ import { useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { displayName, emailGlyphFor, profileHref } from "../types";
-import { AiSearchBox } from "./AiSearchBox";
+import { resultHeadline } from "../resultHeadline";
+import { displayName, emailGlyphForRow, profileHref } from "../types";
 import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
@@ -71,15 +70,18 @@ const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.Bulk
   ssr: false,
 });
 import type { ProspectRow } from "../databaseRows";
-import { FilterPanel } from "./FilterPanel";
+import { FilterRail } from "./FilterRail";
 import { ProspectToolbar } from "./ProspectToolbar";
+import { QuickStartPresets } from "./QuickStartPresets";
 import { QuickViewDrawer } from "./QuickViewDrawer";
 import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
 import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
 import { SaveSearchPanel } from "./SaveSearchPanel";
+import { SearchBox } from "./SearchBox";
 import { RowSelectCheckbox, SelectAllCheckbox } from "./SelectionControls";
+import { WorkspaceOnlyNotice } from "./WorkspaceOnlyNotice";
 
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
@@ -92,8 +94,8 @@ const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status"
 const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "company", label: "Company" },
-  { key: "email", label: "Email" },
-  { key: "address", label: "Address" },
+  { key: "email", label: "Email status" },
+  { key: "address", label: "Email" },
   { key: "phone", label: "Phone" },
 ];
 const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
@@ -173,6 +175,9 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
 
   const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
   const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
+  // Two different empties need two different words (design interaction rules): nothing asked yet vs. a
+  // filter that excluded everything.
+  const isPristine = !query.text && query.filters.length === 0;
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection). The page
   // holds only the STORE (identity-stable, costs no renders); the checkboxes and the bar host subscribe
@@ -270,12 +275,12 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
       },
       {
         key: "email",
-        header: "Email",
+        header: "Email status",
         align: "center",
         width: 56,
         sortValue: (c) => c.emailStatus,
         cell: (c) => {
-          const g = emailGlyphFor(c);
+          const g = emailGlyphForRow(c);
           const cls =
             g.tone === "ok"
               ? styles.glyphOk
@@ -374,11 +379,12 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         onClose={shell.close}
         tabs={shell.tabs}
       >
-        <FilterPanel
+        <FilterRail
           query={query}
           onChange={setQuery}
           counts={counts}
-          header={
+          scope={shell.workspace.scope}
+          footer={
             <>
               <SaveSearchPanel currentQuery={query} onApply={setQuery} />
               <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
@@ -393,16 +399,17 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             {/* Visible only while the rail is off-canvas (≤768px, collapsed) — otherwise the toggle in the
                 rail itself is the way back, and two openers would be one too many. */}
             <SearchDrawerOpener onOpen={shell.toggle} />
+            {/* The People/Accounts switch lives in the rail; while the rail is collapsed it is mirrored
+                here so the tab is never out of reach (decisions.md 2026-08-25). */}
+            {shell.collapsed ? <span className={styles.headTabs}>{shell.tabs}</span> : null}
             <span className={styles.count}>
-              {loading
-                ? "Loading…"
-                : `${(totalCount ?? hits.length - databaseCount).toLocaleString()}${
-                    totalCapped || (totalCount === undefined && hasMore) ? "+" : ""
-                  } in your workspace${
-                    databaseCount > 0
-                      ? ` · ${databaseCount.toLocaleString()} more in the database`
-                      : ""
-                  }`}
+              {resultHeadline({
+                scope: shell.workspace.scope,
+                loading,
+                saved: totalCount ?? hits.length - databaseCount,
+                savedIsFloor: totalCapped || (totalCount === undefined && hasMore),
+                available: databaseCount,
+              })}
             </span>
           </div>
           <div className={styles.headRight}>
@@ -423,14 +430,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         </div>
 
         <div className={styles.searchRow}>
-          <TpInput
-            type="search"
-            placeholder="Search name, title, company, email, LinkedIn…"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            aria-label="Search prospects"
-          />
-          <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
+          <SearchBox value={textInput} onChange={setTextInput} onApplyQuery={setQuery} />
           <WorkspaceScopeControl
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
@@ -444,6 +444,11 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           onChange={setQuery}
           onClearAll={() => setQuery(clearAllFilters(query))}
         />
+        {/* A saved-only filter narrows the list to saved contacts — say so, instead of letting the
+            database half vanish silently. Moot when the scope already excludes the database half. */}
+        {shell.workspace.includeDatabase ? (
+          <WorkspaceOnlyNotice query={query} onChange={setQuery} />
+        ) : null}
 
         {
           <StateSwitch
@@ -453,11 +458,31 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             onRetry={reload}
             skeleton={<TableSkeleton rows={10} />}
             emptyState={
-              <EmptyState
-                icon={<Users size={28} />}
-                title="No matches"
-                description="No contacts match this search. Adjust your filters or import more from the Import surface."
-              />
+              isPristine ? (
+                <div className={styles.emptyWrap}>
+                  <EmptyState
+                    icon={<Users size={28} />}
+                    title="Search the TruePoint database"
+                    description="Filter by title, location or company — or start from one of these."
+                  />
+                  <QuickStartPresets onApply={setQuery} />
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<Users size={28} />}
+                  title="No matches"
+                  description="No people match these filters."
+                  action={
+                    <TpButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setQuery(clearAllFilters({ ...query, text: undefined }))}
+                    >
+                      Clear all filters
+                    </TpButton>
+                  }
+                />
+              )
             }
           >
             <DataTable

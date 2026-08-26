@@ -30,7 +30,7 @@ export { displayName, emailGlyphFor, maskedEmail } from "./types";
 export { bulkEnrich, bulkEstimate } from "./bulkActionsApi";
 
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
-// Wire useProspectSearch() into PeoplePane's grid; FilterPanel renders FILTER_GROUPS inside the shell drawer.
+// Wire useProspectSearch() into PeoplePane's grid; FilterRail renders the two filter tiers inside the shell drawer.
 
 export { FacetTypeahead } from "./components/FacetTypeahead";
 export { useTypeahead } from "./hooks/useTypeahead";
@@ -68,9 +68,9 @@ export {
   countAccounts,
 } from "./accountSearchApi";
 
-// AI NL→search (23, ADR-0023): the natural-language box + the validated-filter preview. The box compiles
-// NL → a validated contactQuery and applies it on confirm via useProspectSearch (human-in-the-loop).
-export { AiSearchBox } from "./components/AiSearchBox";
+// AI NL→search (23, ADR-0023): the "Describe" mode of SearchBox compiles NL → a validated contactQuery and
+// applies it on confirm via useProspectSearch (human-in-the-loop); the preview is exported for reuse.
+export { SearchBox } from "./components/SearchBox";
 export { ParsedFilterPreview } from "./components/ParsedFilterPreview";
 // Record-customization tag layer (ADR-0028, G-REV-6): tag chip + picker (RecordDetail) + the workspace-tag
 // + tagged-records hooks the filter rail uses.

@@ -884,3 +884,102 @@
   background: var(--tp-cobalt);
   opacity: 0.85;
 }
+
+/* ── Two-tier rail + the merged search box (decisions.md 2026-08-25) ───────────────────────────────────── */
+.semantics {
+  margin: 0;
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.quickPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tier {
+  border-top: 1px solid var(--tp-hairline);
+}
+.tierHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.tierHead > :last-child {
+  margin-left: auto;
+}
+.tierTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+  border: 1px solid var(--tp-hairline);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.tierNote {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+.notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+  padding: 6px 10px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+}
+.presets {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 16px;
+}
+.presetsLabel {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+.emptyWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.headTabs {
+  display: inline-flex;
+}
+.searchBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.searchBoxRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.searchBoxRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}

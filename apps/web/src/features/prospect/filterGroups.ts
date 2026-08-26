@@ -1,10 +1,16 @@
-// filterGroups.ts — the declarative model for the Apollo/ZoomInfo-style filter sidebar (24): the collapsible
-// groups + their facets, and the pure, immutable helpers that read/update a server `ContactQuery` from UI
-// interactions (multi-select within a facet = OR; across facets = AND, enforced server-side). The rebuilt
-// FilterPanel renders from FILTER_GROUPS and calls these helpers; the removable pills + clear-all read
-// `activeChips`. Pure module — no React/DOM — so it is fully unit-tested. Only contract-backed facets appear
-// here (search.ts FacetKey/boolFilter/range); tags/lists, last-contacted channel, and job-change/hiring
-// signals need contract/data extensions and are intentionally deferred (documented follow-ups).
+// filterGroups.ts — the declarative model for the filter rail (24; decisions.md 2026-08-25) and the pure,
+// immutable helpers that read/update a server `ContactQuery` from UI interactions (multi-select within a
+// facet = OR; across facets = AND, enforced server-side). Two TIERS, and the split is the whole point:
+//   • QUICK filters — exactly the facets BOTH engines answer (the shared set in databaseRows.ts: title,
+//     location, company, industry, seniority, has email, has phone). Always visible. Using one can never make
+//     database people silently vanish — which is what made the old rail confusing.
+//   • ALL filters — everything else, in accordions, labelled "Saved contacts only": owner, status, tags,
+//     verification state, dates, scores… questions about the user's OWN pipeline, which the global graph
+//     cannot answer, so the database half is skipped while any of them is active (toDatabaseQuery → null).
+// FILTER_GROUPS is the union, so label lookups and chips see every facet. Pure module — no React/DOM — so
+// it is fully unit-tested. Only contract-backed facets appear here (search.ts FacetKey/boolFilter/range);
+// tags/lists, last-contacted channel, and job-change/hiring signals need contract/data extensions and are
+// intentionally deferred (documented follow-ups).
 
 import {
   type BoolFilterField,
@@ -15,6 +21,7 @@ import {
   outreachStatus,
   seniorityLevel,
 } from "@leadwolf/types";
+import { SHARED_BOOL_FIELDS, SHARED_TERM_FIELDS } from "./databaseRows";
 
 export type TermOp = "include" | "exclude";
 
@@ -32,6 +39,8 @@ export type FacetDef =
       /** options = fixed enum chips; typeahead = high-cardinality (suggest); owner = teammate picker (+ Me). */
       input: "options" | "typeahead" | "owner";
       options?: FacetOption[];
+      /** An EXAMPLE of the input ("e.g. VP Sales, CTO") — never the label's job (writing rules). */
+      placeholder?: string;
     }
   | { kind: "bool"; field: BoolFilterField; label: string }
   | { kind: "range"; field: string; label: string; valueKind: "number" | "date"; unit?: string };
@@ -70,30 +79,58 @@ const SOURCE_FACET_OPTIONS: FacetOption[] = [
   { value: "sales_navigator", label: "Sales Navigator export" },
 ];
 
-// ── The five groups (only contract-backed facets) ──────────────────────────────────────────────────────
-export const FILTER_GROUPS: FilterGroup[] = [
+// ── Tier 1: quick filters — the facets both engines answer ─────────────────────────────────────────────
+export const QUICK_FACETS: FacetDef[] = [
+  {
+    kind: "term",
+    field: "title",
+    label: "Title",
+    input: "typeahead",
+    placeholder: "e.g. VP Sales, CTO",
+  },
+  {
+    kind: "term",
+    field: "location",
+    label: "Location",
+    input: "typeahead",
+    placeholder: "e.g. Bengaluru, London",
+  },
+  {
+    kind: "term",
+    field: "company",
+    label: "Company",
+    input: "typeahead",
+    placeholder: "e.g. Freshworks",
+  },
+  {
+    kind: "term",
+    field: "industry",
+    label: "Industry",
+    input: "typeahead",
+    placeholder: "e.g. Software",
+  },
+  {
+    kind: "term",
+    field: "seniority",
+    label: "Seniority",
+    input: "options",
+    options: optionsOf(seniorityLevel.options),
+  },
+  { kind: "bool", field: "has_email", label: "Has email" },
+  { kind: "bool", field: "has_phone", label: "Has phone" },
+];
+
+// ── Tier 2: all filters — saved contacts only ──────────────────────────────────────────────────────────
+export const ALL_FILTER_GROUPS: FilterGroup[] = [
   {
     id: "person",
-    title: "Person",
-    facets: [
-      { kind: "term", field: "title", label: "Title", input: "typeahead" },
-      {
-        kind: "term",
-        field: "seniority",
-        label: "Seniority",
-        input: "options",
-        options: optionsOf(seniorityLevel.options),
-      },
-      { kind: "term", field: "department", label: "Department", input: "typeahead" },
-      { kind: "term", field: "location", label: "Location", input: "typeahead" },
-    ],
+    title: "Person details",
+    facets: [{ kind: "term", field: "department", label: "Department", input: "typeahead" }],
   },
   {
     id: "company",
-    title: "Company",
+    title: "Company details",
     facets: [
-      { kind: "term", field: "company", label: "Company", input: "typeahead" },
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
       { kind: "term", field: "technology", label: "Technology", input: "typeahead" },
       { kind: "term", field: "funding_stage", label: "Funding stage", input: "typeahead" },
       { kind: "term", field: "company_stage", label: "Company stage", input: "typeahead" },
@@ -135,8 +172,6 @@ export const FILTER_GROUPS: FilterGroup[] = [
         input: "options",
         options: optionsOf(emailStatus.options),
       },
-      { kind: "bool", field: "has_email", label: "Has email" },
-      { kind: "bool", field: "has_phone", label: "Has phone" },
       { kind: "bool", field: "has_linkedin", label: "Has LinkedIn" },
       { kind: "bool", field: "complete", label: "Complete record" },
       { kind: "bool", field: "duplicate", label: "Likely duplicate" },
@@ -157,6 +192,51 @@ export const FILTER_GROUPS: FilterGroup[] = [
       { kind: "range", field: "score", label: "Score", valueKind: "number" },
     ],
   },
+];
+
+export const QUICK_GROUP: FilterGroup = {
+  id: "quick",
+  title: "Quick filters",
+  facets: QUICK_FACETS,
+};
+
+/** Every group, quick tier first — the lookup table for labels and chips. */
+export const FILTER_GROUPS: FilterGroup[] = [QUICK_GROUP, ...ALL_FILTER_GROUPS];
+
+/** A facet only the workspace engine answers — the "Saved contacts only" tier (every range is one). */
+export function isWorkspaceOnlyField(field: string): boolean {
+  return !SHARED_TERM_FIELDS.has(field) && !SHARED_BOOL_FIELDS.has(field);
+}
+
+// ── Quick-start presets: enum-backed, so each one actually returns rows on a young database ───────────
+export interface QuickStartPreset {
+  id: string;
+  label: string;
+  query: ContactQuery;
+}
+
+const preset = (id: string, label: string, filters: FilterClause[]): QuickStartPreset => ({
+  id,
+  label,
+  query: { filters, sort: "relevance", limit: 50 },
+});
+
+export const QUICK_START_PRESETS: QuickStartPreset[] = [
+  preset("founders", "Founders & C-suite with an email", [
+    { kind: "term", field: "seniority", op: "include", values: ["c_suite"] },
+    { kind: "bool", field: "has_email", value: true },
+  ]),
+  preset("vps-phone", "VPs with a phone number", [
+    { kind: "term", field: "seniority", op: "include", values: ["vp"] },
+    { kind: "bool", field: "has_phone", value: true },
+  ]),
+  preset("directors", "Directors and managers", [
+    { kind: "term", field: "seniority", op: "include", values: ["director", "manager"] },
+  ]),
+  preset("reachable", "Anyone with an email and a phone", [
+    { kind: "bool", field: "has_email", value: true },
+    { kind: "bool", field: "has_phone", value: true },
+  ]),
 ];
 
 /** Flat label lookup for a facet field (term/bool/range), for chips + headings. */
@@ -340,6 +420,9 @@ export function hasActiveFilters(query: ContactQuery): boolean {
 export interface ActiveChip {
   id: string;
   label: string;
+  /** The facet the chip belongs to — lets the notice say WHICH filter narrowed the list. */
+  field: string;
+  facet: string;
   remove: (query: ContactQuery) => ContactQuery;
 }
 
@@ -347,19 +430,24 @@ export interface ActiveChip {
 export function activeChips(query: ContactQuery): ActiveChip[] {
   const chips: ActiveChip[] = [];
   for (const c of query.filters) {
+    const facet = facetLabel(c.field);
     if (c.kind === "term") {
       const prefix = c.op === "exclude" ? "Not " : "";
       for (const v of c.values) {
         chips.push({
           id: `t:${c.field}:${c.op}:${v}`,
-          label: `${prefix}${facetLabel(c.field)}: ${optionLabel(c.field, v)}`,
+          label: `${prefix}${facet}: ${optionLabel(c.field, v)}`,
+          field: c.field,
+          facet,
           remove: (q) => toggleTermValue(q, c.field, c.op, v),
         });
       }
     } else if (c.kind === "bool") {
       chips.push({
         id: `b:${c.field}`,
-        label: `${facetLabel(c.field)}: ${c.value ? "Yes" : "No"}`,
+        label: `${facet}: ${c.value ? "Yes" : "No"}`,
+        field: c.field,
+        facet,
         remove: (q) => setBool(q, c.field, undefined),
       });
     } else {
@@ -371,10 +459,17 @@ export function activeChips(query: ContactQuery): ActiveChip[] {
         .join(" · ");
       chips.push({
         id: `r:${c.field}`,
-        label: `${facetLabel(c.field)}: ${parts}`,
+        label: `${facet}: ${parts}`,
+        field: c.field,
+        facet,
         remove: (q) => setRange(q, c.field, undefined, undefined),
       });
     }
   }
   return chips;
+}
+
+/** The active chips that narrow the list to SAVED contacts — what the inline notice names and removes. */
+export function workspaceOnlyChips(query: ContactQuery): ActiveChip[] {
+  return activeChips(query).filter((chip) => isWorkspaceOnlyField(chip.field));
 }

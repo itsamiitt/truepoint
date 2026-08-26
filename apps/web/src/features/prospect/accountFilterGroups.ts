@@ -61,34 +61,40 @@ const FUNDING_STAGES = [
 
 const COMPANY_STAGES = ["startup", "smb", "mid_market", "enterprise"] as const;
 
-// ── The five firmographic groups (only contract-backed facets) ──────────────────────────────────────────
-export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
+// ── Two tiers (decisions.md 2026-08-25) ─────────────────────────────────────────────────────────────────
+// QUICK = exactly the facets the GLOBAL company graph answers too (accountRows.ts SHARED_TERM_FIELDS +
+// SHARED_RANGE_FIELDS — accountRows.test.ts asserts the two agree): always visible, and they never make
+// database companies vanish. ALL = workspace-only firmographics, tagged "Saved accounts only".
+// ACCOUNT_FILTER_GROUPS is the union so label lookups and chips see every facet.
+export const ACCOUNT_SHARED_FIELDS: ReadonlySet<string> = new Set([
+  "industry",
+  "hq_country",
+  "hq_city",
+  "employee_band",
+  "employee_count",
+  "founded_year",
+]);
+
+/** A facet only the workspace engine answers — the "Saved accounts only" tier. */
+export function isAccountWorkspaceOnlyField(field: string): boolean {
+  return !ACCOUNT_SHARED_FIELDS.has(field);
+}
+
+export const ACCOUNT_QUICK_FACETS: AccountFacetDef[] = [
+  { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
+  { kind: "term", field: "hq_country", label: "HQ country", input: "typeahead" },
+  { kind: "term", field: "hq_city", label: "HQ city", input: "typeahead" },
+  { kind: "range", field: "employee_count", label: "Employees", valueKind: "number" },
+  { kind: "range", field: "founded_year", label: "Founded year", valueKind: "number" },
+];
+
+// The old "Size & revenue" group offered company_stage twice — once mislabelled "Revenue" — so a new user
+// saw the same facet under two names. The duplicate is gone; company_stage lives under Funding & stage.
+export const ACCOUNT_ALL_FILTER_GROUPS: AccountFilterGroup[] = [
   {
     id: "industry",
-    title: "Industry",
-    facets: [
-      { kind: "term", field: "industry", label: "Industry", input: "typeahead" },
-      { kind: "term", field: "sub_industry", label: "Sub-industry", input: "typeahead" },
-    ],
-  },
-  {
-    id: "size",
-    title: "Size & revenue",
-    facets: [
-      {
-        kind: "range",
-        field: "employee_count",
-        label: "Employees",
-        valueKind: "number",
-      },
-      {
-        kind: "term",
-        field: "company_stage",
-        label: "Revenue",
-        input: "options",
-        options: optionsOf(COMPANY_STAGES),
-      },
-    ],
+    title: "Industry details",
+    facets: [{ kind: "term", field: "sub_industry", label: "Sub-industry", input: "typeahead" }],
   },
   {
     id: "technographics",
@@ -113,7 +119,6 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
         input: "options",
         options: optionsOf(COMPANY_STAGES),
       },
-      { kind: "range", field: "founded_year", label: "Founded year", valueKind: "number" },
       {
         kind: "range",
         field: "company_age",
@@ -123,14 +128,18 @@ export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
       },
     ],
   },
-  {
-    id: "location",
-    title: "Location",
-    facets: [
-      { kind: "term", field: "hq_country", label: "HQ country", input: "typeahead" },
-      { kind: "term", field: "hq_city", label: "HQ city", input: "typeahead" },
-    ],
-  },
+];
+
+export const ACCOUNT_QUICK_GROUP: AccountFilterGroup = {
+  id: "quick",
+  title: "Quick filters",
+  facets: ACCOUNT_QUICK_FACETS,
+};
+
+/** Every group, quick tier first — the lookup table for labels and chips. */
+export const ACCOUNT_FILTER_GROUPS: AccountFilterGroup[] = [
+  ACCOUNT_QUICK_GROUP,
+  ...ACCOUNT_ALL_FILTER_GROUPS,
 ];
 
 /** Flat label lookup for a facet field (term/range), for chips + headings. */
