@@ -4,7 +4,33 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 
+/**
+ * Reject a server-action POST whose `Origin` is the literal string "null" — BEFORE Next tries to parse it.
+ *
+ * Next's action handler does `new URL(req.headers['origin']).host` with no try/catch
+ * (next/dist/server/app-render/action-handler.js), so `Origin: null` — a real value browsers send for an
+ * opaque origin, and one any client can set — throws `TypeError [ERR_INVALID_URL]` and surfaces as a 500.
+ * Every server action on this origin is affected: sign-in, password reset, MFA, signup.
+ *
+ * This changes NO security decision. Next would refuse the request anyway; it just refused it as an
+ * unhandled exception instead of an answer, which costs a 500 in the logs and an error-rate alert for a
+ * request that was never going to be honoured. Deliberately does NOT strip the header to make the request
+ * look same-origin — that would hand an opaque-origin caller the CSRF pass the check exists to withhold.
+ * A 403 is the outcome the check intends, stated plainly.
+ *
+ * Remove this once the upstream parse is guarded.
+ */
+function isOpaqueOriginAction(request: NextRequest): boolean {
+  return request.method === "POST" && request.headers.get("origin") === "null";
+}
+
 export function middleware(request: NextRequest): NextResponse {
+  if (isOpaqueOriginAction(request)) {
+    return NextResponse.json(
+      { code: "forbidden", title: "Request origin is not allowed" },
+      { status: 403 },
+    );
+  }
   const nonce = crypto.randomUUID().replace(/-/g, "");
   // challenges.cloudflare.com is allow-listed for the Turnstile bot check at the identifier step (ADR-0020).
   const csp = [

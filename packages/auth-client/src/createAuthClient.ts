@@ -19,8 +19,11 @@ import { createPkcePair, randomState } from "./pkce.ts";
 import {
   type ElectionChannel,
   type ElectionDeps,
+  type ElectionStorage,
   LOCK_TTL_MS,
   broadcastRefreshResult,
+  createCookieLockStorage,
+  lockCookieDomain,
   parseRefreshMessage,
   releaseRefreshLock,
   tryAcquireRefreshLock,
@@ -92,6 +95,18 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
       : `${Math.random()}`;
   let electionChannel: ElectionChannel | undefined;
 
+  // The lock store, resolved once. A cookie on the shared parent domain lets the election span app./admin./
+  // forge — which is the whole point, since those three contend for ONE host-scoped refresh cookie while
+  // localStorage would only ever elect among a single origin's tabs. Falls back to localStorage wherever
+  // there is no parent domain to scope a cookie to (localhost, an IP, an apex), which is the old behaviour.
+  let lockStore: ElectionStorage | undefined;
+  function resolveLockStore(): ElectionStorage {
+    if (lockStore) return lockStore;
+    const domain = typeof document === "undefined" ? null : lockCookieDomain(appOrigin);
+    lockStore = domain ? createCookieLockStorage(domain) : localStorage;
+    return lockStore;
+  }
+
   function electionDeps(): ElectionDeps | null {
     if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
     if (!electionChannel && typeof BroadcastChannel !== "undefined") {
@@ -105,7 +120,7 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
       electionChannel = channel;
     }
     return {
-      storage: localStorage,
+      storage: resolveLockStore(),
       channel: electionChannel,
       now: () => Date.now(),
       tabId: TAB_ID,
@@ -136,13 +151,20 @@ export function createAuthClient(config: AuthClientConfig): AuthClient {
       return;
     }
     if (!tryAcquireRefreshLock(deps)) {
-      // Another tab is refreshing. Losing the election used to mean this tab simply stopped: its timer had
-      // already fired and nothing re-armed one, so if the winner's broadcast never arrived — the winner's
-      // refresh failed, its tab was closed mid-flight, or the BroadcastChannel message was missed — this tab
-      // sat with no timer at all until some component happened to fetch. Re-arm a short retry instead. It
-      // costs nothing in the common case (the broadcast lands first, adoptToken replaces this timer with the
-      // full-length one) and it means a lost broadcast degrades to a slightly late refresh rather than to
-      // waiting on the next user action.
+      // Another tab — or, now that the lock is a shared-domain cookie, another APP — is refreshing.
+      //
+      // The re-arm matters more in the cross-origin case than it did in the cross-tab one. The broadcast that
+      // shares a winner's token is deliberately per-app (`${storagePrefix}auth`), because an admin tab must
+      // not adopt a token minted for the web audience — the api would reject it. So when the winner is a
+      // DIFFERENT app, this tab will never receive a broadcast at all: it stands down, and its own token has
+      // to come from the on-demand refresh in fetchWithAuth, which now sends the cookie the winner rotated
+      // and succeeds. That is the design, not a gap — one rotation per browser, each app minting its own
+      // audience-correct token from it.
+      //
+      // Without this timer that tab had nothing armed and coasted on a token with ~60s left, waiting for some
+      // component to happen to fetch. With it, a stand-down degrades to a slightly late refresh. In the
+      // same-app case the broadcast usually lands first and adoptToken replaces this timer with a full-length
+      // one, so it costs nothing.
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => void scheduledRefresh(), LOCK_TTL_MS);
       return;

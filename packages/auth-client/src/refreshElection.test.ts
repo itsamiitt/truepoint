@@ -6,8 +6,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   type ElectionDeps,
+  type ElectionStorage,
   LOCK_TTL_MS,
   broadcastRefreshResult,
+  lockCookieDomain,
   parseRefreshMessage,
   releaseRefreshLock,
   tryAcquireRefreshLock,
@@ -125,5 +127,71 @@ describe("result sharing", () => {
     ]) {
       expect(parseRefreshMessage(bad)).toBeNull();
     }
+  });
+});
+
+// ── Cross-ORIGIN election (the shared-domain lock cookie) ───────────────────────────────────────────────
+// localStorage is scoped per ORIGIN, so the election only ever elected among ONE app's tabs — while the
+// refresh cookie is host-scoped to the auth origin and shared by app./admin./forge. Those three contend for
+// a resource none of them could see the others using. A cookie on the shared parent domain is the only
+// coordination channel they have: BroadcastChannel, localStorage, SharedWorker and Web Locks are all
+// origin-scoped by design.
+describe("lockCookieDomain", () => {
+  test("widens an app origin to the parent all three consoles share", () => {
+    expect(lockCookieDomain("https://app.truepoint.in")).toBe(".truepoint.in");
+    expect(lockCookieDomain("https://admin.truepoint.in")).toBe(".truepoint.in");
+    expect(lockCookieDomain("https://forge.truepoint.in")).toBe(".truepoint.in");
+  });
+
+  test("returns null where there is no parent to widen to — caller falls back to localStorage", () => {
+    expect(lockCookieDomain("http://localhost:3002")).toBeNull();
+    expect(lockCookieDomain("https://127.0.0.1:3002")).toBeNull();
+    expect(lockCookieDomain("https://truepoint.in")).toBeNull(); // already the apex
+    expect(lockCookieDomain("not-a-url")).toBeNull();
+  });
+});
+
+describe("tryAcquireRefreshLock — a broken store must never wedge refreshing", () => {
+  const deps = (storage: ElectionStorage, tabId = "me"): ElectionDeps => ({
+    storage,
+    now: () => 1_000,
+    tabId,
+  });
+
+  test("PROCEEDS when the store throws on write (Safari private mode)", () => {
+    const throwing: ElectionStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {},
+    };
+    // The failure to avoid is not "two tabs refreshed" — that is the pre-election status quo, forgiven by the
+    // server's rotation grace. It is "every tab stood down and nobody refreshed", which expires the session.
+    expect(tryAcquireRefreshLock(deps(throwing))).toBe(true);
+  });
+
+  test("PROCEEDS when a write reports success but reads back absent (rejected cookie Domain)", () => {
+    const blackhole: ElectionStorage = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    };
+    expect(tryAcquireRefreshLock(deps(blackhole))).toBe(true);
+  });
+
+  test("still STANDS DOWN when the store works and another tab won — the election must still elect", () => {
+    const store = new Map<string, string>();
+    const working: ElectionStorage = {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => {
+        store.set(k, JSON.stringify({ tabId: "other", at: 1_000 }));
+        void v;
+      },
+      removeItem: (k) => {
+        store.delete(k);
+      },
+    };
+    expect(tryAcquireRefreshLock(deps(working))).toBe(false);
   });
 });

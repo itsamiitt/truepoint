@@ -670,9 +670,43 @@ accept the cold-load flash, or (C) remove the race instead of forgiving it — t
 domain `truepoint.in`, so a non-HttpOnly lock cookie scoped there would let the election span all three
 origins, at the cost of a cookie sent to every subdomain on every request. Security has final say.
 
+> **RESOLVED 2026-08-26 — (C).** The operator directed "fix all the issues found in the audit", which settles
+> this as a choice rather than leaving it open. **(A) was NOT taken**, and the distinction is the whole point:
+> A buys back a cosmetic flash by making a revoked refresh token spend for 30 seconds, which is precisely the
+> property rotation exists to deny. C removes the contention instead, and costs no security property at all.
+>
+> Implemented as a lock cookie on the derived parent domain (`lockCookieDomain`, `createCookieLockStorage` in
+> `@leadwolf/auth-client`), so the existing election now spans app./admin./forge instead of electing among one
+> app's tabs while all three rotate the same host-scoped cookie. The cookie carries a tab id and a timestamp —
+> no secret — which is why it can be script-readable; it is `Max-Age`-bounded to the lock TTL so a tab that
+> dies mid-refresh cannot leave a claim outliving its own validity.
+>
+> The domain is DERIVED (drop the leftmost label) rather than configured, because a new `NEXT_PUBLIC_` var
+> would have to be threaded through three apps, the compose file, the template and the Dockerfiles — one more
+> thing that can be set wrong in exactly the way nobody notices. A wrong derivation is safe: browsers refuse a
+> `Domain` that is not a suffix of the host and refuse a public suffix outright, so the cookie simply never
+> sets. That exposed a REAL latent bug worth recording on its own — `tryAcquireRefreshLock` treated an
+> unwritable store as "someone else holds the lock", so a store that silently dropped writes (a rejected
+> cookie domain, or Safari private mode throwing on `localStorage.setItem`) would have made **every** tab
+> stand down and nobody refresh, silently expiring the session. It now fails toward refreshing: two tabs
+> refreshing is the pre-election status quo and is forgiven by the server's grace; nobody refreshing is not.
+
 **Also worth an operator's attention, not a decision:** `deploy/env.production.template` ships `SMTP_URL=`
 empty. That is correct for the template (the key is injected as a secret and must never be committed), but it
 means password reset, email verification and magic links deliver nothing wherever the secret was not actually
-supplied. The auth app now reports this at BOOT — grep for `auth.boot.FATAL.mail_transport_unset` — instead
-of only at send time, where the enumeration-safe response made a dead relay indistinguishable from a working
-one.
+supplied. The auth app reports this at BOOT — grep for `auth.boot.FATAL.mail_transport_unset` — and, since
+2026-08-26, `deploy.sh` FAILS THE DEPLOY on an unset or dev-capture transport rather than shipping a stack
+whose password reset is switched off. `ALLOW_UNCONFIGURED_MAIL=true` accepts a mail-less stack deliberately,
+which is the right shape for a preview box and the wrong one for production.
+
+**One more upstream defect found while verifying the fixes in a real browser, recorded because it is not
+ours to fix.** Next's server-action handler parses the `Origin` header with an unguarded
+`new URL(req.headers['origin']).host`
+(`next/dist/server/app-render/action-handler.js`). `Origin: null` is a real value browsers send for an opaque
+origin, and any client can set it, so every server action on the auth origin — sign-in, reset, MFA, signup —
+answered `500` instead of a refusal. Confirmed by isolation: it reproduced identically on an action the audit
+never touched, and supplying a valid `Origin` made the same action proceed. `apps/auth/src/middleware.ts` now
+returns a plain `403` for that case. That changes NO security decision — Next would have refused the request
+anyway — it just refuses it as an answer rather than as an unhandled exception. It deliberately does not
+STRIP the header, which would hand an opaque-origin caller the CSRF pass the check exists to withhold. Remove
+the guard once the upstream parse is fixed.

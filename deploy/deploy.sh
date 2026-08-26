@@ -163,6 +163,46 @@ else
   exit 1
 fi
 
+# ── Mail transport: a deploy that cannot send is a deploy with password reset switched off ──────────────
+# This gate exists because the failure it catches already shipped, twice, and stayed invisible both times.
+# AUTH-061 pointed production at MailHog, which captures mail on-box and delivers none of it. Then
+# env.production.template shipped SMTP_URL= empty. In both cases reset, email verification and magic links
+# were dead, and NOTHING said so: the /forgot response is enumeration-safe by design, so a working relay and
+# a missing one produce the identical page, and the only signal was a log line written at SEND time — i.e.
+# in the moment a real user was already failing to reset their password.
+#
+# Checked here rather than only at boot because this is the last point where the answer can still change
+# something: a red deploy gets fixed, a warning in deploy output scrolls past.
+#
+# Overridable ON PURPOSE, matching how lint:prod-switches treats arming a kill-switch — a preview or staging
+# stack legitimately has no relay, and that should be a deliberate line in the env file rather than a reason
+# to weaken the check for everyone.
+echo "==> Verifying the mail transport can actually deliver…"
+if "${COMPOSE[@]}" exec -T -w /app/apps/auth auth bun -e "
+const url = process.env.SMTP_URL ?? '';
+if (process.env.ALLOW_UNCONFIGURED_MAIL === 'true') {
+  console.log('  SKIPPED — ALLOW_UNCONFIGURED_MAIL=true'); process.exit(0);
+}
+if (!url) { console.error('  SMTP_URL is UNSET — reset/verification/magic-link email will not be sent.'); process.exit(1); }
+// Same host list as apps/auth/src/lib/mailTransport.ts. Kept in sync by this comment and nothing else,
+// which is acceptable only because the list is a handful of well-known dev tools that never grows.
+const capture = new Set(['mailhog','mailpit','maildev','localhost','127.0.0.1','::1','0.0.0.0']);
+let host;
+try { host = new URL(url).hostname.toLowerCase(); } catch { console.error('  SMTP_URL is not a valid URL.'); process.exit(1); }
+const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1,-1) : host;
+if (capture.has(bare)) { console.error('  SMTP_URL points at ' + bare + ' — a dev mail-CAPTURE host. Mail is captured on-box, never delivered.'); process.exit(1); }
+console.log('  Transport host: ' + bare);
+process.exit(0);
+"; then
+  echo "==> Mail transport OK."
+else
+  echo "ERROR: the auth container cannot deliver email — password reset, email verification and magic links"
+  echo "       would all fail SILENTLY (the /forgot response is identical either way, by design)."
+  echo "       Set SMTP_URL to a real relay (see deploy/env.production.template), or set"
+  echo "       ALLOW_UNCONFIGURED_MAIL=true in the env file to accept a mail-less stack deliberately."
+  exit 1
+fi
+
 # The developer portal is fully prerendered and depends on nothing, so "did it come up" is the whole check —
 # but it is also the one origin the public and search crawlers see, so a silent failure there is invisible
 # until someone reports a dead docs link. Non-fatal: the portal being down must never block a deploy that

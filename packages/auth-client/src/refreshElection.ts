@@ -84,12 +84,100 @@ export function tryAcquireRefreshLock(deps: ElectionDeps): boolean {
     return false; // someone else holds a live claim
   }
 
-  deps.storage.setItem(LOCK_KEY, JSON.stringify({ tabId: deps.tabId, at: now }));
+  try {
+    deps.storage.setItem(LOCK_KEY, JSON.stringify({ tabId: deps.tabId, at: now }));
+  } catch {
+    // The store refused the write — Safari private mode throws on localStorage.setItem, and a cookie store
+    // silently drops a Domain the browser rejects. FAIL TOWARD REFRESHING: return true so this tab proceeds.
+    // The failure to avoid is not "two tabs refreshed", which is merely the pre-election status quo and is
+    // forgiven by the server's rotation grace — it is "every tab stood down and nobody refreshed", which
+    // silently expires the session. A lock that cannot be written must never be read as "someone else holds
+    // it".
+    return true;
+  }
+
   // Write-then-reread. Two tabs passing the check above both write; the last write wins and the other sees a
   // foreign id here and stands down. This is the whole of the mutual exclusion, and it is why the comment at
   // the top calls the election sloppy rather than correct.
   const confirmed = readClaim(deps.storage);
-  return confirmed?.tabId === deps.tabId;
+  // A write that reported success but reads back as ABSENT means the store is not functioning as one (a
+  // rejected cookie domain is the realistic case). Same reasoning as the catch above — proceed rather than
+  // let a broken lock convince every tab to stand down. A foreign id, by contrast, is the election working:
+  // someone else won, so stand down.
+  if (confirmed === null) return true;
+  return confirmed.tabId === deps.tabId;
+}
+
+// ── Cross-ORIGIN election (the shared-domain lock cookie) ───────────────────────────────────────────────
+//
+// THE DEFECT THIS CLOSES. localStorage is scoped per ORIGIN, so the election above only ever elected among
+// one app's tabs. But the refresh cookie is host-scoped to the auth origin, which means app./admin./forge
+// share ONE cookie — a resource none of them could see the others contending for. Two of those apps open in
+// the same browser therefore rotated the same cookie concurrently, every time, by construction. The server
+// forgives that race now (ConcurrentRotationError leaves the cookie alone) and the client retries through
+// it, but forgiving a race is not the same as not having one: the loser still burns a round-trip, and on a
+// cold load it can still reach the login redirect before the retry helps.
+//
+// A cookie on the shared parent domain is the only coordination channel these three origins actually have.
+// BroadcastChannel, localStorage, SharedWorker and the Web Locks API are all origin-scoped by design; a
+// cookie is the one browser store keyed by DOMAIN rather than by origin.
+//
+// It holds no secret — a tab id and a timestamp, the same claim the localStorage path writes — so it is
+// deliberately NOT HttpOnly (script has to read and write it) and its readability is not a weakness. It is
+// short-lived (Max-Age = the lock TTL) so an abandoned claim disappears on its own even if a tab dies
+// without releasing it.
+const LOCK_COOKIE = "tp_refresh_lock";
+
+/**
+ * The parent domain to scope the lock cookie to, derived from an app origin by dropping the leftmost label:
+ * `https://app.truepoint.in` → `.truepoint.in`, which app./admin./forge all match.
+ *
+ * Derived rather than configured because every alternative is worse in this codebase: a new NEXT_PUBLIC_ env
+ * would need adding to three apps, the compose file, the production template and the Dockerfiles, and would
+ * be one more thing that can be set wrong in exactly the way nobody notices. Returns null when there is no
+ * parent to speak of (localhost, an IP, a bare apex) so the caller falls back to localStorage.
+ *
+ * A WRONG guess is safe, which is what makes deriving acceptable. Browsers refuse a Domain that is not a
+ * suffix of the current host, and refuse a public suffix outright, so the cookie simply never sets — and
+ * tryAcquireRefreshLock reads an unwritable store as "proceed", degrading to the per-origin behaviour this
+ * replaces rather than to a wedged one.
+ */
+export function lockCookieDomain(appOrigin: string): string | null {
+  let host: string;
+  try {
+    host = new URL(appOrigin).hostname;
+  } catch {
+    return null;
+  }
+  if (/^\d+(\.\d+)*$/.test(host) || host === "localhost") return null; // IP or bare host: no parent
+  const labels = host.split(".");
+  if (labels.length < 3) return null; // already an apex (truepoint.in) — nothing to widen to
+  return `.${labels.slice(1).join(".")}`;
+}
+
+/** An ElectionStorage backed by `document.cookie` on `domain`, so the claim is visible to every subdomain. */
+export function createCookieLockStorage(domain: string): ElectionStorage {
+  const read = (key: string): string | null => {
+    for (const part of document.cookie.split(";")) {
+      const [k, ...v] = part.trim().split("=");
+      if (k === key) return decodeURIComponent(v.join("="));
+    }
+    return null;
+  };
+  return {
+    getItem: (key) => (key === LOCK_KEY ? read(LOCK_COOKIE) : null),
+    setItem: (key, value) => {
+      if (key !== LOCK_KEY) return;
+      // Max-Age is the lock TTL: a tab that dies mid-refresh cannot leave a claim that outlives its own
+      // validity window. SameSite=Lax rather than Strict so the claim survives a top-level navigation back
+      // from the auth origin (the login redirect), which is exactly when a fresh refresh is about to happen.
+      document.cookie = `${LOCK_COOKIE}=${encodeURIComponent(value)}; Domain=${domain}; Path=/; Max-Age=${Math.ceil(LOCK_TTL_MS / 1000)}; SameSite=Lax; Secure`;
+    },
+    removeItem: (key) => {
+      if (key !== LOCK_KEY) return;
+      document.cookie = `${LOCK_COOKIE}=; Domain=${domain}; Path=/; Max-Age=0; SameSite=Lax; Secure`;
+    },
+  };
 }
 
 /** Release a claim this tab holds. Never clears another tab's claim — a late release after being preempted
