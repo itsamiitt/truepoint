@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2387,
-  "fileSetHash": "sha256:103a4aa61f502d1b2c6c66a237460e5e96d7cc677466d090a2dfa9c2e529dfe7",
+  "fileCount": 2390,
+  "fileSetHash": "sha256:0868a69738d3c217c98d38af9688d8d2153278459b7d6d3560d06a9260b3d0e1",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2756,6 +2756,7 @@
       "apps/extension/src/background/auth/companionTab.ts",
       "apps/extension/src/background/auth/errors.ts",
       "apps/extension/src/background/auth/index.ts",
+      "apps/extension/src/background/auth/refreshInvariant.test.ts",
       "apps/extension/src/background/auth/refreshToken.ts",
       "apps/extension/src/background/auth/tokenStore.test.ts",
       "apps/extension/src/background/auth/tokenStore.ts",
@@ -3100,6 +3101,7 @@
       "packages/auth/src/policyShadow.ts",
       "packages/auth/src/rateLimit.test.ts",
       "packages/auth/src/rateLimit.ts",
+      "packages/auth/src/redisOptions.ts",
       "packages/auth/src/refresh.ts",
       "packages/auth/src/registration.ts",
       "packages/auth/src/revocation.ts",
@@ -3132,6 +3134,7 @@
     ],
     "packages/auth-client": [
       "packages/auth-client/src/createAuthClient.ts",
+      "packages/auth-client/src/fetchWithAuth.test.ts",
       "packages/auth-client/src/index.ts",
       "packages/auth-client/src/pkce.ts",
       "packages/auth-client/src/refreshElection.test.ts",

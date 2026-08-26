@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2387 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2390 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,37 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-26 refresh (auth audit, 2ed8c4ad + 961be091 + 05c45dd0): 2387 → 2390 files —
+  `packages/auth/src/redisOptions.ts` into `shared["packages/auth"]`,
+  `packages/auth-client/src/fetchWithAuth.test.ts` into `shared["packages/auth-client"]`, and
+  `apps/extension/src/background/auth/refreshInvariant.test.ts` into the existing extension auth area. The
+  two new gate scripts (`scripts/lint-orphan-css-classes.mjs`, `scripts/lint-basepath-links.mjs`) and
+  migration 0140 sit outside the `apps`/`packages` roots, so they do not appear in the count. Unassigned
+  holds at **2**.
+
+  **Read this before adding a Redis client under `packages/auth`, or an anchor/class to `apps/auth`.** Three
+  things this change makes structural rather than remembered:
+
+  • **`redisOptions.ts` is the posture, and there are two of them.** Five of the seven clients here were bare
+  `new Redis(env.REDIS_URL)` — ioredis defaults, `maxRetriesPerRequest: 20` behind a backoff climbing to 2s —
+  and three of those five (`loginTransaction`, `code`, `revocation`) sit on the login critical path, so a
+  merely SLOW Redis stalled sign-in for tens of seconds. The split matters and inverts easily:
+  `FAIL_OPEN_REDIS_OPTIONS` disables the offline queue, which is right only when the caller has a safe answer
+  ready; `CRITICAL_PATH_REDIS_OPTIONS` keeps the queue, because ioredis connects LAZILY and disabling it would
+  reject the first command after every deploy. Pick one deliberately; do not inherit a default again.
+
+  • **`.tp-center-screen` was the whole of the corner-card bug**, and the shape generalises: a `tp-*`/`app-*`
+  class defined in a stylesheet the app does not import renders as nothing, and is an error to no compiler,
+  bundler, browser or DOM test. `apps/auth` does not consume `@leadwolf/app-shell` — it is not a dependency
+  and `shell.css` is not imported — so anything borrowed from a console surface must be defined locally.
+  `bun run lint:orphan-css` now checks this by walking each app's real `@import` closure.
+
+  • **`basePath` does not reach a raw `<a href>`.** `apps/auth` runs at `/auth`; Next prefixes `next/link`,
+  the router and `redirect()` and nothing else, so a root-relative anchor leaves the app and 404s. Use
+  `authPath()` (the in-page sibling of `authUrl()`, both reading `AUTH_BASE_PATH`). `bun run
+  lint:basepath-links` reads the prefix from each app's `next.config.mjs`, so it covers any future basePath
+  app automatically.
 
   2026-08-22 refresh (bind-parameter ceiling, 80ffa065): 2385 → 2387 files —
   `packages/db/src/repositories/bindLimit.{ts,test.ts}`, into the existing `shared["packages/db"]` area
