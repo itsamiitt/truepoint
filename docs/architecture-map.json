@@ -111,8 +111,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2390,
-  "fileSetHash": "sha256:0868a69738d3c217c98d38af9688d8d2153278459b7d6d3560d06a9260b3d0e1",
+  "fileCount": 2391,
+  "fileSetHash": "sha256:2377cacf181798baab97e7db9d0b12491222c9ae13a140e9234269aaf09b8e5d",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3107,6 +3107,7 @@
       "packages/auth/src/revocation.ts",
       "packages/auth/src/revocationLog.test.ts",
       "packages/auth/src/revocationLog.ts",
+      "packages/auth/src/revocationMemo.test.ts",
       "packages/auth/src/scopeGuard.test.ts",
       "packages/auth/src/scopeGuard.ts",
       "packages/auth/src/secrets.ts",

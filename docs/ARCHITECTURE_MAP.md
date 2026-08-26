@@ -62,7 +62,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **2390 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
+> **2391 source files · 93 code-bearing domains · 44 shared areas · 0 domain-vocabulary warnings · 2
 > unbucketed** (plus the 4 framework-root configs — `next.config.mjs` × 3, `postcss.config.mjs` — which have
 > no domain by nature and are expected). **The two unbucketed repositories** —
 > `outcomeMetricsRepository`, `usageEventRepository` — are the **deliberate** gaps described under
@@ -1413,6 +1413,22 @@ flowchart TD
 
   2026-08-22 refresh (owner-connection ratchet, 3dc0ff69 + follow-up): 2380 → 2381 files —
   `packages/db/src/ownerConnectionRatchet.test.ts`, in the existing `shared["packages/db"]` area.
+
+  2026-08-26 refresh (auth audit follow-ups, 26b7bebb): 2390 → 2391 files —
+  `packages/auth/src/revocationMemo.test.ts`, in the existing `shared["packages/auth"]` area. Unassigned
+  holds at **2**.
+
+  **Two operational facts worth knowing before touching `packages/auth/src/revocation.ts` or the auth boot
+  hook.** The deny-list's negative memo now has a CEILING: nothing had ever removed an entry (only
+  `markRevoked` deletes, and that fires for the rare revoke — never for the ~100% of sids that are simply
+  live), so an apps/api process accumulated one entry per distinct session id it had ever served, forever.
+  Because a rotation mints a NEW sid every ~14 minutes, the key space grew with time × active users rather
+  than with concurrent sessions — invisible to every request path, since each individual lookup stayed
+  correct and fast. And the mail transport is now reported at BOOT, not only at send time: an unset or
+  dev-capture `SMTP_URL` used to surface exclusively in the moment a user tried to reset their password, on
+  a path whose response is enumeration-safe and therefore identical whether or not the mail went anywhere.
+  That is how the production template came to ship `SMTP_URL=` empty with reset, verification and magic
+  links all silently dead. The check never logs the URL — its password component is the provider API key.
 
   2026-08-26 refresh (auth audit, 2ed8c4ad + 961be091 + 05c45dd0): 2387 → 2390 files —
   `packages/auth/src/redisOptions.ts` into `shared["packages/auth"]`,
