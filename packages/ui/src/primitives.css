@@ -314,6 +314,15 @@ select.tp-ui-field {
   flex-direction: column;
   gap: 6px;
 }
+/* The one modifier a field group needs and did not have: let it take the free space when it sits in a flex
+   row beside a narrower control. OverrideDialog already asked for it by name (`className="tp-ui-grow"` on the
+   tenant picker in a `display:flex` row) and the class did not exist, so the field did not grow — silently,
+   because an unknown class is an error to nobody. FieldGroup forwards `className` but not `style`, so a class
+   is the only way to express this from a call site. Found by lint:orphan-css. */
+.tp-ui-grow {
+  flex: 1;
+  min-width: 0;
+}
 .tp-ui-field-label {
   font-size: 13px;
   font-weight: 500;

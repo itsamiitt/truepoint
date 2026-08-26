@@ -713,6 +713,20 @@ body {
 .tp-link-back:hover {
   color: var(--tp-ink);
 }
+/* The plain inline link — the sibling of .tp-link-back that was used before it was written. The admin
+   sub-processor table renders each DPA as `<a className="tp-link">link</a>`, and with nothing defining the
+   class it rendered as unstyled default-blue-or-inherited text with no affordance, indistinguishable from the
+   surrounding cell copy. Underline rather than colour carries it: this palette is near-monochrome by design
+   (04 §7), so colour alone would not read as a link and would not survive the contrast rules. Found by
+   lint:orphan-css. */
+.tp-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tp-link:hover {
+  color: var(--tp-ink-3);
+}
 .tp-meta-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

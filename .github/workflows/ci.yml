@@ -123,6 +123,20 @@ jobs:
       # already failed for the three checks above it.
       - name: Design tokens, not raw hex
         run: bun run lint:design-tokens
+      # A `tp-*`/`app-*` class no stylesheet the app imports defines. AuthShell centred every sign-in screen
+      # with `.tp-center-screen`, which lives only in @leadwolf/app-shell's shell.css — a package apps/auth
+      # neither imports nor depends on. So it styled nothing and every auth card rendered in the top-left
+      # corner of the window, on every deploy, until a human looked at a page. An unknown class is an error to
+      # nobody: not the compiler, not the bundler, not the browser, not a test that renders and asserts text.
+      - name: No orphan global CSS classes
+        run: bun run lint:orphan-css
+      # A root-relative `<a href>` inside a basePath app. Next prefixes next/link, the router and redirect()
+      # but NOT raw HTML, which the browser resolves against the origin — so apps/auth's "Forgot password?"
+      # pointed at /forgot instead of /auth/forgot and 404'd, making password reset unreachable while the page
+      # and its action both worked. The same mistake was already found and fixed once for the MAILED links
+      # (AUTH-062) without anyone checking the in-page half.
+      - name: Links stay inside their app's basePath
+        run: bun run lint:basepath-links
       # Feature slices must not import each other. dependency-cruiser HAS a rule for this and is blind to
       # every real instance: the cruise runs without a per-app tsconfig, so the `@/*` alias never resolves
       # (measured: 251 unresolved `@/` imports in apps/web, 0 resolved) and the rule cannot see the edge. It

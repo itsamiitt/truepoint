@@ -76,15 +76,24 @@ news/social feeds. See 04-opportunity-scores.md.
   are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
   `bun run lint:lockfile` · `bun run lint:itest-rejects` · `bun run lint:prod-switches` ·
   `bun run lint:secrets` · `bun run lint:roving-tabindex` · `bun run lint:design-tokens` ·
-  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run db:migrate`.
+  `bun run lint:cross-feature` · `bun run lint:batch-inserts` · `bun run lint:orphan-css` ·
+  `bun run lint:basepath-links` · `bun run db:migrate`.
   The script-based ones are plain filesystem scans (no services, no env, seconds each) and each exists because
   its rule was previously enforced by memory and lost anyway: `itest-rejects` bans the `expect(...).rejects`
   shape that HANGS an itest instead of failing it; `prod-switches` fails if an env kill-switch is armed in
   `deploy/env.production.template` without a recorded reason — load-bearing since migration 0119 turned the
   per-tenant half of most flags globally on, leaving the env half as the only thing keeping dark work dark;
   `secrets` scans tracked files for credential shapes and for this product's PII formats
-  (`.csv`/`.xlsx`/`.xls`/`.rdb`). The last two carry a declared escape hatch (`lint-secrets-ok:`,
-  `itest-rejects-ok:`) — use it with a reason rather than loosening a pattern.
+  (`.csv`/`.xlsx`/`.xls`/`.rdb`); `orphan-css` fails on a `tp-*`/`app-*` class no stylesheet the app imports
+  defines — AuthShell centred every sign-in screen with `.tp-center-screen`, which lives only in
+  `@leadwolf/app-shell/shell.css`, a package apps/auth neither imports nor depends on, so the class styled
+  NOTHING and every auth card rendered in the top-left corner (an unknown class is an error to no compiler,
+  bundler, browser or DOM test — nothing but a human eye caught it); `basepath-links` fails on a root-relative
+  `<a href>` in an app with a `basePath`, because Next prefixes `next/link`/router/`redirect()` but never raw
+  HTML — apps/auth's "Forgot password?" therefore pointed outside `/auth` and 404'd, making password reset
+  unreachable while the page and its action worked. These four carry a declared escape hatch
+  (`lint-secrets-ok:`, `itest-rejects-ok:`, `orphan-css-ok:`, `basepath-link-ok:`) — use it with a reason
+  rather than loosening a pattern.
   **Until 2026-08-22, CI ran only `lint` and `lint:boundaries`**, so `lint:import-pii` and `lint:lockfile`
   were listed here but never actually enforced. All of them are steps in the gates job now.
   **`bun run lint` on a pre-2026-08-22 Windows checkout reports ~1,599 errors, and 1,582 of them are the

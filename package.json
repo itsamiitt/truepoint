@@ -18,6 +18,8 @@
     "lint:secrets": "node scripts/lint-committed-secrets.mjs",
     "lint:roving-tabindex": "node scripts/lint-roving-tabindex.mjs",
     "lint:design-tokens": "node scripts/lint-design-tokens.mjs",
+    "lint:orphan-css": "node scripts/lint-orphan-css-classes.mjs",
+    "lint:basepath-links": "node scripts/lint-basepath-links.mjs",
     "lint:cross-feature": "node scripts/lint-cross-feature-imports.mjs",
     "lint:batch-inserts": "node scripts/lint-batch-insert-bounds.mjs",
     "lint:lockfile": "node scripts/check-lockfile.mjs",
