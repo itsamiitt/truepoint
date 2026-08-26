@@ -51,6 +51,9 @@ export interface OverlayPersonLanding {
   };
   scalars: OverlayScalars;
   masterPersonId: string | null;
+  /** Layer-0 channel presence (0139) — booleans the master row already exposes, never values. Written on
+   *  every landing so a person who gained a channel in Layer 0 is refreshed the next time they land. */
+  masterPresence?: { hasEmail: boolean; hasPhone: boolean };
   accountId?: string | null;
   source: FieldWriteSource;
   sourceName: SourceName;
@@ -102,6 +105,8 @@ export async function landOverlayPerson(
       salesNavLeadId: input.identity.salesNavLeadId ?? undefined,
       salesNavProfileUrl: input.identity.salesNavProfileUrl ?? undefined,
       masterPersonId: input.masterPersonId ?? undefined,
+      masterHasEmail: input.masterPresence?.hasEmail,
+      masterHasPhone: input.masterPresence?.hasPhone,
       accountId: input.accountId ?? undefined,
     };
     for (const field of planned.writableFields) {
@@ -131,6 +136,8 @@ export async function landOverlayPerson(
       salesNavLeadId: input.identity.salesNavLeadId ?? null,
       salesNavProfileUrl: input.identity.salesNavProfileUrl ?? null,
       masterPersonId: input.masterPersonId ?? undefined,
+      masterHasEmail: input.masterPresence?.hasEmail,
+      masterHasPhone: input.masterPresence?.hasPhone,
       accountId: input.accountId ?? null,
       fieldProvenance: provenance,
     });

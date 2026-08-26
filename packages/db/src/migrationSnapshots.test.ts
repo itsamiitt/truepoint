@@ -190,7 +190,11 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  96 → 97 for 0138_api_key_usage_daily (ADR-0049) — the public API's usage rollup, hand-authored for the
  *  same reason 0137 was: generate diffs against a baseline that stopped at 0107. Also in schema/index.ts, so
  *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-const EXPECTED_DEFICIT = 97;
+// 97 → 98 for 0139_contact_master_presence (decisions.md 2026-08-25) — two ADDITIVE nullable booleans on
+// contacts, which IS in the drizzle barrel, so `generate` could have produced the snapshot; it cannot do so
+// retroactively (the 2026-08-04 correction above) and the chain stopped at 0107 (0137). Same category as
+// 0091/0094: hand-authored, additive, its snapshot owed to the eventual rebaseline.
+const EXPECTED_DEFICIT = 98;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

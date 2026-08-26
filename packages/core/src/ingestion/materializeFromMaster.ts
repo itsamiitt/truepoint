@@ -129,6 +129,9 @@ export async function materializeContactFromMaster(
         locationCountry: row.locationCountry ?? loc.country,
       },
       masterPersonId: row.id,
+      // Presence bits (0139): the same "email on file / phone on file" the database search shows, persisted
+      // on the copy so the grid keeps offering the other channel's reveal after one is revealed.
+      masterPresence: { hasEmail: row.hasEmail, hasPhone: row.hasPhone },
       accountId,
       // Vendor-neutral provenance by construction: the workspace learns the value came from the TruePoint
       // database, never which upstream source the platform licensed it from.

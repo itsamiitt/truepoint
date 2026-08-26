@@ -499,7 +499,7 @@ bounded, cached deviation for `VP`/`HR`/`IT`-shaped titles; other facets stay at
 People/Accounts switch is mirrored in the results header while the drawer is collapsed; the drawer itself
 stays as decided on 2026-08-21. (5) The workspace copy carries no channel value until revealed, so the
 overlay projection cannot see that the OTHER channel is still there to reveal; presence is persisted on the
-contact (`master_has_email`/`master_has_phone`, migration 0137) rather than probed on the hot search path.
+contact (`master_has_email`/`master_has_phone`, migration 0139) rather than probed on the hot search path.
 
 Compliance (rule 3): data elements are the profile scalars the add already copied plus one licensed channel
 value copied on reveal (the existing slice-6 path); lawful basis unchanged (`MASTER_PERSON_VISIBLE`,
