@@ -72,11 +72,18 @@ pre-build pass:
 
 1. **Information hierarchy** — What must the user see first? Default to progressive
    disclosure.
-2. **Shared atoms** — Does the app shell (`Sidebar`, `TopBar`, `PageHeader` in
-   `apps/web/src/components/shell/`), a `@leadwolf/ui` component, or an existing app
-   recipe (e.g. the ScorePill recipe) already cover this? Reuse the exact
-   component — never duplicate it. `references/components.md` is the inventory;
-   detail drawers are composed from the DS `Drawer`.
+2. **Shared atoms** — Does one of these already cover it? Reuse the exact component;
+   never duplicate it.
+   - **The chrome** (`AppShellFrame`, `Sidebar`, `TopBar`, `DensityToggle`,
+     `ShortcutsButton`, `NavItem`, `UserRow`, `Logo`, `ShortcutsDialog`,
+     `DensityProvider`, `useSidebarPin`) is `@leadwolf/app-shell`
+     (`packages/app-shell`), composed per app by that app's own `AppShell.tsx` —
+     for the customer surface, `apps/web/src/components/shell/AppShell.tsx`.
+   - **The page scaffolding** (`PageHeader`, `PageContainer`) is `@leadwolf/ui`.
+   - **Everything else that renders** is `@leadwolf/ui` too —
+     `references/components.md` is the inventory.
+   - **App recipes** (e.g. the ScorePill recipe) live in the owning feature; detail
+     drawers are composed from the DS `Drawer`.
 3. **Brand asset?** — Does this show the logo, wordmark, a brand colour, or an icon?
    If yes, read `Guidelines/` (the brand kit, the primary source of truth) and then
    `references/brand.md` for the code patterns. Never approximate.
@@ -124,7 +131,15 @@ The DS has two component families sharing one token system:
   `TpSwitch`, `TpChip`, `TpIconButton`. Pre-styled, driven by props; also accept
   standard HTML form attributes.
 - **shadcn family** — `Button`, `Input`, `Label`, `Alert`, `Badge`, `Separator`,
-  `Checkbox`, `RadioGroup`, `RadioOption`. Same look, same tokens.
+  `Checkbox`, `RadioGroup`, `RadioOption`. Same look, same tokens — and now literally
+  the same stylesheet: they were rewritten off Tailwind utilities onto the
+  `primitives.css` classes, so they render in **every** app. (Before that they only
+  resolved in `apps/auth`, the one app that loads `tailwindcss` + `theme.css`; in
+  `web`/`admin`/`forge` they emitted class names with no CSS behind them.) Choose by
+  API, not by app: `Button` is the one with `asChild`; `Input`/`Checkbox`/`RadioOption`
+  are the native controls that submit with no JavaScript.
+
+Plus the page scaffolding — `PageHeader` and `PageContainer` — and the `cn` helper.
 
 Full props/variants: `references/components.md`. Every token with its value:
 `references/tokens.md`.
@@ -138,17 +153,23 @@ This resolves the prior Tailwind-vs-inline contradiction. The split is by layer:
 - **Components encapsulate their own styling.** Reach for a `@leadwolf/ui`
   component before styling a `<div>`; the look lives in the DS.
 - **App-level layout (in `apps/*`) uses inline `style={{ }}` reading `var(--tp-*)`
-  tokens** — not Tailwind utility classes in app JSX, and not raw values.
+  tokens** — not Tailwind utility classes in app JSX, and not raw values. That
+  includes `fontSize`: the `--tp-text-*` scale (micro 11 / caption 12 / body 13 /
+  label 14 / lg 15 / title 16 / heading 18 / display 22) exists now, so a raw size
+  has no excuse. A size off the ladder is a design decision, not a typo — put it in a
+  token.
 - **Token-driven CSS modules are an accepted app-styling layer** alongside inline
   styles — the shell and larger features use `*.module.css` whose values are
   `var(--tp-*)`; extend a feature's existing stylesheet rather than converting it.
 
 The HARD RULE is scoped to app code: **no Tailwind utility classes in `apps/*` JSX**.
-The design SYSTEM itself (`@leadwolf/ui`) is deliberately a hybrid and is exempt:
-inline `--tp-*` tokens for dashboard primitives (`Card.tsx`), Tailwind v4 (CSS-first,
-`@theme inline` in `theme.css`) + CVA for the shadcn-derived components
-(`components/ui/button.tsx`), and `.tp-ui-*` classes in `primitives.css`. Tailwind is
-not banned package-wide — it is banned in app JSX.
+The design SYSTEM itself (`@leadwolf/ui`) is deliberately a hybrid and is exempt: inline
+`--tp-*` tokens for the dashboard primitives (`Card.tsx`, `StatTile.tsx`, `state.tsx`)
+and `.tp-ui-*` classes in `primitives.css` for everything with a stylesheet — including
+the shadcn-derived components, which no longer use Tailwind utilities or CVA.
+`theme.css` still maps the Tailwind theme onto the tokens via `@theme inline` for
+`apps/auth`, the one app that loads Tailwind. Tailwind is not banned package-wide — it
+is banned in app JSX.
 
 ```jsx
 // ✅ correct
@@ -193,7 +214,12 @@ not literal file locations — read them as "any route under the authed group".)
 - **Shared chrome lives in the layout once** (Sidebar, TopBar; on mobile the sidebar
   becomes the off-canvas drawer opened by the TopBar hamburger)
   — never duplicated per page. This is the design expression of the architecture
-  skill's UI-consolidation rule.
+  skill's UI-consolidation rule. The chrome components themselves come from
+  `@leadwolf/app-shell`, shared by `apps/web`, `apps/admin` and `apps/forge`; each
+  app's own `AppShell.tsx` composes them with its auth gate, its destination list and
+  its own top-bar widgets.
+- **The page inside the layout uses `PageContainer` + `PageHeader`** (`@leadwolf/ui`)
+  — not a hand-rolled wrapper with its own `max-width`.
 
 **Detail-in-drawer still holds as a UX pattern.** Opening a contact/prospect from a
 list shows it in a drawer composed from the DS `Drawer` (see
@@ -275,22 +301,86 @@ user-facing copy is **localizable** (see `references/i18n.md`). Full guidance:
 ## Hard Rules (Zero Tolerance)
 
 These are mandates every UI surface must meet. How each is currently enforced:
-Biome (`biome.json`) runs format + lint; dependency-cruiser (`.dependency-cruiser.cjs`,
-via `bun run lint:boundaries`) enforces module boundaries; token / accessibility /
-no-raw-hex adherence is **manual review** against `Guidelines/TruePoint Brand Kit.html`
-and the live tokens in `packages/ui/src/tokens.css`. (`docs/planning/brand-identity.md`
-is superseded — trust only its header banner, never its legacy body.)
+Biome (`biome.json`) runs format + lint (its `recommended` set includes a11y rules);
+dependency-cruiser (`.dependency-cruiser.cjs`, via `bun run lint:boundaries`) enforces
+module boundaries; `bun run lint:design-tokens`, `bun run lint:roving-tabindex` and the
+contrast tests are CI gates. Everything else — raw px, raw elements, and the brand
+rules — is **code review** against `Guidelines/TruePoint Brand Kit.html` and the live
+tokens in `packages/ui/src/tokens.css`. (`docs/planning/brand-identity.md` is
+superseded — trust only its header banner, never its legacy body.)
 
-> **Implementation status:** there is no custom design-lint yet — the token / a11y /
-> no-raw-hex / no-raw-element rules below are not automatically checked. They are
-> enforced by code review against the Brand Kit + tokens.css; Biome and
-> dependency-cruiser cover only formatting/lint and import boundaries.
+> **Implementation status (updated 2026-08-22):** two of these rules are now checked, the
+> rest still are not.
+>
+> - **no-raw-hex — CHECKED.** `bun run lint:design-tokens` (`scripts/lint-design-tokens.mjs`,
+>   a CI gate) flags a hex used as a colour value in a `.css` declaration or a `.tsx` style
+>   object. Deliberately narrow: `packages/ui/src/tokens.css`, `var(--token, #fallback)`
+>   (which `apps/extension` needs — a content script runs where tokens.css never loaded),
+>   Next's `themeColor` `<meta>` literal, and hexes inside comments are all excluded.
+>   Escape hatch: `// design-tokens-ok: <reason>`.
+> - **keyboard operability — PARTLY CHECKED.** `bun run lint:roving-tabindex` catches a
+>   composite ARIA role with `tabIndex={-1}` and no key handler — the trap that makes an
+>   option unreachable. It cannot tell you the handler is *correct*; only a browser can.
+> - **contrast — CHECKED.** Each app asserts the token pairs it paints
+>   (`apps/doc/src/components/contrast.test.ts`, `apps/web/src/contrast.test.ts`,
+>   `apps/admin/src/contrast.test.ts`), and `packages/ui/src/primitivesContrast.test.ts` covers
+>   the shared stylesheet by **deriving** its pairs from the CSS — so a new primitive with a bad
+>   pairing fails without anyone maintaining a list. `apps/forge` has no pair test on purpose:
+>   it paints exactly one token (`--tp-ink` on white, 21:1) through DS primitives, so there is
+>   nothing to enumerate yet. What none of them can see: colour-only rules (the background comes
+>   from an ancestor), composited alpha, and inline styles.
+> - **`--success` / `--warning` are FILL tones, not text tones.** 3.30:1 and 3.19:1 on white —
+>   fine behind a status dot or a check icon (WCAG 1.4.11 asks 3:1 of a meaningful graphic),
+>   under the 4.5:1 floor for a number or a label. Use **`--success-700`** / **`--warning-700`**
+>   (added 2026-08-22, 5.02:1) whenever the status colour IS the text, exactly as
+>   `--danger-700` has always been the text-safe half of `--danger`.
+> - **`--tp-ink-4` is NOT a text colour — ratcheted repo-wide.** It is 2.54:1 on white and
+>   worse on every tint, which is below the AA floor for normal text (4.5:1) *and* for large
+>   text (3.0:1) — no text size passes. It remains fine for placeholders, disabled controls
+>   (WCAG 1.4.3 exempts those) and icon glyphs. The existing text usages across `apps/web`,
+>   `apps/admin`, `apps/auth` and `packages/ui` are capped by
+>   `packages/ui/src/inkFourContrast.test.ts` — an **equality** assertion, so it fails both
+>   when the count grows and when it silently shrinks. **Cite the file, never a number, in
+>   prose**: the budget only moves down, and every quoted figure goes stale the next time it
+>   does. Read `INK4_TEXT_BUDGET` when you need the current one. **Do not add a new usage.**
+>   Reach for `--tp-ink-3` — but check the surface first: ink-3 clears AA on white and
+>   `--tp-surface-2` and FAILS on `--tp-surface-3` and `--nav-hover-fill`.
+> - **overlay focus management and composite-widget keyboard — IMPLEMENTED IN THE DS,
+>   AND BEHAVIOURALLY TESTED.** `Dialog`/`Drawer` portal-render, move focus in, trap Tab
+>   (wrapping both ways), return focus to the opener, ref-count the scroll lock, and
+>   close only the top-most layer on Escape (the shared `overlayStack.ts`).
+>   `DropdownMenu`, `Combobox`, `Tabs` and `SegmentedControl` each implement their ARIA
+>   pattern's full keyboard model, `Tooltip` clones `aria-describedby` onto the trigger
+>   and dismisses on Escape, `DataTable` makes a clickable row focusable and
+>   Enter/Space-activatable, and `Toast` mounts its live region before the first toast.
+>   Every one of those is asserted against a real DOM in
+>   `packages/ui/src/components/overlay.domtest.tsx` and `keyboard.domtest.tsx`, run by
+>   **`bun run test:dom`** (a CI step; the `.domtest.tsx` extension keeps them out of a
+>   plain `bun test`, which has no DOM). So **hand-rolling any of it is now the
+>   violation** — a bespoke overlay or a `role="menu"` you wired yourself is strictly
+>   worse than the DS component and has to be justified, not merely written.
+>   `bun run lint:roving-tabindex` still catches the specific trap of a composite role
+>   with `tabIndex={-1}` and no key handler in *app* code.
+> - **every `.tp-ui-*` class a component emits must exist — CHECKED.**
+>   `packages/ui/src/classCoverage.test.ts` fails the build on a class name with no
+>   definition in `primitives.css`. This is the gate that would have caught the audit's
+>   most expensive defect: nine exported components styled with Tailwind utilities that
+>   only resolved in `apps/auth`, rendering as unstyled markup everywhere else while
+>   typecheck, biome and the contrast tests all passed — they were all passing on a
+>   string. It cannot prove a class *looks* right, only that its styling exists.
+> - **no-raw-element, and the rest below — NOT checked.** "No raw `<button>`/`<input>`/
+>   `<table>`/`<dialog>` where a DS equivalent exists" is code review only — no lint bans
+>   them. Biome (`recommended`, including its a11y rules) and dependency-cruiser cover
+>   formatting/lint and import boundaries, and neither can see a `<div onClick>`.
 
 - **No hardcoded hex.** `#2563c9` → `var(--tp-cobalt)`.
 - **No raw `<button>`/`<input>`/`<table>`/`<dialog>`** — use the DS equivalents.
-- **No duplicating the shell or a detail drawer** — one shared source (the
-  app-shell components in `apps/web/src/components/shell/`; drawers composed from
-  the DS `Drawer`).
+- **No duplicating the shell or a detail drawer** — one shared source: the chrome is
+  `@leadwolf/app-shell` (composed per app by that app's `AppShell.tsx`), the page
+  scaffolding is `PageHeader`/`PageContainer` from `@leadwolf/ui`, and drawers are
+  composed from the DS `Drawer`.
+- **No hand-rolled overlay focus management or composite-widget keyboard** — the DS
+  implements both; re-implementing either is the violation, not the fix.
 - **No navigating away from a list to show detail** — open it in a drawer (DS
   `Drawer` composition).
 - **No hand-rolled shell** — the shell is the Next.js authed layout; add a route.

@@ -28,7 +28,6 @@ import {
   useWorkspaceScope,
 } from "@/components/search";
 import type { SearchShell } from "@/components/search";
-import { RevealStoreProvider } from "@/features/prospect/entries/revealStore";
 import { Skeleton, TableSkeleton } from "@leadwolf/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
@@ -58,7 +57,7 @@ function PaneSkeleton() {
 //                                             fetch before it can even issue its first search
 // The 80kB the third option saves is real, and it is bought with a round trip in front of every cold visit
 // to the page reps live on. Deferring the thing the user came for is not a performance win.
-import { PeoplePane } from "@/features/prospect/entries/pane";
+import { PeoplePane, RevealStoreProvider } from "@/features/prospect/entries/pane";
 
 const AccountsPane = dynamic(
   () => import("@/features/accounts/entries/pane").then((m) => m.AccountsPane),

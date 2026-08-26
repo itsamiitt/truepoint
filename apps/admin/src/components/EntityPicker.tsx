@@ -1,12 +1,29 @@
 "use client";
 // EntityPicker.tsx — the generic async typeahead behind TenantPicker / UserPicker: it resolves a human-typed
-// query to an entity id via a caller-supplied DEBOUNCED server search, so staff stop pasting raw UUIDs. Reuses
-// the shared tp-ui popover classes (primitives.css); the input keeps role="combobox", the results are plain
-// operable buttons (native keyboard activation); closes on outside-click + Esc. Controlled value=id;
-// onChange(id, label). UX/convenience only — the api always re-validates + authorizes the id on the write,
-// so a hand-typed or stale value can never bypass a check.
+// query to an entity id via a caller-supplied server search, so staff stop pasting raw UUIDs. Controlled
+// value=id; onChange(id, label). UX/convenience only — the api always re-validates + authorizes the id on the
+// write, so a hand-typed or stale value can never bypass a check.
+//
+// THE WIDGET IS THE DS <Combobox> NOW, not a hand-rolled one. The previous version reached into the DS's
+// INTERNAL classes (tp-ui-anchor / tp-ui-field / tp-ui-popover / tp-ui-menu) and rebuilt the widget on top of
+// them, which meant it inherited the LOOK of a combobox and none of the behaviour: role="combobox" with no
+// aria-activedescendant, results that were neither a listbox nor options, and no arrow keys at all — so the
+// only way to pick a row was the mouse. The DS component implements the full ARIA combobox pattern
+// (arrows/Home/End/Enter/Escape, aria-activedescendant, focus return to the trigger), and its `onQueryChange`
+// + `loading` props exist precisely for a server-driven picker like this one. Everything below is the SEARCH
+// half; the widget half is the DS's.
+//
+// LABELLING. The DS Combobox's trigger is a button it owns, so there is no id to point a `<label htmlFor>` at.
+// Wrap the picker in the label instead — `<label><span>Tenant</span><TenantPicker …/></label>` — which is the
+// same shape apps/web's ReportsPage uses for its Combobox filters. The `id` prop below still lands on the
+// read-only field rendered in the DISABLED state, which is the one state that renders a labelable element.
+//
+// A REJECTED SEARCH IS A STATE, NOT A HANG. The old effect awaited search(...) with no try/catch: one failed
+// request left `loading` true forever and the menu stuck on "Searching…" with no way back. The catch below
+// turns it into a message the user can act on, and `finally` guarantees the spinner clears either way.
 
-import { useEffect, useRef, useState } from "react";
+import { type ComboOption, Combobox, TpInput } from "@leadwolf/ui";
+import { useEffect, useMemo, useState } from "react";
 
 export interface EntityOption {
   value: string;
@@ -24,37 +41,45 @@ export function EntityPicker({
   placeholder = "Search…",
   emptyText = "No matches.",
 }: {
-  /** Optional input id so a wrapping <label htmlFor> can associate; also seeds the listbox id. */
+  /** Id for the read-only field rendered while `disabled`. When enabled, wrap the picker in its `<label>`. */
   id?: string;
   /** The selected entity id, or "" when none is chosen yet. */
   value: string;
   /** Display label of the selected entity when known (e.g. just picked); falls back to the id otherwise. */
   selectedLabel?: string | null;
   onChange: (value: string, label: string) => void;
-  /** Debounced server search — MUST be a stable reference (module-level fn or useCallback). */
+  /** Server search — MUST be a stable reference (module-level fn or useCallback); it is an effect dependency. */
   search: (query: string) => Promise<EntityOption[]>;
   disabled?: boolean;
   placeholder?: string;
   emptyText?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
   const [hits, setHits] = useState<EntityOption[]>([]);
   const [loading, setLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const listId = id ? `${id}-list` : undefined;
+  const [failed, setFailed] = useState(false);
 
-  // Debounced search while the dropdown is open (250ms; cancels the in-flight result on each keystroke/close).
+  // Debounced search (250ms; the in-flight result is dropped on each keystroke). It runs once on mount with
+  // the empty query so the first open already shows the top matches — the DS Combobox owns its open state and
+  // does not report it, so the alternative is a menu that says "No matches" until you type. A DISABLED picker
+  // does not search at all; enabling it is a dependency change, so the first list arrives with the control.
   useEffect(() => {
-    if (!open) return;
+    if (disabled) return;
     let cancelled = false;
     setLoading(true);
     const t = setTimeout(() => {
       void (async () => {
-        const rows = await search(query.trim());
-        if (!cancelled) {
+        try {
+          const rows = await search(query.trim());
+          if (cancelled) return;
           setHits(rows);
-          setLoading(false);
+          setFailed(false);
+        } catch {
+          if (cancelled) return;
+          setHits([]);
+          setFailed(true);
+        } finally {
+          if (!cancelled) setLoading(false);
         }
       })();
     }, 250);
@@ -62,104 +87,46 @@ export function EntityPicker({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, open, search]);
+  }, [query, search, disabled]);
 
-  // Close on outside-click + Esc (mirrors the kit Combobox).
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointer);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // The current selection is pinned into the option list even when the live results no longer contain it —
+  // the Combobox renders its trigger from `options.find(o => o.value === value)`, so without this the trigger
+  // would fall back to the placeholder the moment the user typed something that filtered the selection out.
+  const options: ComboOption[] = useMemo(() => {
+    const rows: ComboOption[] = hits.map((h) => ({
+      value: h.value,
+      label: h.label,
+      hint: h.hint,
+    }));
+    if (value && !rows.some((r) => r.value === value)) {
+      rows.unshift({ value, label: selectedLabel ?? `${value.slice(0, 8)}…` });
+    }
+    return rows;
+  }, [hits, value, selectedLabel]);
 
-  const showChip = !!value && !open;
+  if (disabled) {
+    return (
+      <TpInput
+        id={id}
+        readOnly
+        disabled
+        value={selectedLabel ?? (value ? `${value.slice(0, 8)}…` : "")}
+        placeholder={placeholder}
+      />
+    );
+  }
 
   return (
-    <div className="tp-ui-anchor" ref={ref} style={{ display: "block" }}>
-      {showChip ? (
-        <button
-          type="button"
-          className="tp-ui-field"
-          disabled={disabled}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            textAlign: "left",
-          }}
-          onClick={() => setOpen(true)}
-        >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {selectedLabel ?? `${value.slice(0, 8)}…`}
-          </span>
-          <span aria-hidden style={{ color: "var(--tp-ink-4)", marginLeft: 8 }}>
-            ▾
-          </span>
-        </button>
-      ) : (
-        <input
-          id={id}
-          className="tp-ui-field"
-          value={query}
-          placeholder={placeholder}
-          disabled={disabled}
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          onFocus={() => setOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-        />
-      )}
-      {open ? (
-        <div
-          id={listId}
-          className="tp-ui-popover tp-ui-popover--start"
-          style={{ width: "100%", maxHeight: 280, overflow: "auto" }}
-        >
-          <div className="tp-ui-menu">
-            {loading ? (
-              <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
-                Searching…
-              </div>
-            ) : hits.length === 0 ? (
-              <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
-                {emptyText}
-              </div>
-            ) : (
-              hits.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  className="tp-ui-menu-item"
-                  onClick={() => {
-                    onChange(o.value, o.label);
-                    setQuery("");
-                    setOpen(false);
-                  }}
-                >
-                  <span style={{ flex: 1 }}>{o.label}</span>
-                  {o.hint != null ? (
-                    <span style={{ color: "var(--tp-ink-4)", fontSize: 12 }}>{o.hint}</span>
-                  ) : null}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <Combobox
+      options={options}
+      value={value || null}
+      onChange={(next) => onChange(next, options.find((o) => o.value === next)?.label ?? next)}
+      onQueryChange={setQuery}
+      loading={loading}
+      placeholder={placeholder}
+      searchPlaceholder={placeholder}
+      loadingText="Searching…"
+      emptyText={failed ? "Search failed — edit the query to try again." : emptyText}
+    />
   );
 }

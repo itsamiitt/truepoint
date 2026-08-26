@@ -189,12 +189,36 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  96 → 97 for 0138_api_key_usage_daily (ADR-0049) — the public API's usage rollup, hand-authored for the
  *  same reason 0137 was: generate diffs against a baseline that stopped at 0107. Also in schema/index.ts, so
- *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline. */
-// 97 → 98 for 0139_contact_master_presence (decisions.md 2026-08-25) — two ADDITIVE nullable booleans on
+ *  rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  97 → 98 for 0139_validation_rules (database-management-research 06; audit X2) — same category as 0137/0138,
+ *  with one difference worth recording: this migration did not introduce a table, it CANONICALISED one that
+ *  had been shipping without a migration at all. `validation_rules` was created by a defensive
+ *  `CREATE TABLE IF NOT EXISTS` inside rls/validationRules.sql, on the assumption that a later drizzle regen
+ *  would emit the real one. That regen is not safe here — the same stale-baseline problem — so "later" never
+ *  came and the table had no journal entry, which is the one place a reader looks to find out when it
+ *  appeared. So the deficit grows by one to close a worse gap than the one it opens. `IF NOT EXISTS`
+ *  throughout and byte-identical to the defensive CREATE it replaces, so it is a no-op on every existing
+ *  database. In schema/index.ts, so rlsCoverage holds it to a policy. Absorbed by the next rebaseline.
+ *
+ *  98 → 99 for 0140_search_recency_filter_indexes — the cheapest category of widening: INDEXES ONLY, no
+ *  schema change at all, so there is nothing for a snapshot to carry and nothing `generate` could have
+ *  emitted. Same reason as 0132: drizzle-kit produces only plain blocking CREATE INDEX, and all three of
+ *  these are PARTIAL and must be CONCURRENTLY on hot tables (contacts, intent_signals). The alternative —
+ *  shipping the filters they serve without them — makes a verification-recency or job-change filter scan
+ *  the RLS-visible workspace slice on the product's busiest read. Absorbed by the next rebaseline.
+ *
+ *  99 → 100 for 0141_past_employer_filter_indexes — same category as 0140: INDEXES ONLY, no schema change,
+ *  nothing `generate` could have emitted (all three are PARTIAL and must be CONCURRENTLY on Layer-0 tables
+ *  sized for billions). They are the reverse-lookup direction over master_employment, which every existing
+ *  index on that table misses: the two that touch a company are partial on `is_current` and on
+ *  `master_company_id IS NULL` respectively, so "has EVER worked at X" was served by neither. Absorbed by
+ *  the next rebaseline. */
+// 100 → 101 for 0142_contact_master_presence (decisions.md 2026-08-25) — two ADDITIVE nullable booleans on
 // contacts, which IS in the drizzle barrel, so `generate` could have produced the snapshot; it cannot do so
 // retroactively (the 2026-08-04 correction above) and the chain stopped at 0107 (0137). Same category as
 // 0091/0094: hand-authored, additive, its snapshot owed to the eventual rebaseline.
-const EXPECTED_DEFICIT = 98;
+const EXPECTED_DEFICIT = 101;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

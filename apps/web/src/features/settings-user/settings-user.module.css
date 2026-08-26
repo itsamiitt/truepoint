@@ -1,7 +1,8 @@
 /*
  * settings-user.module.css — co-located styles for the Settings ▸ User scope (Profile · Security ·
  * Notifications). Monochrome per the TruePoint tokens (packages/ui/src/tokens.css): hairline borders,
- * generous whitespace, no shadows. The panel chrome (.tp-settings-panel/.tp-settings-title) is global; these
+ * generous whitespace, no shadows. The panel chrome is global (.tp-settings-panel) and the title is the
+ * shared <PageHeader> from @leadwolf/ui — neither belongs here; these
  * styles only cover the bodies the slice owns.
  */
 
@@ -80,7 +81,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tp-hairline-2);
 }

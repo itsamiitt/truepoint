@@ -17,6 +17,10 @@
 //   - Cleared on mutation. Any action that could change what a lookup returns (capture, add-to-workspace,
 //     reveal, workspace/org switch, sign-out) invalidates the affected key or the whole cache in the bus
 //     router — so the next LOOKUP re-resolves against the truth.
+//
+// GENERIC over the cached value (defaulting to SubjectStatus, so every existing call site is unchanged): the
+// Profile Intelligence Panel's intel read wants exactly the same coalescing and the same invalidation points,
+// and a second copy of this logic would drift from the first the moment one of them gained a rule.
 import type { SubjectStatus } from "../../shared/types.ts";
 
 const DEFAULT_TTL_MS = 60_000;
@@ -24,25 +28,21 @@ const DEFAULT_TTL_MS = 60_000;
 // An active Sales-Nav session could view many profiles before that, so cap the map and evict oldest-first.
 const MAX_ENTRIES = 200;
 
-interface Entry {
-  status: SubjectStatus;
+interface Entry<T> {
+  status: T;
   at: number;
 }
 
-export class LookupCache {
-  private readonly entries = new Map<string, Entry>();
-  private readonly inflight = new Map<string, Promise<SubjectStatus>>();
+export class LookupCache<T = SubjectStatus> {
+  private readonly entries = new Map<string, Entry<T>>();
+  private readonly inflight = new Map<string, Promise<T>>();
 
   constructor(private readonly ttlMs: number = DEFAULT_TTL_MS) {}
 
   /** Return a fresh cached status, or the in-flight request for this key, or start `fetcher` and remember its
    *  success. `now` is injectable so the TTL is testable without fake timers (matches captureQueue.due). A
    *  rejected `fetcher` is propagated and NOT cached — the caller decides how to degrade. */
-  async resolve(
-    key: string,
-    fetcher: () => Promise<SubjectStatus>,
-    now: number = Date.now(),
-  ): Promise<SubjectStatus> {
+  async resolve(key: string, fetcher: () => Promise<T>, now: number = Date.now()): Promise<T> {
     const hit = this.entries.get(key);
     if (hit && now - hit.at < this.ttlMs) return hit.status;
 
@@ -61,7 +61,7 @@ export class LookupCache {
     }
   }
 
-  private remember(key: string, status: SubjectStatus, now: number): void {
+  private remember(key: string, status: T, now: number): void {
     this.entries.set(key, { status, at: now });
     if (this.entries.size > MAX_ENTRIES) {
       const oldest = this.entries.keys().next().value;

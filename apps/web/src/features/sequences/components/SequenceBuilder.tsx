@@ -71,7 +71,7 @@ export function SequenceBuilder({
       footer={
         <div className={styles.drawerFooter}>
           {error ? <p className={styles.drawerError}>{error}</p> : <span />}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
             <TpButton variant="ghost" onClick={close} disabled={busy}>
               Cancel
             </TpButton>

@@ -6,7 +6,15 @@
 
 import { isWorkspaceAdmin, useSessionRole } from "@/lib/useSessionRole";
 import type { TeamMemberView, TeamView } from "@leadwolf/types";
-import { Card, EmptyState, StateSwitch, TpButton, TpInput, useToast } from "@leadwolf/ui";
+import {
+  Card,
+  EmptyState,
+  PageHeader,
+  StateSwitch,
+  TpButton,
+  TpInput,
+  useToast,
+} from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import {
   addTeamMember,
@@ -73,10 +81,16 @@ function TeamRoster({ team, canManage }: { team: TeamView; canManage: boolean })
   }
 
   return (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--tp-hairline-2)" }}>
+    <div
+      style={{
+        marginTop: "var(--tp-space-3)",
+        paddingTop: "var(--tp-space-3)",
+        borderTop: "1px solid var(--tp-hairline-2)",
+      }}
+    >
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {members.length === 0 ? (
-          <p className="app-muted" style={{ fontSize: 13, margin: "0 0 12px" }}>
+          <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", margin: "0 0 12px" }}>
             No members in this team yet.
           </p>
         ) : (
@@ -107,7 +121,7 @@ function TeamRoster({ team, canManage }: { team: TeamView; canManage: boolean })
           </ul>
         )}
         {canManage && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
             <TpInput
               value={addEmail}
               placeholder="member@company.com"
@@ -200,16 +214,27 @@ export function TeamsPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Teams</h1>
-      <p className="app-muted" style={{ fontSize: 13, marginTop: 0 }}>
-        Teams are a way to group the people in this workspace — an org-chart label. They do{" "}
-        <strong>not</strong> change who can see which contacts, lists, or searches; everyone in the
-        workspace still sees the same records.
-      </p>
+      <PageHeader
+        title="Teams"
+        subtitle={
+          <>
+            Teams are a way to group the people in this workspace — an org-chart label. They do{" "}
+            <strong>not</strong> change who can see which contacts, lists, or searches; everyone in
+            the workspace still sees the same records.
+          </>
+        }
+      />
 
       {canManage && available && (
-        <Card style={{ padding: 16, marginBottom: 20 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
+        <Card style={{ padding: "var(--tp-space-4)", marginBottom: "var(--tp-space-5)" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "var(--tp-space-2)",
+              alignItems: "flex-start",
+            }}
+          >
             <TpInput
               value={newName}
               placeholder="Team name"
@@ -245,20 +270,20 @@ export function TeamsPanel() {
           />
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
           {teams.map((team) => (
-            <Card key={team.id} style={{ padding: 16 }}>
+            <Card key={team.id} style={{ padding: "var(--tp-space-4)" }}>
               <div
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
               >
                 <div>
                   <div style={{ fontWeight: 600 }}>{team.name}</div>
-                  <div className="app-muted" style={{ fontSize: 12 }}>
+                  <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                     {team.memberCount} member{team.memberCount === 1 ? "" : "s"}
                     {team.description ? ` · ${team.description}` : ""}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
                   <TpButton
                     variant="secondary"
                     size="sm"

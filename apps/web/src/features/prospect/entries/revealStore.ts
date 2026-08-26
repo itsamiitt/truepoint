@@ -1,7 +1,9 @@
-// entries/revealStore.ts — the prospect slice's REVEAL-STORE entry (perf-checklist PA-2 shape). The Search
-// composer mounts the provider ABOVE both panes and the profile drawers (reveal-as-save, decisions.md
-// 2026-08-25), and the accounts feature's person profile drawer reads the same store — through this entry,
-// never the main barrel, which would weld the whole contact-side slice into the Accounts tab's chunk.
+// entries/revealStore.ts — the prospect slice's REVEAL-STORE entry (perf-checklist PA-2 shape). The person
+// profile drawer in the accounts feature loads `DatabaseProfileRevealActions` from here with next/dynamic
+// (reveal-as-save, decisions.md 2026-08-25) — through this entry, never the main barrel, which would weld
+// the whole contact-side slice into the drawer's chunk. The provider itself is exported from `entries/pane`
+// beside the People pane, whose chunk already carries the store.
+export { DatabaseProfileRevealActions } from "../components/DatabaseProfileRevealActions";
 export {
   type DatabaseRevealAttempt,
   type RevealAttempt,

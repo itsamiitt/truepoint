@@ -45,6 +45,26 @@ export async function searchContacts(
 }
 
 /** GET /search/suggest — typeahead values drawn from the index (24 §3). `signal` cancels stale requests. */
+/**
+ * GET /search/database/suggest — typeahead over the Layer-0 satellite values behind the `database-only`
+ * facets (skill / language / school). A different endpoint, not a parameter: the workspace suggest
+ * aggregates the caller's own contacts, which hold none of this data.
+ */
+export async function suggestDatabaseField(
+  field: string,
+  prefix: string,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<Suggestion[]> {
+  const qs = new URLSearchParams({ field, prefix, limit: String(limit) });
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/search/database/suggest?${qs.toString()}`, {
+    signal,
+  });
+  if (!res.ok) throw await toError(res, "Suggest failed");
+  const body = (await res.json()) as { suggestions: Suggestion[] };
+  return body.suggestions ?? [];
+}
+
 export async function suggestField(
   field: FacetKey,
   prefix: string,

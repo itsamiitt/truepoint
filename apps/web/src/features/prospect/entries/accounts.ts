@@ -9,17 +9,24 @@ export {
   AccountAlumniSection,
   AccountDisplacementSection,
 } from "../components/AccountGraphSections";
-export { AccountsTable } from "../components/AccountsTable";
+export {
+  ACCOUNT_DEFAULT_VISIBLE_COLUMNS,
+  ACCOUNT_TOGGLEABLE_COLUMNS,
+  AccountsTable,
+} from "../components/AccountsTable";
 export { AccountTechnologySection } from "../components/AccountTechnologySections";
 export { HeadcountSection } from "../components/HeadcountSection";
 export { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
 export { useAccountSearch } from "../hooks/useAccountSearch";
 export { useAccountTechnologies } from "../hooks/useAccountTechnologies";
 export {
+  ACCOUNT_ALL_FILTER_GROUPS,
   ACCOUNT_QUICK_FACETS,
+  accountFacetScope,
+  accountWorkspaceOnlyFields,
   activeChips,
   clearAllFilters,
-  isAccountWorkspaceOnlyField,
+  facetLabel as accountFacetLabel,
 } from "../accountFilterGroups";
 export { orgKindCopy } from "../orgKindCopy";
 export { contactsHrefForCompany } from "../searchUrlState";

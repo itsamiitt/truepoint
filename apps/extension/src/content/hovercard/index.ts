@@ -7,16 +7,50 @@ import { send } from "../../shared/client.ts";
 import { ENV } from "../../shared/env.ts";
 import type { CapturedRecord, SubjectStatus } from "../../shared/types.ts";
 
+/**
+ * The DS tokens are declared on `:root` — and `:root` matches the document ELEMENT, which a ShadowRoot is
+ * not (it is a DocumentFragment). So importing tokens.css into the shadow tree shipped the whole stylesheet
+ * into every LinkedIn page for ZERO effect: every var() below silently fell through to its inline fallback,
+ * the card rendered in the host page's font with a heavier, colder shadow than any other TruePoint popover,
+ * and — worst — tokens.css's `:focus-visible { outline: 2px solid var(--focus-ring) }` DID match in here
+ * (a plain selector, unlike :root) with `--focus-ring` undefined, making the declaration invalid at
+ * computed-value time. An invalid `outline` unsets to `outline-style: none`, so the rule intended to
+ * GUARANTEE a focus ring destroyed the UA's default one on the card's primary action.
+ *
+ * Re-scoping the selector to `:host` puts the same tokens on the shadow host, where the card can see them.
+ */
+export function scopeTokensToShadowHost(css: string): string {
+  // `(?![\w-])`, not `\b`: a word boundary sits between "t" and "-", so `\b` would rewrite a selector like
+  // `:root-panel` into `:host-panel`. Caught by its own test rather than by a mangled page.
+  return css.replace(/:root(?![\w-])/g, ":host");
+}
+
+const shadowTokens = scopeTokensToShadowHost(tokens);
+
 const baseCss = `
 :host { all: initial; }
 .card {
   position: fixed; top: 84px; inset-inline-end: 24px; width: 320px;
-  font-family: var(--font-sans, system-ui); color: var(--tp-ink, #111827);
+  /* An explicit stack, NOT var(--font-sans): that token resolves through --font-geist-sans, which next/font
+     defines on the app's documents and never on a LinkedIn page — the substitution fails and font-family
+     falls all the way back to the initial value (a serif, under all:initial). No @font-face reaches a
+     content script either, so the system stack is the honest choice here. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--tp-ink, #111827);
   background: var(--tp-surface, #fff); border: 1px solid var(--tp-hairline-2, #e5e7eb);
-  border-radius: var(--tp-radius-card, 14px); box-shadow: var(--tp-shadow-popover, 0 8px 24px rgba(0,0,0,.12));
+  border-radius: var(--tp-radius-card, 14px);
+  /* Fallback matches the DS token it stands in for — it used to be a single heavier, colder shadow, so on
+     the one surface where the fallback actually fired the card did not look like a TruePoint popover. */
+  box-shadow: var(--tp-shadow-popover, 0 4px 16px rgba(17,24,39,.08), 0 1px 3px rgba(17,24,39,.06));
   padding: var(--tp-space-4, 16px); z-index: 2147483647;
 }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .name { font-size: 15px; font-weight: 600; }
+.close {
+  border: 0; background: transparent; padding: 0; margin: -2px -2px 0 0; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 1; color: var(--tp-ink-3, #6b7280);
+}
+.close:hover { color: var(--tp-ink, #111827); }
 .sub { font-size: 12px; color: var(--tp-ink-3, #6b7280); margin-top: 2px; }
 .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px;
   font-size: 13px; color: var(--tp-ink-2, #374151); }
@@ -37,6 +71,7 @@ export class HoverCard {
   private readonly subEl: HTMLElement;
   private readonly pillEl: HTMLElement;
   private readonly button: HTMLButtonElement;
+  private readonly closeButton: HTMLButtonElement;
   private readonly revealEl: HTMLElement;
   private record: CapturedRecord | null = null;
   private reExtract: (() => CapturedRecord | null) | null = null;
@@ -49,23 +84,44 @@ export class HoverCard {
     this.root = this.host.attachShadow({ mode: "open" });
 
     const style = document.createElement("style");
-    style.textContent = tokens + baseCss;
+    style.textContent = shadowTokens + baseCss;
     this.root.appendChild(style);
 
     const card = el("div", "card");
-    const header = el("div");
+    // The card appears over someone else's page with its own controls, so it needs to announce itself as a
+    // region and carry a name — it had no role, no accessible name and no dismiss control at all.
+    // Deliberately NOT a modal and deliberately NOT auto-focused: it appears on profile detection, not on a
+    // user action, and stealing focus mid-browse would be hostile.
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", t("app.name"));
+    card.tabIndex = -1;
+
+    const header = el("div", "head");
+    const identity = el("div");
     this.nameEl = el("div", "name");
     this.subEl = el("div", "sub");
-    header.append(this.nameEl, this.subEl);
+    identity.append(this.nameEl, this.subEl);
+    this.closeButton = document.createElement("button");
+    this.closeButton.type = "button";
+    this.closeButton.className = "close";
+    this.closeButton.textContent = "✕";
+    this.closeButton.setAttribute("aria-label", t("card.dismiss"));
+    this.closeButton.addEventListener("click", () => this.hide());
+    header.append(identity, this.closeButton);
 
     const row = el("div", "row");
     const brand = el("span");
     brand.textContent = t("app.name");
     this.pillEl = el("span", "pill");
+    // The pill is the status: it moves from "checking" to found/queued/not-found on its own, and without a
+    // live region a screen-reader user is never told the answer arrived.
+    this.pillEl.setAttribute("aria-live", "polite");
     row.append(brand, this.pillEl);
 
     this.revealEl = el("div", "reveal");
+    this.revealEl.setAttribute("aria-live", "polite");
     this.button = document.createElement("button");
+    this.button.type = "button";
     this.button.className = "btn";
     this.button.addEventListener("click", () => void this.onPrimary());
 
@@ -73,11 +129,19 @@ export class HoverCard {
     this.root.appendChild(card);
     document.documentElement.appendChild(this.host);
 
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        this.hide();
-      }
-    });
+    document.addEventListener("keydown", this.onKeyDown);
+  }
+
+  /** Bound so it can be REMOVED — the old inline listener stayed on `document` for the page's lifetime, and
+   *  fired on every Escape whether the card was showing or not. */
+  private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "Escape" && this.host.style.display !== "none") this.hide();
+  };
+
+  /** Tear down the injected host and its document listener (SPA teardown / extension disable). */
+  destroy(): void {
+    document.removeEventListener("keydown", this.onKeyDown);
+    this.host.remove();
   }
 
   /** Show the card for a freshly detected profile. `reExtract` (optional) re-reads the DOM at Save time so
@@ -196,7 +260,7 @@ export class HoverCard {
     // The app has no per-contact detail route yet, so open the prospect workspace (a deep link is a future
     // apps/web route). A content-script click is a user gesture, so window.open is allowed.
     if (contactId && this.status?.owned) {
-      window.open(`${ENV.appOrigin}/prospect`, "_blank", "noopener,noreferrer");
+      window.open(`${ENV.appOrigin}/search`, "_blank", "noopener,noreferrer");
       return;
     }
 

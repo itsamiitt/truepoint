@@ -35,7 +35,16 @@ export default async function OrgPage({ searchParams }: { searchParams: SearchPa
             >
               <span>{o.tenantName}</span>
               {o.isTenantOwner ? (
-                <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--tp-ink-4)" }}>
+                // ink-2, not ink-3 and certainly not the ink-4 this shipped with: a RadioOption fills with
+                // --tp-surface-3 once it is :checked (and the first one is checked by default), where ink-3 is
+                // 4.43:1 and ink-4 was 2.33:1 — both under AA. ink-2 holds at 9.4:1 checked and 12.6:1 not.
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: "var(--tp-text-caption)",
+                    color: "var(--tp-ink-2)",
+                  }}
+                >
                   owner
                 </span>
               ) : null}

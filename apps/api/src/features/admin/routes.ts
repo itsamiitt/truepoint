@@ -1455,7 +1455,7 @@ adminRoutes.get("/feature-flags/env-gates", (c) => {
       label: "Auth-policy login enforcement",
       description:
         "System-wide master-arm for tenant auth-policy login enforcement. Pairs with each tenant's auth-enforcement switch (Tenants → tenant → Auth enforcement).",
-      enabled: env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true",
+      enabled: env.AUTH_POLICY_ENFORCEMENT_ENABLED,
       flagKey: null,
     },
     // linkedin_api source gates (docs/planning/linkedin-source-ingestion/). Env-only — Layer 0 has no

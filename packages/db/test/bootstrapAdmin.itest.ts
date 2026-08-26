@@ -118,5 +118,6 @@ test("renaming onto an address owned by a different account fails closed", async
       passwordHash: "hash-v4",
       fullName: "Bootstrap Admin",
     }),
+    // itest-rejects-ok: awaits a core bootstrap call that settles its own tx before throwing (suite verified 4 pass, no stall)
   ).rejects.toThrow(/already used by another account/);
 });

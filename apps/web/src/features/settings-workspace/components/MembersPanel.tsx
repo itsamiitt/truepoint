@@ -8,6 +8,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -122,7 +123,7 @@ export function MembersPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Members</h1>
+      <PageHeader title="Members" />
       <div className={styles.inviteRow}>
         <TpInput
           className={styles.inviteEmail}

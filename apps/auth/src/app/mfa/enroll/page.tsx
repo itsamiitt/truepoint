@@ -75,21 +75,25 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
             display: "flex",
             flexDirection: "column",
             gap: "var(--tp-space-2)",
-            fontSize: 14,
+            fontSize: "var(--tp-text-label)",
           }}
         >
           <div>
-            <dt style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Setup key</dt>
+            <dt style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Setup key
+            </dt>
             <dd className={styles.selectable}>{result.secret}</dd>
           </div>
           <div>
-            <dt style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Setup link (otpauth)</dt>
+            <dt style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Setup link (otpauth)
+            </dt>
             <dd
               style={{
                 userSelect: "all",
                 wordBreak: "break-all",
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: "var(--tp-text-caption)",
                 color: "var(--tp-ink-3)",
               }}
             >
@@ -131,7 +135,7 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
           gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: "var(--tp-space-2)",
           fontFamily: "var(--font-mono)",
-          fontSize: 14,
+          fontSize: "var(--tp-text-label)",
         }}
         aria-label="Recovery codes"
       >

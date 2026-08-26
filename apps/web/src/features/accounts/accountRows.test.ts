@@ -66,7 +66,7 @@ function account(over: Partial<MaskedAccount> = {}): MaskedAccount {
 
 describe("toDatabaseCompanyQuery", () => {
   test("passes through the facets the global graph can answer", () => {
-    const q = toDatabaseCompanyQuery(
+    const { query: q } = toDatabaseCompanyQuery(
       {
         ...BASE,
         text: "acme",
@@ -86,7 +86,7 @@ describe("toDatabaseCompanyQuery", () => {
 
   test("preserves the exclude sense rather than flipping it to include", () => {
     // Dropping `op` here would show the user exactly the companies they asked to hide.
-    const q = toDatabaseCompanyQuery(
+    const { query: q } = toDatabaseCompanyQuery(
       {
         ...BASE,
         filters: [{ kind: "term", field: "industry", op: "exclude", values: ["Retail"] }],
@@ -96,27 +96,38 @@ describe("toDatabaseCompanyQuery", () => {
     expect(q?.filters[0]).toMatchObject({ kind: "term", op: "exclude", values: ["Retail"] });
   });
 
-  test("returns null for a workspace-only clause instead of dropping it", () => {
+  test("skips the global half for a workspace-only clause, and SAYS which one", () => {
     // These are all interrogations of the user's OWN book. Answering them against the global graph would
-    // return companies that do not satisfy the filter the user actually typed.
+    // return companies that do not satisfy the filter the user actually typed — so the half is skipped.
+    // What changed: the caller now learns WHY, so the pane can say so instead of the rows just vanishing.
     const workspaceOnly: AccountQuery["filters"][number][] = [
       { kind: "term", field: "technology", op: "include", values: ["salesforce"] },
       { kind: "term", field: "funding_stage", op: "include", values: ["series_a"] },
       { kind: "term", field: "revenue_range", op: "include", values: ["1M-10M"] },
       { kind: "range", field: "icp_fit_score", gte: 80 },
-      { kind: "bool", field: "has_email", value: true },
     ];
     for (const clause of workspaceOnly) {
-      expect(toDatabaseCompanyQuery({ ...BASE, filters: [clause] }, 25)).toBeNull();
+      const result = toDatabaseCompanyQuery({ ...BASE, filters: [clause] }, 25, [clause.field]);
+      expect(result.query).toBeNull();
+      expect(result.droppedFields).toEqual([clause.field]);
     }
+  });
+
+  test("a bool clause skips the global half — the server drops account bools anyway", () => {
+    const result = toDatabaseCompanyQuery(
+      { ...BASE, filters: [{ kind: "bool", field: "has_email", value: true }] },
+      25,
+    );
+    expect(result.query).toBeNull();
+    expect(result.droppedFields).toEqual(["has_email"]);
   });
 
   test("maps the overlay's created_desc onto a global order that means something", () => {
     // "recently added to MY workspace" is meaningless for a company the workspace does not hold.
-    expect(toDatabaseCompanyQuery({ ...BASE, sort: "created_desc" }, 25)?.sort).toBe(
+    expect(toDatabaseCompanyQuery({ ...BASE, sort: "created_desc" }, 25).query?.sort).toBe(
       "recently_updated",
     );
-    expect(toDatabaseCompanyQuery({ ...BASE, sort: "name_asc" }, 25)?.sort).toBe("name_asc");
+    expect(toDatabaseCompanyQuery({ ...BASE, sort: "name_asc" }, 25).query?.sort).toBe("name_asc");
   });
 });
 
@@ -180,7 +191,9 @@ describe("the Accounts quick tier never skips the database half", () => {
         facet.kind === "range"
           ? { kind: "range" as const, field: facet.field, gte: 1 }
           : { kind: "term" as const, field: facet.field, op: "include" as const, values: ["x"] };
-      expect(toDatabaseCompanyQuery({ ...BASE, filters: [clause] }, 25)).not.toBeNull();
+      const { query, droppedFields } = toDatabaseCompanyQuery({ ...BASE, filters: [clause] }, 25);
+      expect(query).not.toBeNull();
+      expect(droppedFields).toEqual([]);
     }
   });
 });

@@ -21,6 +21,7 @@ import type {
 import { and, asc, desc, eq, getTableColumns, gt, inArray, notInArray, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
 
 // ── Row types (VerificationJob-style $inferSelect) ─────────────────────────────────────────────────────────
@@ -802,6 +803,11 @@ export const importJobRepository = {
    */
   async insertJobRows(tx: Tx, rows: ImportJobRowInsert[]): Promise<void> {
     if (rows.length === 0) return;
-    await tx.insert(importJobRows).values(rows);
+    // Sliced under PostgreSQL's bind-parameter ceiling: 7 parameters a row against bands of
+    // CHUNK_ROWS = 10_000 is 70,000 against a 65,534 limit, so this threw MAX_PARAMETERS_EXCEEDED on every
+    // full chunk. See bindLimit.ts. Each slice runs on the caller's tx — the chunk still commits as one.
+    for (const slice of sliceForBindLimit(rows)) {
+      await tx.insert(importJobRows).values(slice);
+    }
   },
 };

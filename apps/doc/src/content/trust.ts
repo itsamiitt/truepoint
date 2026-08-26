@@ -90,7 +90,7 @@ export const TRUST_SECTIONS: readonly TrustSection[] = [
         kind: "list",
         items: [
           "A data processing agreement and a current sub-processor list.",
-          "Per-field provenance in the API response itself, so an audit does not depend on us answering an email.",
+          "Provenance in the API response itself, so an audit does not depend on us answering an email. Today that is the freshness stamp on company enrichment; the full per-field block arrives with person enrichment, and until it does no page here claims otherwise.",
           "Deletion confirmation covering the data we hold, on request.",
         ],
       },

@@ -50,7 +50,13 @@ const COLUMNS: Column<AiUsageTenant>[] = [
     cell: (t) =>
       t.failures > 0 ? (
         <span
-          style={{ color: "var(--warning)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
+          // --warning-700, not --warning: this is a NUMBER, and the base tone is 3.19:1 on white — under the
+          // 4.5:1 AA floor for text. The base tone stays correct for fills and icons.
+          style={{
+            color: "var(--warning-700)",
+            fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+          }}
         >
           {fmt(t.failures)}
         </span>
@@ -108,7 +114,7 @@ export function AiUsagePage() {
               display: "inline-flex",
               alignItems: "center",
               gap: "var(--tp-space-2)",
-              fontSize: 13,
+              fontSize: "var(--tp-text-body)",
               color: "var(--tp-ink-3)",
             }}
           >
@@ -124,7 +130,18 @@ export function AiUsagePage() {
         }
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !(data && totals)}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No AI usage recorded"
+            description="Nothing has been logged for this window yet."
+          />
+        }
+      >
         {data && totals ? (
           <>
             <div className="tp-stat-grid">

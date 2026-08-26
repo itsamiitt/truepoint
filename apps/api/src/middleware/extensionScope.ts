@@ -70,6 +70,19 @@ const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   // "Add to workspace" from the platform database (Layer-0-as-database slice 3/4): one contact per user
   // gesture, addressed by URL. The card's in-database CTA calls exactly this.
   rule("POST", "/api/v1/contacts/from-database"),
+  // The ONE composed read behind the Profile Intelligence Panel (chrome-extension/14 X06 remainder): the
+  // masked Layer-0 profile + company + the caller's own overlay row for the page the rep is viewing. Its own
+  // rule because the /lookup pattern is anchored — a sibling path is a separate grant, deliberately.
+  rule("POST", "/api/v1/contacts/lookup/intel"),
+  // The NO-CHARGE view of reveal data the workspace already owns (ADR-0042). The panel hydrates a revealed
+  // contact from this on open instead of re-revealing, so re-opening a card can never re-charge.
+  rule("GET", "/api/v1/contacts/:id/revealed"),
+  // Add-to-list from the panel footer (C-01: contribution as exhaust of work the rep is already doing).
+  // READ the workspace's lists, and add ONE contact per gesture — nothing else on the lists surface: no
+  // create, no delete, no member enumeration (a masked page of every contact in a list is a bulk read the
+  // extension has no reason to make).
+  rule("GET", "/api/v1/lists"),
+  rule("POST", "/api/v1/lists/:id/members"),
   rule("GET", "/api/v1/credits/balance"),
   rule("GET", "/api/v1/credits/reveal-costs"),
   rule("GET", "/api/v1/me"),

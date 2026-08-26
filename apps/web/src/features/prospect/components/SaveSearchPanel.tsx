@@ -87,7 +87,9 @@ export function SaveSearchPanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-2)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tp-ink-2)" }}>
+        <span
+          style={{ fontSize: "var(--tp-text-caption)", fontWeight: 600, color: "var(--tp-ink-2)" }}
+        >
           Saved searches
         </span>
         <TpButton variant="secondary" size="sm" onClick={() => setSaveOpen(true)}>
@@ -96,9 +98,11 @@ export function SaveSearchPanel({
       </div>
 
       {error ? (
-        <span style={{ fontSize: 12, color: "var(--danger)" }}>{error}</span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--danger)" }}>{error}</span>
       ) : loading ? (
-        <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>Loading…</span>
+        <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+          Loading…
+        </span>
       ) : searches.length === 0 ? null : (
         <ul
           style={{
@@ -115,6 +119,8 @@ export function SaveSearchPanel({
               key={s.id}
               style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-1)" }}
             >
+              {/* Raw <button>, but NOT hand-rolled: it already wears the DS's own `.tp-ui-menu-item` — a
+                  full-width, left-aligned, truncating list row. TpButton would turn it into an inline pill. */}
               <button
                 type="button"
                 className="tp-ui-menu-item"
@@ -133,13 +139,17 @@ export function SaveSearchPanel({
                   {s.name}
                 </span>
                 {s.visibility === "workspace" ? (
-                  <span style={{ fontSize: 11, color: "var(--tp-ink-4)" }}>Shared</span>
+                  // ink-2, not ink-3: this row is a .tp-ui-menu-item, whose hover paints
+                  // --nav-hover-fill, where ink-3 scores 4.39:1 and misses AA.
+                  <span style={{ fontSize: "var(--tp-text-micro)", color: "var(--tp-ink-2)" }}>
+                    Shared
+                  </span>
                 ) : null}
               </button>
               {s.isOwner ? (
                 <DropdownMenu
-                  trigger={({ toggle }) => (
-                    <TpIconButton label={`Actions for ${s.name}`} onClick={toggle}>
+                  trigger={({ toggle, props }) => (
+                    <TpIconButton {...props} label={`Actions for ${s.name}`} onClick={toggle}>
                       <MoreHorizontal size={16} aria-hidden />
                     </TpIconButton>
                   )}

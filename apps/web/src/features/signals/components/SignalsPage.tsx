@@ -6,7 +6,16 @@
 "use client";
 
 import type { SignalFamily, TenantSignal, Watchlist } from "@leadwolf/types";
-import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import {
+  EmptyState,
+  PageHeader,
+  StateSwitch,
+  StatusBadge,
+  type TabItem,
+  Tabs,
+  TpButton,
+  TpInput,
+} from "@leadwolf/ui";
 import Link from "next/link";
 import { useState } from "react";
 import { useSignalFeed, useWatchlists } from "../hooks/useSignals";
@@ -21,6 +30,9 @@ const FAMILIES: Array<{ key: SignalFamily | "all"; label: string }> = [
   { key: "filing", label: "Filings" },
   { key: "other", label: "Other" },
 ];
+
+/** The same seven options, shaped for the DS <Tabs> (which the feed filter already declared itself to be). */
+const FAMILY_TABS: TabItem[] = FAMILIES.map((f) => ({ value: f.key, label: f.label }));
 
 type Tone = "success" | "warning" | "muted";
 const FAMILY_TONE: Record<SignalFamily, Tone> = {
@@ -112,6 +124,10 @@ function WatchlistsPanel() {
                 </TpButton>
               </div>
               <div className={styles.familyToggles}>
+                {/* Deliberately a raw <button> and not TpChip: these are MULTI-select subscription toggles,
+                    and their state is announced by aria-pressed. TpChip renders its label inside a wrapper
+                    <span> with no pressed state to pass through, so converting would leave the on/off state
+                    conveyed by the pill colour alone. It carries type="button" and its label is its name. */}
                 {FAMILIES.filter((f) => f.key !== "all").map((f) => {
                   const effective = subs[w.id] ?? new Set<SignalFamily>(w.myFamilies);
                   const active = effective.has(f.key as SignalFamily);
@@ -141,7 +157,7 @@ function WatchlistsPanel() {
           create.mutate(trimmed, { onSuccess: () => setName("") });
         }}
       >
-        <input
+        <TpInput
           className={styles.newInput}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -162,27 +178,21 @@ export function SignalsPage() {
 
   return (
     <section>
-      <div className={styles.head}>
-        <h1 className="tp-settings-title" style={{ margin: 0 }}>
-          Signals
-        </h1>
-      </div>
+      {/* PageHeader, not the borrowed .tp-settings-title: this is a destination, not a settings panel. The
+          feature's .head keeps the 16px gap to the layout below (PageHeader's own margin is 0). */}
+      <PageHeader className={styles.head} title="Signals" />
       <div className={styles.layout}>
         <div>
-          <div className={styles.filters} role="tablist" aria-label="Signal family">
-            {FAMILIES.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                role="tab"
-                aria-selected={family === f.key}
-                className={family === f.key ? styles.chipActive : styles.chip}
-                onClick={() => setFamily(f.key)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          {/* The DS Tabs — the filter row was ALREADY a hand-rolled role="tablist"/role="tab", but without
+              the pattern's other half: no roving tabindex and no arrow keys, so it was Tab-only. Tabs ships
+              both. .filters still carries the row's gap + 12px bottom margin. */}
+          <Tabs
+            className={styles.filters}
+            items={FAMILY_TABS}
+            value={family}
+            onChange={(v) => setFamily(v as SignalFamily | "all")}
+            aria-label="Signal family"
+          />
           <StateSwitch
             loading={loading}
             error={error}

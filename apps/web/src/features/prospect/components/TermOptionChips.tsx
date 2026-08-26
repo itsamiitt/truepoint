@@ -37,6 +37,9 @@ export function TermOptionChips({
       </span>
     );
   }
+  // Raw <button>, not TpChip: `.addChip` is a DASHED "add" affordance (TpChip is a solid surface-3 pill),
+  // and its include/exclude treatment rides on `data-op` — which TpChip takes no passthrough for. Converting
+  // would erase both the add affordance and the negation colour. Each button carries its own visible label.
   return (
     <div className={styles.chipWrap}>
       {options.map((o) => {

@@ -167,7 +167,7 @@ export function PricingPage() {
       align: "right",
       cell: (p) =>
         canManage ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="ghost"
               size="sm"
@@ -218,7 +218,7 @@ export function PricingPage() {
         onClose={() => (busy ? undefined : setDraft(null))}
         title={draft?.editingKey ? "Edit credit pack" : "New credit pack"}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -229,7 +229,7 @@ export function PricingPage() {
         }
       >
         {draft ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
             <Field label="Key (stable id)" htmlFor="pack-key">
               <TpInput
                 id="pack-key"
@@ -248,7 +248,7 @@ export function PricingPage() {
                 onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })}
               />
             </Field>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-3)" }}>
               <Field label="Credits" htmlFor="pack-credits" grow>
                 <TpInput
                   id="pack-credits"
@@ -300,9 +300,14 @@ function Field({
   return (
     <label
       htmlFor={htmlFor}
-      style={{ display: "flex", flexDirection: "column", gap: 4, flex: grow ? "1 1 0" : undefined }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--tp-space-1)",
+        flex: grow ? "1 1 0" : undefined,
+      }}
     >
-      <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
+      <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
     </label>
   );

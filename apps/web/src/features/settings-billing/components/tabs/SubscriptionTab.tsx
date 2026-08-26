@@ -69,46 +69,46 @@ export function SubscriptionTab() {
   return (
     <StateSwitch loading={loading} error={error} onRetry={reload}>
       {sub ? (
-        <Card style={{ padding: 24 }}>
+        <Card style={{ padding: "var(--tp-space-6)" }}>
           <div className={styles.cardHead}>
             <span className={styles.cardLabel}>{sub.planName ?? sub.plan}</span>
             <StatusBadge tone={statusTone(sub.status)}>{sub.status.replace(/_/g, " ")}</StatusBadge>
           </div>
           <div style={{ display: "flex", gap: 40, margin: "16px 0" }}>
             <div>
-              <div className="app-muted" style={{ fontSize: 12 }}>
+              <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                 Billing
               </div>
               <div>{sub.term === "annual" ? "Annual" : "Monthly"}</div>
             </div>
             {sub.currentPeriodEnd && (
               <div>
-                <div className="app-muted" style={{ fontSize: 12 }}>
+                <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                   {sub.cancelAtPeriodEnd ? "Ends" : "Renews"}
                 </div>
                 <div>{fmtDate(sub.currentPeriodEnd)}</div>
               </div>
             )}
           </div>
-          <p className="app-muted" style={{ fontSize: 13, marginBottom: 0 }}>
+          <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", marginBottom: 0 }}>
             {sub.cancelAtPeriodEnd
               ? "Your subscription is set to end at the close of the current period. Purchased credits never expire."
               : sub.status === "past_due"
                 ? "We couldn't process your last payment. Update your payment method to keep your plan active."
                 : "Your monthly credit allotment refreshes each period; unused allotment doesn't carry over. Purchased credits never expire."}
           </p>
-          <div style={{ marginTop: 16 }}>{manageButton}</div>
+          <div style={{ marginTop: "var(--tp-space-4)" }}>{manageButton}</div>
         </Card>
       ) : (
-        <Card style={{ padding: 24 }}>
+        <Card style={{ padding: "var(--tp-space-6)" }}>
           <div className={styles.cardHead}>
             <span className={styles.cardLabel}>Month-to-month</span>
           </div>
-          <p className="app-muted" style={{ fontSize: 13, marginBottom: 0 }}>
+          <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", marginBottom: 0 }}>
             You're on month-to-month — no auto-renewal, no lock-in, and your credits never expire.
             Choose a plan on the Plan tab to subscribe for a recurring monthly credit allotment.
           </p>
-          <div style={{ marginTop: 16 }}>{manageButton}</div>
+          <div style={{ marginTop: "var(--tp-space-4)" }}>{manageButton}</div>
         </Card>
       )}
     </StateSwitch>

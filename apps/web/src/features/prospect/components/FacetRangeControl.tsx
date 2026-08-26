@@ -5,6 +5,7 @@
 
 import type { ContactQuery } from "@leadwolf/types";
 import { TpInput } from "@leadwolf/ui";
+import type { ReactNode } from "react";
 import { getRange, setRange } from "../filterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
@@ -25,6 +26,7 @@ export function RangeControl({
   unit,
   query,
   onChange,
+  scopeNote,
 }: {
   field: string;
   label: string;
@@ -32,6 +34,8 @@ export function RangeControl({
   unit?: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  /** Optional mark beside the label — the scope badge. */
+  scopeNote?: ReactNode;
 }) {
   const { gte, lte } = getRange(query, field);
   const { draft, schedule, flush } = useDraftRange(gte, lte, (next) =>
@@ -46,9 +50,12 @@ export function RangeControl({
   const type = valueKind === "date" ? "date" : "number";
   return (
     <div className={styles.facet}>
-      <span className={styles.facetLabel}>
-        {label}
-        {unit ? ` (${unit})` : ""}
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>
+          {label}
+          {unit ? ` (${unit})` : ""}
+        </span>
+        {scopeNote}
       </span>
       <div className={styles.rangeRow}>
         <TpInput

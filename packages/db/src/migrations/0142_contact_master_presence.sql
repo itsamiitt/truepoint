@@ -1,4 +1,4 @@
--- 0139_contact_master_presence.sql — Layer-0 channel PRESENCE persisted on the workspace copy (reveal-as-save,
+-- 0142_contact_master_presence.sql — Layer-0 channel PRESENCE persisted on the workspace copy (reveal-as-save,
 -- decisions.md 2026-08-25) [S-04][S-10]
 -- HAND-AUTHORED, additive-only. No drizzle-kit generate — the snapshot chain stopped at 0107 (see 0137).
 --

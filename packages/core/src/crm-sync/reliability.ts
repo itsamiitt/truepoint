@@ -35,27 +35,9 @@ export function classifyRetry(cls: CrmRetryClass): RetryAction {
   }
 }
 
-/** Backoff tuning. `jitter` is INJECTED (default identity) so the pure fn never calls Math.random itself. */
-export interface BackoffOpts {
-  baseMs?: number;
-  capMs?: number;
-  /** The worker passes a real jitter at call time (e.g. full-jitter in [0, d]); default is identity. */
-  jitter?: (delayMs: number) => number;
-}
-
-/**
- * Deterministic capped exponential backoff: base · 2^attempt, clamped to capMs, then the injected jitter.
- * attempt is clamped to ≥0 and truncated. Defaults: base 1s, cap 5m. PURE — no clock, no RNG inside.
- */
-export function backoffDelayMs(attempt: number, opts: BackoffOpts = {}): number {
-  const base = opts.baseMs ?? 1_000;
-  const cap = opts.capMs ?? 300_000;
-  const jitter = opts.jitter ?? ((d) => d);
-  const safeAttempt = Math.max(0, Math.trunc(attempt));
-  const exp = base * 2 ** safeAttempt;
-  const capped = Math.min(exp, cap);
-  return Math.max(0, Math.round(jitter(capped)));
-}
+// backoffDelayMs/BackoffOpts moved to ../reliability/backoff.ts (shared with the data-source fetch
+// lane, verbatim); re-exported here so the original import sites and tests keep working unchanged.
+export { backoffDelayMs, type BackoffOpts } from "../reliability/backoff.ts";
 
 /** Inputs to the per-connection daily fair-share gate (§8.2 layer 2). All counts are for one UTC day. */
 export interface RateBudgetInput {

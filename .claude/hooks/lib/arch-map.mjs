@@ -27,6 +27,9 @@ export const CANONICAL_DOMAINS = [
   "workspaces",
   "import",
   "enrichment",
+  // Shared reliability primitives (packages/core/src/reliability): Retry-After parsing, the data-source
+  // error classifier, capped backoff — consumed by enrichment + sourceLanding, owned by neither.
+  "reliability",
   "sales-navigator",
   "search",
   "reveal",
@@ -72,6 +75,83 @@ export const CANONICAL_DOMAINS = [
   "settings-billing",
   "settings-compliance",
   "teams",
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────
+  // OBSERVED IN CODE, declared 2026-08-22. Everything above came from docs/planning/05 + 11; everything
+  // below is a folder that exists and was warning on every single run — 58 of them, which is more than the
+  // declared list held. That is not a list catching drift, it is a list that lost the race, and 58 lines of
+  // "undeclared domain" is indistinguishable from no warnings at all: the one genuinely new folder tomorrow
+  // would arrive as warning #59 and nobody would see it.
+  //
+  // Declaring them is the correct branch of the warning's own instruction ("add to CANONICAL_DOMAINS or
+  // rename the folder") for every case but one, noted at the end. They are kept in a separate block rather
+  // than merged above so the provenance distinction survives: above = planned vocabulary, below = shipped
+  // vocabulary. When a planning doc next enumerates modules, this block is the diff it owes.
+  "account-search",
+  "accounts",
+  "admin",
+  "announcements",
+  "api-keys",
+  "api-usage",
+  "audit-log",
+  "auth-policy",
+  "channels",
+  "contacts-bulk",
+  "contacts-dedup",
+  "contacts-from-database",
+  "contacts-merge",
+  "contacts-resolve",
+  "content",
+  "custom-fields",
+  "data-ops",
+  "data-quality",
+  "data-sources",
+  "email",
+  "enrichment-jobs",
+  "entitlements",
+  "er",
+  "events",
+  "extension",
+  "feature-flags",
+  "identity",
+  "import-mapping-templates",
+  "ingest",
+  "master-sync",
+  "pipeline-stages",
+  "plans",
+  "pricing",
+  "projection",
+  "provenance",
+  "provider-configs",
+  "public-api",
+  "public-pricing",
+  "saved-searches",
+  "scim",
+  "settings-custom-fields",
+  "settings-developer",
+  "settings-enrichment",
+  "settings-mailboxes",
+  "settings-shell",
+  "settings-teams",
+  "settings-tenant",
+  "settings-user",
+  "settings-workspace",
+  "staff",
+  "system-health",
+  "tags",
+  "tenants",
+  "trust-abuse",
+  "users",
+  "validation",
+  "webhooks",
+  // THE ONE THAT SHOULD BE RENAMED, NOT DECLARED. `packages/core/src/sourceLanding/` is the only camelCase
+  // folder among ~40 in that directory; every sibling is kebab-case, so the consistent name is
+  // `source-landing`. It is declared here only so it stops drowning the other 57 — the rename is the real
+  // fix. Blast radius is small (5 files, 11 import specifiers) but one of them is
+  // `packages/core/src/prospect/profileIntel.ts`, which is live work on another branch as of 2026-08-22, so
+  // renaming it underneath that session would trade a naming nit for a merge conflict. Do it when that area
+  // is quiet, and delete this entry in the same commit.
+  "sourceLanding",
 ];
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
@@ -120,6 +200,8 @@ export const QUEUE_DOMAIN = {
   "search-sync": "search",
   webhook: "api-public",
   dsar: "compliance",
+  // The DSAR statutory-deadline sweep (audit-sweep wave) — same compliance lane as the dsar queue.
+  dsarDeadlineSweep: "compliance",
   reverification: "data-health",
   reverificationSweep: "data-health",
   dataQualitySnapshotSweep: "data-health",
@@ -310,6 +392,14 @@ export const REPO_DOMAIN = {
   // it is a usage COUNTER for the customer dashboard, and the credit ledger remains the money's source of
   // truth. Filing it under billing would encode in the map the exact conflation the code refuses to make.
   apiUsage: "api-public",
+  // The `usage_event` outcome-metric substrate (08-architecture § Instrumentation): usageEvent WRITES the
+  // events from the reveal/list/resolve paths, outcomeMetrics READS them back as the Phase 1 metrics. One
+  // subsystem, two entities, and `reports` is the destination that exists to surface them — apps/api's
+  // reports routes and apps/web's RevealOutcomesSection are the only readers. Deliberately NOT `billing`:
+  // usage_event records what was ATTEMPTED, and the credit ledger stays the money's source of truth — the
+  // same distinction apiUsage draws above. Both sat in `unassigned` because neither was registered.
+  usageEvent: "reports",
+  outcomeMetrics: "reports",
   purchase: "billing",
   notification: "notifications",
   aiRequest: "ai",

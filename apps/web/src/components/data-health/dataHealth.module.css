@@ -1,0 +1,33 @@
+/* dataHealth.module.css — the shared Data Health cell (score pill + freshness band). Lifted out of
+ * lists.module.css when the Search grid gained the same column: two features render this cell, and a feature
+ * slice may not import another (lint:cross-feature), so the one implementation lives in components/. */
+
+.healthCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+  white-space: nowrap;
+}
+
+/* ScorePill recipe (design patterns.md): dot + tabular number. */
+.scorePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: var(--tp-text-body);
+  color: var(--tp-ink);
+}
+
+.scoreDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+
+/* The "no health computed" placeholder. ink-3, not ink-4: this is text, and ink-4 fails AA at every size. */
+.empty {
+  color: var(--tp-ink-3);
+}

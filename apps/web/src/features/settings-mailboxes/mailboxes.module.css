@@ -17,19 +17,8 @@
   gap: 6px;
 }
 
-.title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--tp-ink);
-  margin: 0;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: var(--tp-ink-3);
-  margin: 0;
-}
+/* .title/.subtitle are gone — the page renders the shared <PageHeader>. .header stays: it is the flex column
+   that keeps the live send-quota line coupled to the header instead of drifting into the card stack's gap. */
 
 .quota {
   font-size: 13px;

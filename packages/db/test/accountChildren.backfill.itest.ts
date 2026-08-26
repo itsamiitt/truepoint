@@ -114,7 +114,14 @@ beforeAll(async () => {
     hqCity: null,
   });
   await seedAccount(tOn, wsOn, { name: "Ghost", domain: null, hqCountry: null, hqCity: null });
-  // OFF tenant: one domained + HQ account (the fail-closed arm).
+  // OFF tenant: one domained + HQ account (the fail-closed arm). Its flag is pinned OFF explicitly rather
+  // than left to the 0062 seed — migration 0119 set `global_enabled = true` on every defined flag, so an
+  // un-overridden tenant evaluates ON and this arm would silently stop testing fail-closed (same repair as
+  // contactChannels.dualwrite, 1211879d).
+  await admin`
+    INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
+    VALUES ('account_domains_dual_write', ${tOff}, false)
+    ON CONFLICT (flag_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`;
   await seedAccount(tOff, wsOff, {
     name: "Umbrella",
     domain: "umbrella.com",
@@ -185,7 +192,8 @@ describe("S-A1/S-A3 account backfill — domain + HQ passes, idempotency, the C2
   test("THE C2 GATE reaches 0 once the last tenant is enabled + backfilled", async () => {
     await admin`
       INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
-      VALUES ('account_domains_dual_write', ${tOff}, true)`;
+      VALUES ('account_domains_dual_write', ${tOff}, true)
+      ON CONFLICT (flag_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`;
     const res = await core.runAccountBackfillForWorkspace(scope(tOff, wsOff));
     expect(res.gateOff).toBe(false);
     expect(res.domainsCreated).toBe(1);

@@ -16,6 +16,11 @@ const wrap: React.CSSProperties = {
   color: "var(--tp-ink, #111827)",
   background: "var(--tp-surface, #fff)",
 };
+// NOT panel/primitives' Button, deliberately. That file is the PANEL's atoms — a 320px popup card wants a
+// chunkier CTA (10px/14px against the panel's 7px/12px), and reaching across surfaces for it would either
+// import the panel's scale into the popup or push the popup's scale into the panel. Both real <button
+// type="button">s, and the DS :focus-visible ring reaches them: popup/main.tsx imports brand.css, which
+// imports @leadwolf/ui/tokens.css, where the ring is a bare `:focus-visible` selector.
 const primaryBtn: React.CSSProperties = {
   width: "100%",
   border: 0,
@@ -58,7 +63,7 @@ function ConnectedTag(): React.ReactElement {
         alignItems: "center",
         gap: 4,
         fontFamily: "var(--font-mono)",
-        fontSize: 10.5,
+        fontSize: 11,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
         color: "var(--tp-ink-3, #6b7280)",

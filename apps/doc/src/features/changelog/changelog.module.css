@@ -43,3 +43,12 @@
     gap: var(--tp-space-2);
   }
 }
+
+/* The feed pointer sits directly under the lede — a reader deciding whether to bookmark the page is
+   exactly the reader who should be offered the subscription instead. */
+.subscribe {
+  margin: var(--tp-space-5) 0 0;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+  max-width: 68ch;
+}

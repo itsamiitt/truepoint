@@ -25,13 +25,44 @@ export interface SessionView {
   expiresAt: Date;
 }
 
+/**
+ * Rows each session table on /account/security renders. The page is SSR with no pagination control (these are
+ * plain server-rendered tables, not the DS DataTable — see auth.module.css), so whatever this returns is
+ * whatever the browser is sent: an account with a long device history would otherwise stream every row into
+ * the HTML. Twenty is the page; the count line below tells the user what is hidden.
+ */
+export const SECURITY_LIST_PAGE_SIZE = 20;
+
+/**
+ * Rows the underlying read loads — `sessionRepository.listOwnSessionsDetailed`'s own default cap, named here
+ * because the totals below are measured against it. When the read comes back full the totals are a FLOOR, not
+ * an exact figure, which is why `atSourceLimit` travels with them rather than the page claiming a number it
+ * cannot know.
+ */
+const SOURCE_ROW_LIMIT = 50;
+
 export interface AccountSecurityData {
   hasPassword: boolean;
   mfaMethods: MfaMethodView[];
   recoveryCodesRemaining: number;
+  /** The most recent `SECURITY_LIST_PAGE_SIZE` live sessions. */
   activeSessions: SessionView[];
-  /** Recent sessions (active + revoked/expired) as the login-history view. */
+  /** Recent sessions (active + revoked/expired) as the login-history view, same cap. */
   loginHistory: SessionView[];
+  /** Unclipped counts for the two lists above, so the page can say how many rows it is NOT showing. */
+  activeSessionsTotal: number;
+  loginHistoryTotal: number;
+  /** True when the source read filled its cap, making both totals a floor ("50+") rather than exact. */
+  atSourceLimit: boolean;
+}
+
+/**
+ * Copy for the honest "you are not seeing all of them" line under a capped table; null when nothing is hidden.
+ * Lives beside the page size on purpose — the cap and the sentence that discloses it have to move together.
+ */
+export function moreRowsNote(shown: number, total: number, atSourceLimit: boolean): string | null {
+  if (total <= shown) return null;
+  return `Showing the ${shown} most recent of ${total}${atSourceLimit ? "+" : ""}.`;
 }
 
 // A coarse, dependency-free device label from the stored User-Agent. There is no ua-parser in the repo and
@@ -90,11 +121,15 @@ export async function loadAccountSecurity(
 
   const active = sessions.filter((s) => !s.revokedAt && s.expiresAt.getTime() > now);
 
+  // The repository orders `created_at DESC`, so the head of each list IS "the most recent" — no re-sort here.
   return {
     hasPassword: !!user?.passwordHash,
     mfaMethods: detailed,
     recoveryCodesRemaining: recoveryCount,
-    activeSessions: active.map(toView),
-    loginHistory: sessions.slice(0, 20).map(toView),
+    activeSessions: active.slice(0, SECURITY_LIST_PAGE_SIZE).map(toView),
+    loginHistory: sessions.slice(0, SECURITY_LIST_PAGE_SIZE).map(toView),
+    activeSessionsTotal: active.length,
+    loginHistoryTotal: sessions.length,
+    atSourceLimit: sessions.length >= SOURCE_ROW_LIMIT,
   };
 }

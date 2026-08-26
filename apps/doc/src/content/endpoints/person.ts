@@ -84,15 +84,15 @@ export const PERSON_ENRICH: Endpoint = {
     request: `curl -X POST https://api.truepoint.in/api/v1/public/person/enrich \\
   -H "Authorization: Bearer $TRUEPOINT_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"Priya Nair","company_domain":"acme.com","verify_email":true}'`,
+  -d '{"name":"Priya Nair","company_domain":"northgate.example.com","verify_email":true}'`,
     response: `{
   "id": "prs_7f3a91c2",
   "full_name": "Priya Nair",
   "title": "VP Revenue Operations",
-  "company": { "id": "cmp_2b81", "name": "Acme", "domain": "acme.com" },
-  "work_email": "priya.nair@acme.com",
+  "company": { "domain": "northgate.example.com", "name": "Northgate Tax Partners" },
+  "work_email": "priya.nair@northgate.example.com",
   "employment_history": [
-    { "company": "Acme", "title": "VP Revenue Operations", "from": "2024-03" }
+    { "company": "Northgate Tax Partners", "title": "VP Revenue Operations", "from": "2024-03" }
   ],
   "field_provenance": {
     "title":      { "sources": 3, "class": "corroborated", "last_seen": "2026-08-14" },

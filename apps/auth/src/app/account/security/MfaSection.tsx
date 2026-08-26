@@ -5,7 +5,7 @@
 import { AccountSectionCard } from "@/shared/AccountShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import styles from "@/shared/auth.module.css";
-import { Alert, Badge, Input, Label, StatusBadge } from "@leadwolf/ui";
+import { Alert, Badge, Button, Input, Label, StatusBadge } from "@leadwolf/ui";
 import { disableMfaMethod, regenerateRecoveryCodes, startTotpEnroll } from "./actions";
 import type { MfaMethodView } from "./data";
 import type { StatusMessage } from "./status";
@@ -91,7 +91,7 @@ export function MfaSection({
         aria-label="Enrolled two-step methods"
       >
         {verified.length === 0 ? (
-          <li style={{ fontSize: 14, color: "var(--tp-ink-3)" }}>
+          <li style={{ fontSize: "var(--tp-text-label)", color: "var(--tp-ink-3)" }}>
             No two-step method is set up yet.
           </li>
         ) : (
@@ -109,10 +109,10 @@ export function MfaSection({
               }}
             >
               <span style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ fontSize: "var(--tp-text-label)", fontWeight: 500 }}>
                   {TYPE_LABELS[m.type] ?? m.type}
                 </span>
-                <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
+                <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
                   Added {m.createdAt.toLocaleDateString()}
                   {m.lastUsedAt ? ` · last used ${m.lastUsedAt.toLocaleDateString()}` : ""}
                 </span>
@@ -136,7 +136,12 @@ export function MfaSection({
                     autoComplete={stepUpAutoComplete}
                     placeholder={stepUpLabel}
                     required
-                    style={{ height: 36, width: 160 }}
+                    // Not a button and not a media slot: this is the step-up field inline in the method ROW,
+                    // narrowed from the DS field's width:100% so it fits beside "Remove". The `height: 36` that
+                    // used to sit here was dead weight — .tp-ui-field is already 36px — and only made the pair
+                    // look like a bespoke control. 160px is off the spacing scale by design: it is a field
+                    // width chosen for the row, not a token-able gap.
+                    style={{ width: 160 }}
                   />
                   <SubmitButton>Remove</SubmitButton>
                 </form>
@@ -161,8 +166,16 @@ export function MfaSection({
             }}
           >
             <div>
-              <span style={{ fontSize: 14, fontWeight: 500 }}>Set up an authenticator app</span>
-              <p style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}>
+              <span style={{ fontSize: "var(--tp-text-label)", fontWeight: 500 }}>
+                Set up an authenticator app
+              </span>
+              <p
+                style={{
+                  marginTop: "var(--tp-space-1)",
+                  fontSize: "var(--tp-text-caption)",
+                  color: "var(--tp-ink-3)",
+                }}
+              >
                 You'll scan a QR code, confirm a code, and save one-time recovery codes.
               </p>
             </div>
@@ -191,16 +204,32 @@ export function MfaSection({
             }}
           >
             <div>
-              <span style={{ fontSize: 14, fontWeight: 500 }}>Set up an authenticator app</span>
-              <p style={{ marginTop: "var(--tp-space-1)", fontSize: 12, color: "var(--tp-ink-3)" }}>
+              <span style={{ fontSize: "var(--tp-text-label)", fontWeight: 500 }}>
+                Set up an authenticator app
+              </span>
+              <p
+                style={{
+                  marginTop: "var(--tp-space-1)",
+                  fontSize: "var(--tp-text-caption)",
+                  color: "var(--tp-ink-3)",
+                }}
+              >
                 Your account signs in without a password, so there's no credential to confirm setup
                 with yet. Set a password first — you can still sign in with a link too — then add an
                 authenticator here.
               </p>
             </div>
-            <a href={setPasswordHref} className={styles.buttonLink}>
-              Set a password
-            </a>
+            {/* The DS secondary button, worn by an <a>. `asChild` merges the button's classes onto the anchor,
+                so this is the real thing rather than auth.module.css's hand-rolled .buttonLink lookalike (now
+                deleted). Button is a client component, but rendering one from an RSC is fine — its child here
+                is a plain host element, which serialises across the boundary, and it SSRs to a styled <a> that
+                needs no JavaScript to be clickable. Default size, not `sm`: .buttonLink was 36px/14px, which
+                is the DS default; `sm` is 30px/13px and would shrink this CTA. alignSelf replaces its
+                `width: fit-content` — this sits in a flex COLUMN, whose default align-items:stretch would
+                otherwise pull the button across the whole card. */}
+            <Button variant="outline" asChild style={{ alignSelf: "flex-start" }}>
+              <a href={setPasswordHref}>Set a password</a>
+            </Button>
           </div>
         )
       ) : null}
@@ -218,10 +247,18 @@ export function MfaSection({
               gap: "var(--tp-space-2)",
             }}
           >
-            <span style={{ fontSize: 14, fontWeight: 500 }}>Recovery codes</span>
+            <span style={{ fontSize: "var(--tp-text-label)", fontWeight: 500 }}>
+              Recovery codes
+            </span>
             <Badge>{recoveryCodesRemaining} remaining</Badge>
           </div>
-          <p style={{ marginBottom: "var(--tp-space-3)", fontSize: 12, color: "var(--tp-ink-3)" }}>
+          <p
+            style={{
+              marginBottom: "var(--tp-space-3)",
+              fontSize: "var(--tp-text-caption)",
+              color: "var(--tp-ink-3)",
+            }}
+          >
             One-time codes to sign in if you lose your authenticator. Regenerating replaces any
             existing codes.
           </p>

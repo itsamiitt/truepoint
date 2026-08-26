@@ -14,6 +14,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { crmSyncConflicts } from "../schema/crm.ts";
+import { sliceForBindLimit } from "./bindLimit.ts";
 
 /**
  * Fields whose values are PII and must never be stored in clear here.
@@ -64,23 +65,28 @@ export const crmSyncConflictRepository = {
    */
   async recordMany(tx: Tx, rows: CrmConflictInsert[]): Promise<number> {
     if (rows.length === 0) return 0;
-    const inserted = await tx
-      .insert(crmSyncConflicts)
-      .values(
-        rows.map((r) => ({
-          tenantId: r.tenantId,
-          workspaceId: r.workspaceId,
-          connectionId: r.connectionId,
-          recordLinkId: r.recordLinkId ?? null,
-          objectType: r.objectType,
-          field: r.field,
-          status: "open",
-          tpValue: maskIfPii(r.field, r.tpValue),
-          crmValue: maskIfPii(r.field, r.crmValue),
-        })),
-      )
-      .returning({ id: crmSyncConflicts.id });
-    return inserted.length;
+    // Sliced for the bind-parameter ceiling (bindLimit.ts): a full CRM sync can plan a conflict per changed
+    // field per record, which scales with the customer's CRM rather than with anything bounded here.
+    const values = rows.map((r) => ({
+      tenantId: r.tenantId,
+      workspaceId: r.workspaceId,
+      connectionId: r.connectionId,
+      recordLinkId: r.recordLinkId ?? null,
+      objectType: r.objectType,
+      field: r.field,
+      status: "open",
+      tpValue: maskIfPii(r.field, r.tpValue),
+      crmValue: maskIfPii(r.field, r.crmValue),
+    }));
+    let insertedCount = 0;
+    for (const slice of sliceForBindLimit(values)) {
+      const inserted = await tx
+        .insert(crmSyncConflicts)
+        .values(slice)
+        .returning({ id: crmSyncConflicts.id });
+      insertedCount += inserted.length;
+    }
+    return insertedCount;
   },
 
   /** The open review queue for a workspace, newest first (index-backed by workspace+status+created_at). */

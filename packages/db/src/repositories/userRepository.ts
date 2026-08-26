@@ -222,6 +222,8 @@ export const userRepository = {
         .delete(userMfaMethods)
         .where(and(eq(userMfaMethods.userId, userId), eq(userMfaMethods.type, "recovery_code")));
       if (codeHashes.length > 0) {
+        // batch-insert-bounds-ok: recovery codes are a fixed-size set minted by the app (ten), never a user-
+        // or chunk-sized list, so this cannot approach the bind-parameter ceiling.
         await tx.insert(userMfaMethods).values(
           codeHashes.map((h) => ({
             userId,

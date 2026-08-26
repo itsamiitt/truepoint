@@ -13,7 +13,9 @@ import {
   searchCount,
   searchDatabase,
   searchDatabaseCompanies,
+  suggestDatabase,
 } from "@leadwolf/core";
+import { isDatabaseSuggestField } from "@leadwolf/db";
 import {
   NotFoundError,
   ValidationError,
@@ -190,6 +192,37 @@ searchRoutes.get("/database/companies/:domain", async (c) => {
 });
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */
+/**
+ * GET /search/database/suggest — typeahead over the Layer-0 SATELLITE values (skill / language / school).
+ *
+ * A sibling of /search/suggest, not a mode of it. That one aggregates the caller's own `contacts` under RLS
+ * and cannot answer these at all: the overlay stores no skills, languages or schools, and its role is
+ * REVOKEd from every `master_*` table. (It accepts a `scope=global` parameter that nothing has ever read —
+ * this route is what that parameter was gesturing at.)
+ *
+ * Workspace-independent by construction: the values are global facts and the response is identical for
+ * every caller, so there is no tenant transaction here. `requireWorkspace` still runs — the route is
+ * authenticated and workspace-selected like every sibling — but nothing workspace-scoped reaches the query.
+ * Visibility is enforced inside it (MASTER_PERSON_VISIBLE), which is what stops a value or its count from
+ * confirming that a suppressed or private person exists.
+ */
+searchRoutes.get("/database/suggest", async (c) => {
+  requireWorkspace(c, "Select a workspace to search.");
+
+  const field = c.req.query("field") ?? "";
+  if (!isDatabaseSuggestField(field)) {
+    throw new ValidationError("Invalid suggest field (skill, language or school).");
+  }
+  const prefix = (c.req.query("prefix") ?? "").trim();
+  const limitRaw = Number(c.req.query("limit"));
+  // Bounded here as well as in the repository: the query's own floor stops a 1-character scan, this stops a
+  // caller asking for an unbounded page of values.
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 10;
+
+  const suggestions = await suggestDatabase(field, prefix, limit);
+  return c.json({ suggestions });
+});
+
 searchRoutes.get("/suggest", async (c) => {
   const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 

@@ -41,7 +41,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
 }
 
@@ -65,7 +65,7 @@
   font-weight: 500;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Per-field coverage grid ──────────────────────────────────────────────────────────────────────── */
@@ -108,7 +108,7 @@
 
 .rateSub {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 /* ── Freshness sparkline (duplicated from home DataHealthTrendCard) ───────────────────────────────── */
@@ -130,7 +130,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .sparkTotal {
@@ -163,7 +163,7 @@
 .footnote {
   margin: 0;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   line-height: 1.5;
 }
 
@@ -203,7 +203,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .recordName {
@@ -264,14 +264,14 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .mergeNote {
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .mergeImpact {

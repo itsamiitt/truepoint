@@ -4,7 +4,7 @@
 // database and wants it gone should not have to hunt for how — that is outcome A-02 expressed as information
 // architecture rather than as a queue.
 
-import { CONTACT, FOOTER_NAV, SITE_TAGLINE } from "@/content/site.ts";
+import { API_VERSION_STAMP, CONTACT, FOOTER_NAV, SITE_TAGLINE } from "@/content/site.ts";
 import Link from "next/link";
 import styles from "./site-chrome.module.css";
 
@@ -14,7 +14,14 @@ export function SiteFooter() {
       <div className="tp-ui-page-container" data-width="default">
         <div className={styles.footerGrid}>
           <div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--tp-ink)" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "var(--tp-text-label)",
+                fontWeight: 600,
+                color: "var(--tp-ink)",
+              }}
+            >
               TruePoint Data
             </p>
             <p className={styles.footerNote}>{SITE_TAGLINE}</p>
@@ -43,6 +50,7 @@ export function SiteFooter() {
             Looking for the TruePoint prospecting app instead?{" "}
             <a href={CONTACT.app}>app.truepoint.in</a>
           </p>
+          <p className={styles.footerMeta}>TruePoint Data · {API_VERSION_STAMP}</p>
         </div>
       </div>
     </footer>

@@ -1,58 +1,53 @@
-// FacetBoolControl.tsx — a three-way boolean facet (Any / Yes / No) as a compact toggle row. Presentation
-// only; the pure helpers in ../filterGroups read and write the query.
+// FacetBoolControl.tsx — a three-way boolean facet (Any / Yes / No) as a compact segmented row. The DS
+// SegmentedControl rather than hand-rolled pills: it carries the selected state to assistive tech and the
+// keyboard model itself, which the raw `MiniToggle` buttons this replaced did not (UI remediation
+// 2026-08-22 retired that class). Presentation only; the pure helpers in ../filterGroups read and write the
+// query.
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
+import { SegmentedControl } from "@leadwolf/ui";
 import type { ReactNode } from "react";
 import { getBool, setBool } from "../filterGroups";
 import styles from "../prospect.module.css";
 
-export function MiniToggle({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={styles.miniToggle}
-      data-active={active ? "true" : undefined}
-    >
-      {children}
-    </button>
-  );
-}
+const ITEMS = [
+  { value: "any", label: "Any" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
+
+const toValue = (b: boolean | undefined): string => (b === undefined ? "any" : b ? "yes" : "no");
+const fromValue = (v: string): boolean | undefined => (v === "any" ? undefined : v === "yes");
 
 export function BoolControl({
   field,
   label,
   query,
   onChange,
+  scopeNote,
 }: {
   field: BoolFilterField;
   label: string;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
+  /** Optional mark beside the label — the scope badge. */
+  scopeNote?: ReactNode;
 }) {
   const current = getBool(query, field);
-  const opt = (value: boolean | undefined, text: string) => (
-    <MiniToggle active={current === value} onClick={() => onChange(setBool(query, field, value))}>
-      {text}
-    </MiniToggle>
-  );
   return (
     <div className={styles.facetRow}>
-      <span className={styles.facetLabel}>{label}</span>
+      <span className={styles.facetLabelRow}>
+        <span className={styles.facetLabel}>{label}</span>
+        {scopeNote}
+      </span>
       <span className={styles.opToggle}>
-        {opt(undefined, "Any")}
-        {opt(true, "Yes")}
-        {opt(false, "No")}
+        <SegmentedControl
+          items={ITEMS}
+          value={toValue(current)}
+          onChange={(v) => onChange(setBool(query, field, fromValue(v)))}
+          aria-label={label}
+        />
       </span>
     </div>
   );

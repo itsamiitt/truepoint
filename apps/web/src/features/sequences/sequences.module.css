@@ -79,7 +79,7 @@
 
 .seqNameSub {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
 }
 
@@ -111,7 +111,7 @@
 }
 
 .funnelTopMuted {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 .rowActions {
@@ -548,7 +548,7 @@
 .footnote {
   margin: 0;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 
 @media (max-width: 768px) {

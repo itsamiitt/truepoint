@@ -5,6 +5,7 @@
 
 import {
   Card,
+  EmptyState,
   PageContainer,
   PageHeader,
   StatTile,
@@ -31,7 +32,18 @@ export function TrustAbusePage() {
         subtitle="Cross-tenant abuse signals — signup velocity, non-business email signups, active holds and the tenant-status mix. Counts only; no identities are shown."
       />
 
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !data}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No abuse signals"
+            description="Nothing has been recorded for this environment yet."
+          />
+        }
+      >
         {data ? (
           <>
             <h3 className="tp-section-title">Signups</h3>

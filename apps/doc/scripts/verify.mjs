@@ -22,10 +22,13 @@ const PAGES = [
   "/datasets/us-accounting-firms",
   "/datasets/us-managed-it-services",
   "/docs",
+  "/docs/playground",
+  "/docs/machine-reference",
   "/docs/authentication",
   "/docs/errors",
   "/docs/pagination",
   "/docs/confidence",
+  "/docs/versioning",
   "/docs/api/company-match",
   "/docs/api/company-enrich",
   "/docs/api/search",
@@ -33,7 +36,7 @@ const PAGES = [
   "/trust",
   "/changelog",
 ];
-const FILES = ["/robots.txt", "/sitemap.xml"];
+const FILES = ["/robots.txt", "/sitemap.xml", "/llms.txt", "/openapi.json", "/changelog.xml"];
 
 // Claims that must never reach a reader. Each is a CLAUDE.md hard rule, not a style preference:
 // earned credits and bounties are rule 7; the Sales Navigator supply path is rule 4.
@@ -116,6 +119,20 @@ for (const route of [...PAGES, ...FILES]) {
     // The chrome is what carries the skip link and the route to privacy@ — both required on every page.
     if (!body.includes("Skip to content")) problems.push("missing skip link");
     if (!body.includes("privacy@truepoint.in")) problems.push("missing privacy contact");
+    // Search lives in the root layout, so its absence from ANY page means the chrome itself broke. It is
+    // also the one control on this site a reader is likely to reach for before the nav, and it is a client
+    // component: a hydration failure would leave the input inert rather than missing, which is why the
+    // keyboard behaviour is proven in a browser rather than here. This asserts only that it was delivered,
+    // named, and in its closed state.
+    const combobox = /<input\b[^>]*role="combobox"[^>]*>/.exec(body)?.[0];
+    if (!combobox) problems.push("missing masthead search");
+    else {
+      if (!/aria-label=|aria-labelledby=/.test(combobox))
+        problems.push("search has no accessible name");
+      if (!/aria-expanded="false"/.test(combobox))
+        problems.push("search does not render collapsed");
+      if (!/aria-controls=/.test(combobox)) problems.push("search combobox names no popup");
+    }
     problems.push(...checkAccessibility(body));
   }
 
@@ -133,7 +150,7 @@ for (const route of [...PAGES, ...FILES]) {
 // Only checked against a production server: the whole set is NODE_ENV-gated, so `next dev` legitimately
 // sends none of it.
 {
-  const res = await fetch(BASE + "/");
+  const res = await fetch(`${BASE}/`);
   const csp = res.headers.get("content-security-policy") ?? "";
   const problems = [];
 
@@ -179,7 +196,7 @@ for (const route of [...PAGES, ...FILES]) {
 {
   const problems = [];
   const pageUrl = new URL(BASE);
-  const html = await (await fetch(BASE + "/")).text();
+  const html = await (await fetch(`${BASE}/`)).text();
 
   /** Same-origin, root-relative, or a data: URI — anything else needs a CSP allowance we do not grant. */
   function permitted(url) {

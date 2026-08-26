@@ -2,9 +2,13 @@
 // chips, with the progressive-exclude block), a three-way boolean, or a min/max range. Shared by the quick
 // tier and the "All filters" accordions so a facet looks identical wherever it sits. Presentation only —
 // the pure helpers in ../filterGroups read and write the query.
+//
+// Every control carries its own scope mark (FacetScopeBadge — nothing for a `both` facet), so "this filter
+// searches one side only" is visible BEFORE the click rather than only in the notice above the grid after.
 "use client";
 
 import type { ContactQuery } from "@leadwolf/types";
+import type { ReactNode } from "react";
 import {
   type FacetDef,
   type TermOp,
@@ -14,6 +18,7 @@ import {
 } from "../filterGroups";
 import { BoolControl } from "./FacetBoolControl";
 import { RangeControl } from "./FacetRangeControl";
+import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
 import { TermOptionChips } from "./TermOptionChips";
@@ -38,9 +43,16 @@ export function FacetControl({
   /** Teammates (+ a "Me" entry the page prepends) for the Owner facet. */
   owners: OwnerOption[];
 }) {
+  const scopeNote = <FacetScopeBadge scope={facet.scope} />;
   if (facet.kind === "bool")
     return (
-      <BoolControl field={facet.field} label={facet.label} query={query} onChange={onChange} />
+      <BoolControl
+        field={facet.field}
+        label={facet.label}
+        query={query}
+        onChange={onChange}
+        scopeNote={scopeNote}
+      />
     );
   if (facet.kind === "range")
     return (
@@ -51,10 +63,18 @@ export function FacetControl({
         unit={facet.unit}
         query={query}
         onChange={onChange}
+        scopeNote={scopeNote}
       />
     );
   return (
-    <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} owners={owners} />
+    <TermFacet
+      facet={facet}
+      query={query}
+      onChange={onChange}
+      counts={counts}
+      owners={owners}
+      scopeNote={scopeNote}
+    />
   );
 }
 
@@ -65,12 +85,14 @@ function TermFacet({
   onChange,
   counts,
   owners,
+  scopeNote,
 }: {
   facet: Extract<FacetDef, { kind: "term" }>;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
   counts?: Map<string, number>;
   owners: OwnerOption[];
+  scopeNote: ReactNode;
 }) {
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
@@ -86,6 +108,7 @@ function TermFacet({
       label={facet.label}
       conditions={conditions}
       excludeNoun="Contacts"
+      scopeNote={scopeNote}
       onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
       renderPicker={(op, autoFocus) =>
         facet.input === "typeahead" ? (
@@ -96,6 +119,9 @@ function TermFacet({
             autoFocus={autoFocus}
             selected={[...applied]}
             placeholder={facet.placeholder}
+            // A database-only facet's values live in the Layer-0 satellites, which the workspace suggest
+            // endpoint cannot see — it must ask the global one or the picker silently returns nothing.
+            source={facet.scope === "database-only" ? "database" : "workspace"}
             onAdd={(v) => add(op, v)}
           />
         ) : (

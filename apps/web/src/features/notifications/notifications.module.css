@@ -94,21 +94,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.markBtn {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--tp-ink-3);
-  cursor: pointer;
-  border-radius: var(--tp-radius-sm);
-}
-
-.markBtn:hover {
-  color: var(--tp-ink);
-  background: var(--tp-surface-3);
-}
+/* .markBtn is gone — the per-row "mark read" control is a <TpButton variant="ghost" size="sm">, which is what
+   this class was re-deriving (transparent fill, ink-3 label, hover tint). */
 
 .more {
   display: flex;

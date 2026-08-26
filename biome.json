@@ -52,6 +52,17 @@
     {
       "include": ["**/tsconfig*.json"],
       "json": { "parser": { "allowComments": true } }
+    },
+    {
+      "include": [
+        "scripts/**",
+        "**/scripts/**",
+        "packages/db/src/seed.ts",
+        "packages/auth/src/log.ts",
+        "apps/workers/src/logger.ts",
+        "apps/auth/src/lib/bootstrapAdmin.ts"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsoleLog": "off" } } }
     }
   ],
   "javascript": {

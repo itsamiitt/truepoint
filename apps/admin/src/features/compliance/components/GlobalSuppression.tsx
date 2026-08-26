@@ -151,7 +151,10 @@ export function GlobalSuppression() {
   return (
     <div style={{ marginTop: 28 }}>
       <h3 className="tp-section-title">Global blocklist</h3>
-      <p className="app-muted" style={{ margin: "4px 0 12px", fontSize: 13 }}>
+      <p
+        className="app-muted"
+        style={{ margin: "var(--tp-space-1) 0 var(--tp-space-3)", fontSize: "var(--tp-text-body)" }}
+      >
         A blocked domain suppresses reveals and sends for that domain across every tenant.
       </p>
 
@@ -163,18 +166,20 @@ export function GlobalSuppression() {
           }}
           style={{
             display: "flex",
-            gap: 8,
+            gap: "var(--tp-space-2)",
             alignItems: "flex-end",
             flexWrap: "wrap",
-            marginBottom: 16,
+            marginBottom: "var(--tp-space-4)",
             maxWidth: 640,
           }}
         >
           <label
             htmlFor="block-domain"
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Domain</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Domain
+            </span>
             <TpInput
               id="block-domain"
               value={domain}
@@ -185,9 +190,16 @@ export function GlobalSuppression() {
           </label>
           <label
             htmlFor="block-reason"
-            style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 240px" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--tp-space-1)",
+              flex: "1 1 240px",
+            }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (optional)</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Reason (optional)
+            </span>
             <TpInput
               id="block-reason"
               value={reason}
@@ -201,9 +213,14 @@ export function GlobalSuppression() {
         </form>
       ) : null}
 
-      <div style={{ marginBottom: 12, maxWidth: 320 }}>
-        <label htmlFor="block-search" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Search blocked domains</span>
+      <div style={{ marginBottom: "var(--tp-space-3)", maxWidth: 320 }}>
+        <label
+          htmlFor="block-search"
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+        >
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            Search blocked domains
+          </span>
           <TpInput
             id="block-search"
             value={search}
@@ -219,14 +236,14 @@ export function GlobalSuppression() {
         empty={!!entries && entries.length === 0}
         onRetry={() => void reload(search.trim())}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             {search.trim() ? "No blocks match this search." : "No global blocks."}
           </p>
         }
       >
         <DataTable columns={columns} rows={entries ?? []} rowKey={(e) => e.id} />
         {nextCursor ? (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: "var(--tp-space-3)" }}>
             <TpButton variant="secondary" disabled={loadingMore} onClick={() => void loadMore()}>
               {loadingMore ? "Loading…" : "Load more"}
             </TpButton>
@@ -244,7 +261,7 @@ export function GlobalSuppression() {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setRemoveTarget(null)}>
               Cancel
             </TpButton>

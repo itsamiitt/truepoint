@@ -367,6 +367,16 @@ export {
   type LandLinkedinPayloadInput,
   type LandLinkedinPayloadResult,
 } from "./sourceLanding/landSourcePayload.ts";
+// The title_function catch-up for rows that predate the landing writer — the operator sweep migration 0136
+// promised by name (`backfillTitleFunctionTx`) and nobody wrote. Reuses the SAME canonicalizeTitle call the
+// landing writer makes; a second implementation of the taxonomy is precisely what 0136 refused to create.
+export {
+  backfillTitleFunction,
+  decideTitleFunctions,
+  type BackfillTitleFunctionOptions,
+  type BackfillTitleFunctionResult,
+  type TitleFunctionDecision,
+} from "./sourceLanding/backfillTitleFunction.ts";
 // The origin fleet (0117): failover-chain fetch client for the real vendor contract
 // (POST <origin>/api/linkedin/{profile,company}), the origin router (60s cache + env fallback), and the
 // console's key-ingest boundary (sealOriginKey — cleartext key never leaves apps/api unencrypted).
@@ -375,10 +385,27 @@ export {
   fetchLinkedinCompany,
   salesNavCompanyUrl,
   defaultLinkedinTransport,
+  walkOriginChain,
+  type ChainDeps,
   type LinkedinFetchOptions,
   type LinkedinFetchResult,
   type LinkedinTransport,
 } from "./sourceLanding/linkedinSourceClient.ts";
+export {
+  makeOriginCooldownStore,
+  originCooldowns,
+  type OriginCooldownStore,
+} from "./sourceLanding/originCooldowns.ts";
+// Shared reliability primitives (the data-source fetch + enrichment lanes): Retry-After parsing (seconds
+// AND HTTP-date), the pure source-error classifier over the expo proxy's classification contract, and
+// the capped-exponential backoff (moved from crm-sync/reliability.ts, which re-exports it).
+export { parseRetryAfterMs, retryAfterFromHeaders } from "./reliability/retryAfter.ts";
+export {
+  classifySourceError,
+  type SourceClassifierDefaults,
+  type SourceErrorInput,
+  type SourceErrorVerdict,
+} from "./reliability/sourceErrorClassifier.ts";
 export {
   loadOrigins,
   invalidateOriginCache,
@@ -1525,6 +1552,7 @@ export { inferSeniorityFromTitle } from "./search/inferSeniority.ts";
 // The GLOBAL database search (Layer-0-as-database slice 2) — visibility-filtered, workspace-flagged.
 export {
   searchDatabase,
+  suggestDatabase,
   countDatabase,
   toMaskedDatabasePerson,
   type DatabaseSearchScope,
@@ -1545,3 +1573,7 @@ export {
   readDatabaseCompanyProfile,
   type DatabaseProfileScope,
 } from "./prospect/databaseProfile.ts";
+// The ONE composed read behind the extension's Profile Intelligence Panel — the two profile readers above
+// plus the caller's own overlay row, in a single non-PII answer per viewed LinkedIn URL. Read-only: it never
+// calls the vendor and never touches the 30-day freshness clock.
+export { readProfileIntel } from "./prospect/profileIntel.ts";

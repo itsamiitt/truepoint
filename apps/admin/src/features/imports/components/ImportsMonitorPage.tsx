@@ -50,7 +50,10 @@ export function ImportsMonitorPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <StatusBadge tone={jobStatusTone(j.status)}>{j.status}</StatusBadge>
           {j.failedReason ? (
-            <span style={{ color: "var(--tp-ink-3)", fontSize: 12 }} title={j.failedReason}>
+            <span
+              style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-caption)" }}
+              title={j.failedReason}
+            >
               {j.failedReason}
             </span>
           ) : null}

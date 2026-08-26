@@ -108,11 +108,11 @@ export function HistoryTab() {
   ];
 
   return (
-    <Card style={{ padding: 24 }}>
+    <Card style={{ padding: "var(--tp-space-6)" }}>
       <div className={styles.cardHead}>
         <span className={styles.cardLabel}>Credit history</span>
       </div>
-      <p className="app-muted" style={{ fontSize: 13, marginTop: 0 }}>
+      <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", marginTop: 0 }}>
         Every credit movement — top-ups, reveals, adjustments and monthly plan resets. For older
         accounts, movements from before this statement was introduced are summarised as an opening
         balance once reconciliation has run.

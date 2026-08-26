@@ -7,6 +7,7 @@ export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./databaseCompanySearch.ts";
 export * from "./databaseProfile.ts";
+export * from "./profileIntel.ts";
 export * from "./databaseSearch.ts";
 export * from "./sourceLabel.ts";
 export * from "./reports.ts";

@@ -84,6 +84,72 @@ jobs:
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)
         run: bun run lint:boundaries
+      # The three script-based gates CLAUDE.md lists alongside biome and dependency-cruiser. They were NOT
+      # running here — `bun run lint` is `biome check .` and nothing else — so two documented gates existed
+      # only as a habit, and the third (itest-rejects) would have arrived stillborn. All three are pure
+      # filesystem scans: no services, no env, seconds to run.
+      - name: Import-path PII-in-log tripwire
+        run: bun run lint:import-pii
+      - name: Lockfile hygiene
+        run: bun run lint:lockfile
+      # Bans expect(...).rejects on a DB call in an *.itest.ts. The failure mode it guards is a HANG, not a
+      # red — four suites were each eating their whole timeout before this landed (retention 540s,
+      # scheduledImports 240s, enrichmentPolicy 240s, bulkImport.pipeline 120s).
+      - name: Integration-test rejection shape
+        run: bun run lint:itest-rejects
+      # Fails if an env kill-switch is armed in the production template without a recorded reason. Since
+      # 0119 flipped the per-tenant half of most flags globally on, arming the env half is often the WHOLE
+      # enablement — one template line can take a dark train live for every tenant.
+      - name: Production switch posture
+        run: bun run lint:prod-switches
+      # Scans TRACKED files for credential shapes and for this product's PII formats (.csv/.xlsx/.xls/.rdb).
+      # .gitignore stops the accident; this stops `git add -f`, a path that slips a pattern, and a key pasted
+      # into source as a temporary default. Asymmetric cost: a wrong commit is a revert, a committed secret is
+      # a rotation plus a history rewrite.
+      - name: Committed secrets + PII formats
+        run: bun run lint:secrets
+      # A composite ARIA role with tabIndex={-1} takes those options OUT of the tab order, so arrow keys are
+      # the only way to reach them; ship the roving half without a key handler and the control is unreachable
+      # by keyboard (WCAG 2.2 SC 2.1.1). apps/doc's playground shipped exactly that, and neither typecheck,
+      # biome's a11y rules, nor verify.mjs's accessibility-tree assertions saw it — the STRUCTURE was correct
+      # (two radios, right aria-checked) and structure is all they inspect. It took pressing ArrowRight in a
+      # real browser. This is the source-level half of that check, which is the half CI can run.
+      - name: Roving tabindex needs arrow keys
+        run: bun run lint:roving-tabindex
+      # A raw hex is a token that stopped tracking the design system: moving --tp-cobalt moves every surface
+      # using the token and none that froze its value. It also sits outside apps/doc's contrast.test.ts, which
+      # asserts TOKEN pairs, so a hardcoded colour can fail WCAG AA with nothing to notice. truepoint-design
+      # states this rule first and its own note says it is "enforced by code review" — the mechanism that had
+      # already failed for the three checks above it.
+      - name: Design tokens, not raw hex
+        run: bun run lint:design-tokens
+      # Feature slices must not import each other. dependency-cruiser HAS a rule for this and is blind to
+      # every real instance: the cruise runs without a per-app tsconfig, so the `@/*` alias never resolves
+      # (measured: 251 unresolved `@/` imports in apps/web, 0 resolved) and the rule cannot see the edge. It
+      # fires only for relative imports, which is not how this codebase writes them. This checks the alias
+      # text directly, and ratchets apps/web's 9 known imports so they cannot become 10.
+      - name: Cross-feature imports
+        run: bun run lint:cross-feature
+      # A multi-row INSERT has a hard row ceiling: PostgreSQL caps a statement at 65,534 bind parameters and
+      # Drizzle emits ONE statement for .values(array), so a contact (~19 params/row) caps near 3,400 rows —
+      # against an importer that plans bands of 10,000. Six call sites exceeded it simultaneously and every
+      # bulk import of a full chunk threw. Dark feature + a soak suite that had never run = nobody noticed.
+      - name: Batch inserts stay under the bind-parameter ceiling
+        run: bun run lint:batch-inserts
+      # Every gate above is a regex over source, and SEVEN of this repo's checks have been caught reporting a
+      # clean `ok` while blind to the exact defect they were written for — a resolver that never resolved, a
+      # lookahead defeated by backtracking, patterns blind to ES6 shorthand, comments counted as code. Each was
+      # found by planting a failure by hand. This step does that on every run: it writes a file that MUST trip
+      # each gate, requires a non-zero exit that names the plant, removes it, and requires green again. A gate
+      # that passes its own plant fails here, by name.
+      # A queue with a producer and no consumer fills Redis and never errors: the enqueue succeeds, the jobs
+      # sit there, and the only symptom is work that silently never happens. Adding a queue is two edits in two
+      # files; this fails the build when the second one is missing. *_DLQ is skipped — a dead-letter queue is a
+      # parking lot by design.
+      - name: Every queue has a consumer
+        run: bun run lint:queue-consumers
+      - name: Each gate can still fail (plant-and-check)
+        run: bun run lint:gates-selftest
       # Build every buildable workspace (5 Next apps + the Vite extension). CI previously never built
       # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
       # minutes into a deploy. Two classes this catches that typecheck cannot:
@@ -179,14 +245,29 @@ jobs:
           done
           exit "${status}"
 
+      # The design system's behavioural suite: overlay focus management and the composite-widget
+      # keyboard models. It needs its own step because these files are named *.domtest.tsx, which the
+      # find above deliberately does not match: registering happy-dom replaces global ReadableStream/
+      # Request/Response, and sharing one bun process with the API suites fails ten of them. Same split
+      # as *.itest.ts. See packages/ui/src/test/dom.ts.
+      - name: Design-system DOM tests (overlays + keyboard)
+        run: bun run test:dom
+
   itests:
     name: Integration tests — *.itest.ts on Postgres + Redis (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # 114 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
-    # "cancelled" was this timeout. Four round-robin shards (~29 files each) keep every job under the ceiling.
-    # The shard split is `find | sort` + index mod 4, so a NEW *.itest.ts is picked up with no registry to
-    # update — but watch the per-shard count as files are added: the 40-minute ceiling is the next thing to
-    # give, and the fix is a fifth shard, not a longer timeout.
+    # 129 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
+    # "cancelled" was this timeout. Four round-robin shards (32-33 files each) keep every job under the
+    # ceiling. The shard split is `find | sort` + index mod 4, so a NEW *.itest.ts is picked up with no
+    # registry to update — but watch the per-shard count as files are added: the 40-minute ceiling is the
+    # next thing to give, and the fix is a fifth shard, not a longer timeout.
+    #
+    # Count updated 2026-08-22 (was 114/~29). The ceiling got FURTHER away despite the growth, because four
+    # suites were each stalling on the banned `expect(...).rejects` shape rather than failing — roughly 19
+    # minutes of pure wall-clock, unevenly spread: shard 3 lost 9 min to retention alone, shard 1 lost 6 min
+    # across scheduledImports + bulkImport.pipeline, shard 2 lost 4 min to enrichmentPolicy. All four are
+    # fixed and `bun run lint:itest-rejects` now fails the shape in the gates job, so that class of silent
+    # budget burn cannot come back. Read a rising shard time as new work, not as this.
     strategy:
       fail-fast: false
       matrix:

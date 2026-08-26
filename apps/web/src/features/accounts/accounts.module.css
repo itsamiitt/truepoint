@@ -14,28 +14,9 @@
   margin-bottom: 20px;
 }
 
-.headerMain {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.name {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 650;
-}
-
-.domain {
-  color: var(--tp-text-muted);
-  font-size: 13px;
-}
-
-.headerActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
+/* .headerMain/.name/.domain/.headerActions are gone — the company title, its domain and the Watch / View-
+   contacts pair are now the title/subtitle/actions of the shared <PageHeader>. .header stays: it is the
+   hairline rule that closes the header block under the attributes grid. */
 
 .fieldGrid {
   display: grid;
@@ -58,11 +39,15 @@
   color: var(--tp-text-muted);
 }
 
+/* Wraps rather than ellipsing. These cells carry job titles, school names, revenue strings and locations
+   inside a 480px drawer whose grid is ~150px per column, so `white-space: nowrap` + ellipsis clipped most
+   real values with no tooltip and no way to read the rest — on touch there is not even a hover to try.
+   Matches the prospect-side .fieldValue, which has always wrapped. */
 .fieldValue {
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .sections {
@@ -71,7 +56,7 @@
   gap: 28px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .sections {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -131,7 +116,7 @@
   align-items: start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .indexLayout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -141,23 +126,20 @@
   min-width: 0;
 }
 
+/* Holds the rail opener, the search box, the scope switch, Export and the Markets link. It MUST wrap: the
+   search field is width:100% by DS contract, so without `flex-wrap` and a shrinkable basis on the field the
+   row could not fit its own contents and pushed the pane into horizontal overflow on narrow viewports.
+   Mirrors the People pane's .searchRow, which already had this. */
 .indexHead {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
-
-.searchInput {
-  flex: 1;
-  min-width: 0;
-  max-width: 380px;
-  border: 1px solid var(--tp-hairline);
-  border-radius: var(--radius);
-  padding: 6px 10px;
-  font-size: 13px;
-  background: transparent;
-  color: var(--tp-text);
+.indexSearch {
+  flex: 1 1 280px;
+  min-width: 220px;
 }
 
 .loadMore {
@@ -172,38 +154,10 @@
   margin: 0 0 8px;
 }
 
-/* ── Markets board ── */
-
-.boardWrap {
-  overflow-x: auto;
-  border: 1px solid var(--tp-hairline);
-  border-radius: var(--radius);
-}
-
-.board {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.board th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--tp-text-muted);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--tp-hairline);
-}
-
-.board td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--tp-hairline);
-}
-
-.board tbody tr:last-child td {
-  border-bottom: none;
-}
+/* ── Markets board ──
+   The hand-rolled <table> (.boardWrap/.board/.board th/.board td) is gone. It was this app's only raw table
+   and its rows.map() was unbounded; it is now a <DataTable>, which windows above 100 rows and brings the
+   shared header/row/density chrome with it. */
 
 .marketsLink {
   flex-shrink: 0;

@@ -34,7 +34,9 @@ const PERSON_FIXTURE = {
   open_link: false,
   job_seeker: false,
   profile_picture: "https://media.licdn.com/photo.jpg",
-  background_picture: null,
+  // Populated, not null: a drop assertion against a null field cannot fail. Real payloads carry all of
+  // these, so the fixture has to as well or the compliance test passes by having nothing to drop.
+  background_picture: "https://media.licdn.com/background.jpg",
   current_position: {
     title: "Senior Director of Accounting",
     company_name: "Vertical Bridge",
@@ -58,6 +60,7 @@ const PERSON_FIXTURE = {
       title: "VP of Finance",
       company_name: "Sage Dental",
       company_id: 2844769,
+      company_logo: "https://media.licdn.com/company-logo.jpg",
       is_current: false,
       start_date: "2025-05",
       end_date: "2026-05",
@@ -76,6 +79,7 @@ const PERSON_FIXTURE = {
     {
       school_name: "Florida Atlantic University",
       school_id: 9077,
+      school_logo: "https://media.licdn.com/school-logo.jpg",
       degree: "Master of Accounting",
       fields_of_study: ["Accounting"],
       start_date: "2010",
@@ -183,6 +187,16 @@ describe("mapLinkedinPerson", () => {
     expect(flat).not.toContain("profile_picture");
     expect(flat).not.toContain("licdn.com/photo");
     expect(flat).not.toContain("volunteering"); // volunteering stays raw-only (not named by the gate-opening instruction)
+
+    // Added 2026-08-22 after checking the mapper against real provider payloads: every one of them carries
+    // open_link, a background image, and a logo URL on each position and education. The mapper already drops
+    // all four — but the fixture had `background_picture: null` and no logo fields at all, so three of these
+    // assertions would have passed against a payload that had nothing to leak. The fixture now carries them.
+    expect(mapped.fields).not.toHaveProperty("openLink");
+    expect(flat).not.toContain("open_link");
+    expect(flat).not.toContain("licdn.com/background");
+    expect(flat).not.toContain("licdn.com/company-logo");
+    expect(flat).not.toContain("licdn.com/school-logo");
   });
 
   test("skills + languages ARE mapped (the C6 gate opened 2026-08-16): deduped, proficiency validated", () => {

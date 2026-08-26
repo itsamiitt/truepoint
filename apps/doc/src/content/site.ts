@@ -9,6 +9,13 @@ export const SITE_ORIGIN = "https://doc.truepoint.in";
 
 export const SITE_NAME = "TruePoint Data";
 
+/** The public API's base URL — the one every example on the site curls. One constant so the header stamp,
+ *  the facts strip and the examples cannot drift apart. */
+export const API_BASE_URL = "https://api.truepoint.in/api/v1/public";
+
+/** The contract stamp shown in the masthead and footer. "v1" is the path segment every call carries. */
+export const API_VERSION_STAMP = "API v1";
+
 /** The one-sentence description of what this portal documents. Used in metadata and on the landing page. */
 export const SITE_TAGLINE =
   "Company and people data, delivered by API and priced by usage — with provenance on every field.";
@@ -49,6 +56,8 @@ export const FOOTER_NAV: readonly { heading: string; links: readonly NavLink[] }
       { href: "/docs/authentication", label: "Authentication" },
       { href: "/docs/errors", label: "Errors" },
       { href: "/docs/confidence", label: "Confidence and provenance" },
+      { href: "/docs/versioning", label: "Versioning and change policy" },
+      { href: "/docs/machine-reference", label: "Machine reference" },
     ],
   },
   {

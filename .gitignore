@@ -50,3 +50,27 @@ packages/ui/.ds-tsconfig.json
 # Dev secrets generated on first boot by start.sh (Ed25519 signing key, blind-index key, bootstrap password).
 # Generated per machine so two developers never share a signing key — never commit this.
 .dev-secrets.env
+
+# Local data drops handed to an agent or a developer as working material — provider payload samples, export
+# extracts, anything pasted in to reason about. `source plan/` is the current one: six real LinkedIn profile
+# and company payloads (named individuals, employment histories, member ids). Same reasoning as *.rdb above —
+# it is data, not source — but with sharper stakes: committing a real person's record publishes it into git
+# history, where deleting it means rewriting a shared history rather than a revert. The whole point of the
+# suppression and provenance machinery in this repo is that such records do not spread, and a stray
+# `git add -A` is the likeliest way one would.
+#
+# Verified never committed (git log --all -- "source plan/" is empty) at the time this rule was added.
+# Ignoring does NOT delete anything: the files stay on disk and stay usable as a test oracle.
+source plan/
+
+# Spreadsheet + CSV drops. These are THIS product's PII formats in both directions: bulk contact export,
+# audit-log export and billing export all write CSV, and the import path takes CSV/XLSX uploads — so testing
+# either end locally leaves a file of real revealed contacts sitting in the tree. Zero .csv/.xlsx/.xls files
+# are tracked today, so this costs nothing and closes the same hole as the `source plan/` rule above.
+#
+# If a genuine FIXTURE is ever needed (a tiny, synthetic, reserved-domain sample — ADR-0048 D5 discipline),
+# un-ignore it explicitly rather than weakening the rule:  !packages/db/test/fixtures/whatever.csv
+*.csv
+*.xlsx
+*.xls
+.gstack/

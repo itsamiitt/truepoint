@@ -79,7 +79,7 @@ export async function refreshAccessToken(args: {
   // come from the RESOLVED tenant policy (server-side), never client input.
   let maxLifetimeSeconds: number | undefined;
   let notLaterThan: Date | undefined;
-  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED) {
     const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(
       session.tenantId,
     );

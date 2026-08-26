@@ -28,7 +28,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
   // Only offer the passkey option when the user has one enrolled — else the prompt would have no credential to
   // match and just fail. Owner-connection read (webauthn_credentials is REVOKEd from leadwolf_app).
   const hasPasskeys =
-    env.WEBAUTHN_ENABLED === "true" &&
+    env.WEBAUTHN_ENABLED &&
     (await webauthnCredentialRepository.listSummaryForUser(txn.userId)).length > 0;
 
   return (
@@ -53,14 +53,14 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
         </div>
         {/* Trusted-device MFA skip is OFF until its backend is built + reviewed (MFA-bypass surface). Hidden
             rather than shown as a no-op — a checkbox that silently does nothing is a trust bug. */}
-        {env.TRUSTED_DEVICES_ENABLED === "true" ? (
+        {env.TRUSTED_DEVICES_ENABLED ? (
           <label
             style={{
               marginBottom: "var(--tp-space-4)",
               display: "flex",
               alignItems: "center",
               gap: "var(--tp-space-2)",
-              fontSize: 14,
+              fontSize: "var(--tp-text-label)",
             }}
             htmlFor="trust_device"
           >
@@ -74,7 +74,13 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           </Alert>
         ) : null}
         {isEmailOtp && sp.sent === "1" ? (
-          <p style={{ marginBottom: "var(--tp-space-4)", fontSize: 14, color: "var(--tp-ink-3)" }}>
+          <p
+            style={{
+              marginBottom: "var(--tp-space-4)",
+              fontSize: "var(--tp-text-label)",
+              color: "var(--tp-ink-3)",
+            }}
+          >
             We emailed a code to your address. It expires in 15 minutes.
           </p>
         ) : null}
@@ -89,7 +95,13 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
       </form>
 
       {isEmailOtp ? (
-        <div style={{ marginTop: "var(--tp-space-3)", textAlign: "center", fontSize: 14 }}>
+        <div
+          style={{
+            marginTop: "var(--tp-space-3)",
+            textAlign: "center",
+            fontSize: "var(--tp-text-label)",
+          }}
+        >
           <a className={styles.link} href="/mfa">
             Use your authenticator instead
           </a>

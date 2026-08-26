@@ -1,7 +1,10 @@
-// AccountFilterPanel.tsx — the firmographic filter rail (the Accounts twin of FilterRail; decisions.md
-// 2026-08-25). Same two tiers: QUICK filters — exactly the facets the global company graph answers too
-// (industry, HQ country/city, employees, founded year), always visible — then "All filters" (saved accounts
-// only) in accordions. Presentation only — the pane owns query state, URL persistence, and counts.
+// AccountFilterPanel.tsx — the firmographic filter rail (the Accounts sibling of FilterRail; decisions.md
+// 2026-08-25). Two tiers: QUICK filters, always visible — exactly the facets the global company graph
+// answers too (industry, HQ country/city, employees, founded year) — then "All filters", the workspace-only
+// firmographics in accordions collapsed by default (active-count badge per header, open state persisted).
+// Term facets use the PROGRESSIVE EXCLUDE pattern (TermFacetField) and every control carries its scope
+// badge. The Prospect/Account scope switch is hosted at the top of the rail. Presentation only — the pane
+// owns query state, URL persistence, and counts.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
@@ -14,36 +17,35 @@ import {
   clearAllFilters,
   groupActiveCount,
   hasActiveFilters,
-  isAccountWorkspaceOnlyField,
 } from "../accountFilterGroups";
 import { useOpenGroups } from "../hooks/useOpenGroups";
 import styles from "../prospect.module.css";
 import { AccordionGroup } from "./AccordionGroup";
 import { AccountFacetControl } from "./AccountFacetControl";
 
-const TIER_ID = "account-all-filters";
+const TIER_ID = "accounts-all-filters";
+const NARROWING_FIELDS = ACCOUNT_ALL_FILTER_GROUPS.flatMap((g) => g.facets.map((f) => f.field));
 
 export function AccountFilterPanel({
   query,
   onChange,
   counts,
   scopeSwitch,
-  scope = "all",
+  scope,
 }: {
   query: AccountQuery;
   onChange: (next: AccountQuery) => void;
-  /** Live per-option counts keyed `${field}:${value}` (from POST /account-search/facets). Optional. */
+  /** Live per-option counts keyed `${field}:${value}` (from POST /search/accounts/facets). Optional. */
   counts?: Map<string, number>;
   /** The Prospect/Account scope switch, hosted at the top of the sidebar. */
   scopeSwitch?: ReactNode;
-  /** All / Saved / Not saved — in "Not saved" the saved-only tier cannot apply and says so. */
-  scope?: WorkspaceScope;
+  /** All / Saved / Not saved — in "Not saved" the workspace-only tier cannot apply and says so. */
+  scope: WorkspaceScope;
 }) {
+  // Namespaced ids so the Accounts rail's open state never collides with the People rail's.
   const groups = useOpenGroups();
-  const open = groups.isOpen("all");
-  const active = query.filters
-    .filter((c) => isAccountWorkspaceOnlyField(c.field))
-    .reduce((n, c) => n + (c.kind === "term" ? c.values.length : 1), 0);
+  const active = groupActiveCount(query, NARROWING_FIELDS);
+  const open = groups.isOpen("accounts-all");
 
   return (
     <aside className={styles.rail} aria-label="Company filters">
@@ -71,63 +73,65 @@ export function AccountFilterPanel({
         ))}
       </div>
 
-      {scope === "exclude" ? (
-        <p className={styles.tierNote}>
-          Saved-only filters don't apply to companies you haven't saved yet. Switch to All or Saved
-          to use them.
-        </p>
-      ) : (
-        <section className={styles.tier}>
-          <button
-            type="button"
-            className={styles.tierHead}
-            aria-expanded={open}
-            aria-controls={TIER_ID}
-            onClick={() => groups.toggle("all")}
-          >
-            <span className={styles.groupTitle}>
-              All filters
-              {active > 0 ? <span className={styles.groupBadge}>{active}</span> : null}
-            </span>
-            <span className={styles.tierTag}>Saved accounts only</span>
-            <span aria-hidden className={styles.groupChevron}>
-              {open ? "−" : "+"}
-            </span>
-          </button>
-          {open ? (
-            <div id={TIER_ID}>
+      <section className={styles.tier}>
+        <button
+          type="button"
+          className={styles.tierHead}
+          aria-expanded={open}
+          aria-controls={TIER_ID}
+          onClick={() => groups.toggle("accounts-all")}
+        >
+          <span className={styles.groupTitle}>
+            All filters
+            {active > 0 ? <span className={styles.groupBadge}>{active}</span> : null}
+          </span>
+          <span className={styles.tierTag}>Workspace only</span>
+          <span aria-hidden className={styles.groupChevron}>
+            {open ? "−" : "+"}
+          </span>
+        </button>
+        {open ? (
+          <div id={TIER_ID}>
+            {scope === "exclude" ? (
               <p className={styles.tierNote}>
-                These narrow the list to accounts already saved in your workspace.
+                Workspace-only filters don't apply to companies you haven't saved yet — switch to
+                All or Saved to use them.
               </p>
-              {ACCOUNT_ALL_FILTER_GROUPS.map((group) => (
-                <AccordionGroup
-                  key={group.id}
-                  id={`account-group-${group.id}`}
-                  title={group.title}
-                  open={groups.isOpen(`account-${group.id}`)}
-                  onToggle={() => groups.toggle(`account-${group.id}`)}
-                  badge={
-                    groupActiveCount(
-                      query,
-                      group.facets.map((f) => f.field),
-                    ) || undefined
-                  }
-                >
-                  {group.facets.map((facet) => (
-                    <AccountFacetControl
-                      key={`${facet.kind}:${facet.field}`}
-                      facet={facet}
-                      query={query}
-                      onChange={onChange}
-                      counts={counts}
-                    />
-                  ))}
-                </AccordionGroup>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      )}
+            ) : (
+              <>
+                <p className={styles.tierNote}>
+                  These narrow the list to accounts already saved in your workspace.
+                </p>
+                {ACCOUNT_ALL_FILTER_GROUPS.map((group) => (
+                  <AccordionGroup
+                    key={group.id}
+                    id={`accounts-group-${group.id}`}
+                    title={group.title}
+                    open={groups.isOpen(`accounts-${group.id}`)}
+                    onToggle={() => groups.toggle(`accounts-${group.id}`)}
+                    badge={
+                      groupActiveCount(
+                        query,
+                        group.facets.map((f) => f.field),
+                      ) || undefined
+                    }
+                  >
+                    {group.facets.map((facet) => (
+                      <AccountFacetControl
+                        key={`${facet.kind}:${facet.field}`}
+                        facet={facet}
+                        query={query}
+                        onChange={onChange}
+                        counts={counts}
+                      />
+                    ))}
+                  </AccordionGroup>
+                ))}
+              </>
+            )}
+          </div>
+        ) : null}
+      </section>
     </aside>
   );
 }

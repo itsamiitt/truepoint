@@ -19,9 +19,9 @@ import {
 const base: AccountQuery = { filters: [], sort: "relevance", limit: 50 };
 
 describe("accountFilterGroups model", () => {
-  test("ACCOUNT_FILTER_GROUPS covers both tiers (quick first) + their facet fields", () => {
+  test("ACCOUNT_FILTER_GROUPS covers the quick tier + the firmographic groups and their facet fields", () => {
     const ids = ACCOUNT_FILTER_GROUPS.map((g) => g.id);
-    expect(ids).toEqual(["quick", "industry", "technographics", "funding"]);
+    expect(ids).toEqual(["quick", "industry", "size", "technographics", "funding", "fit"]);
     const fields = ACCOUNT_FILTER_GROUPS.flatMap((g) => g.facets.map((f) => f.field));
     for (const required of [
       "industry",
@@ -32,6 +32,11 @@ describe("accountFilterGroups model", () => {
       "founded_year",
       "hq_country",
       "hq_city",
+      // Both supported by accountSearchRepository all along; neither had a control until now. revenue_range
+      // in particular had its facet COUNTS requested by the pane with nothing to render them into, while a
+      // control labelled "Revenue" filtered company_stage instead.
+      "revenue_range",
+      "icp_fit_score",
     ]) {
       expect(fields).toContain(required);
     }

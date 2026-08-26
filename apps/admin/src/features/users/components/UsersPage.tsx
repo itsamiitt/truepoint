@@ -147,8 +147,8 @@ export function UsersPage() {
       <div
         style={{
           display: "flex",
-          gap: 8,
-          marginBottom: 16,
+          gap: "var(--tp-space-2)",
+          marginBottom: "var(--tp-space-4)",
           alignItems: "center",
           flexWrap: "wrap",
         }}
@@ -159,7 +159,7 @@ export function UsersPage() {
             e.preventDefault();
             applySearch(query.trim());
           }}
-          style={{ display: "flex", gap: 8, maxWidth: 420, flex: "1 1 320px" }}
+          style={{ display: "flex", gap: "var(--tp-space-2)", maxWidth: 420, flex: "1 1 320px" }}
         >
           <TpInput
             value={query}
@@ -202,12 +202,14 @@ export function UsersPage() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 8,
-              marginTop: 16,
+              gap: "var(--tp-space-2)",
+              marginTop: "var(--tp-space-4)",
             }}
           >
             {loadMoreError ? (
-              <span style={{ color: "var(--danger)", fontSize: 13 }}>{loadMoreError}</span>
+              <span style={{ color: "var(--danger)", fontSize: "var(--tp-text-body)" }}>
+                {loadMoreError}
+              </span>
             ) : null}
             <TpButton variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
               {loadingMore ? "Loading…" : loadMoreError ? "Retry" : "Load more"}
@@ -228,7 +230,7 @@ export function UsersPage() {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setPending(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -244,9 +246,11 @@ export function UsersPage() {
       >
         <label
           htmlFor="user-action-reason"
-          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+          <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+            Reason (audited)
+          </span>
           <TpTextarea
             id="user-action-reason"
             value={reason}

@@ -27,15 +27,23 @@ export function ParsedFilterPreview({ result }: { result: AiSearchResponse }) {
   const ranges = query.filters.filter(isRange);
   const empty = !query.text && terms.length === 0 && ranges.length === 0;
 
-  const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--tp-ink-3)" } as const;
+  const labelStyle = {
+    fontSize: "var(--tp-text-caption)",
+    fontWeight: 600,
+    color: "var(--tp-ink-3)",
+  } as const;
   const rowStyle = { display: "flex", flexDirection: "column", gap: 6 } as const;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {notes ? <p style={{ margin: 0, fontSize: 13, color: "var(--tp-ink-2)" }}>{notes}</p> : null}
+      {notes ? (
+        <p style={{ margin: 0, fontSize: "var(--tp-text-body)", color: "var(--tp-ink-2)" }}>
+          {notes}
+        </p>
+      ) : null}
 
       {empty ? (
-        <p style={{ margin: 0, fontSize: 13, color: "var(--tp-ink-4)" }}>
+        <p style={{ margin: 0, fontSize: "var(--tp-text-body)", color: "var(--tp-ink-3)" }}>
           The AI didn't find any specific filters in that query. Applying it will clear the current
           filters and show all contacts — try a more specific description.
         </p>
@@ -80,7 +88,7 @@ export function ParsedFilterPreview({ result }: { result: AiSearchResponse }) {
       </div>
 
       {usedRepair ? (
-        <p style={{ margin: 0, fontSize: 11, color: "var(--tp-ink-4)" }}>
+        <p style={{ margin: 0, fontSize: "var(--tp-text-micro)", color: "var(--tp-ink-3)" }}>
           The first attempt needed a quick correction — please double-check the filter above.
         </p>
       ) : null}

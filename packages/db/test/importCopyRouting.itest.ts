@@ -281,6 +281,7 @@ describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission 
         fileStore: failingStore,
         enqueueDrive: h.enqueueDrive,
       }),
+      // itest-rejects-ok: the rejection comes from an injected object-store fault, not a pooled DB connection (suite verified 5 pass, no stall)
     ).rejects.toThrow("store down");
     expect(h.drives).toEqual([]);
     const [row] = await admin`

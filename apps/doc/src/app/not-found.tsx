@@ -3,16 +3,15 @@
 // land somewhere with no way onward.
 
 import { ButtonLink } from "@/components/ButtonLink.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
-import { PageContainer } from "@leadwolf/ui";
+import { PageContainer, PageHeader } from "@leadwolf/ui";
 
 export default function NotFound() {
   return (
     <PageContainer width="default">
-      <PageIntro
+      <PageHeader
         eyebrow="404"
         title="That page isn't here."
-        lede="The link may be out of date, or the page may have moved. The documentation index and the price list are both one click away."
+        subtitle="The link may be out of date, or the page may have moved. The documentation index and the price list are both one click away."
       />
       <div style={{ display: "flex", gap: "var(--tp-space-3)", marginTop: "var(--tp-space-6)" }}>
         <ButtonLink href="/docs">Go to the docs</ButtonLink>

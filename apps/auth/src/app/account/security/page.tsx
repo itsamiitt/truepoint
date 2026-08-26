@@ -45,9 +45,18 @@ export default async function AccountSecurityPage({
         recoveryCodesRemaining={data.recoveryCodesRemaining}
         status={sp.mfa}
       />
-      {env.WEBAUTHN_ENABLED === "true" ? <PasskeySection /> : null}
-      <SessionsSection sessions={data.activeSessions} status={sp.sessions} />
-      <HistorySection history={data.loginHistory} />
+      {env.WEBAUTHN_ENABLED ? <PasskeySection /> : null}
+      <SessionsSection
+        sessions={data.activeSessions}
+        total={data.activeSessionsTotal}
+        atSourceLimit={data.atSourceLimit}
+        status={sp.sessions}
+      />
+      <HistorySection
+        history={data.loginHistory}
+        total={data.loginHistoryTotal}
+        atSourceLimit={data.atSourceLimit}
+      />
     </AccountShell>
   );
 }

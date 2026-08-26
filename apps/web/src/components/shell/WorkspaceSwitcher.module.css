@@ -55,12 +55,12 @@
 .optionRole {
   flex-shrink: 0;
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-2);
   text-transform: capitalize;
 }
 
 .state {
   padding: 8px 9px;
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }

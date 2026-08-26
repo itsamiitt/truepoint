@@ -6,6 +6,7 @@
 // affected counts all live server-side; this surface never sees raw PII (reveal is the only de-masking path).
 "use client";
 
+import { DataHealthCell } from "@/components/data-health";
 // Reuse the prospect surface verbatim: the bulk bar, the masked quick-view, the bulk-selection model, the tags
 // hook, and the masking presentation helpers. The list members ARE masked contacts, so these compose directly.
 // Everything comes through the prospect PUBLIC barrel (no deep cross-feature imports); the dependency is one-way.
@@ -23,22 +24,15 @@ import {
   useBulkSelectionStore,
   useTags,
 } from "@/features/prospect/entries/bulk";
-import type {
-  BulkSpendEstimate,
-  ContactDataHealth,
-  ContactHit,
-  ContactQuery,
-  MaskedContact,
-} from "@leadwolf/types";
+import type { BulkSpendEstimate, ContactHit, ContactQuery, MaskedContact } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   SegmentedControl,
   StateSwitch,
-  StatusBadge,
-  type StatusTone,
   TableSkeleton,
   Tooltip,
   TpButton,
@@ -64,42 +58,6 @@ const DENSITIES = [
 // The members surface isn't backed by the workspace search query, so the bulk bar's `query` is a no-op
 // default; we hide its "Select all matching" escalation (which would wrongly resolve to the whole workspace).
 const EMPTY_QUERY: ContactQuery = { filters: [], sort: "relevance", limit: 50 };
-
-// freshness_status (server-derived, list-plan/06 §3.3) → a StatusBadge tone + label. fresh = good, aging/stale
-// = degrading, expired = needs re-verify. Presentational only; the band itself is computed server-side.
-const FRESHNESS_BADGE: Record<
-  ContactDataHealth["freshnessStatus"],
-  { tone: StatusTone; label: string }
-> = {
-  fresh: { tone: "success", label: "Fresh" },
-  aging: { tone: "warning", label: "Aging" },
-  stale: { tone: "warning", label: "Stale" },
-  expired: { tone: "danger", label: "Expired" },
-};
-
-/** The list-detail Data Health cell (list-plan/06 §3.3): the 0–100 score (ScorePill recipe — dot + tabular
- *  number, design patterns.md) + the freshness band. Read-side, derived, non-PII — the server computes it. */
-function DataHealthCell({ health }: { health: ContactDataHealth | undefined }) {
-  if (!health) return <span className={styles.glyphNone}>—</span>;
-  const tone =
-    health.score >= 80
-      ? "var(--success)"
-      : health.score >= 50
-        ? "var(--warning)"
-        : "var(--tp-ink-4)";
-  const badge = FRESHNESS_BADGE[health.freshnessStatus];
-  return (
-    <span className={styles.healthCell}>
-      <Tooltip label={`Data quality ${health.score}/100 · ${badge.label.toLowerCase()}`}>
-        <span className={styles.scorePill}>
-          <span className={styles.scoreDot} style={{ background: tone }} aria-hidden />
-          {health.score}
-        </span>
-      </Tooltip>
-      <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
-    </span>
-  );
-}
 
 export function ListDetailPage({ listId }: { listId: string }) {
   const router = useRouter();
@@ -345,47 +303,51 @@ export function ListDetailPage({ listId }: { listId: string }) {
         <ArrowLeft size={15} aria-hidden /> Back to lists
       </Link>
 
-      <div className={styles.head}>
-        <div className={styles.headMeta}>
-          <h1 className={styles.title}>
+      <PageHeader
+        title={
+          <>
             <ListChecks size={20} aria-hidden /> {list?.name ?? (listLoading ? "…" : "List")}
-          </h1>
-          <span className={styles.subtitle}>
+          </>
+        }
+        subtitle={
+          <>
             {list?.description ? `${list.description} · ` : ""}
             {list
               ? `${list.memberCount.toLocaleString()} member${list.memberCount === 1 ? "" : "s"}`
               : ""}
             {list ? ` · ${list.isOwner ? "Owned by you" : "Shared"}` : ""}
-          </span>
-        </div>
-        <div className={styles.headActions}>
-          <SegmentedControl
-            items={DENSITIES}
-            value={density}
-            onChange={setDensity}
-            aria-label="Row density"
-          />
-          <TpButton
-            variant="secondary"
-            size="sm"
-            leftIcon={<Upload size={15} />}
-            disabled={!list}
-            onClick={() => setImportOpen(true)}
-          >
-            Import into list
-          </TpButton>
-          {list?.isOwner ? (
-            <>
-              <TpButton variant="secondary" size="sm" onClick={() => setRenameOpen(true)}>
-                Rename
-              </TpButton>
-              <TpButton variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
-                Delete
-              </TpButton>
-            </>
-          ) : null}
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <SegmentedControl
+              items={DENSITIES}
+              value={density}
+              onChange={setDensity}
+              aria-label="Row density"
+            />
+            <TpButton
+              variant="secondary"
+              size="sm"
+              leftIcon={<Upload size={15} />}
+              disabled={!list}
+              onClick={() => setImportOpen(true)}
+            >
+              Import into list
+            </TpButton>
+            {list?.isOwner ? (
+              <>
+                <TpButton variant="secondary" size="sm" onClick={() => setRenameOpen(true)}>
+                  Rename
+                </TpButton>
+                <TpButton variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
+                  Delete
+                </TpButton>
+              </>
+            ) : null}
+          </>
+        }
+      />
 
       <StateSwitch
         loading={loading}

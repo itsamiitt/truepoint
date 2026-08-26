@@ -33,19 +33,29 @@ src/
 ## Status — first increment (M0 + M1 spine)
 
 **Working end-to-end:** MV3 manifest + build config; the service-worker runtime (message bus, API client
-with RFC-9457 + idempotency, PKCE auth, IndexedDB capture queue + alarm-driven drain with backoff, remote
-config, telemetry, dark SSE consumer); the LinkedIn adapter + navigation observer + shadow-DOM hover-card
-with the capture flow to `/ingest`; the popup and a four-state panel.
+with RFC-9457 + idempotency, the ADR-0045 companion-window auth, IndexedDB capture queue + alarm-driven
+drain with backoff, local feature flags, telemetry, dark SSE consumer); the LinkedIn adapter + navigation
+observer + shadow-DOM hover-card with the capture flow to `/ingest`; the popup; and the **Profile
+Intelligence Panel**.
+
+**The panel** (`src/ui/panel/`, 2026-08-22) is two tabs — Prospect and Company — over ONE server read,
+`POST /api/v1/contacts/lookup/intel`, which composes the masked Layer-0 profile, the employer's
+firmographics and headcount series, and this workspace's own contact row. It hydrates on open from the
+active tab's URL (`GET_SUBJECT`) rather than waiting for a content-script broadcast, and follows navigation
+and tab switches from there. The signals list is derived by a pure, unit-tested function
+(`intel/deriveSignals.ts`) in which **every row cites the field, the basis and the grade it came from** —
+nothing is inferred beyond the record, and there is no model, no scoring and no intent data.
 
 **Stubbed / follow-up (clearly marked in code):**
 
-- `LOOKUP` returns `unknown` — wire `POST /search/contacts` (import the `ContactQuery` schema from
-  `@leadwolf/types`) for a real owned/known check.
 - `RemoteConfig` caches flags locally — add the **signed** fetch + signature check (fail-closed).
-- Feature modules beyond capture/reveal (lists, sequences, ai-assist, signals, crm-sync) per 09 §2.
-- Reveal needs a `contactId`; today it appears once `LOOKUP`/SSE supplies one.
-- Tests (Vitest unit + Playwright loaded-extension E2E) per 04 §3.
+- Notes + the server activity timeline on the panel (the endpoints exist; add-to-list is built).
+- A per-contact **verify** endpoint — the panel shows verification recency but cannot trigger one, because
+  no such endpoint exists (enrichment *finds* a value; it does not verify one).
+- No DOM/E2E suite yet: the tests here are pure unit tests (`bun test`) plus the server-side itest.
 - The hover-card is docked (top-right) as the MVP surface; the badge-anchored variant is 08 §3.1.
+- Company **DOM** extraction (X07) remains deliberately unbuilt — the Company tab resolves from the URL
+  server-side, so no company page is ever read.
 
 ## Guardrails (enforced by design)
 

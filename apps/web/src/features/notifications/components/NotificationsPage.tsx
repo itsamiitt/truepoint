@@ -5,7 +5,7 @@
 "use client";
 
 import type { Notification, NotificationType } from "@leadwolf/types";
-import { EmptyState, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import { EmptyState, PageHeader, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import Link from "next/link";
 import { useNotificationHistory } from "../hooks/useNotificationHistory";
 import styles from "../notifications.module.css";
@@ -81,16 +81,20 @@ export function NotificationsPage() {
 
   return (
     <section>
-      <div className={styles.head}>
-        <h1 className="tp-settings-title" style={{ margin: 0 }}>
-          Notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ""}
-        </h1>
-        {unreadCount > 0 ? (
-          <TpButton variant="secondary" size="sm" onClick={markAll}>
-            Mark all read
-          </TpButton>
-        ) : null}
-      </div>
+      {/* PageHeader, not the borrowed .tp-settings-title: this is a destination, not a settings panel. The
+          feature's .head is kept as the header's className because it carries what PageHeader does not — the
+          760px measure the list below is capped to, and the 16px gap under it (PageHeader's margin is 0). */}
+      <PageHeader
+        className={styles.head}
+        title={`Notifications${unreadCount > 0 ? ` · ${unreadCount} unread` : ""}`}
+        actions={
+          unreadCount > 0 ? (
+            <TpButton variant="secondary" size="sm" onClick={markAll}>
+              Mark all read
+            </TpButton>
+          ) : null
+        }
+      />
 
       <StateSwitch
         loading={loading}
@@ -125,15 +129,19 @@ export function NotificationsPage() {
                 </span>
                 <span className={styles.time}>{relTime(n.createdAt)}</span>
               </Link>
+              {/* The row's hit target is the <Link>; this is the small trailing action beside it, which is
+                  exactly what a ghost TpButton is — so it is a DS button, not a raw one. The label stays
+                  per-notification ("Mark read: <title>"): a list of identical "Mark read" buttons tells a
+                  screen-reader user nothing about which one they are on. */}
               {n.readAt ? null : (
-                <button
-                  type="button"
-                  className={styles.markBtn}
+                <TpButton
+                  variant="ghost"
+                  size="sm"
                   onClick={() => markRead(n.id)}
                   aria-label={`Mark read: ${n.title}`}
                 >
                   Mark read
-                </button>
+                </TpButton>
               )}
             </li>
           ))}

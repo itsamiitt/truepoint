@@ -210,6 +210,7 @@ describe("M3 reveal & credits DoD", () => {
         contactId,
         revealType: "email",
       }),
+      // itest-rejects-ok: awaits a core reveal call whose AppError is thrown after its tx settles (suite verified 9 pass, no stall)
     ).rejects.toMatchObject({ code: "insufficient_credits" });
 
     expect(await balanceOf(tenantB)).toBe(0);
@@ -258,6 +259,7 @@ describe("M3 reveal & credits DoD", () => {
         contactId,
         revealType: "email",
       }),
+      // itest-rejects-ok: awaits a core reveal call whose AppError is thrown after its tx settles (suite verified 9 pass, no stall)
     ).rejects.toMatchObject({ code: "suppressed" });
 
     expect(await balanceOf(tenantA)).toBe(before);

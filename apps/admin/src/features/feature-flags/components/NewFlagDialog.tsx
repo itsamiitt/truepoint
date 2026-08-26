@@ -60,7 +60,7 @@ export function NewFlagDialog({
       title="New feature flag"
       maxWidth={460}
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
           <TpButton variant="secondary" onClick={onClose}>
             Cancel
           </TpButton>
@@ -83,7 +83,7 @@ export function NewFlagDialog({
             onChange={(e) => setKey(e.currentTarget.value)}
           />
           {trimmedKey && !keyValid ? (
-            <span style={{ color: "var(--danger)", fontSize: 12 }}>
+            <span style={{ color: "var(--danger)", fontSize: "var(--tp-text-caption)" }}>
               Lowercase letters, digits and . _ - only (2–100 chars).
             </span>
           ) : null}
@@ -97,13 +97,13 @@ export function NewFlagDialog({
           />
         </FieldGroup>
         <FieldGroup label="Default when no global/override decides" htmlFor="ff-default">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
             <TpSwitch
               id="ff-default"
               checked={defaultEnabled}
               onChange={(e) => setDefaultEnabled(e.currentTarget.checked)}
             />
-            <span style={{ fontSize: 13 }}>{defaultEnabled ? "On" : "Off"}</span>
+            <span style={{ fontSize: "var(--tp-text-body)" }}>{defaultEnabled ? "On" : "Off"}</span>
           </span>
         </FieldGroup>
       </FormSection>

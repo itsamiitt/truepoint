@@ -139,7 +139,10 @@ export function DeadLetterQueue() {
         }
       >
         {truncated ? (
-          <p className="app-muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+          <p
+            className="app-muted"
+            style={{ margin: "0 0 var(--tp-space-2)", fontSize: "var(--tp-text-body)" }}
+          >
             Showing the newest {list.length} of {total} open dead letters.
           </p>
         ) : null}

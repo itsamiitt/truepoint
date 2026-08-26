@@ -380,4 +380,40 @@ describe("M12 email cross-tenant isolation (P0)", () => {
     const [r] = await admin`SELECT email_send_used AS u FROM tenants WHERE id = ${tenantA}`;
     expect((r as { u: number }).u).toBe(2); // exactly two consumed, the third never ran
   });
+
+  test("an elapsed window rolls over on the next lock — an exhausted tenant is not blocked forever", async () => {
+    // Continues from the test above: tenantA sits at used = 2 of quota 2, i.e. permanently refused. That was
+    // the real state of any quota'd tenant, because NOTHING reset email_send_used — resetPeriod existed,
+    // documented as driven by a "P6 retention/period sweep" that was never built, and had no caller.
+    await admin`UPDATE tenants SET email_send_period_start = now() - interval '31 days' WHERE id = ${tenantA}`;
+
+    // The same call that refused a moment ago now succeeds: lock() sees the elapsed window and rolls it.
+    await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, async (tx) => {
+      const snap = await dbmod.sendQuotaRepository.lock(tx, tenantA);
+      expect(snap.used).toBe(0); // rolled, not the stale 2
+      dbmod.sendQuotaRepository.assertWithinQuota(snap);
+      await dbmod.sendQuotaRepository.consume(tx, tenantA);
+    });
+
+    const [after] = await admin`SELECT email_send_used AS u,
+                                       email_send_period_start > now() - interval '1 minute' AS fresh
+                                  FROM tenants WHERE id = ${tenantA}`;
+    // One consumed in the NEW window, and the anchor was re-stamped — so the next roll-over is a further
+    // period away rather than firing again on the very next send.
+    expect((after as { u: number }).u).toBe(1);
+    expect((after as { fresh: boolean }).fresh).toBe(true);
+  });
+
+  test("a fresh window does NOT roll — the reset is bounded by the period, not by every lock", async () => {
+    // The other direction, which is what stops the fix from becoming "the quota never applies". tenantA is at
+    // used = 1 in a window stamped moments ago by the previous test.
+    await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, async (tx) => {
+      const snap = await dbmod.sendQuotaRepository.lock(tx, tenantA);
+      expect(snap.used).toBe(1); // carried forward, not zeroed
+      dbmod.sendQuotaRepository.assertWithinQuota(snap);
+      await dbmod.sendQuotaRepository.consume(tx, tenantA);
+    });
+    const [r2] = await admin`SELECT email_send_used AS u FROM tenants WHERE id = ${tenantA}`;
+    expect((r2 as { u: number }).u).toBe(2);
+  });
 });

@@ -5,7 +5,7 @@
 
 import { useStaffMe } from "@/lib/staffMe";
 import type { SubscriptionView } from "@leadwolf/types";
-import { StateSwitch, StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { EmptyState, StateSwitch, StatusBadge, type StatusTone } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import { fetchTenantSubscription } from "../api";
 import { shortDate } from "../format";
@@ -46,17 +46,35 @@ export function TenantSubscription({ tenantId }: { tenantId: string }) {
   return (
     <div style={{ marginTop: 28 }}>
       <h3 className="tp-section-title">Subscription</h3>
-      <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !error && !sub}
+        onRetry={() => void reload()}
+        emptyState={
+          <EmptyState
+            title="No subscription"
+            description="This tenant is on no paid plan — Free/Community access only."
+          />
+        }
+      >
         {sub ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "baseline" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "var(--tp-space-8)",
+              alignItems: "baseline",
+            }}
+          >
             <div>
-              <div className="app-muted" style={{ fontSize: 12 }}>
+              <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                 Plan
               </div>
               <div>{sub.planName ?? sub.plan}</div>
             </div>
             <div>
-              <div className="app-muted" style={{ fontSize: 12 }}>
+              <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                 Status
               </div>
               <StatusBadge tone={statusTone(sub.status)}>
@@ -64,14 +82,14 @@ export function TenantSubscription({ tenantId }: { tenantId: string }) {
               </StatusBadge>
             </div>
             <div>
-              <div className="app-muted" style={{ fontSize: 12 }}>
+              <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                 Term
               </div>
               <div>{sub.term === "annual" ? "Annual" : "Monthly"}</div>
             </div>
             {sub.currentPeriodEnd ? (
               <div>
-                <div className="app-muted" style={{ fontSize: 12 }}>
+                <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                   {sub.cancelAtPeriodEnd ? "Ends" : "Renews"}
                 </div>
                 <div className="tp-cell-mono">{shortDate(sub.currentPeriodEnd)}</div>
@@ -79,7 +97,7 @@ export function TenantSubscription({ tenantId }: { tenantId: string }) {
             ) : null}
           </div>
         ) : (
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             Month-to-month — no active subscription.
           </p>
         )}

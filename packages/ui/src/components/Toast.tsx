@@ -71,28 +71,39 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {items.length > 0 ? (
-        <section className="tp-ui-toaster" aria-label="Notifications">
-          {items.map((t) => (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: click is an optional dismiss; toasts auto-expire
-            <div
-              key={t.id}
-              className={cn("tp-ui-toast", t.tone !== "default" && `tp-ui-toast--${t.tone}`)}
-              // biome-ignore lint/a11y/useSemanticElements: toast card holds flow content; <output> takes phrasing only
-              role="status"
-              onClick={() => remove(t.id)}
-            >
-              <span className="tp-ui-toast-dot" aria-hidden />
-              <div className="tp-ui-toast-body">
-                <span className="tp-ui-toast-title">{t.title}</span>
-                {t.description != null ? (
-                  <span className="tp-ui-toast-desc">{t.description}</span>
-                ) : null}
-              </div>
+      {/* The live region is mounted ALWAYS, empty or not. A region created in the same commit as its first
+          content is the classic reason first toasts go unannounced across NVDA/JAWS/VoiceOver: the AT has
+          to be observing the node before text lands in it. (:empty hides it — see primitives.css.) */}
+      <section className="tp-ui-toaster" aria-live="polite" aria-label="Notifications">
+        {items.map((t) => (
+          // biome-ignore lint/a11y/useKeyWithClickEvents: click-anywhere is a shortcut; the × is the keyboard path
+          <div
+            key={t.id}
+            className={cn("tp-ui-toast", t.tone !== "default" && `tp-ui-toast--${t.tone}`)}
+            onClick={() => remove(t.id)}
+          >
+            <span className="tp-ui-toast-dot" aria-hidden />
+            <div className="tp-ui-toast-body">
+              <span className="tp-ui-toast-title">{t.title}</span>
+              {t.description != null ? (
+                <span className="tp-ui-toast-desc">{t.description}</span>
+              ) : null}
             </div>
-          ))}
-        </section>
-      ) : null}
+            {/* A sticky toast (duration: 0) was otherwise unremovable without a mouse. */}
+            <button
+              type="button"
+              className="tp-ui-toast-close"
+              aria-label="Dismiss notification"
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(t.id);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </section>
     </ToastContext.Provider>
   );
 }

@@ -13,39 +13,9 @@
   min-width: 0;
 }
 
-/* ── Surface header (title + meta + primary actions) ───────────────────────────────────────────────────── */
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.headMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tp-ink);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.subtitle {
-  font-size: 13px;
-  color: var(--tp-ink-3);
-}
-.headActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+/* The surface header (.head/.headMeta/.title/.subtitle/.headActions) is gone: both list surfaces render the
+   shared <PageHeader> from @leadwolf/ui, which owns the title/subtitle/actions row for every destination. */
+
 /* The back-to-lists breadcrumb on the detail surface. */
 .back {
   display: inline-flex;
@@ -105,7 +75,7 @@
 }
 .sub {
   font-size: 12px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -131,10 +101,10 @@
   color: var(--warning);
 }
 .glyphNone {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .lock {
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   display: inline-flex;
 }
 
@@ -261,7 +231,7 @@
 }
 .fieldLabel {
   font-size: 11px;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
 }
 .fieldValue {
   font-size: 13px;

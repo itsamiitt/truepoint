@@ -8,7 +8,7 @@ import { webauthnCredentialRepository } from "@leadwolf/db";
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
-  if (env.WEBAUTHN_ENABLED !== "true") return new Response("Not found", { status: 404 });
+  if (!env.WEBAUTHN_ENABLED) return new Response("Not found", { status: 404 });
   const account = await resolveApiUser();
   if (!account) return new Response("Unauthorized", { status: 401 });
   const passkeys = await webauthnCredentialRepository.listSummaryForUser(account.userId);

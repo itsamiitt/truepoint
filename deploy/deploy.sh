@@ -169,10 +169,35 @@ fi
 # fixed the actual product. Run apps/doc's own verify script against the live origin for the deeper pass:
 #   DOC_BASE_URL=https://doc.truepoint.in bun run --filter @leadwolf/doc verify
 echo "==> Checking the developer portal answers…"
-if "${COMPOSE[@]}" exec -T doc bun -e "fetch('http://localhost:3007/').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"; then
-  echo "==> Developer portal OK."
+# The landing page plus the three GENERATED artifacts. Those three are the surfaces nobody looks at: an
+# assistant fetches /llms.txt, a client generator fetches /openapi.json, a reader subscribes to
+# /changelog.xml, and none of them will ever file a bug report. They are prerendered by route handlers
+# rather than pages — a different rendering path — and they are the paths a future proxy rule would break
+# first, since they carry file extensions. Content-type is asserted too: a JSON document served as text/html
+# is broken for every tool that consumes it while looking perfectly fine in a browser.
+if "${COMPOSE[@]}" exec -T doc bun -e "
+const checks = [
+  ['/', 'text/html'],
+  ['/llms.txt', 'text/plain'],
+  ['/openapi.json', 'application/json'],
+  ['/changelog.xml', 'application/atom+xml'],
+];
+let bad = 0;
+for (const [path, type] of checks) {
+  try {
+    const r = await fetch('http://localhost:3007' + path);
+    const got = r.headers.get('content-type') ?? '';
+    if (!r.ok || !got.includes(type)) {
+      console.log('  FAIL ' + path + ' -> ' + r.status + ' ' + got);
+      bad++;
+    }
+  } catch (e) { console.log('  FAIL ' + path + ' -> ' + e.message); bad++; }
+}
+process.exit(bad === 0 ? 0 : 1);
+"; then
+  echo "==> Developer portal OK (page + llms.txt + openapi.json + changelog.xml)."
 else
-  echo "WARNING: doc.truepoint.in did not answer 200. Deploy continues — the portal serves no product traffic."
+  echo "WARNING: doc.truepoint.in did not answer as expected. Deploy continues — the portal serves no product traffic."
   "${COMPOSE[@]}" logs --tail=20 doc || true
 fi
 

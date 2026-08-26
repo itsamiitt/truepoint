@@ -11,6 +11,7 @@ import {
   EmptyState,
   FieldGroup,
   FormSection,
+  PageHeader,
   SegmentedControl,
   StateSwitch,
   StatusBadge,
@@ -151,7 +152,7 @@ export function CustomFieldsPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Custom fields</h1>
+      <PageHeader title="Custom fields" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         <FormSection
           title="Workspace custom fields"

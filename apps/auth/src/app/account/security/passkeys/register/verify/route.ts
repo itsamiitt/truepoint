@@ -14,7 +14,7 @@ import { verifyStepUp } from "../../../stepUp";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request): Promise<Response> {
-  if (env.WEBAUTHN_ENABLED !== "true") return new Response("Not found", { status: 404 });
+  if (!env.WEBAUTHN_ENABLED) return new Response("Not found", { status: 404 });
   const account = await resolveApiUser();
   if (!account) return new Response("Unauthorized", { status: 401 });
   const body = (await req.json().catch(() => null)) as {

@@ -38,7 +38,10 @@ export default async function MockIdpPage() {
         </div>
         <div className={styles.spaced}>
           <Label htmlFor="full_name">
-            Full name <span style={{ color: "var(--tp-ink-4)" }}>(optional)</span>
+            {/* ink-3, not ink-4: "(optional)" is part of the field's LABEL, so it is read as text. On the white
+                AuthShell card ink-3 is 4.83:1 where ink-4 was 2.54:1. This matches signup/profile, which
+                already spells the same "(optional)" in ink-3. */}
+            Full name <span style={{ color: "var(--tp-ink-3)" }}>(optional)</span>
           </Label>
           <Input id="full_name" name="full_name" type="text" autoComplete="name" />
         </div>

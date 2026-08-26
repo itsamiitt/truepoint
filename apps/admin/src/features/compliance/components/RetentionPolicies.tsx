@@ -9,6 +9,7 @@ import {
   type Column,
   DataTable,
   Dialog,
+  FieldGroup,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -122,7 +123,7 @@ export function RetentionPolicies() {
       cell: (p) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{p.entity}</span>
-          <span className="app-muted" style={{ fontSize: 12 }}>
+          <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
             {p.field ? `field: ${p.field}` : "whole entity"}
           </span>
         </div>
@@ -156,7 +157,7 @@ export function RetentionPolicies() {
       align: "right",
       cell: (p) =>
         canManage ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="ghost"
               size="sm"
@@ -186,7 +187,12 @@ export function RetentionPolicies() {
   return (
     <div style={{ marginTop: 28 }}>
       <div
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "var(--tp-space-3)",
+        }}
       >
         <h3 className="tp-section-title">Retention policies</h3>
         {canManage ? <TpButton onClick={openNew}>New policy</TpButton> : null}
@@ -197,7 +203,14 @@ export function RetentionPolicies() {
           "contacts.email — 400 days", sees it saved and marked Active, and reasonably concludes personal data
           is being deleted on that schedule is the failure this line exists to prevent — and a code comment
           cannot reach them. Whether to wire it into the sweep is a human decision (§9C options). */}
-      <p className="app-muted" style={{ fontSize: 12, marginTop: 4, maxWidth: "68ch" }}>
+      <p
+        className="app-muted"
+        style={{
+          fontSize: "var(--tp-text-caption)",
+          marginTop: "var(--tp-space-1)",
+          maxWidth: "68ch",
+        }}
+      >
         Recorded commitments, for audit and reference. Saving a policy here does{" "}
         <strong>not</strong> delete anything — the engine that actually deletes reads its own
         per-class schedule on the Retention page.
@@ -209,7 +222,7 @@ export function RetentionPolicies() {
         empty={!!policies && policies.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No retention policies configured.
           </p>
         }
@@ -222,7 +235,7 @@ export function RetentionPolicies() {
         onClose={() => (busy ? undefined : setDraft(null))}
         title={draft?.id ? "Edit retention policy" : "New retention policy"}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -233,9 +246,11 @@ export function RetentionPolicies() {
         }
       >
         {draft ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <label htmlFor="r-entity" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Entity</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
+            {/* The DS FieldGroup, not four hand-rolled label+span stacks: it is the same label · control ·
+                hint contract the rest of this console already uses 22 times, and it keeps the label tone and
+                spacing on tokens instead of re-deciding them per dialog. */}
+            <FieldGroup label="Entity" htmlFor="r-entity">
               <TpSelect
                 id="r-entity"
                 value={draft.entity}
@@ -248,11 +263,8 @@ export function RetentionPolicies() {
                   </option>
                 ))}
               </TpSelect>
-            </label>
-            <label htmlFor="r-field" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
-                Field (blank = whole entity)
-              </span>
+            </FieldGroup>
+            <FieldGroup label="Field" htmlFor="r-field" hint="Blank = the whole entity.">
               <TpInput
                 id="r-field"
                 value={draft.field}
@@ -260,9 +272,8 @@ export function RetentionPolicies() {
                 disabled={busy}
                 onChange={(e) => setDraft({ ...draft, field: e.currentTarget.value })}
               />
-            </label>
-            <label htmlFor="r-days" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Retention (days)</span>
+            </FieldGroup>
+            <FieldGroup label="Retention (days)" htmlFor="r-days">
               <TpInput
                 id="r-days"
                 type="number"
@@ -270,16 +281,15 @@ export function RetentionPolicies() {
                 disabled={busy}
                 onChange={(e) => setDraft({ ...draft, retentionDays: e.currentTarget.value })}
               />
-            </label>
-            <label htmlFor="r-reason" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (optional)</span>
+            </FieldGroup>
+            <FieldGroup label="Reason (optional)" htmlFor="r-reason">
               <TpInput
                 id="r-reason"
                 value={draft.reason}
                 disabled={busy}
                 onChange={(e) => setDraft({ ...draft, reason: e.currentTarget.value })}
               />
-            </label>
+            </FieldGroup>
           </div>
         ) : null}
       </Dialog>
@@ -294,7 +304,7 @@ export function RetentionPolicies() {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setEnableTarget(null)}>
               Cancel
             </TpButton>

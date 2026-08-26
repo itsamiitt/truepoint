@@ -10,9 +10,11 @@ import {
   type Column,
   DataTable,
   EmptyState,
-  ErrorState,
-  LoadingState,
+  PageContainer,
+  PageHeader,
+  StateSwitch,
   StatusBadge,
+  TableSkeleton,
   TpButton,
   TpSwitch,
   useToast,
@@ -56,7 +58,9 @@ export function FeatureFlagsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span style={{ fontWeight: 600 }}>{f.key}</span>
           {f.description ? (
-            <span style={{ color: "var(--tp-ink-3)", fontSize: 12 }}>{f.description}</span>
+            <span style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-caption)" }}>
+              {f.description}
+            </span>
           ) : null}
         </div>
       ),
@@ -107,41 +111,36 @@ export function FeatureFlagsPage() {
   ];
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-      <header
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
-      >
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Feature flags</h1>
-          <p style={{ color: "var(--tp-ink-3)", fontSize: 13 }}>
-            Global flags with per-tenant overrides. Evaluation: a tenant override wins, else the
-            global default. Every change is audited.
-          </p>
-        </div>
-        {canManage ? (
-          <TpButton leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
-            New flag
-          </TpButton>
-        ) : null}
-      </header>
+    // PageContainer + PageHeader, not a hand-rolled <main>: AppShellFrame already renders the page's <main>,
+    // so this one was a second, nested one — and its 20px title matched no other destination in the console.
+    <PageContainer width="fluid">
+      <PageHeader
+        title="Feature flags"
+        subtitle="Global flags with per-tenant overrides. Evaluation: a tenant override wins, else the global default. Every change is audited."
+        actions={
+          canManage ? (
+            <TpButton leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
+              New flag
+            </TpButton>
+          ) : null
+        }
+      />
 
-      {loading && flags.length === 0 ? (
-        <LoadingState label="Loading feature flags…" />
-      ) : error ? (
-        <ErrorState detail={error} onRetry={reload} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={flags}
-          rowKey={(f) => f.key}
-          empty={
-            <EmptyState
-              title="No feature flags yet"
-              description="Define one to start gating features."
-            />
-          }
-        />
-      )}
+      <StateSwitch
+        loading={loading && flags.length === 0}
+        error={error}
+        empty={!loading && !error && flags.length === 0}
+        onRetry={reload}
+        skeleton={<TableSkeleton rows={6} columns={[16, 5, 4, 6]} label="Loading feature flags" />}
+        emptyState={
+          <EmptyState
+            title="No feature flags yet"
+            description="Define one to start gating features."
+          />
+        }
+      >
+        <DataTable columns={columns} rows={flags} rowKey={(f) => f.key} />
+      </StateSwitch>
 
       <EnvGatesPanel />
 
@@ -164,6 +163,6 @@ export function FeatureFlagsPage() {
           }}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }

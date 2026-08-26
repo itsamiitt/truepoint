@@ -35,20 +35,20 @@ export function EconomicsTrend({ trend }: { trend: EconomicsTrendPoint[] }) {
   const hasData = totalRevenue > 0 && paths !== null;
 
   return (
-    <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: "var(--tp-space-6)" }}>
       <div
         style={{
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 8,
+          gap: "var(--tp-space-3)",
+          marginBottom: "var(--tp-space-2)",
         }}
       >
         <h3 className="tp-section-title" style={{ margin: 0 }}>
           Revenue trend
         </h3>
-        <span className="app-muted" style={{ fontSize: 12 }}>
+        <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
           {money(totalRevenue)} over {trend.length} day{trend.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -72,7 +72,7 @@ export function EconomicsTrend({ trend }: { trend: EconomicsTrendPoint[] }) {
           />
         </svg>
       ) : (
-        <p className="app-muted" style={{ fontSize: 13 }}>
+        <p className="app-muted" style={{ fontSize: "var(--tp-text-body)" }}>
           No revenue in this window.
         </p>
       )}

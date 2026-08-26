@@ -5,7 +5,7 @@ import { Skeleton, TableSkeleton } from "@leadwolf/ui";
 
 export default function ListDetailLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
       <Skeleton width={90} height={12} />
       <Skeleton width={240} height={20} />
       <TableSkeleton rows={10} />

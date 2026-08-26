@@ -5,10 +5,10 @@
 // (ADR-0048 §D4), so the calls to action are links into the docs and into the product, not a waitlist input.
 
 import { ButtonLink } from "@/components/ButtonLink.tsx";
-import { PageIntro } from "@/components/PageIntro.tsx";
 import intro from "@/components/page-intro.module.css";
+import { endpointStatus } from "@/content/endpointStatus.ts";
 import { PROOF_POINTS, SITE_TAGLINE } from "@/content/site.ts";
-import { Card, PageContainer } from "@leadwolf/ui";
+import { Card, PageContainer, PageHeader } from "@leadwolf/ui";
 import styles from "../marketing.module.css";
 import { EndpointIndex } from "./EndpointIndex.tsx";
 
@@ -16,10 +16,10 @@ export function HomePage() {
   return (
     <PageContainer width="default">
       <div className={styles.hero}>
-        <PageIntro
+        <PageHeader
           eyebrow="TruePoint Data"
           title="Company and people data, by API."
-          lede={`${SITE_TAGLINE} Priced in credits you buy, metered on results, and documented in full before you talk to anyone.`}
+          subtitle={`${SITE_TAGLINE} Priced in credits you buy, metered on results, and documented in full before you talk to anyone.`}
         />
         <div className={styles.heroActions}>
           <ButtonLink href="/docs">Read the quickstart</ButtonLink>
@@ -41,8 +41,7 @@ export function HomePage() {
 
       <h2 className={intro.sectionTitle}>The endpoints</h2>
       <p className={intro.sectionNote}>
-        The contract is published in full below. It is not callable yet — every endpoint page
-        carries its status, and the changelog records the day that changes.
+        The contract is published in full below. {endpointStatus().line}
       </p>
       <EndpointIndex />
 

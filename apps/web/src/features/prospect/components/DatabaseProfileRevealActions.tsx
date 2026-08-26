@@ -2,10 +2,17 @@
 // 2026-08-25). For each channel the person carries, either the revealed VALUE (when this workspace owns it) or
 // a "Reveal email · Ncr" button that materializes the person AND reveals in one request. There is no "Add to
 // workspace" here any more — no free path into the workspace from Search, by decision. Reads the same
-// RevealStore the grid does (through the prospect slice's entry), so a reveal made here and one made in the
-// grid never disagree.
+// RevealStore the grid does, so a reveal made here and one made in the grid never disagree.
+//
+// It lives in the prospect slice (the store's home) and the accounts feature's profile drawer loads it
+// through `entries/revealStore` with next/dynamic — the drawer is itself intent-deferred, and a static
+// cross-feature import would spend the `lint:cross-feature` ratchet for nothing.
 "use client";
 
+import type { MaskedDatabasePerson } from "@leadwolf/types";
+import { StatusBadge, TpButton, TpChip, useToast } from "@leadwolf/ui";
+import { Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   ownedRevealTypes,
   useDatabaseRevealEnabled,
@@ -13,12 +20,8 @@ import {
   useRevealCosts,
   useRevealStore,
   useRevealedContact,
-} from "@/features/prospect/entries/revealStore";
-import type { MaskedDatabasePerson } from "@leadwolf/types";
-import { StatusBadge, TpButton, TpChip, useToast } from "@leadwolf/ui";
-import { Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
-import styles from "../accounts.module.css";
+} from "../hooks/useRevealStore";
+import styles from "../prospect.module.css";
 
 const IN_PROGRESS = "A reveal is already in progress.";
 
@@ -87,9 +90,9 @@ export function DatabaseProfileRevealActions({
   };
 
   return (
-    <section className={styles.profileSection} aria-label="Contact channels">
+    <section className={styles.channelSection} aria-label="Contact channels">
       {contactId ? (
-        <div className={styles.presenceRow}>
+        <div className={styles.channelChips}>
           <TpChip active>Saved to your workspace</TpChip>
         </div>
       ) : null}
@@ -137,10 +140,10 @@ function ChannelLine({
   onReveal: () => void;
 }) {
   return (
-    <div className={styles.field}>
-      <span className={styles.fieldLabel}>{label}</span>
+    <div className={styles.channelRow}>
+      <span className={styles.channelLabel}>{label}</span>
       {value ? (
-        <span className={styles.fieldValue}>
+        <span className={styles.channelValue}>
           {value}
           {status ? (
             <>
@@ -150,9 +153,9 @@ function ChannelLine({
           ) : null}
         </span>
       ) : !present ? (
-        <span className={styles.profileSub}>Not on file</span>
+        <span className={styles.channelNote}>Not on file</span>
       ) : !enabled ? (
-        <span className={styles.profileSub}>
+        <span className={styles.channelNote}>
           On file — revealing from the database isn't enabled yet
         </span>
       ) : (

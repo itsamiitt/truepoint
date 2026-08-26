@@ -133,13 +133,23 @@ describe("G-ENR-1 auto-enrich policy DoD", () => {
       expect(rows.length).toBe(0); // RLS hides A's row from a B-scoped transaction
 
       // An INSERT that lies about the workspace_id (claims A while scoped to B) is rejected by WITH CHECK.
-      const insert = app.begin(async (tx) => {
-        await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
-        await tx`
+      //
+      // Captured with `.then` rather than `expect(...).rejects` (CLAUDE.md; the note at
+      // activitiesPartitioned.itest.ts:233). Handing a rejecting DB call to `.rejects` can leave the promise
+      // unsettled on the single pooled connection, and the symptom is a HANG rather than a failure — this
+      // case burned its full 240s timeout before the rewrite.
+      const insertError = await app
+        .begin(async (tx) => {
+          await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
+          await tx`
           INSERT INTO enrichment_policy (tenant_id, workspace_id, enabled)
           VALUES (${tenantA}, ${wsA}, true)`;
-      });
-      await expect(insert).rejects.toThrow();
+        })
+        .then(
+          () => "",
+          (e: unknown) => (e instanceof Error ? e.message : String(e)),
+        );
+      expect(insertError).not.toBe("");
     } finally {
       await app.end();
     }

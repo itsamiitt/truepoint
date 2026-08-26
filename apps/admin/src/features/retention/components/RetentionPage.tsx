@@ -6,7 +6,7 @@
 // component (the /retention shell route mounts it).
 "use client";
 
-import { Tabs } from "@leadwolf/ui";
+import { PageContainer, PageHeader, Tabs } from "@leadwolf/ui";
 import { useState } from "react";
 import { RetentionPoliciesPage } from "./RetentionPoliciesPage";
 import { RetentionRunsPanel } from "./RetentionRunsPanel";
@@ -22,10 +22,12 @@ export function RetentionPage() {
   const [tab, setTab] = useState<TabId>("policies");
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Retention</h1>
-      </header>
+    // PageContainer + PageHeader, not a hand-rolled <main>: AppShellFrame already renders the page's <main>,
+    // so this one was a second, nested one — and its 20px title matched no other destination in the console.
+    // This is the retention surface's ONE container; the two tab bodies render inside it (nesting a second
+    // PageContainer there would cap the width twice and double the page padding).
+    <PageContainer width="fluid">
+      <PageHeader title="Retention" />
 
       <Tabs
         items={TABS}
@@ -36,6 +38,6 @@ export function RetentionPage() {
 
       {tab === "policies" ? <RetentionPoliciesPage /> : null}
       {tab === "runs" ? <RetentionRunsPanel /> : null}
-    </main>
+    </PageContainer>
   );
 }

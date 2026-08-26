@@ -107,15 +107,20 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
         <div
           style={{
             display: "flex",
-            gap: 8,
+            gap: "var(--tp-space-2)",
             alignItems: "flex-end",
             flexWrap: "wrap",
-            margin: "8px 0 16px",
+            margin: "var(--tp-space-2) 0 var(--tp-space-4)",
             maxWidth: 640,
           }}
         >
-          <label htmlFor="hold-kind" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Kind</span>
+          <label
+            htmlFor="hold-kind"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
+          >
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Kind
+            </span>
             <TpSelect
               id="hold-kind"
               value={kind}
@@ -131,9 +136,16 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
           </label>
           <label
             htmlFor="hold-reason"
-            style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 280px" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--tp-space-1)",
+              flex: "1 1 280px",
+            }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Reason (audited)
+            </span>
             <TpTextarea
               id="hold-reason"
               value={reason}
@@ -155,17 +167,30 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
         empty={!!holds && holds.length === 0}
         onRetry={() => void reload()}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No holds on this org.
           </p>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 640 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-2)",
+            maxWidth: 640,
+          }}
+        >
           {(holds ?? []).map((h) => {
             const active = h.liftedAt == null;
             return (
               <Card key={h.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "var(--tp-space-3)",
+                  }}
+                >
                   <div>
                     <StatusBadge tone={active ? "danger" : "muted"}>
                       {active ? h.kind : `${h.kind} · lifted`}
@@ -175,7 +200,11 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
                     </div>
                     <div
                       className="tp-cell-mono"
-                      style={{ marginTop: 6, fontSize: 12, color: "var(--tp-ink-3)" }}
+                      style={{
+                        marginTop: 6,
+                        fontSize: "var(--tp-text-caption)",
+                        color: "var(--tp-ink-3)",
+                      }}
                     >
                       placed {shortDate(h.placedAt)} · {h.placedByUserId.slice(0, 8)}
                       {h.liftedAt ? ` · lifted ${shortDate(h.liftedAt)}` : ""}
@@ -203,7 +232,7 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
             : undefined
         }
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setLiftTarget(null)} disabled={lifting}>
               Cancel
             </TpButton>

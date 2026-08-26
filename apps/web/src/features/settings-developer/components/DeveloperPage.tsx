@@ -3,7 +3,7 @@
 // inside the single /settings/api-keys page. Each panel owns its own data + empty/connect states.
 "use client";
 
-import { type TabItem, Tabs } from "@leadwolf/ui";
+import { PageHeader, type TabItem, Tabs } from "@leadwolf/ui";
 import { useState } from "react";
 import styles from "../settings-developer.module.css";
 import { ApiDocsPanel } from "./ApiDocsPanel";
@@ -25,7 +25,7 @@ export function DeveloperPage() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Developer</h1>
+      <PageHeader title="Developer" />
       <Tabs
         className={styles.tabs}
         items={TABS}

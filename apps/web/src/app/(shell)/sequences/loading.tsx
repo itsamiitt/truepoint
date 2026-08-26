@@ -4,7 +4,7 @@ import { Skeleton, TableSkeleton } from "@leadwolf/ui";
 
 export default function SequencesLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-4)" }}>
       <Skeleton width={180} height={20} />
       <TableSkeleton rows={8} columns={[12, 5, 4, 4, 3]} />
     </div>

@@ -346,6 +346,26 @@ export const appEnvSchema = z
     // the byte cap bounds an oversized/hostile response body before JSON.parse.
     ENRICH_PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     ENRICH_PROVIDER_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
+
+    // Data-source failover-chain error handling (expo.truepoint.in/docs §Errors & classifications; the
+    // sourceErrorClassifier verdict table). Per-class origin cooldown defaults — a Retry-After header
+    // always wins over these; the MAX clamp bounds any vendor-sent horizon so a bad header can never
+    // brick an origin for a day. TRANSIENT_RETRIES=0 restores the pre-classifier zero-retry failover.
+    ENRICH_ORIGIN_THROTTLE_FALLBACK_MS: z.coerce.number().int().positive().default(15_000),
+    ENRICH_ORIGIN_SHUTDOWN_COOLDOWN_MS: z.coerce.number().int().positive().default(30_000),
+    ENRICH_ORIGIN_POOL_DEAD_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
+    ENRICH_ORIGIN_SEAT_DEAD_COOLDOWN_MS: z.coerce.number().int().positive().default(600_000),
+    ENRICH_ORIGIN_COOLDOWN_MAX_MS: z.coerce.number().int().positive().default(3_600_000),
+    ENRICH_ORIGIN_TRANSIENT_RETRIES: z.coerce.number().int().nonnegative().default(1),
+    ENRICH_ORIGIN_TRANSIENT_RETRY_DELAY_MS: z.coerce.number().int().positive().default(300),
+    // Rate-limit horizon cap for the enrichment breaker (redisBreakerStore `limited` key) — bounds a
+    // vendor-sent Retry-After so one bad header can't block a provider fleet-wide for longer than this.
+    ENRICH_BREAKER_RATE_LIMIT_HORIZON_CAP_S: z.coerce.number().int().positive().default(86_400),
+    // All-throttled job deferral: max re-enqueues per original job, and the delay above which the job
+    // PARKS (returns unfilled; the ledger's rate_limited rows + the breaker horizon carry the state)
+    // instead of scheduling a delayed job — a daily-budget 86400s Retry-After must not pile up jobs.
+    ENRICH_MAX_DEFERRALS: z.coerce.number().int().nonnegative().default(3),
+    ENRICH_DEFER_MAX_DELAY_MS: z.coerce.number().int().positive().default(1_800_000),
     // Per-verification unit cost in micro-dollars folded into the daily budget as `verify:email:*` ledger
     // rows (waterfall v2 verify-before-accept). Default 0 — a self-hosted Reacher is infra cost, not
     // per-call spend; set when a metered hosted verifier is used.
@@ -386,7 +406,10 @@ export const appEnvSchema = z
     // this arm off the gates are a strict no-op and do NO policy read (today's exact behavior, the merge-safety
     // guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it — "false"/"0"/"" can never be
     // coerced truthy.
-    AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
+    AUTH_POLICY_ENFORCEMENT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // AUTH-065: restrict an extension-scoped access token (scope:["extension"]) to the prospecting/ingestion
     // route allow-list in apps/api (extensionScope.ts), deny-by-default. LOCKOUT-CAPABLE (a wrong allow-list
@@ -402,7 +425,10 @@ export const appEnvSchema = z
     // gates enforce today — but ENFORCES NOTHING (the comparison is detached + try/caught, so it can neither slow
     // nor break a login). Lets on-call confirm the engine resolves identically on REAL traffic before any
     // cutover. Default OFF — unset ⇒ no shadow read, today's exact behaviour. Only the literal "true" arms it.
-    AUTH_POLICY_SHADOW_ENABLED: z.string().optional(),
+    AUTH_POLICY_SHADOW_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // OBSERVE-FIRST breached-password screening at LOGIN (credential-stuffing defence). When "true",
     // authenticatePassword screens the just-verified password against HaveIBeenPwned (detached + fail-open, so it
@@ -424,14 +450,20 @@ export const appEnvSchema = z
     // so a passkey registered on auth.* works across app.*/api.* in the subdomain estate. Ceremonies verify the
     // response's origin against the APP_ORIGINS allow-list and its rpIdHash against this. Flagged NEEDS
     // SPECIALIST REVIEW BEFORE ENABLE (the security-critical generate/verify lives in @leadwolf/auth).
-    WEBAUTHN_ENABLED: z.string().optional(),
+    WEBAUTHN_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     WEBAUTHN_RP_ID: z.string().default(""),
 
     // Trusted-device "remember this device for 30 days" MFA skip (device.trusted). OFF BY DEFAULT — the /mfa
     // checkbox is HIDDEN and no MFA is skipped until the trusted-device backend (token store + skip check +
     // revocation) is built and reviewed. It is an MFA-BYPASS surface, so it stays dark until then rather than
     // present a checkbox that silently does nothing. Only an explicit "true" shows the option.
-    TRUSTED_DEVICES_ENABLED: z.string().optional(),
+    TRUSTED_DEVICES_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
@@ -1109,7 +1141,7 @@ export const appEnvSchema = z
     // WebAuthn/passkeys (AUTH-024): once armed, the Relying Party ID is required — enabling the ceremony without
     // WEBAUTHN_RP_ID would fail cryptically at registration/assertion time. Fail fast at boot instead. Checked in
     // every environment (unlike the production-only checks below), since passkeys can be enabled in dev too.
-    if (val.WEBAUTHN_ENABLED === "true" && val.WEBAUTHN_RP_ID.trim() === "") {
+    if (val.WEBAUTHN_ENABLED && val.WEBAUTHN_RP_ID.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["WEBAUTHN_RP_ID"],

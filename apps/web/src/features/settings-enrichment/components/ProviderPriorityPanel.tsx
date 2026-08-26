@@ -18,6 +18,7 @@ import {
 import {
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpSelect,
@@ -95,7 +96,7 @@ export function ProviderPriorityPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Enrichment providers</h1>
+      <PageHeader title="Enrichment providers" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {form ? (
           <>

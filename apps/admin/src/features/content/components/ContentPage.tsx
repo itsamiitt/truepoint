@@ -156,7 +156,7 @@ export function ContentPage() {
       cell: (a) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{a.title}</span>
-          <span className="app-muted" style={{ fontSize: 12 }}>
+          <span className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
             {a.audience === "tenant"
               ? `tenant ${(a.tenantTarget ?? "").slice(0, 8)}`
               : "all tenants"}
@@ -195,7 +195,7 @@ export function ContentPage() {
       align: "right",
       cell: (a) =>
         canManage ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton
               variant="ghost"
               size="sm"
@@ -247,7 +247,7 @@ export function ContentPage() {
         title={draft?.id ? "Edit announcement" : "New announcement"}
         maxWidth={560}
         footer={
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
             <TpButton variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
               Cancel
             </TpButton>
@@ -258,7 +258,7 @@ export function ContentPage() {
         }
       >
         {draft ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
             <Field label="Title" htmlFor="a-title">
               <TpInput
                 id="a-title"
@@ -303,7 +303,7 @@ export function ContentPage() {
                 <option value="maintenance">Maintenance (site-wide, non-dismissible)</option>
               </TpSelect>
             </Field>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-3)" }}>
               <Field label="Level" htmlFor="a-level" grow>
                 <TpSelect
                   id="a-level"
@@ -331,7 +331,9 @@ export function ContentPage() {
               </Field>
             </div>
             {draft.audience === "tenant" ? (
-              <Field label="Target tenant" htmlFor="a-target">
+              // No htmlFor: the DS Combobox inside TenantPicker owns its trigger and exposes no id, so the
+              // association is the WRAPPING label (Field renders one) — see EntityPicker's header.
+              <Field label="Target tenant">
                 <TenantPicker
                   id="a-target"
                   value={draft.tenantTarget}
@@ -343,7 +345,7 @@ export function ContentPage() {
                 />
               </Field>
             ) : null}
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-3)" }}>
               <Field label="Start (optional)" htmlFor="a-start" grow>
                 <TpInput
                   id="a-start"
@@ -377,16 +379,23 @@ function Field({
   children,
 }: {
   label: string;
-  htmlFor: string;
+  /** Omit for a control that owns its own trigger (the DS Combobox): this label WRAPS its control, so the
+   *  first labelable descendant is the association. A dangling `for` would give the label no control at all. */
+  htmlFor?: string;
   grow?: boolean;
   children: ReactNode;
 }) {
   return (
     <label
       htmlFor={htmlFor}
-      style={{ display: "flex", flexDirection: "column", gap: 4, flex: grow ? "1 1 0" : undefined }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--tp-space-1)",
+        flex: grow ? "1 1 0" : undefined,
+      }}
     >
-      <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
+      <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
     </label>
   );

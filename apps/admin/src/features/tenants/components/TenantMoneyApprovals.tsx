@@ -97,12 +97,12 @@ export function TenantMoneyApprovals({
         onRetry={() => void reload()}
         empty={!loading && rows.length === 0}
         emptyState={
-          <p className="app-muted" style={{ padding: 16 }}>
+          <p className="app-muted" style={{ padding: "var(--tp-space-4)" }}>
             No pending credit or refund requests.
           </p>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
           {rows.map((a) => (
             <div
               key={a.id}
@@ -110,20 +110,20 @@ export function TenantMoneyApprovals({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                gap: 16,
-                padding: "12px 16px",
+                gap: "var(--tp-space-4)",
+                padding: "var(--tp-space-3) var(--tp-space-4)",
                 border: "1px solid var(--tp-hairline-2)",
                 borderRadius: 8,
               }}
             >
               <div>
                 <div style={{ fontWeight: 500 }}>{describe(a)}</div>
-                <div className="app-muted" style={{ fontSize: 12 }}>
+                <div className="app-muted" style={{ fontSize: "var(--tp-text-caption)" }}>
                   {a.requestReason} · filed {shortDate(a.createdAt)}
                 </div>
               </div>
               {canDecide ? (
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: "var(--tp-space-2)" }}>
                   <TpButton
                     variant="primary"
                     size="sm"
@@ -160,7 +160,7 @@ export function TenantMoneyApprovals({
           title={decision.kind === "approve" ? "Approve request" : "Reject request"}
           description="You cannot decide a request you filed yourself — the server enforces separation of duties (a self-decision is refused)."
           footer={
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: "var(--tp-space-2)", justifyContent: "flex-end" }}>
               <TpButton variant="secondary" onClick={() => setDecision(null)} disabled={busy}>
                 Cancel
               </TpButton>
@@ -176,9 +176,11 @@ export function TenantMoneyApprovals({
         >
           <label
             htmlFor="money-approval-reason"
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-1)" }}
           >
-            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+            <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+              Reason (audited)
+            </span>
             <TpTextarea
               id="money-approval-reason"
               value={reason}

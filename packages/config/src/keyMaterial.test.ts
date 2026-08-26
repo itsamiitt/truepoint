@@ -4,6 +4,8 @@
 import { describe, expect, it } from "bun:test";
 import { decodeKeyMaterial } from "./env.ts";
 
+// lint-secrets-ok: a fixture, not a key — the body is the literal "abc123def456" and decodes to nothing.
+// A real-SHAPED PEM is required here to prove the base64 transport survives docker compose interpolation.
 const PEM =
   "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIabc123def456\n-----END PRIVATE KEY-----\n";
 const b64 = Buffer.from(PEM, "utf8").toString("base64");

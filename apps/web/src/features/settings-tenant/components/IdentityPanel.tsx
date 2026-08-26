@@ -16,6 +16,7 @@ import {
   EmptyState,
   FieldGroup,
   FormSection,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -221,7 +222,7 @@ export function IdentityPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Domains &amp; SCIM</h1>
+      <PageHeader title="Domains & SCIM" />
       <StateSwitch loading={loading} error={error} onRetry={reload}>
         {forbidden ? (
           <EmptyState

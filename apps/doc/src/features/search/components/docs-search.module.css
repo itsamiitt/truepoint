@@ -1,0 +1,163 @@
+/* docs-search.module.css — the masthead search box and its result popup.
+ *
+ * Every colour pair here is one contrast.test.ts asserts against the WCAG 2.2 AA floor; the active row adds
+ * --tp-ink on --tp-cobalt-50, which is registered there. The muted section label deliberately switches from
+ * ink-3 to ink-2 on the active row, because ink-3 on cobalt-50 is 3.9:1 and would fail. */
+
+.search {
+  position: relative;
+  flex: 0 1 260px;
+  min-width: 0;
+}
+
+.input {
+  width: 100%;
+  height: 32px;
+  /* Right padding reserves the "/" affordance's lane so the placeholder never runs under it. */
+  padding: 0 var(--tp-space-6) 0 var(--tp-space-3);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  background: var(--tp-surface-2);
+  color: var(--tp-ink);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease), background
+    var(--tp-duration-fast) var(--tp-ease);
+}
+.input::placeholder {
+  color: var(--tp-ink-3);
+}
+
+/* The "/" affordance. Absolutely positioned so it cannot reflow the input, and the input reserves room for it
+   on the right so a long placeholder never runs underneath. ink-3 on surface-2 is 4.63:1 — a pair
+   contrast.test.ts already asserts. It is removed from the DOM on focus rather than faded, so it can never
+   sit behind what someone is typing. */
+.shortcut {
+  position: absolute;
+  top: 50%;
+  right: var(--tp-space-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 4px;
+  background: var(--tp-surface);
+  color: var(--tp-ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+.input:hover {
+  background: var(--tp-surface);
+}
+.input:focus-visible {
+  outline: 2px solid var(--tp-cobalt);
+  outline-offset: 1px;
+  background: var(--tp-surface);
+  border-color: var(--tp-cobalt);
+}
+.panel {
+  position: absolute;
+  top: calc(100% + var(--tp-space-2));
+  left: 0;
+  width: min(420px, calc(100vw - var(--tp-space-6)));
+  z-index: var(--tp-z-popover);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--tp-shadow-popover);
+  overflow: hidden;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: var(--tp-space-1);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.option,
+.optionActive {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--tp-space-2);
+  align-items: baseline;
+  padding: var(--tp-space-2) var(--tp-space-3);
+  border-radius: var(--tp-radius-sm);
+  cursor: pointer;
+  /* white-space is normal here: a summary that wraps to two lines is readable, one that ellipses is not. */
+  white-space: normal;
+}
+.optionActive {
+  background: var(--tp-cobalt-50);
+}
+
+.optionTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.optionSection {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tp-ink-3);
+  justify-self: end;
+}
+.optionActive .optionSection {
+  color: var(--tp-ink-2);
+}
+
+.optionSummary {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--tp-ink-2);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--tp-space-4);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* Visually hidden, still announced. The clip-path pair is what keeps it out of the layout without taking it
+   out of the accessibility tree the way display:none would. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input {
+    transition: none;
+  }
+}
+
+/* The masthead wraps below 860px (site-chrome.module.css); the box takes the full row rather than competing
+   with the nav for a few pixels. */
+@media (max-width: 860px) {
+  .search {
+    flex: 1 1 100%;
+    order: 3;
+  }
+  .panel {
+    width: 100%;
+  }
+}

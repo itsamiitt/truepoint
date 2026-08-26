@@ -10,4 +10,8 @@ export const reportKeys = {
   source: () => ["reports", "source"] as const,
   /** The server-aggregated counts for one filter combination — the filters ARE the key now. */
   summary: (range: string, member: string) => ["reports", "summary", range, member] as const,
+  /** Reveal hit-rate + latency. Keyed by range ONLY: the metric has no member dimension (usage_event rows
+   *  carry the workspace, not the actor), so including `member` would fragment the cache into identical
+   *  copies and refetch on a filter that changes nothing about the answer. */
+  outcomes: (range: string) => ["reports", "outcomes", range] as const,
 };

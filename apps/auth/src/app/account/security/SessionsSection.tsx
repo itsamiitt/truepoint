@@ -2,12 +2,16 @@
 // and never offered for revoke. SSR, no-JS friendly, WCAG 2.2 AA: a real table with scope="col" headers, each
 // revoke is a labelled submit, and the destructive "sign out everywhere else" is clearly described. Reads are
 // scoped to the authenticated user (data.ts); revokes are ownership-checked server-side (actions.ts).
+//
+// The row count is CAPPED in data.ts, not here: an SSR table with no pagination control renders exactly what
+// it is handed, so an account with many devices used to put every one of them in the HTML. What is hidden is
+// disclosed in a count line rather than dropped silently.
 import { AccountSectionCard } from "@/shared/AccountShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import styles from "@/shared/auth.module.css";
 import { Alert, StatusBadge } from "@leadwolf/ui";
 import { revokeAllOtherSessions, revokeOwnSession } from "./actions";
-import type { SessionView } from "./data";
+import { type SessionView, moreRowsNote } from "./data";
 import type { StatusMessage } from "./status";
 
 function sessionsStatusMessage(status: string | undefined): StatusMessage | null {
@@ -25,13 +29,23 @@ function sessionsStatusMessage(status: string | undefined): StatusMessage | null
 
 export function SessionsSection({
   sessions,
+  total,
+  atSourceLimit,
   status,
 }: {
+  /** Already capped by the data layer (SECURITY_LIST_PAGE_SIZE) — this JSX renders whatever it is given. */
   sessions: SessionView[];
+  /** Live sessions in total, so the cap can be disclosed rather than silently swallowing rows. */
+  total: number;
+  atSourceLimit: boolean;
   status?: string;
 }) {
   const msg = sessionsStatusMessage(status);
+  const more = moreRowsNote(sessions.length, total, atSourceLimit);
   const others = sessions.filter((s) => !s.current);
+  // "Sign out all other sessions" revokes every other session server-side, not just the rendered page — so it
+  // must stay offered whenever ANY row is hidden, even if this page happens to show only the current device.
+  const hasOthers = others.length > 0 || total > sessions.length;
 
   return (
     <AccountSectionCard
@@ -83,7 +97,11 @@ export function SessionsSection({
                 </td>
                 <td className={styles.cellRight}>
                   {s.current ? (
-                    <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>Current</span>
+                    // ink-3, not ink-4: this is a read-as-text status word on the white card (4.83:1), where
+                    // ink-4 was 2.54:1 — below AA at every text size. See contrast.test.ts.
+                    <span style={{ fontSize: "var(--tp-text-caption)", color: "var(--tp-ink-3)" }}>
+                      Current
+                    </span>
                   ) : (
                     <form action={revokeOwnSession}>
                       <input type="hidden" name="session_id" value={s.id} />
@@ -99,7 +117,19 @@ export function SessionsSection({
         </table>
       </div>
 
-      {others.length > 0 ? (
+      {more ? (
+        <p
+          style={{
+            margin: "var(--tp-space-2) 0 0",
+            fontSize: "var(--tp-text-caption)",
+            color: "var(--tp-ink-3)",
+          }}
+        >
+          {more} Signing out all other sessions below covers every one, not just the rows shown.
+        </p>
+      ) : null}
+
+      {hasOthers ? (
         <form
           action={revokeAllOtherSessions}
           style={{ marginTop: "var(--tp-space-4)", maxWidth: 260 }}

@@ -9,6 +9,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -152,11 +153,10 @@ export function SessionsPanel() {
 
   return (
     <section>
-      <h1 className="tp-settings-title">Active sessions</h1>
-      <p className={styles.panelIntro}>
-        Review where members of this workspace are signed in, and revoke a session or sign a member
-        out of every device. A revoked session can no longer be used to sign in.
-      </p>
+      <PageHeader
+        title="Active sessions"
+        subtitle="Review where members of this workspace are signed in, and revoke a session or sign a member out of every device. A revoked session can no longer be used to sign in."
+      />
       <StateSwitch
         loading={loading}
         error={error}

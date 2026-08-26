@@ -12,6 +12,27 @@
     sans-serif;
   --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
+  /* Type scale. Added because there wasn't one: every app was told "no raw px" while `fontSize` had nothing
+     to point at, so ~150 raw sizes accumulated across web/admin/auth/extension and the ladder drifted into
+     10.5/11.5/12.5 steps that no two surfaces shared. These eight ARE the ladder — a size not on it is a
+     design decision, not a typo, and belongs in a token.
+       micro    11  dense table meta, tiny pills
+       caption  12  hints, eyebrows, timestamps
+       body     13  the default UI text size (rows, menus, descriptions)
+       label    14  form controls, buttons, primary body
+       lg       15  drawer titles, section leads
+       title    16  dialog titles, card headings
+       heading  18  panel headings
+       display  22  destination page titles (cockpit headers scale above this responsively) */
+  --tp-text-micro: 11px;
+  --tp-text-caption: 12px;
+  --tp-text-body: 13px;
+  --tp-text-label: 14px;
+  --tp-text-lg: 15px;
+  --tp-text-title: 16px;
+  --tp-text-heading: 18px;
+  --tp-text-display: 22px;
+
   /* Neutrals — text */
   --tp-ink: #111827;
   --tp-ink-2: #374151;
@@ -38,7 +59,8 @@
   /* Special surfaces */
   --tp-twilight: #0c0e1a;
   /* Scrim / backdrop behind overlays (modal, mobile sidebar) — ink at low alpha. */
-  --tp-scrim: rgba(17, 24, 39, 0.4);
+  /* 0.32, matching what .tp-ui-scrim shipped inline for a year — the token said 0.4 and nothing read it. */
+  --tp-scrim: rgba(17, 24, 39, 0.32);
 
   /* Primary action button = Ink (white text), hover darker */
   --tp-btn: #111827;
@@ -51,6 +73,17 @@
   --danger: #dc2626;
   /* Darker danger tone — destructive-button hover + error text on light surfaces. */
   --danger-700: #b91c1c;
+  /* Text-safe success/warning, added 2026-08-22 for the same reason --danger-700 exists: the base tones are
+     FILL colours and do not clear WCAG AA as text. --success is 3.30:1 on white and --warning 3.19:1, both
+     under the 4.5:1 normal-text floor — fine behind a 3:1 non-text graphic (a status dot, a check icon),
+     wrong for a number or a label. The 700 steps are 5.02:1 on white and ~4.8:1 on --tp-surface-2.
+     RULE: status colour on a FILL or an ICON → --success / --warning. Status colour on TEXT → the -700. */
+  --success-700: #15803d;
+  --warning-700: #b45309;
+  /* Faint status TINTS — the fill behind a status pill, paired with the -700 tone as its text.
+     --success-700 on --success-50 is 4.71:1; --warning-700 on --warning-50 is 4.62:1. */
+  --success-50: #eaf6ee;
+  --warning-50: #fdf3e7;
   /* Soft danger scale — the EXCLUSION/negation surface (the progressive-exclude filter block and its chips).
      Not for destructive actions (that stays --danger): these read as "this is a negative clause", not "danger".
      --danger-ink is the muted rose for supporting copy; it is darkened from the design's #a97a7a so 11px text
@@ -68,8 +101,12 @@
   /* Shape */
   --radius: 8px;
 
-  /* Focus ring — subtle grey, not glowing (04 §7) */
-  --focus-ring: #9ca3af;
+  /* Focus ring — subtle grey, not glowing (04 §7).
+     #6b7280, not the old #9ca3af: a focus indicator is a meaningful non-text graphic, so WCAG 2.2 SC 1.4.11
+     asks for 3:1 against what it sits on. The old value is 2.54:1 on white — the ring that every keyboard
+     user in every app relies on was itself below the line it was there to hold. This is 4.83:1 on white and
+     3.8:1 on --tp-surface-3, still reads as grey rather than a glow, and is the same value as --tp-ink-3. */
+  --focus-ring: #6b7280;
 
   /* Motion — subtle + professional (04 §8). Shared easings + durations so every interaction reads
      consistently; use with opacity/transform only (GPU-friendly). All motion collapses to near-instant
@@ -93,8 +130,15 @@
   --tp-shadow-card-hover: 0 4px 12px rgba(17, 24, 39, 0.08);
 
   /* Z-index scale — replaces the scattered magic numbers (sticky bar 30 / slide-over 40 / scrim 50…) so
-     overlays always stack predictably: sticky < drawer < overlay/scrim < modal < popover < toast < command. */
+     overlays always stack predictably: sticky < bulkbar < drawer < overlay/scrim < modal < popover < toast
+     < command. */
   --tp-z-sticky: 30;
+  /* Floating selection/action bars (the Prospect bulk bar). Above sticky table chrome so it is never cut by
+     a sticky header, but BELOW every dismissable overlay: a bar sitting on the popover layer painted over
+     the record Drawer, the QuickView Drawer and its own Dialogs, which is the one stacking order a
+     selection bar must never have. Its own menus/dialogs are unaffected — Dialog/Drawer portal to <body>,
+     and a DropdownMenu inside the bar rides this context above page content. */
+  --tp-z-bulkbar: 35;
   --tp-z-drawer: 40;
   --tp-z-overlay: 50;
   --tp-z-modal: 60;

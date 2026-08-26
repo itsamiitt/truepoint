@@ -12,7 +12,7 @@ import type { FacetKey, Suggestion } from "@leadwolf/types";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { prospectKeys } from "../keys";
-import { suggestField } from "../searchApi";
+import { suggestDatabaseField, suggestField } from "../searchApi";
 
 const MIN_CHARS_DEFAULT = 3;
 /** Title is the one facet where two letters are a real query — "VP", "HR", "IT". A recorded deviation from
@@ -20,7 +20,14 @@ const MIN_CHARS_DEFAULT = 3;
 const MIN_CHARS: Partial<Record<FacetKey, number>> = { title: 2 };
 const DEBOUNCE_MS = 300;
 
-export function useTypeahead(field: FacetKey) {
+/**
+ * Which endpoint supplies the values. `workspace` aggregates the caller's own contacts; `database`
+ * aggregates the Layer-0 satellites, which the overlay does not store and cannot read. A facet declared
+ * `database-only` must use the latter or its picker silently returns nothing.
+ */
+export type TypeaheadSource = "workspace" | "database";
+
+export function useTypeahead(field: FacetKey, source: TypeaheadSource = "workspace") {
   const minChars = MIN_CHARS[field] ?? MIN_CHARS_DEFAULT;
   const [query, setQuery] = useState("");
   // The debounce still belongs here: it decides WHEN a term becomes a request, which is a property of typing,
@@ -34,9 +41,14 @@ export function useTypeahead(field: FacetKey) {
 
   const term = debounced.length >= minChars ? debounced : "";
   const result = useQuery<Suggestion[]>({
-    queryKey: prospectKeys.typeahead(field, term),
+    // `source` is part of the KEY: the two endpoints answer the same (field, term) differently, so sharing
+    // one cache entry would serve workspace values to a database facet and vice versa.
+    queryKey: [...prospectKeys.typeahead(field, term), source],
     enabled: term !== "",
-    queryFn: ({ signal }) => suggestField(field, term, 10, signal),
+    queryFn: ({ signal }) =>
+      source === "database"
+        ? suggestDatabaseField(field, term, 10, signal)
+        : suggestField(field, term, 10, signal),
     // A suggestion list is disposable; retrying it while the user keeps typing only queues work for a term
     // they have already moved past.
     retry: false,

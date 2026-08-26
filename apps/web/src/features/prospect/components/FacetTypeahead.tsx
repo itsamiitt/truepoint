@@ -14,12 +14,20 @@ import type { FacetKey } from "@leadwolf/types";
 import { TpInput } from "@leadwolf/ui";
 import { useEffect, useId, useRef, useState } from "react";
 import type { TermOp } from "../filterGroups";
-import { useTypeahead } from "../hooks/useTypeahead";
+import { type TypeaheadSource, useTypeahead } from "../hooks/useTypeahead";
 import { optionId, typeaheadKey } from "../typeaheadKeys";
 
 function Hint({ children }: { children: string }) {
   return (
-    <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>{children}</div>
+    <div
+      style={{
+        padding: "8px 10px",
+        color: "var(--tp-ink-3)",
+        fontSize: "var(--tp-text-body)",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -31,6 +39,7 @@ export function FacetTypeahead({
   op = "include",
   autoFocus = false,
   placeholder,
+  source = "workspace",
 }: {
   field: FacetKey;
   label: string;
@@ -43,8 +52,10 @@ export function FacetTypeahead({
   autoFocus?: boolean;
   /** An EXAMPLE of the input ("e.g. VP Sales, CTO"); the label stays the label. */
   placeholder?: string;
+  /** Which suggest endpoint answers — the global one for a database-only facet (see useTypeahead). */
+  source?: TypeaheadSource;
 }) {
-  const { query, setQuery, suggestions, loading, minChars } = useTypeahead(field);
+  const { query, setQuery, suggestions, loading, minChars } = useTypeahead(field, source);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -143,7 +154,7 @@ export function FacetTypeahead({
                   onClick={() => pick(s.value)}
                 >
                   <span style={{ flex: 1 }}>{s.displayLabel}</span>
-                  <span style={{ color: "var(--tp-ink-4)", fontSize: 12 }}>
+                  <span style={{ color: "var(--tp-ink-3)", fontSize: "var(--tp-text-caption)" }}>
                     {s.count.toLocaleString()}
                   </span>
                 </button>
