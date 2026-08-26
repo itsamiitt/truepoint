@@ -554,3 +554,50 @@ how a decision quietly becomes a non-decision. Every one is measured, not estima
 Two standing ratchets exist so none of the above can quietly get worse while it waits: ink-4 at 95,
 cross-feature at 9 (web) / 0 (everywhere else). Both fail the build if the number rises, and both refuse to
 pass silently if it falls — they demand the budget be tightened instead.
+
+---
+
+2026-08-26 — **ONE OPEN DECISION from the auth audit: whether to trade a rotation-replay window for a UX
+flash.** Everything else the audit found is fixed and shipped (commits 2ed8c4ad, 961be091, 05c45dd0,
+26b7bebb). This is the only item deliberately left undone, because it is a security judgement rather than an
+effort question.
+
+**The situation, measured.** The refresh cookie is host-scoped to the auth origin, so ONE cookie serves
+app./admin./forge. The client's anti-stampede rotation election is localStorage-backed and therefore
+per-ORIGIN. Two of those apps open in one browser cannot see each other's lock, so both rotate the same
+cookie, and the loser presents a token the winner replaced milliseconds earlier. `session.ts` already
+forgives that for reuse-detection purposes inside `REUSE_GRACE_MS` (30s) — it skips the family revocation —
+but it still rejects the token, and `/token/refresh`'s handler used to CLEAR the cookie on that rejection.
+When the loser's 401 landed after the winner's 200, the browser dropped the one cookie all three apps depend
+on and the user was signed out everywhere. That was the reported "accounts keep getting logged out".
+
+**What shipped.** `ConcurrentRotationError` (subclasses `InvalidTokenError`, so the wire response is
+unchanged) plus a pure `shouldClearRefreshCookie()` shared by the three clearing routes, a bounded
+refresh-and-retry in `fetchWithAuth`, and a re-armed timer on both election-loss paths. Net effect: the
+session survives, the retry sends the winner's cookie and succeeds, and the user stays signed in.
+
+**What is still imperfect, and it is cosmetic.** On a COLD load that races, `AppShell` can reach
+`startLogin()` before the retry helps — a redirect to the auth origin, which finds the live cookie and
+bounces straight back signed in. A flash, not a logout.
+
+**The fix that would remove even the flash, and why it was not taken.** `rotate()` records `rotatedFrom`, so
+the loser's successor session is findable: the server could rotate THAT and hand the loser a valid token
+instead of a 401. It is maybe thirty lines. But it changes what presenting a revoked refresh token BUYS
+inside the grace window — today, nothing; afterwards, a live session. Rotation exists precisely so that a
+captured refresh token is useless once used, and this would convert a 30-second detection window into a
+30-second exploitation window. The realistic attacker must already hold an HttpOnly, SameSite=Strict,
+host-scoped cookie (in which case they could present the current value anyway), which argues the exposure is
+small — but "small" is the kind of judgement that should be made deliberately and recorded, not made
+silently inside a UX fix.
+
+**Decide:** (A) implement successor-rotation and accept the 30s window, (B) keep the current behaviour and
+accept the cold-load flash, or (C) remove the race instead of forgiving it — the apps share the registrable
+domain `truepoint.in`, so a non-HttpOnly lock cookie scoped there would let the election span all three
+origins, at the cost of a cookie sent to every subdomain on every request. Security has final say.
+
+**Also worth an operator's attention, not a decision:** `deploy/env.production.template` ships `SMTP_URL=`
+empty. That is correct for the template (the key is injected as a secret and must never be committed), but it
+means password reset, email verification and magic links deliver nothing wherever the secret was not actually
+supplied. The auth app now reports this at BOOT — grep for `auth.boot.FATAL.mail_transport_unset` — instead
+of only at send time, where the enumeration-safe response made a dead relay indistinguishable from a working
+one.
