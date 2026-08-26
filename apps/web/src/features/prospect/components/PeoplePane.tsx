@@ -69,16 +69,20 @@ import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.BulkActionBar), {
   ssr: false,
 });
+// The saved + recent searches block sits UNDER the filters and carries its own dialogs, menu and client — an
+// intent (PA-3), deferred so the quick tier + grid fit /search's 200kB First Load budget.
+const RailFooter = dynamic(() => import("./RailFooter").then((m) => m.RailFooter), {
+  ssr: false,
+  loading: () => null,
+});
 import type { ProspectRow } from "../databaseRows";
 import { FilterRail } from "./FilterRail";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickStartPresets } from "./QuickStartPresets";
 import { QuickViewDrawer } from "./QuickViewDrawer";
-import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
 import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
-import { SaveSearchPanel } from "./SaveSearchPanel";
 import { SearchBox } from "./SearchBox";
 import { RowSelectCheckbox, SelectAllCheckbox } from "./SelectionControls";
 import { WorkspaceOnlyNotice } from "./WorkspaceOnlyNotice";
@@ -385,10 +389,12 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           counts={counts}
           scope={shell.workspace.scope}
           footer={
-            <>
-              <SaveSearchPanel currentQuery={query} onApply={setQuery} />
-              <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
-            </>
+            <RailFooter
+              query={query}
+              onApply={setQuery}
+              recents={recent.recents}
+              onClearRecents={recent.clear}
+            />
           }
         />
       </SearchDrawer>

@@ -1,17 +1,25 @@
 // AllFiltersSection.tsx — the second tier of the rail (decisions.md 2026-08-25): every facet only the
-// workspace engine answers, in accordions, under one collapsible "All filters" header tagged "Saved contacts
-// only". Collapsed by default (progressive disclosure); the badge counts active selections so a collapsed
-// tier is still legible. In "Not saved" scope nothing here can apply, so the tier says so instead of offering
+// workspace engine answers, under one collapsible "All filters" header tagged "Saved contacts only".
+// Collapsed by default (progressive disclosure); the badge counts active selections so a collapsed tier is
+// still legible. In "Not saved" scope nothing here can apply, so the tier says so instead of offering
 // controls that would silently do nothing.
+//
+// The header is eager; the BODY (the groups) is next/dynamic — opening the tier is an intent (perf-checklist
+// PA-3), and /search has a 200kB First Load budget the quick tier + grid must fit inside.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
 import type { ContactQuery } from "@leadwolf/types";
-import { ALL_FILTER_GROUPS, groupActiveCount, workspaceOnlyChips } from "../filterGroups";
+import dynamic from "next/dynamic";
+import { workspaceOnlyChips } from "../filterGroups";
 import { useOpenGroups } from "../hooks/useOpenGroups";
 import styles from "../prospect.module.css";
-import { AccordionGroup } from "./AccordionGroup";
-import { FacetControl, type OwnerOption } from "./FacetControl";
+import type { OwnerOption } from "./FacetControl";
+
+const AllFiltersBody = dynamic(() => import("./AllFiltersBody").then((m) => m.AllFiltersBody), {
+  ssr: false,
+  loading: () => <p className={styles.tierNote}>Loading filters…</p>,
+});
 
 const TIER_ID = "search-all-filters";
 
@@ -61,35 +69,7 @@ export function AllFiltersSection({
       </button>
       {open ? (
         <div id={TIER_ID}>
-          <p className={styles.tierNote}>
-            These narrow the list to contacts already saved in your workspace.
-          </p>
-          {ALL_FILTER_GROUPS.map((group) => (
-            <AccordionGroup
-              key={group.id}
-              id={`search-group-${group.id}`}
-              title={group.title}
-              open={groups.isOpen(group.id)}
-              onToggle={() => groups.toggle(group.id)}
-              badge={
-                groupActiveCount(
-                  query,
-                  group.facets.map((f) => f.field),
-                ) || undefined
-              }
-            >
-              {group.facets.map((facet) => (
-                <FacetControl
-                  key={`${facet.kind}:${facet.field}`}
-                  facet={facet}
-                  query={query}
-                  onChange={onChange}
-                  counts={counts}
-                  owners={owners}
-                />
-              ))}
-            </AccordionGroup>
-          ))}
+          <AllFiltersBody query={query} onChange={onChange} counts={counts} owners={owners} />
         </div>
       ) : null}
     </section>
