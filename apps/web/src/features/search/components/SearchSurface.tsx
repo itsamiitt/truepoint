@@ -1,8 +1,10 @@
 // SearchSurface.tsx — the Search destination's composer (search-consolidation 01).
 //
-// It owns exactly three things and delegates everything else: the active tab (URL-derived, so a view is
+// It owns exactly four things and delegates everything else: the active tab (URL-derived, so a view is
 // shareable), the filter drawer's collapsed state (localStorage, so it is a preference and not part of the
-// search), and which profile is open (a URL param, so a drawer is shareable too). It then mounts ONE pane.
+// search), which profile is open (a URL param, so a drawer is shareable too), and the RevealStore — mounted
+// HERE, above both panes and the profile drawers, so a reveal made in a drawer and one made in the grid read
+// the same state (reveal-as-save, decisions.md 2026-08-25). It then mounts ONE pane.
 //
 // Mounting one pane rather than both is deliberate. The retired Prospect page kept both scopes mounted
 // because React forbids conditional hooks, then threaded an `enabled` flag through every hook to stop the
@@ -26,7 +28,9 @@ import {
   useWorkspaceScope,
 } from "@/components/search";
 import type { SearchShell } from "@/components/search";
+import { RevealStoreProvider } from "@/features/prospect/entries/revealStore";
 import { Skeleton, TableSkeleton } from "@leadwolf/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useCallback, useMemo } from "react";
 import { SearchProfileHost } from "./SearchProfileHost";
@@ -61,11 +65,21 @@ const AccountsPane = dynamic(
   { ssr: false, loading: () => <PaneSkeleton /> },
 );
 
+/** The query families that count or list a row by SIDE (saved vs not) — what a reveal-as-save moves. */
+const SIDE_FAMILIES = [
+  "contact-search",
+  "database-search",
+  "database-count",
+  "contact-count",
+  "contact-facets",
+] as const;
+
 export function SearchSurface() {
   const { tab, setTab } = useSearchTab();
   const drawer = useDrawerCollapsed();
   const { profile, open, close } = useProfileParam();
   const workspace = useWorkspaceScope();
+  const queryClient = useQueryClient();
 
   const shell: SearchShell = useMemo(
     () => ({
@@ -77,21 +91,33 @@ export function SearchSurface() {
     [drawer, tab, setTab, open, workspace],
   );
 
-  // Adding from a profile drawer closes it: the record is now an ordinary workspace row, and leaving the
-  // global profile open would show a stale "not in your workspace" state over a record that just joined it.
-  const handleAdded = useCallback(() => close(), [close]);
+  // A reveal-as-save made from a PROFILE DRAWER has no grid row to patch in place, so the two searches and the
+  // side-counting aggregates refetch (the narrow set the old AddToWorkspaceButton invalidated — never the
+  // ["prospect"] root, perf-audit P3.3), plus the profile itself so its "Saved to your workspace" state is
+  // the server's, not just this session's. The drawer stays open: the user is reading it.
+  const handleMaterialized = useCallback(
+    (slug: string) => {
+      for (const family of SIDE_FAMILIES) {
+        void queryClient.invalidateQueries({ queryKey: ["prospect", family] });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: ["search", "database", "people", "profile", slug],
+      });
+    },
+    [queryClient],
+  );
 
   return (
-    <>
+    <RevealStoreProvider>
       {tab === "accounts" ? <AccountsPane shell={shell} /> : <PeoplePane shell={shell} />}
       {profile ? (
         <SearchProfileHost
           kind={profile.kind}
           profileKey={profile.key}
           onClose={close}
-          onAddToWorkspace={handleAdded}
+          onMaterialized={handleMaterialized}
         />
       ) : null}
-    </>
+    </RevealStoreProvider>
   );
 }

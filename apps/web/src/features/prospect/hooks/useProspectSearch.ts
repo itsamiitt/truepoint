@@ -12,7 +12,7 @@
 // than a fresh round trip, which the ref-based version could never offer because it kept exactly one result set.
 "use client";
 
-import type { ContactHit, ContactQuery, SearchPage } from "@leadwolf/types";
+import type { ContactHit, ContactQuery, MaskedContact, SearchPage } from "@leadwolf/types";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -20,8 +20,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
-import { type ProspectRow, mergeRows, toDatabaseQuery } from "../databaseRows";
+import { useCallback, useMemo, useState } from "react";
+import { type ProspectRow, countDatabaseRows, mergeRows, toDatabaseQuery } from "../databaseRows";
 import { searchDatabase } from "../databaseSearchApi";
 import { prospectKeys } from "../keys";
 import { searchContacts } from "../searchApi";
@@ -47,6 +47,8 @@ export interface ProspectSearch {
   patchRows: (ids: string[], patch: (row: ContactHit) => ContactHit) => void;
   /** Drop rows from the cached owned pages (e.g. archived out of the workspace) without a refetch. */
   removeRows: (ids: string[]) => void;
+  /** Reveal-as-save flipped a database row into a workspace contact: render it IN PLACE (no refetch, no jump). */
+  materializeRow: (slug: string, owned: MaskedContact) => void;
 }
 
 export interface UseProspectSearchOptions {
@@ -142,11 +144,18 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     staleTime: 30_000,
   });
 
-  const hits = useMemo(
-    () => mergeRows(owned, databaseSearch.data?.hits ?? []),
-    [owned, databaseSearch.data],
+  // Reveal-as-save flips a database row into the workspace contact it became, IN PLACE (decisions.md
+  // 2026-08-25): the row is remembered here by slug for the pane's lifetime and rendered by mergeRows in its
+  // original position, so a reveal never moves the row out from under the reader's cursor. A later owned
+  // refetch that returns the same slug wins (dedupe in mergeRows) — the row then joins the saved section.
+  const [materialized, setMaterialized] = useState<ReadonlyMap<string, MaskedContact>>(
+    () => new Map(),
   );
-  const databaseCount = hits.length - owned.length;
+  const hits = useMemo(
+    () => mergeRows(owned, databaseSearch.data?.hits ?? [], materialized),
+    [owned, databaseSearch.data, materialized],
+  );
+  const databaseCount = useMemo(() => countDatabaseRows(hits), [hits]);
 
   // Written straight into the cache rather than into a parallel useState, so a patched row survives a
   // remount and stays consistent with what a later refetch replaces it with. patchRows/removeRows are the
@@ -166,6 +175,16 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
             })),
           },
       );
+      // A flipped row lives in the materialized map, not in the pages — patch it there too.
+      setMaterialized((prev) => {
+        let next: Map<string, MaskedContact> | null = null;
+        for (const [slug, row] of prev) {
+          if (!idSet.has(row.id)) continue;
+          if (next === null) next = new Map(prev);
+          next.set(slug, patch(row));
+        }
+        return next ?? prev;
+      });
     },
     [qc, queryKey],
   );
@@ -184,6 +203,15 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
             })),
           },
       );
+      setMaterialized((prev) => {
+        let next: Map<string, MaskedContact> | null = null;
+        for (const [slug, row] of prev) {
+          if (!idSet.has(row.id)) continue;
+          if (next === null) next = new Map(prev);
+          next.delete(slug);
+        }
+        return next ?? prev;
+      });
     },
     [qc, queryKey],
   );
@@ -193,6 +221,19 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
       patchRows([id], (h) => ({ ...h, isRevealed: true }));
     },
     [patchRows],
+  );
+
+  const materializeRow = useCallback(
+    (slug: string, ownedRow: MaskedContact) => {
+      setMaterialized((prev) => new Map(prev).set(slug, ownedRow));
+      // The row changed side: only the aggregates that count sides are stale. NOT the two searches — the row
+      // is patched in place, and a refetch would also move it to the top of the grid under the reader's
+      // cursor — and never the ["prospect"] root (perf-audit P3.3).
+      for (const family of ["contact-count", "contact-facets", "database-count"]) {
+        void qc.invalidateQueries({ queryKey: ["prospect", family] });
+      }
+    },
+    [qc],
   );
 
   return {
@@ -219,5 +260,6 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     markRevealed,
     patchRows,
     removeRows,
+    materializeRow,
   };
 }

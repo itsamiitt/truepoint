@@ -34,6 +34,7 @@ import {
   TableSkeleton,
   Tooltip,
   TpButton,
+  TpChip,
   TpInput,
 } from "@leadwolf/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +52,7 @@ import {
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
-import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
+import { useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
@@ -70,7 +71,6 @@ const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.Bulk
   ssr: false,
 });
 import type { ProspectRow } from "../databaseRows";
-import { AddToWorkspaceButton } from "./AddToWorkspaceButton";
 import { FilterPanel } from "./FilterPanel";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
@@ -120,6 +120,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     markRevealed,
     patchRows,
     removeRows,
+    materializeRow,
   } = search;
   const queryClient = useQueryClient();
   const counts = useFacetCounts(query, COUNT_FIELDS);
@@ -207,6 +208,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             store={selectionStore}
             id={c.id}
             label={`Select ${displayName(c)}`}
+            disabledReason={c.databaseSlug ? "Reveal to save this person first" : undefined}
             className={styles.rowCheck}
           />
         ),
@@ -220,7 +222,17 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           return (
             <span className={styles.nameCell}>
               <span className={styles.nameMeta}>
-                <span className={styles.name}>{displayName(c)}</span>
+                <span className={styles.name}>
+                  {displayName(c)}
+                  {c.databaseSlug ? (
+                    // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place
+                    // the grid says which side a row is on — its reveal is what saves it.
+                    <>
+                      {" "}
+                      <TpChip>Not saved</TpChip>
+                    </>
+                  ) : null}
+                </span>
                 <span className={styles.title}>
                   {c.jobTitle ?? "—"}
                   {href ? (
@@ -282,13 +294,27 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
       {
         key: "address",
         header: "Email",
-        cell: (c) => <RevealCell contact={c} field="email" onRevealed={markRevealed} />,
+        cell: (c) => (
+          <RevealCell
+            contact={c}
+            field="email"
+            onRevealed={markRevealed}
+            onMaterialized={materializeRow}
+          />
+        ),
       },
       {
         key: "phone",
         header: "Phone",
         sortValue: (c) => (c.hasPhone ? 1 : 0),
-        cell: (c) => <RevealCell contact={c} field="phone" onRevealed={markRevealed} />,
+        cell: (c) => (
+          <RevealCell
+            contact={c}
+            field="phone"
+            onRevealed={markRevealed}
+            onMaterialized={materializeRow}
+          />
+        ),
       },
       {
         key: "actions",
@@ -303,7 +329,16 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             role="presentation"
           >
             {c.databaseSlug ? (
-              <AddToWorkspaceButton slug={c.databaseSlug} name={displayName(c)} />
+              // A not-saved row has no list/tag/status — those are workspace facts; its save gesture is
+              // the reveal. The menu keeps the honest email hint and the LinkedIn link.
+              <RowActions
+                contact={c}
+                onOpenLinkedin={
+                  c.databaseUrl
+                    ? () => window.open(c.databaseUrl, "_blank", "noopener,noreferrer")
+                    : undefined
+                }
+              />
             ) : (
               <RowActions
                 contact={c}
@@ -318,7 +353,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     ],
     // The store is identity-stable, so selection changes no longer rebuild the columns (and with them every
     // cell of every row) — only new rows (shownIds) or new handlers do.
-    [selectionStore, shownIds, startRowAction, markRevealed],
+    [selectionStore, shownIds, startRowAction, markRevealed, materializeRow],
   );
 
   // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
@@ -429,10 +464,9 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               columns={columns}
               rows={hits}
               rowKey={(c) => c.id}
-              // STAGE 3 — the un-gate. A database row used to be inert here ("add it first, then it behaves
-              // like any contact"); it now opens its full masked Layer-0 profile in a drawer, with
-              // add-to-workspace as one action ON that profile rather than the price of admission to it.
-              // An owned row still opens the lightweight QuickView, which hands off to RecordDetail.
+              // A database row opens its full masked Layer-0 profile in a drawer (stage 3); its reveal — in
+              // the grid or in that drawer — is what saves it (decisions.md 2026-08-25). An owned row still
+              // opens the lightweight QuickView, which hands off to RecordDetail.
               onRowClick={(c) =>
                 c.databaseSlug ? shell.openProfile("person", c.databaseSlug) : setPreviewId(c.id)
               }
@@ -590,11 +624,8 @@ function ProspectBulkBar({
   );
 }
 
-/** Public entry: wraps the surface in the RevealStore so the grid + detail derive reveal state from one source. */
+/** Public entry. The RevealStore is provided by the Search composer — above both panes AND the profile
+ *  drawers — so a reveal made in a drawer and one made in the grid derive their state from one source. */
 export function PeoplePane({ shell }: { shell: SearchShell }) {
-  return (
-    <RevealStoreProvider>
-      <PeoplePaneInner shell={shell} />
-    </RevealStoreProvider>
-  );
+  return <PeoplePaneInner shell={shell} />;
 }

@@ -4,31 +4,43 @@
 // reveal runs through the RevealStore (optimistic in-grid update + a synchronous re-entry guard so a
 // double-click can't double-charge). Success/error is toasted; the row's coarse isRevealed flag is flipped via
 // onRevealed so the detail drawer stays consistent.
+//
+// A NOT-SAVED row (a database person) gets the same button, and its reveal IS the save gesture (decisions.md
+// 2026-08-25): one request materializes the person and reveals the channel, then `onMaterialized` flips the
+// row in place. What a row may do is decided by rowAffordances — never inline.
 "use client";
 
 import type { MaskedContact, RevealType } from "@leadwolf/types";
-import { StatusBadge, TpButton, useToast } from "@leadwolf/ui";
+import { StatusBadge, Tooltip, TpButton, useToast } from "@leadwolf/ui";
 import { Sparkles } from "lucide-react";
+import { type ProspectRow, ownedRowFromDatabase } from "../databaseRows";
 import {
   ownedRevealTypes,
+  useDatabaseRevealEnabled,
   useIsRevealing,
   useRevealCosts,
   useRevealStore,
   useRevealedContact,
 } from "../hooks/useRevealStore";
 import styles from "../prospect.module.css";
+import { rowAffordances } from "../rowAffordances";
 import { emailStatusLabel, emailStatusTone, phoneLineTypeLabel, phoneStatusTone } from "../types";
 import { CopyButton } from "./CopyButton";
+
+const IN_PROGRESS = "A reveal is already in progress.";
 
 export function RevealCell({
   contact,
   field,
   onRevealed,
+  onMaterialized,
 }: {
-  contact: MaskedContact;
+  contact: ProspectRow;
   field: "email" | "phone";
   /** Flip the row's coarse isRevealed flag after a successful reveal (keeps the drawer/other surfaces in sync). */
   onRevealed?: (contactId: string) => void;
+  /** A database row became a workspace contact (reveal-as-save) — render it in place. */
+  onMaterialized?: (slug: string, row: MaskedContact) => void;
 }) {
   const store = useRevealStore();
   const toast = useToast();
@@ -38,14 +50,26 @@ export function RevealCell({
   const revealed = useRevealedContact(contact.id);
   const busy = useIsRevealing(contact.id, field as RevealType);
   const costs = useRevealCosts();
+  const databaseRevealEnabled = useDatabaseRevealEnabled();
+  const affordance = rowAffordances(contact, { databaseRevealEnabled });
 
   const has = field === "email" ? contact.hasEmail : contact.hasPhone;
   if (!has) return <span className={styles.glyphNone}>—</span>;
+  const label = field === "email" ? "Email" : "Phone";
+
+  if (!affordance.reveal[field]) {
+    // The person carries the channel, but reveal-as-save is switched off for this deployment: "on file" is
+    // the honest word — "—" would claim there is nothing here.
+    return (
+      <Tooltip label="Revealing from the TruePoint database isn't enabled yet">
+        <span className={styles.glyphNone}>On file</span>
+      </Tooltip>
+    );
+  }
 
   const owned = ownedRevealTypes(contact.revealedTypes, revealed);
   const isOwned = field === "email" ? owned.email : owned.phone;
   const value = field === "email" ? revealed?.email : revealed?.phone;
-  const label = field === "email" ? "Email" : "Phone";
 
   // Owned + hydrated → show the real value inline with a copy control + verification badge.
   if (isOwned && value) {
@@ -73,8 +97,9 @@ export function RevealCell({
 
   // Not owned → the one-click reveal affordance with the credit cost up front.
   const cost = costs ? (field === "email" ? costs.email : costs.phone) : null;
+  const charged = (n: number) => `Charged ${n} credit${n === 1 ? "" : "s"}.`;
 
-  const onReveal = async () => {
+  const revealOwned = async () => {
     const res = await store.reveal(contact.id, field as RevealType);
     if (res.ok && res.result) {
       onRevealed?.(contact.id);
@@ -86,9 +111,7 @@ export function RevealCell({
       } else {
         toast.success(
           res.result.alreadyOwned ? "Already owned — no credits charged" : `${label} revealed`,
-          res.result.alreadyOwned
-            ? undefined
-            : `Charged ${res.result.creditsCharged} credit${res.result.creditsCharged === 1 ? "" : "s"}.`,
+          res.result.alreadyOwned ? undefined : charged(res.result.creditsCharged),
         );
       }
     } else if (res.error && res.code !== undefined) {
@@ -96,12 +119,55 @@ export function RevealCell({
         res.code === "insufficient_credits" ? "Not enough credits" : "Reveal failed",
         res.error,
       );
-    } else if (res.error && res.error !== "A reveal is already in progress.") {
+    } else if (res.error && res.error !== IN_PROGRESS) {
       toast.error("Reveal failed", res.error);
     }
   };
 
-  return (
+  // Reveal IS the save gesture: the landing commits before the reveal runs, so the person is saved whenever a
+  // contactId comes back — success or a failed reveal alike — and the row flips either way.
+  const revealAndSave = async () => {
+    const slug = contact.databaseSlug as string;
+    const res = await store.revealFromDatabase(slug, field as RevealType);
+    if (res.contactId) {
+      onMaterialized?.(
+        slug,
+        ownedRowFromDatabase(
+          contact,
+          res.contactId,
+          res.presence,
+          res.ok ? (field as RevealType) : undefined,
+        ),
+      );
+    }
+    if (res.ok && res.result) {
+      onRevealed?.(res.contactId ?? contact.id);
+      if (res.result.nothingToReveal) {
+        toast.success(
+          "Saved to your workspace",
+          `No ${label.toLowerCase()} on file — nothing was charged.`,
+        );
+      } else {
+        toast.success(
+          `${label} revealed · saved to your workspace`,
+          res.result.alreadyOwned
+            ? "Already owned — no credits charged."
+            : charged(res.result.creditsCharged),
+        );
+      }
+    } else if (res.error && res.error !== IN_PROGRESS) {
+      toast.error(
+        res.contactId
+          ? "Saved to your workspace — reveal failed"
+          : res.code === "insufficient_credits"
+            ? "Not enough credits"
+            : "Reveal failed",
+        res.error,
+      );
+    }
+  };
+
+  const button = (
     <TpButton
       size="sm"
       variant="secondary"
@@ -109,11 +175,18 @@ export function RevealCell({
       leftIcon={<Sparkles size={13} />}
       onClick={(e) => {
         e.stopPropagation();
-        void onReveal();
+        void (affordance.saved ? revealOwned() : revealAndSave());
       }}
     >
       {label}
       {cost != null ? ` · ${cost}cr` : ""}
     </TpButton>
+  );
+  return affordance.saved ? (
+    button
+  ) : (
+    <Tooltip label={`Reveals the ${label.toLowerCase()} and saves this person to your workspace`}>
+      {button}
+    </Tooltip>
   );
 }

@@ -2,21 +2,22 @@
 // masked Layer-0 detail of a person or a company, opened straight from a search row WITHOUT first adding
 // the record to a workspace.
 //
-// WHAT IS DELIBERATELY ABSENT. No owner, stage, tags, activity timeline, notes or reveal state — and no
-// email or phone VALUE. Those are not omissions to fill in later: a global record has no workspace-scoped
-// facts (Layer 0 has no workspace column), and the channel values are the paid product, revealed only once
-// the record is in the workspace. `hasEmail`/`hasPhone`/`hasMobile` show that data EXISTS; the primary
-// action turns the row into a workspace contact, after which the ordinary owned-record drawer takes over.
+// WHAT IS DELIBERATELY ABSENT. No owner, stage, tags, activity timeline or notes — those are workspace-scoped
+// facts a global record does not have (Layer 0 has no workspace column). The channel VALUES are the paid
+// product: `hasEmail`/`hasPhone`/`hasMobile` show that data EXISTS, and the reveal buttons are the SAVE
+// gesture (decisions.md 2026-08-25) — one request materializes the person into the workspace and reveals
+// the channel, after which the value shows here and the grid row flips. There is no "Add to workspace".
 //
 // This module is loaded through next/dynamic (see SearchProfileHost) — it is only reachable on a row click,
 // so it has no business in the Search route's first load.
 "use client";
 
-import { Avatar, Drawer, EmptyState, StateSwitch, TpButton, TpChip } from "@leadwolf/ui";
+import { Avatar, Drawer, EmptyState, StateSwitch, TpChip } from "@leadwolf/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, ExternalLink, UserX } from "lucide-react";
 import styles from "../accounts.module.css";
 import { fetchDatabaseCompanyProfile, fetchDatabasePersonProfile } from "../databaseProfileApi";
+import { DatabaseProfileRevealActions } from "./DatabaseProfileRevealActions";
 
 /** Profile reads are cheap, bounded and change slowly — hold them long enough that reopening a row the user
  *  just looked at is instant rather than a round trip (the PA-8 query-hygiene posture). */
@@ -63,11 +64,12 @@ function period(startedOn: string | null, endedOn: string | null): string {
 export function DatabasePersonProfileDrawer({
   slug,
   onClose,
-  onAddToWorkspace,
+  onMaterialized,
 }: {
   slug: string;
   onClose: () => void;
-  onAddToWorkspace: (slug: string) => void;
+  /** The person became (or already was) a workspace contact through a reveal here. */
+  onMaterialized: (slug: string) => void;
 }) {
   const q = useQuery({
     queryKey: ["search", "database", "people", "profile", slug],
@@ -104,14 +106,9 @@ export function DatabasePersonProfileDrawer({
               hasMobile={q.data?.hasMobile}
             />
 
+            <DatabaseProfileRevealActions slug={slug} person={p} onMaterialized={onMaterialized} />
+
             <div className={styles.profileActions}>
-              {p.inWorkspace ? (
-                <TpChip active>In your workspace</TpChip>
-              ) : (
-                <TpButton size="sm" onClick={() => onAddToWorkspace(slug)}>
-                  Add to workspace
-                </TpButton>
-              )}
               <a
                 className={styles.marketsLink}
                 href={p.linkedinUrl}

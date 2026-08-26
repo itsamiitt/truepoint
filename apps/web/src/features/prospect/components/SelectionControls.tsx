@@ -3,9 +3,13 @@
 // state changed — never the page, never the other ~700 cells (see useBulkSelection.ts for the full story).
 // memo() on top: the grid's own re-renders (new rows, density) skip these when their props are unchanged —
 // the store prop is identity-stable for the page's lifetime, so only id/label changes break the memo.
+//
+// A NOT-SAVED row (a database person) renders the checkbox DISABLED WITH ITS REASON rather than hidden
+// (search-consolidation 01 §Results grid): bulk actions address contacts by id, and the row has none until its
+// reveal saves it (decisions.md 2026-08-25).
 "use client";
 
-import { TpCheckbox } from "@leadwolf/ui";
+import { Tooltip, TpCheckbox } from "@leadwolf/ui";
 import { memo } from "react";
 import {
   type BulkSelectionStore,
@@ -18,13 +22,34 @@ export const RowSelectCheckbox = memo(function RowSelectCheckbox({
   id,
   label,
   className,
+  disabledReason,
 }: {
   store: BulkSelectionStore;
   id: string;
   label: string;
   className?: string;
+  /** Set ⇒ the row cannot join a selection; the reason is the tooltip AND part of the accessible name. */
+  disabledReason?: string;
 }) {
   const checked = useRowSelected(store, id);
+  if (disabledReason) {
+    return (
+      <Tooltip label={disabledReason}>
+        {/* A disabled input swallows pointer events in some engines, so the tooltip anchors on a wrapper. */}
+        <span style={{ display: "inline-flex" }}>
+          <TpCheckbox
+            className={className}
+            checked={false}
+            disabled
+            aria-disabled="true"
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => undefined}
+            aria-label={`${label} — ${disabledReason}`}
+          />
+        </span>
+      </Tooltip>
+    );
+  }
   return (
     <TpCheckbox
       className={className}

@@ -1,13 +1,15 @@
 // databaseSearchApi.ts — typed, authenticated calls to the GLOBAL database search (Layer-0-as-database
-// slice 2) and the "Add to workspace" verb. The database surface is deliberately separate from
-// searchApi.ts: it returns people the workspace does NOT own, addressed by their public LinkedIn slug.
+// slice 2) and the reveal-as-save verb (decisions.md 2026-08-25). The database surface is deliberately
+// separate from searchApi.ts: it returns people the workspace does NOT own, addressed by their public
+// LinkedIn slug. There is no "add to workspace" call here any more — the reveal IS the save gesture.
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
-  ContactFromDatabaseResponse,
+  ContactRevealFromDatabaseResponse,
   DatabaseCountResult,
   DatabaseQuery,
   DatabaseSearchPage,
+  RevealType,
 } from "@leadwolf/types";
 import { ApiError } from "./api";
 
@@ -49,15 +51,24 @@ export async function countDatabase(query: DatabaseQuery): Promise<DatabaseCount
   return (await res.json()) as DatabaseCountResult;
 }
 
-/** POST /contacts/from-database — materialize a database person into the workspace. */
-export async function addFromDatabase(
+/**
+ * POST /contacts/from-database/reveal — reveal IS the save gesture: materialize the database person into the
+ * workspace AND reveal one channel in ONE request [S-06][S-04]. A fresh Idempotency-Key per attempt means a
+ * network retry replays the same charge instead of double-spending (07 §3), exactly like revealContact. On a
+ * 402/403 the problem's `contactId` extension says the person was nevertheless saved.
+ */
+export async function revealFromDatabase(
   linkedinPublicId: string,
-): Promise<ContactFromDatabaseResponse> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/from-database`, {
+  revealType: RevealType,
+): Promise<ContactRevealFromDatabaseResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/from-database/reveal`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ linkedinPublicId }),
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({ linkedinPublicId, reveal_type: revealType }),
   });
-  if (!res.ok) throw await toError(res, "Could not add this contact");
-  return (await res.json()) as ContactFromDatabaseResponse;
+  if (!res.ok) throw await toError(res, "Could not reveal this person");
+  return (await res.json()) as ContactRevealFromDatabaseResponse;
 }
