@@ -3,7 +3,7 @@
 // packages/core. Enums mirror the 03 §5 CHECK constraints exactly. Validation lives here; logic does not.
 
 import { z } from "zod";
-import { revealType } from "./billing.ts";
+import { revealResponseSchema, revealType } from "./billing.ts";
 import { importRejectCode } from "./importReject.ts";
 import { freshnessStatus } from "./intel.ts";
 
@@ -587,3 +587,40 @@ export const contactFromDatabaseResponseSchema = z.object({
   reason: z.string().optional(),
 });
 export type ContactFromDatabaseResponse = z.infer<typeof contactFromDatabaseResponseSchema>;
+
+// ── Reveal is the save gesture (POST /contacts/from-database/reveal — decisions.md 2026-08-25) ────────────
+/**
+ * Materialize a database person into the caller's workspace AND reveal one channel in the SAME gesture
+ * [S-06][S-04]. Addressing is the add's: exactly one of slug or LinkedIn/Sales-Nav URL — a Layer-0 id is
+ * never accepted from a client. `reveal_type` is the money path's own vocabulary.
+ */
+export const contactRevealFromDatabaseRequestSchema = z
+  .object({
+    linkedinPublicId: z.string().trim().min(1).max(255).optional(),
+    url: z.string().url().optional(),
+    reveal_type: revealType,
+  })
+  .refine(
+    (v) => Boolean(v.linkedinPublicId) !== Boolean(v.url),
+    "Provide exactly one of linkedinPublicId or url.",
+  );
+export type ContactRevealFromDatabaseRequest = z.infer<
+  typeof contactRevealFromDatabaseRequestSchema
+>;
+
+/**
+ * The composed answer: the workspace contact the person became (`outcome` is the landing's — `known` when
+ * the workspace already held them), the reveal exactly as `POST /contacts/:id/reveal` returns it, and
+ * Layer-0 channel PRESENCE. Presence is booleans only, never a value: the workspace copy carries no channel
+ * until it is revealed, so without these bits the grid could not honestly keep offering the OTHER channel's
+ * reveal after this one.
+ */
+export const contactRevealFromDatabaseResponseSchema = z.object({
+  contactId: z.string().uuid(),
+  outcome: z.enum(["created", "updated", "known"]),
+  reveal: revealResponseSchema,
+  presence: z.object({ hasEmail: z.boolean(), hasPhone: z.boolean() }),
+});
+export type ContactRevealFromDatabaseResponse = z.infer<
+  typeof contactRevealFromDatabaseResponseSchema
+>;

@@ -168,6 +168,24 @@ export class FeatureDisabledError extends AppError {
 }
 
 /**
+ * Reveal-as-save (decisions.md 2026-08-25) needs the licensed Layer-0 channel read, which
+ * MASTER_CHANNEL_REVEAL_ENABLED gates. A materialized contact carries no channel value of its own, so while
+ * the switch is off the composed endpoint refuses BEFORE any write — never a half-saved, unrevealable contact.
+ * Its own code (not `feature_disabled`) so the grid can hide exactly this affordance and nothing else.
+ */
+export class DatabaseRevealDisabledError extends AppError {
+  constructor() {
+    super({
+      status: 409,
+      code: "database_reveal_disabled",
+      title: "Revealing from the database is not enabled",
+      detail:
+        "Revealing a person straight from the TruePoint database is switched off for this deployment.",
+    });
+  }
+}
+
+/**
  * Contact TRUE-MERGE legality — a merge input is already merged/tombstoned (import-and-data-model-redesign
  * 04 §API/§pre-build edge): loser already merged, or survivor tombstoned. 409 `contact_merged` carrying a
  * `mergedInto` extension member so a stale reference resolves to the survivor (the same code a 410-style

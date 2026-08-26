@@ -96,6 +96,9 @@ creditsRoutes.get("/reveal-costs", requireRole("owner", "admin", "member", "view
     email: env.REVEAL_COST_EMAIL,
     phone: env.REVEAL_COST_PHONE,
     full_profile: env.REVEAL_COST_FULL_PROFILE,
+    // Reveal-as-save capability (decisions.md 2026-08-25): the grid hides database-row reveal buttons while
+    // the Layer-0 channel switch is off, and this payload is the one it already loads once per page.
+    databaseReveal: Boolean(env.MASTER_CHANNEL_REVEAL_ENABLED),
   }),
 );
 

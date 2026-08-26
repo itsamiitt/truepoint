@@ -28,6 +28,16 @@ import { names, splitLocation } from "./personFields.ts";
 
 export type MaterializeBy = { linkedinPublicId: string } | { url: string };
 
+/** Layer-0 channel PRESENCE for the person — booleans only, never a value (reveal-as-save hands these to the
+ *  grid so the OTHER channel's reveal stays on offer after one is revealed). */
+export interface MasterPresence {
+  hasEmail: boolean;
+  hasPhone: boolean;
+}
+
+/** The landing result plus presence; absent on a `skipped` outcome (there was no person to read). */
+export type MaterializeResult = CaptureLandingResult & { presence?: MasterPresence };
+
 /** The public profile URL for a slug — the canonical, customer-facing addressing form. */
 function publicProfileUrl(slug: string): string {
   return `https://www.linkedin.com/in/${slug}`;
@@ -57,7 +67,7 @@ function addressOf(
 export async function materializeContactFromMaster(
   scope: CaptureScope,
   by: MaterializeBy,
-): Promise<CaptureLandingResult> {
+): Promise<MaterializeResult> {
   const address = addressOf(by);
   if (!address || (!address.slug && !address.normalizedUrl)) {
     return { outcome: "skipped", contactId: null, reason: "not_supported" };
@@ -88,7 +98,7 @@ export async function materializeContactFromMaster(
       (row.company.websiteUrl ? registrableDomain(row.company.websiteUrl) : null))
     : null;
 
-  return withTenantTx(scope, async (tx) => {
+  const landed = await withTenantTx(scope, async (tx) => {
     // The employer becomes (or resolves to) an account when we hold a registrable domain — the same
     // domain-keyed upsert import uses. A domainless employer simply leaves the contact company-less until
     // the company document lands (fillCompanyPrimaryDomain then supplies the key).
@@ -136,4 +146,7 @@ export async function materializeContactFromMaster(
       contentHash,
     });
   });
+  // Presence rides along because the overlay copy carries NO channel value until it is revealed, so the
+  // workspace projection alone cannot tell the grid that a phone is still there to reveal.
+  return { ...landed, presence: { hasEmail: row.hasEmail, hasPhone: row.hasPhone } };
 }

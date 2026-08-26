@@ -51,6 +51,7 @@ const { enrichmentRoutes } = await import("./features/enrichment/index.ts");
 const { activityRoutes } = await import("./features/activity/index.ts");
 const { complianceRoutes, dsarPublicRoutes } = await import("./features/compliance/index.ts");
 const { creditsRoutes } = await import("./features/billing/index.ts");
+const { contactsFromDatabaseRoutes } = await import("./features/contacts-from-database/index.ts");
 
 function buildApp() {
   const app = new Hono();
@@ -62,6 +63,9 @@ function buildApp() {
   app.route("/api/v1/compliance/dsar", dsarPublicRoutes);
   app.route("/api/v1/compliance", complianceRoutes);
   app.route("/api/v1/credits", creditsRoutes);
+  // Reveal-as-save (decisions.md 2026-08-25): a MONEY route under the literal /contacts/from-database
+  // segment — a viewer must never reach it, exactly like /:id/reveal.
+  app.route("/api/v1/contacts", contactsFromDatabaseRoutes);
   return app;
 }
 
@@ -87,6 +91,9 @@ const PROTECTED_WRITES: ReadonlyArray<readonly [string, () => Promise<Response>]
   ["POST /outreach/log/:id/bounce", () => post(`/api/v1/outreach/log/${UUID}/bounce`)],
   ["POST /enrichment/contact/:id", () => post(`/api/v1/enrichment/contact/${UUID}`)],
   ["POST /contacts/:id/activities", () => post(`/api/v1/contacts/${UUID}/activities`)],
+  // The two "from the database" acquisitions: the add the extension still uses, and reveal-as-save (a spend).
+  ["POST /contacts/from-database", () => post("/api/v1/contacts/from-database")],
+  ["POST /contacts/from-database/reveal", () => post("/api/v1/contacts/from-database/reveal")],
   ["POST /compliance/suppression", () => post("/api/v1/compliance/suppression")],
   [
     "DELETE /compliance/suppression/:id",
