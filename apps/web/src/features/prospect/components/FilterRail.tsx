@@ -45,12 +45,26 @@ export function FilterRail({
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
-          <TpButton variant="ghost" size="sm" onClick={() => onChange(clearAllFilters(query))}>
-            Clear all
-          </TpButton>
+          <span className={styles.railHeadActions}>
+            {/* The save action used to live ONLY inside the closed Saved-searches disclosure — a first-time
+                user could filter for an hour and never learn searches can be kept. This opens that section. */}
+            {footer != null ? (
+              <TpButton variant="ghost" size="sm" onClick={() => setSavedOpen(true)}>
+                Save
+              </TpButton>
+            ) : null}
+            <TpButton variant="ghost" size="sm" onClick={() => onChange(clearAllFilters(query))}>
+              Clear all
+            </TpButton>
+          </span>
         ) : null}
       </div>
       <p className={styles.semantics}>Matches all groups · any value within a group</p>
+      {/* The option counts come from the workspace engine — in "All" they describe the saved half only.
+          (In "Not saved" the pane passes no counts at all: a wrong number is worse than none.) */}
+      {counts !== undefined && scope === "all" ? (
+        <p className={styles.semantics}>Option counts reflect your saved contacts.</p>
+      ) : null}
 
       <QuickFilters query={query} onChange={onChange} counts={counts} owners={owners} />
       <AllFiltersSection

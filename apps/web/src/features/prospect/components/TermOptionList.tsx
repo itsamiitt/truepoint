@@ -8,13 +8,19 @@
 // the user.
 "use client";
 
-import { TpCheckbox } from "@leadwolf/ui";
+import { TpCheckbox, TpInput } from "@leadwolf/ui";
 import { useState } from "react";
 import type { FacetOption, TermOp } from "../filterGroups";
 import styles from "../prospect.module.css";
 
 /** How many options show before "Show N more" (v4: the scannable handful; seniority fits entirely). */
 const VISIBLE = 6;
+/** Lists longer than this get a filter box on top (a big team's Owner facet is unusable by scrolling). */
+const FILTERABLE = 8;
+
+/** Expanded facets, remembered for the session — closing and reopening a facet used to reset "Show more",
+ *  which read as the list losing your place. Module state on purpose: read once at mount, never reactive. */
+const EXPANDED = new Set<string>();
 
 export function TermOptionList({
   field,
@@ -36,15 +42,39 @@ export function TermOptionList({
   selected: string[];
   onToggle: (value: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const expandKey = `${field}:${op}`;
+  const [expanded, setExpandedState] = useState(() => EXPANDED.has(expandKey));
+  const setExpanded = (v: boolean) => {
+    if (v) EXPANDED.add(expandKey);
+    else EXPANDED.delete(expandKey);
+    setExpandedState(v);
+  };
+  const [filter, setFilter] = useState("");
   if (options.length === 0) {
     return <span className={styles.facetEmpty}>No options</span>;
   }
   const chosen = new Set(selected);
-  const shown = expanded ? options : options.slice(0, VISIBLE);
-  const hidden = options.length - shown.length;
+  const filtering = filter.trim().length > 0;
+  const matched = filtering
+    ? options.filter((o) => o.label.toLowerCase().includes(filter.trim().toLowerCase()))
+    : options;
+  // While filtering, every match shows — clamping a searched list behind "Show more" helps nobody.
+  const shown = filtering || expanded ? matched : matched.slice(0, VISIBLE);
+  const hidden = matched.length - shown.length;
   return (
     <fieldset className={styles.optList} aria-label={op === "exclude" ? `Exclude ${label}` : label}>
+      {options.length > FILTERABLE ? (
+        <TpInput
+          type="search"
+          value={filter}
+          placeholder={`Filter ${label.toLowerCase()}…`}
+          aria-label={`Filter ${label.toLowerCase()} options`}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      ) : null}
+      {filtering && matched.length === 0 ? (
+        <span className={styles.facetEmpty}>No matching options</span>
+      ) : null}
       {shown.map((o) => {
         const count = counts?.get(`${field}:${o.value}`);
         return (
@@ -64,7 +94,7 @@ export function TermOptionList({
         <button type="button" className={styles.optMore} onClick={() => setExpanded(true)}>
           Show {hidden} more
         </button>
-      ) : expanded && options.length > VISIBLE ? (
+      ) : !filtering && expanded && options.length > VISIBLE ? (
         <button type="button" className={styles.optMore} onClick={() => setExpanded(false)}>
           Show less
         </button>

@@ -57,13 +57,19 @@ export function RevealCell({
   const has = field === "email" ? contact.hasEmail : contact.hasPhone;
   if (!has) return <span className={styles.glyphNone}>—</span>;
   const label = field === "email" ? "Email" : "Phone";
+  // The masked per-value summaries (counts only, no values) — lets an UNREVEALED cell say how many values
+  // one reveal unlocks ("3 emails · 2cr"), which is the honest sell for the multi-value record.
+  const maskedCount =
+    field === "email" ? contact.channels?.emailCount : contact.channels?.phoneCount;
 
   if (!affordance.reveal[field]) {
     // The person carries the channel, but reveal-as-save is switched off for this deployment: "on file" is
-    // the honest word — "—" would claim there is nothing here.
+    // the honest word — "—" would claim there is nothing here. The count rides along when there are several.
     return (
       <Tooltip label="Revealing from the TruePoint database isn't enabled yet">
-        <span className={styles.glyphNone}>On file</span>
+        <span className={styles.glyphNone}>
+          {maskedCount !== undefined && maskedCount > 1 ? `${maskedCount} on file` : "On file"}
+        </span>
       </Tooltip>
     );
   }
@@ -74,10 +80,6 @@ export function RevealCell({
   // ALL live values of this channel (S-CH4, primary-first) — present only when the read gate is on and the
   // hydrate carried them. Length > 1 renders the "+N" popover beside the primary (Search v4).
   const allValues = field === "email" ? revealed?.emails : revealed?.phones;
-  // The masked per-value summaries (counts only, no values) — lets an UNREVEALED cell say how many values
-  // one reveal unlocks ("3 emails · 2cr"), which is the honest sell for the multi-value record.
-  const maskedCount =
-    field === "email" ? contact.channels?.emailCount : contact.channels?.phoneCount;
 
   // Owned + hydrated → show the real value inline with a copy control + verification badge.
   if (isOwned && value) {

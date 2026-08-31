@@ -9,6 +9,7 @@
 
 import type { RevealedEmailValue, RevealedPhoneValue } from "@leadwolf/types";
 import { Popover, TpButton, useToast } from "@leadwolf/ui";
+import { useState } from "react";
 import styles from "../prospect.module.css";
 import { emailStatusLabel, emailStatusTone, phoneLineTypeLabel } from "../types";
 
@@ -43,6 +44,9 @@ export function ChannelValuesPopover({
   values: AnyValue[];
 }) {
   const toast = useToast();
+  // Near the viewport's bottom the panel opens UPWARD — inside the grid a downward panel on the last
+  // visible rows would clip against the scrollport. Decided per open, from the trigger's live position.
+  const [side, setSide] = useState<"top" | "bottom">("bottom");
   if (values.length < 2) return null;
   const noun = field === "email" ? "email" : "phone";
 
@@ -68,11 +72,16 @@ export function ChannelValuesPopover({
     >
       <Popover
         className={styles.chPanel}
+        side={side}
         trigger={({ toggle, props }) => (
           <button
             type="button"
             className={styles.chPlus}
-            onClick={toggle}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setSide(rect.bottom > window.innerHeight - 280 ? "top" : "bottom");
+              toggle();
+            }}
             aria-label={`Show all ${values.length} ${noun}s`}
             {...props}
           >

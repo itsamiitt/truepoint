@@ -88,8 +88,16 @@ import { RecordDetail } from "./RecordDetail";
 import { SearchBox } from "./SearchBox";
 import { DEFAULT_VISIBLE_COLUMNS, TOGGLEABLE_COLUMNS, buildPeopleColumns } from "./peopleColumns";
 
-// The fixed-option facets that get live counts in the sidebar (POST /search/facets).
-const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
+// EVERY fixed-option facet gets live counts in the sidebar (POST /search/facets) — a counted list next to
+// a bare one read as broken. owner + phone_line_type are facet-count-supported (searchRepository FACET map).
+const COUNT_FIELDS: FacetKey[] = [
+  "seniority",
+  "outreach_status",
+  "email_status",
+  "source",
+  "phone_line_type",
+  "owner",
+];
 // One UI page of the grid (2026-08-31 pagination) — matches the engine's keyset PAGE_SIZE, so paging past
 // the loaded rows costs exactly one fetch.
 const GRID_PAGE_SIZE = 25;
@@ -123,7 +131,11 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     materializeRow,
   } = search;
   const queryClient = useQueryClient();
-  const counts = useFacetCounts(query, COUNT_FIELDS);
+  // Facet counts are computed by the WORKSPACE engine. In "Not saved" the list is the database population,
+  // so those numbers would be flatly wrong — skip the request and the sidebar omits counts (honest blank
+  // beats a wrong number). In "All" they still describe only the saved half; the rail says so.
+  const workspaceCountsApply = shell.workspace.scope !== "exclude";
+  const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: workspaceCountsApply });
   // The REAL total for the header (POST /search/count) — previously the header printed the loaded page
   // size ("50+") as if it were the dataset, which read as missing contacts on any workspace >1 page.
   // Gated on the same skip as the workspace search itself. Without this the header prints a real workspace
@@ -209,11 +221,13 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     if (hits.length <= (page + 1) * GRID_PAGE_SIZE) loadMore();
     setPage((p) => p + 1);
   }, [hits.length, page, loadMore]);
+  // "Showing X–Y", with a total ONLY when it is exact (everything loaded, no floors) — a floor here and a
+  // differently-shaped floor in the headline read as two disagreeing numbers for the same list.
   const pagerLabel =
     hits.length === 0
       ? undefined
-      : `${page * GRID_PAGE_SIZE + 1}–${Math.min(hits.length, (page + 1) * GRID_PAGE_SIZE)} of ${
-          hasMore || databaseHasMore ? `${hits.length}+` : hits.length
+      : `Showing ${page * GRID_PAGE_SIZE + 1}–${Math.min(hits.length, (page + 1) * GRID_PAGE_SIZE)}${
+          hasMore || databaseHasMore ? "" : ` of ${hits.length.toLocaleString()}`
         }`;
 
   // Only SAVED rows are selectable: bulk actions address contacts by id, and a not-saved row has none.
@@ -268,7 +282,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
         <FilterRail
           query={query}
           onChange={setQuery}
-          counts={counts}
+          counts={workspaceCountsApply ? counts : undefined}
           scope={shell.workspace.scope}
           footer={
             <RailFooter
@@ -346,7 +360,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             error={error}
             empty={!loading && hits.length === 0}
             onRetry={reload}
-            skeleton={<TableSkeleton rows={10} />}
+            skeleton={<TableSkeleton rows={25} />}
             emptyState={
               isPristine ? (
                 <div className={styles.emptyWrap}>
@@ -380,8 +394,9 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             }
           >
             {loadingMore && pageRows.length === 0 ? (
-              // Next was clicked past the loaded rows — the keyset page is in flight.
-              <TableSkeleton rows={10} />
+              // Next was clicked past the loaded rows — the keyset page is in flight. Full page height so
+              // the pager underneath does not jump when the rows land.
+              <TableSkeleton rows={25} />
             ) : (
               <DataTable
                 columns={columns}

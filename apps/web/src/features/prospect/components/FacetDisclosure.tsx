@@ -40,7 +40,8 @@ export function FacetDisclosure({
         >
           <span className={styles.facetLabel}>{label}</span>
           {scopeNote}
-          <span className={styles.facetVal} data-set={summary ? "true" : undefined}>
+          {/* title = the untruncated summary — the row clips long selections at the CSS max-width. */}
+          <span className={styles.facetVal} data-set={summary ? "true" : undefined} title={summary}>
             {summary ?? "Any"}
           </span>
           <RailChevron />

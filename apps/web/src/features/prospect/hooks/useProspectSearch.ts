@@ -13,12 +13,7 @@
 "use client";
 
 import type { ContactHit, ContactQuery, SearchPage } from "@leadwolf/types";
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { type ProspectRow, countDatabaseRows, mergeRows, toDatabaseQuery } from "../databaseRows";
@@ -162,21 +157,39 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   // filtered list of people; whether a row is already in the workspace is a property of the row, not a
   // different screen. The database half runs as its own query so a slow/failed global search can never
   // stall or break the workspace results — it simply contributes nothing.
+  //
+  // An INFINITE query since the v4 honesty fix (2026-08-31): the database half used to be one capped page
+  // that "load more" could never advance, so deep pages silently stopped showing database people while the
+  // header still promised thousands more. `loadMore` now pages the workspace half first and then keeps
+  // paging the database half through its keyset cursor — the merged list actually reaches what the
+  // headline counts.
   const narrowing = useMemo(() => toDatabaseQuery(query, PAGE_SIZE), [query]);
   const databaseQuery = narrowing.query;
-  const databaseSearch = useQuery({
+  const databaseSearch = useInfiniteQuery({
     queryKey: prospectKeys.databaseSearch(databaseQuery ?? { filters: [], limit: PAGE_SIZE }),
     // Skipped when the query is inherently workspace-only (owner, status, tags, ranges…). Which filters
     // caused that is reported through `databaseDroppedFields` so the pane can say so instead of the global
     // half simply disappearing.
     enabled: enabled && includeDatabase && databaseQuery !== null,
+    initialPageParam: null as string | null,
     // Same no-blank treatment as the owned half above: a filter edit keeps the previous database rows on
     // screen while the fresh search lands, instead of the merged grid losing its bottom half per edit.
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      searchDatabase(databaseQuery as NonNullable<typeof databaseQuery>, signal),
+    queryFn: ({ pageParam, signal }) =>
+      searchDatabase(
+        {
+          ...(databaseQuery as NonNullable<typeof databaseQuery>),
+          cursor: (pageParam as string | null) ?? undefined,
+        },
+        signal,
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 30_000,
   });
+  const databaseHits = useMemo(
+    () => databaseSearch.data?.pages.flatMap((page) => page.hits) ?? [],
+    [databaseSearch.data],
+  );
 
   // REVEAL-AS-SAVE (decisions.md 2026-08-25): slug → the owned row a database person became this session.
   // Component state, not the query cache, on purpose: the database half's cached pages are the SERVER's
@@ -193,13 +206,8 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   // hashes identically to the unfiltered query's key.)
   const hits = useMemo(
     () =>
-      mergeRows(
-        owned,
-        databaseQuery === null ? [] : (databaseSearch.data?.hits ?? []),
-        workspaceSkipped,
-        materialized,
-      ),
-    [owned, databaseSearch.data, databaseQuery, workspaceSkipped, materialized],
+      mergeRows(owned, databaseQuery === null ? [] : databaseHits, workspaceSkipped, materialized),
+    [owned, databaseHits, databaseQuery, workspaceSkipped, materialized],
   );
   // Counted off the merged rows, not `hits.length - owned.length`: a row flipped in place by a reveal is
   // saved now and must not read as "more available".
@@ -285,16 +293,17 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     [qc, query],
   );
 
+  // Whether the database engine is actually contributing to this view (on, and not narrowed away).
+  const databaseActive = enabled && includeDatabase && databaseQuery !== null;
+
   return {
     query,
     setQuery,
     hits,
     databaseCount,
-    // The database half is a SINGLE capped page — "Load more" pages the workspace infinite query only, so
-    // there is no way to reach a 51st database row. Surfaced so the header renders the number as a floor
-    // instead of implying the list is everything the database holds. (Real pagination of the global half
-    // needs cursor plumbing through the merge and is tracked separately.)
-    databaseHasMore: Boolean(databaseSearch.data?.nextCursor),
+    // Still a floor for the HEADER: the loaded database rows are however many pages the user has walked,
+    // never the whole of what the database holds.
+    databaseHasMore: databaseActive && Boolean(databaseSearch.hasNextPage),
     // Non-empty ⇒ the database half was skipped because these filters only exist on the workspace overlay.
     databaseDroppedFields: narrowing.droppedFields,
     workspaceDroppedFields,
@@ -308,15 +317,18 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     loading: workspaceSkipped
       ? databaseSearch.isPending && enabled && includeDatabase
       : search.isPending && enabled && !excludeOwned,
-    loadingMore: search.isFetchingNextPage,
+    loadingMore: search.isFetchingNextPage || databaseSearch.isFetchingNextPage,
     error: search.error
       ? search.error instanceof Error
         ? search.error.message
         : "Search failed"
       : null,
-    hasMore: search.hasNextPage,
+    // The workspace half pages first; once it is exhausted the database half keeps going on its own cursor.
+    hasMore: search.hasNextPage || (databaseActive && Boolean(databaseSearch.hasNextPage)),
     loadMore: () => {
       if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+      else if (databaseActive && databaseSearch.hasNextPage && !databaseSearch.isFetchingNextPage)
+        void databaseSearch.fetchNextPage();
     },
     reload: () => {
       void search.refetch();
