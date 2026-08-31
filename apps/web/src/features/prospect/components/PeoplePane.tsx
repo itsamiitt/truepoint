@@ -61,7 +61,6 @@ import { useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import { prospectKeys } from "../keys";
 import styles from "../prospect.module.css";
-import { resultHeadline } from "../resultHeadline";
 import type { BulkMutationEffect, RowBulkAction } from "./BulkActionBar";
 
 // The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
@@ -237,6 +236,23 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     [pageRows],
   );
 
+  const appliedChips = useMemo(() => activeChips(query), [query]);
+
+  // The rail's stat card (user call 2026-08-31 — replaced the results-area headline): MATCHING = everyone
+  // the applied filters reach across both engines (saved + database), SAVED = the workspace's own share.
+  // Floors keep their "+": the database side is only ever counted as far as it has been paged.
+  const savedCount = workspaceSkipped
+    ? hits.length - databaseCount
+    : (totalCount ?? hits.length - databaseCount);
+  const savedFloor = totalCapped || (totalCount === undefined && hasMore);
+  const totalFloor = savedFloor || databaseHasMore;
+  const railStats = loading
+    ? { total: "…", saved: "…" }
+    : {
+        total: `${(savedCount + databaseCount).toLocaleString()}${totalFloor ? "+" : ""}`,
+        saved: `${savedCount.toLocaleString()}${savedFloor ? "+" : ""}`,
+      };
+
   // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
   const startRowAction = useCallback(
     (id: string, action: RowBulkAction) => {
@@ -284,6 +300,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           onChange={setQuery}
           counts={workspaceCountsApply ? counts : undefined}
           scope={shell.workspace.scope}
+          stats={railStats}
           footer={
             <RailFooter
               query={query}
@@ -318,32 +335,19 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           />
         </div>
 
-        {/* Search v4: headline + applied chips share ONE row — the meta line reads left to right as "what
-            you have · how it is narrowed". The chips render nothing when no filter is active. */}
-        <div className={styles.metaRow}>
-          <span className={styles.count}>
-            {resultHeadline({
-              scope: shell.workspace.scope,
-              loading,
-              saved: workspaceSkipped
-                ? hits.length - databaseCount
-                : (totalCount ?? hits.length - databaseCount),
-              savedIsFloor: totalCapped || (totalCount === undefined && hasMore),
-              available: databaseCount,
-              // The database half is one capped page — paging fetches the workspace query alone — so
-              // more than it shows is a floor, never the whole of what the database holds.
-              availableIsFloor: databaseHasMore,
-              workspaceSkipped,
-            })}
-          </span>
-          <AppliedFilterChips
-            chips={activeChips(query)}
-            query={query}
-            onChange={setQuery}
-            onClearAll={() => setQuery(clearAllFilters(query))}
-            inline
-          />
-        </div>
+        {/* The result numbers moved into the rail's stat card (user call 2026-08-31) — this row carries
+            only the applied chips, and only when at least one filter is active. */}
+        {appliedChips.length > 0 ? (
+          <div className={styles.metaRow}>
+            <AppliedFilterChips
+              chips={appliedChips}
+              query={query}
+              onChange={setQuery}
+              onClearAll={() => setQuery(clearAllFilters(query))}
+              inline
+            />
+          </div>
+        ) : null}
 
         {/* Only when workspace-only filters are actually suppressing the database half — say so, instead of
             letting the not-saved half vanish silently. Moot when the scope already excludes it. */}

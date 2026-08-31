@@ -20,12 +20,21 @@ import { RailChevron } from "./RailChevron";
 
 export type { OwnerOption } from "./FacetControl";
 
+/** The two numbers the rail's stat card shows — pre-formatted by the pane (floors carry a trailing "+"). */
+export interface RailStats {
+  /** Everyone the applied filters match, both engines (saved + database). */
+  total: string;
+  /** How many of them are already saved in this workspace. */
+  saved: string;
+}
+
 export function FilterRail({
   query,
   onChange,
   counts,
   owners = [],
   scope,
+  stats,
   footer,
 }: {
   query: ContactQuery;
@@ -36,12 +45,26 @@ export function FilterRail({
   owners?: OwnerOption[];
   /** All / Saved / Not saved — in "Not saved" the saved-only tier cannot apply and says so. */
   scope: WorkspaceScope;
+  /** The result numbers for the stat card at the top of the rail (replaced the results-area headline). */
+  stats?: RailStats;
   /** Saved + recent searches, rendered when the Saved searches disclosure is opened. */
   footer?: ReactNode;
 }) {
   const [savedOpen, setSavedOpen] = useState(false);
   return (
     <aside className={styles.rail} aria-label="Filters">
+      {stats ? (
+        <div className={styles.railStats}>
+          <div className={styles.railStat}>
+            <span className={styles.railStatNum}>{stats.total}</span>
+            <span className={styles.railStatLabel}>Matching</span>
+          </div>
+          <div className={styles.railStat}>
+            <span className={styles.railStatNum}>{stats.saved}</span>
+            <span className={styles.railStatLabel}>Saved</span>
+          </div>
+        </div>
+      ) : null}
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (

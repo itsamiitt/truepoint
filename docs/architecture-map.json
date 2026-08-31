@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2491,
-  "fileSetHash": "sha256:bacdc05bdaf0d8e906a145f30d6c1c1359e5fa38b374c166e9136388d9650656",
+  "fileCount": 2489,
+  "fileSetHash": "sha256:dea3adacfc5c11bd4d039a13781f261502734750d910123ccc195f59cc865c16",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1638,8 +1638,6 @@
         "apps/web/src/features/prospect/keys.ts",
         "apps/web/src/features/prospect/orgKindCopy.test.ts",
         "apps/web/src/features/prospect/orgKindCopy.ts",
-        "apps/web/src/features/prospect/resultHeadline.test.ts",
-        "apps/web/src/features/prospect/resultHeadline.ts",
         "apps/web/src/features/prospect/rowAffordances.test.ts",
         "apps/web/src/features/prospect/rowAffordances.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",

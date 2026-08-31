@@ -1771,8 +1771,10 @@ flowchart TD
     observability owner (lazy-init, trim integrations, or re-baseline the budget), not something this pass silently
     absorbed. `FacetTypeahead` is keyboard-operable through the pure `typeaheadKeys.ts` and takes a
     `source` (the Background facets ask the global suggest endpoint); `SearchBox.tsx` merges the keyword box
-    and the retired `AiSearchBox` ("Describe" mode); `QuickStartPresets` and `resultHeadline.ts` carry the
-    copy; the boolean facets are the DS `SegmentedControl`. `AccountFilterPanel` got the same two tiers
+    and the retired `AiSearchBox` ("Describe" mode); `QuickStartPresets` carries the first-run
+    presets and the copy (`resultHeadline.ts` is GONE — 2026-08-31: the results headline became the rail's
+    stat card, `FilterRail`'s `RailStats` — matching total + saved share, floors marked "+"); the boolean
+    facets are the DS `SegmentedControl`. `AccountFilterPanel` got the same two tiers
     (`AccountFacetControl`). Vocabulary everywhere: Saved / Not saved.
   - **`0142_contact_master_presence`** — `contacts.master_has_email/master_has_phone`, written by
     `landOverlayPerson` from the master row and OR-ed into the search projection's `hasEmail/hasPhone`, so
