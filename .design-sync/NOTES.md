@@ -373,3 +373,14 @@ Roughly twenty of them, and the pattern repeats:
 | forge | TruePoint Forge `eb2cf971` | uploaded |
 | extension | TruePoint Extension `f626dd3f` | uploaded |
 | auth | **"Modernist"** `aecf862c` | 55 — uploaded. The project NAME is still the one it was created with; DesignSync has no rename method, so renaming it is a manual step in the UI. |
+
+## 2026-08-31 — design-login account mismatch + the Search design page
+
+A fresh `/design-login` saw **zero** projects and `get_project` on the recorded web id
+(`1390e5cb-…`, config.json) returned 404 — the authorized claude.ai account does not own the five
+TruePoint projects above (retried 3×; not the transient-404 case). Per user decision a NEW project was
+created on the currently-authorized account: **"TruePoint Web Designs" `0099ef39-3203-4eb7-89d2-01259ab98c01`**,
+holding the hand-authored full-page design `Search.html` (source of truth:
+`.design-sync/designs/Search.html` — self-contained HTML, tokens inlined verbatim from
+`packages/ui/src/tokens.css`, no bundle dependency). If the original account is re-authorized later, the
+five-project table above is still the sync target; re-upload Search.html there if wanted.

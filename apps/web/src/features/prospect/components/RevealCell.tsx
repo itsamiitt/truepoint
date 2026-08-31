@@ -25,6 +25,7 @@ import {
 import styles from "../prospect.module.css";
 import { rowAffordances } from "../rowAffordances";
 import { emailStatusLabel, emailStatusTone, phoneLineTypeLabel, phoneStatusTone } from "../types";
+import { ChannelValuesPopover } from "./ChannelValuesPopover";
 import { CopyButton } from "./CopyButton";
 
 const IN_PROGRESS = "A reveal is already in progress.";
@@ -70,6 +71,13 @@ export function RevealCell({
   const owned = ownedRevealTypes(contact.revealedTypes, revealed);
   const isOwned = field === "email" ? owned.email : owned.phone;
   const value = field === "email" ? revealed?.email : revealed?.phone;
+  // ALL live values of this channel (S-CH4, primary-first) — present only when the read gate is on and the
+  // hydrate carried them. Length > 1 renders the "+N" popover beside the primary (Search v4).
+  const allValues = field === "email" ? revealed?.emails : revealed?.phones;
+  // The masked per-value summaries (counts only, no values) — lets an UNREVEALED cell say how many values
+  // one reveal unlocks ("3 emails · 2cr"), which is the honest sell for the multi-value record.
+  const maskedCount =
+    field === "email" ? contact.channels?.emailCount : contact.channels?.phoneCount;
 
   // Owned + hydrated → show the real value inline with a copy control + verification badge.
   if (isOwned && value) {
@@ -87,6 +95,7 @@ export function RevealCell({
           </StatusBadge>
         ) : null}
         <CopyButton value={value} label={label} />
+        {allValues ? <ChannelValuesPopover field={field} values={allValues} /> : null}
       </span>
     );
   }
@@ -167,6 +176,10 @@ export function RevealCell({
     }
   };
 
+  // One reveal unlocks EVERY value of the channel (reveal is contact × type grained), so when the masked
+  // summaries say there is more than one, the button says what the click actually buys: "3 emails · 2cr".
+  const buttonLabel =
+    maskedCount !== undefined && maskedCount > 1 ? `${maskedCount} ${label.toLowerCase()}s` : label;
   const button = (
     <TpButton
       size="sm"
@@ -178,7 +191,7 @@ export function RevealCell({
         void (affordance.saved ? revealOwned() : revealAndSave());
       }}
     >
-      {label}
+      {buttonLabel}
       {cost != null ? ` · ${cost}cr` : ""}
     </TpButton>
   );

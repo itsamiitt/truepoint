@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2489,
-  "fileSetHash": "sha256:7d1630e5898f2e9dd0809d441b5a99ca099521b87570c6ea8b5b9d2a89a01d81",
+  "fileCount": 2490,
+  "fileSetHash": "sha256:9eb4ed9758f64cfb040dba02f42414c245cd660765888e6584f31329bf6e7c0b",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1553,6 +1553,7 @@
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
+        "apps/web/src/features/prospect/components/ChannelValuesPopover.tsx",
         "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/DatabaseProfileRevealActions.tsx",
         "apps/web/src/features/prospect/components/EducationSection.tsx",

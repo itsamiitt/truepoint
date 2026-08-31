@@ -113,6 +113,11 @@ function mergeReveal(
     emailStatus: res.emailStatus ?? existing?.emailStatus ?? null,
     phoneStatus: existing?.phoneStatus ?? null,
     phoneLineType: existing?.phoneLineType ?? null,
+    // The S-CH4 full per-value lists (gate-on only) survive the optimistic merge — dropping them would blank
+    // the "+N" popover on the row the user just interacted with. A fresh reveal's OWN lists arrive via the
+    // follow-up refresh (the reveal response carries only the primary).
+    ...(existing?.emails ? { emails: existing.emails } : {}),
+    ...(existing?.phones ? { phones: existing.phones } : {}),
     ownedTypes,
     revealedFields,
     history: existing?.history ?? [],
@@ -185,6 +190,9 @@ function createRevealStore(onCreditsMoved: () => void): RevealStore {
         hydrated.add(contactId);
         // Credits moved — invalidate so the top-bar pill and the bulk bar both re-read.
         onCreditsMoved();
+        // The reveal response carries only the primary value; the S-CH4 per-value lists ("+N" popover) come
+        // from the no-charge read. Refresh in the background so they land without a user gesture.
+        store.refresh(contactId);
         return { ok: true, result };
       } catch (e) {
         if (e instanceof ApiError) return { ok: false, error: e.message, code: e.code };
@@ -206,6 +214,8 @@ function createRevealStore(onCreditsMoved: () => void): RevealStore {
         publish({ ...state, byId: mergeReveal(state.byId, res.contactId, revealType, res.reveal) });
         hydrated.add(res.contactId);
         onCreditsMoved();
+        // Same as reveal(): pull the S-CH4 per-value lists for the freshly-landed contact in the background.
+        store.refresh(res.contactId);
         return {
           ok: true,
           result: res.reveal,

@@ -869,6 +869,94 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ── Multi-value channel "+N" popover (Search v4, 2026-08-31): all live emails/phones of a revealed cell. */
+.chWrap {
+  display: inline-flex;
+  flex: none;
+}
+.chWrap > * {
+  display: inline-flex;
+}
+.chPlus {
+  border: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface);
+  border-radius: 999px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--tp-ink-3);
+  cursor: pointer;
+}
+.chPlus:hover,
+.chPlus[aria-expanded="true"] {
+  border-color: var(--tp-cobalt);
+  color: var(--tp-cobalt-700);
+  background: var(--tp-cobalt-50);
+}
+.chPanel {
+  min-width: 260px;
+}
+.chList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+}
+.chHead {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+.chRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--tp-radius-sm);
+  white-space: nowrap;
+}
+.chRow:hover {
+  background: var(--tp-surface-2);
+}
+.chValue {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--tp-ink);
+}
+.chRow[data-primary="true"] .chValue {
+  font-weight: 600;
+}
+.chType {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-3);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.chStatus {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--tp-ink-3);
+}
+.chStatus[data-tone="success"] {
+  color: var(--success-700);
+}
+.chStatus[data-tone="danger"] {
+  color: var(--danger-700);
+}
+.chFoot {
+  border-top: 1px solid var(--tp-hairline);
+  margin-top: 4px;
+  padding: 4px 4px 0;
+  display: flex;
+}
 /* Revealed value row in the record detail: value + verification badge + copy control, inline. */
 .revealedValueRow {
   display: flex;

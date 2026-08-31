@@ -1224,6 +1224,15 @@ flowchart TD
   `linkedin` icon column; the People defaults are now name (job title as the Name cell's sub-line — user
   call) · company · email · phone · location · LinkedIn.
 
+  2026-08-31 refresh, third pass (Search v4 — multi-value channels): `features/prospect/components/` gained
+  `ChannelValuesPopover.tsx` — the "+N" pill on a revealed email/phone cell opening a popover of ALL live
+  values (value · usage-type tag · per-value grade, primary first, copy-all). Pure read of the S-CH4
+  surfaces that already existed: `RevealedContact.emails/phones` (post-reveal full lists) and
+  `MaskedContact.channels` (masked counts — the unrevealed button now says "3 emails · 2cr"). RevealStore's
+  optimistic merge keeps the lists and refreshes after a reveal. All additive and gate-shaped: with
+  `CHANNEL_READ_FROM_CHILD` + `channels_read` off the payload fields are absent and the grid renders
+  exactly as before.
+
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
   `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,
