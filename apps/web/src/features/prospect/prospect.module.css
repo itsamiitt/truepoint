@@ -97,34 +97,25 @@
   gap: 12px;
   flex-wrap: wrap;
 }
-.headLeft {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 .count {
   font-size: 13px;
   color: var(--tp-ink-3);
 }
-.headRight {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
-/* Top search row: free-text box + AI NL box. */
+/* ONE toolbar line (2026-08-31): search box (with Describe), scope switch, column chooser — the search box
+   takes every pixel the fixed controls leave. Wraps only when the viewport genuinely cannot fit the row. */
 .searchRow {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
 }
-.searchRow > :first-child {
+.searchRow > .searchBox {
   flex: 1 1 280px;
   min-width: 220px;
 }
 
-/* Keyset "Load more" footer under the results. */
+/* The pager footer under the results (2026-08-31 pagination — replaced the keyset "Load more" button). */
 .loadMore {
   display: flex;
   justify-content: center;
@@ -527,6 +518,19 @@
 }
 .glyphNone {
   color: var(--tp-ink-3);
+}
+/* The trailing LinkedIn column's icon link (2026-08-31 grid slimming) — a real 32px hit target. */
+.linkedinLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--tp-radius-sm);
+  color: var(--tp-cobalt);
+}
+.linkedinLink:hover {
+  background: var(--tp-surface-2);
 }
 .lock {
   color: var(--tp-ink-3);

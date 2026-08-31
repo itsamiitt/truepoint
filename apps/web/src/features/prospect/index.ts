@@ -5,7 +5,6 @@ export { PeoplePane } from "./components/PeoplePane";
 // Prospect-search redesign (24): the results toolbar (sort + column chooser), the lightweight QuickView
 // preview Drawer, the per-row overflow menu, and the per-browser Recent-searches row. PeoplePane composes
 // these; they're exported for reuse/testing and to keep the slice surface explicit.
-export { ProspectToolbar } from "./components/ProspectToolbar";
 export { QuickViewDrawer } from "./components/QuickViewDrawer";
 export { RowActions } from "./components/RowActions";
 export { RecentSearches } from "./components/RecentSearches";

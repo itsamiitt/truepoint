@@ -52,6 +52,15 @@ function textCell(value: string | null | undefined) {
   return value ? <span>{value}</span> : <span className={styles.glyphNone}>—</span>;
 }
 
+/** The LinkedIn "in" mark, inlined: lucide 1.18 dropped its brand icons, and this column IS the brand link. */
+function LinkedinGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z" />
+    </svg>
+  );
+}
+
 export function buildPeopleColumns({
   selectionStore,
   shownIds,
@@ -84,44 +93,30 @@ export function buildPeopleColumns({
       key: "name",
       header: "Name",
       sortValue: (c) => displayName(c),
-      cell: (c) => {
-        const href = profileHref(c);
-        return (
-          <span className={styles.nameCell}>
-            <span className={styles.nameMeta}>
-              <span className={styles.name}>
-                {displayName(c)}
-                {c.databaseSlug ? (
-                  // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place the
-                  // grid says which side a row is on — its reveal is what saves it (decisions.md 2026-08-25).
-                  // Matches the Accounts grid's chip. [A-01]
-                  <>
-                    {" "}
-                    <TpChip>Not saved</TpChip>
-                  </>
-                ) : null}
-              </span>
-              <span className={styles.title}>
-                {c.jobTitle ?? "—"}
-                {href ? (
-                  <>
-                    {" · "}
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label="Open profile"
-                    >
-                      profile
-                    </a>
-                  </>
-                ) : null}
-              </span>
-            </span>
+      // One line, no sub-line (2026-08-31 grid slimming): the job title is its own column now and the
+      // profile link is the trailing LinkedIn column, so the name cell fits a compact row.
+      cell: (c) => (
+        <span className={styles.nameCell}>
+          <span className={styles.name}>
+            {displayName(c)}
+            {c.databaseSlug ? (
+              // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place the
+              // grid says which side a row is on — its reveal is what saves it (decisions.md 2026-08-25).
+              // Matches the Accounts grid's chip. [A-01]
+              <>
+                {" "}
+                <TpChip>Not saved</TpChip>
+              </>
+            ) : null}
           </span>
-        );
-      },
+        </span>
+      ),
+    },
+    {
+      key: "title",
+      header: "Job title",
+      sortValue: (c) => c.jobTitle ?? "",
+      cell: (c) => textCell(c.jobTitle),
     },
     {
       key: "company",
@@ -150,13 +145,6 @@ export function buildPeopleColumns({
       width: 140,
       sortValue: (c) => c.department ?? "",
       cell: (c) => textCell(c.department),
-    },
-    {
-      key: "location",
-      header: "Location",
-      width: 160,
-      sortValue: (c) => [c.locationCity, c.locationCountry].filter(Boolean).join(", "),
-      cell: (c) => textCell([c.locationCity, c.locationCountry].filter(Boolean).join(", ") || null),
     },
     {
       key: "email",
@@ -216,6 +204,13 @@ export function buildPeopleColumns({
       cell: (c) => textCell(phoneLineTypeLabel(c.phoneLineType ?? null)),
     },
     {
+      key: "location",
+      header: "Location",
+      width: 160,
+      sortValue: (c) => [c.locationCity, c.locationCountry].filter(Boolean).join(", "),
+      cell: (c) => textCell([c.locationCity, c.locationCountry].filter(Boolean).join(", ") || null),
+    },
+    {
       key: "outreach",
       header: "Outreach",
       width: 140,
@@ -244,6 +239,31 @@ export function buildPeopleColumns({
       width: 130,
       sortValue: (c) => c.createdAt,
       cell: (c) => <span className={styles.mono}>{shortDate(c.createdAt)}</span>,
+    },
+    {
+      // The row's trailing affordance (2026-08-31 grid slimming): the profile link that used to hide as a
+      // "profile" text link inside the Name sub-line, now a recognisable icon in its own last column.
+      key: "linkedin",
+      header: "LinkedIn",
+      align: "center",
+      width: 80,
+      sortValue: (c) => ((profileHref(c) ?? c.databaseUrl) ? 1 : 0),
+      cell: (c) => {
+        const href = profileHref(c) ?? c.databaseUrl ?? null;
+        if (!href) return <span className={styles.glyphNone}>—</span>;
+        return (
+          <a
+            className={styles.linkedinLink}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Open ${displayName(c)}'s LinkedIn profile`}
+          >
+            <LinkedinGlyph />
+          </a>
+        );
+      },
     },
     {
       key: "actions",

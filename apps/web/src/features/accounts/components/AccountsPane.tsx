@@ -33,7 +33,7 @@ import {
   useAccountFacetCounts,
 } from "@/features/prospect/entries/accounts";
 import type { AccountFacetKey, MaskedAccount } from "@leadwolf/types";
-import { EmptyState, SegmentedControl, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
+import { EmptyState, StateSwitch, TpButton, TpInput } from "@leadwolf/ui";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,7 +42,6 @@ import type { AccountRow } from "../accountRows";
 import styles from "../accounts.module.css";
 import { exportAccountsCsv } from "../export";
 import { useAccountsSearch } from "../hooks/useAccountsSearch";
-import { AccountsSort } from "./AccountsSort";
 
 /** The fixed-option firmographic facets that get live counts in the rail (POST /account-search/facets). */
 const COUNT_FIELDS: AccountFacetKey[] = [
@@ -51,11 +50,6 @@ const COUNT_FIELDS: AccountFacetKey[] = [
   "funding_stage",
   "revenue_range",
   "employee_band",
-];
-
-const DENSITIES = [
-  { value: "comfortable", label: "Comfortable" },
-  { value: "compact", label: "Compact" },
 ];
 
 export function AccountsPane({ shell }: { shell: SearchShell }) {
@@ -69,9 +63,6 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
   // The same debounce-commit free-text pattern the People pane uses: a local mirror committed to the query
   // 300ms after the last keystroke, re-synced when the query changes externally (URL restore / back).
   const [text, setText] = useState(search.query.text ?? "");
-  // Density was People-only: this pane never set [data-density], which is what the shared DataTable reads,
-  // so switching to the Accounts tab silently dropped the user's compact setting.
-  const [density, setDensity] = useState("comfortable");
   const [visibleColumns, setVisibleColumns] = useState<string[]>(ACCOUNT_DEFAULT_VISIBLE_COLUMNS);
   useEffect(() => setText(search.query.text ?? ""), [search.query.text]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: debounce-commit keyed on the local input.
@@ -83,7 +74,9 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
   }, [text]);
 
   return (
-    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density={density}>
+    // Compact is the grid's one density (2026-08-31 — the switch is gone; [data-density] is what the shared
+    // DataTable reads).
+    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density="compact">
       <SearchDrawer
         collapsed={shell.collapsed}
         isOverlay={shell.isOverlay}
@@ -118,17 +111,10 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
           />
-          <AccountsSort query={search.query} onChange={search.setQuery} />
           <ColumnChooser
             columns={ACCOUNT_TOGGLEABLE_COLUMNS}
             visibleColumns={visibleColumns}
             onVisibleColumnsChange={setVisibleColumns}
-          />
-          <SegmentedControl
-            items={DENSITIES}
-            value={density}
-            onChange={setDensity}
-            aria-label="Row density"
           />
           <TpButton
             variant="ghost"

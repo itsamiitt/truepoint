@@ -1,11 +1,13 @@
 // PeoplePane.tsx — the People half of the Search surface (04 §5, 11 §4.2, 24; search-consolidation 01): the
-// two-tier filter rail (hosting Saved/Recent searches under the filters) driving a server ContactQuery, ONE
-// search box with a "Describe" mode, a results header with a sort + column-chooser toolbar, the results
-// table (list only — sortable, density-aware, masked glyphs, row-select, per-row overflow menu) with keyset
-// "Load more", a lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the
-// sticky bulk-action bar (the full Phase-3 bulk surface). Search/filter state lives in the URL
-// (useProspectSearch → searchUrlState), so a view is shareable and restored on refresh/back. Composition
-// only; data + masking + mutations come from the slice (api/bulkActionsApi).
+// filter rail (hosting Saved/Recent searches under the filters) driving a server ContactQuery, ONE toolbar
+// line — search box with a "Describe" mode, the All/Saved/Not-saved scope switch, the column chooser — the
+// results table (list only — compact, masked glyphs, row-select, per-row overflow menu) paged 25 rows at a
+// time behind a Previous/Next pager over the keyset pages (2026-08-31 pagination; sort control and density
+// switch removed — compact is the default and relevance the sort), a lightweight QuickView preview Drawer
+// that hands off to the heavy RecordDetail, and the sticky bulk-action bar (the full Phase-3 bulk surface).
+// Search/filter state lives in the URL (useProspectSearch → searchUrlState), so a view is shareable and
+// restored on refresh/back. Composition only; data + masking + mutations come from the slice
+// (api/bulkActionsApi).
 //
 // It renders the SHELL GRID itself (drawer column + results column) rather than being placed inside one, so
 // the drawer wraps this pane's own filter rail. The Accounts pane does the same with its panel — one
@@ -22,6 +24,7 @@
 
 import {
   AppliedFilterChips,
+  ColumnChooser,
   ScopeNotice,
   SearchDrawer,
   SearchDrawerOpener,
@@ -34,7 +37,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
-  SegmentedControl,
+  Pagination,
   StateSwitch,
   TableSkeleton,
   TpButton,
@@ -79,19 +82,17 @@ const RailFooter = dynamic(() => import("./RailFooter").then((m) => m.RailFooter
 });
 import type { ProspectRow } from "../databaseRows";
 import { FilterRail } from "./FilterRail";
-import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickStartPresets } from "./QuickStartPresets";
 import { QuickViewDrawer } from "./QuickViewDrawer";
 import { RecordDetail } from "./RecordDetail";
 import { SearchBox } from "./SearchBox";
 import { DEFAULT_VISIBLE_COLUMNS, TOGGLEABLE_COLUMNS, buildPeopleColumns } from "./peopleColumns";
 
-const DENSITIES = [
-  { value: "comfortable", label: "Comfortable" },
-  { value: "compact", label: "Compact" },
-];
 // The fixed-option facets that get live counts in the sidebar (POST /search/facets).
 const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
+// One UI page of the grid (2026-08-31 pagination) — matches the engine's keyset PAGE_SIZE, so paging past
+// the loaded rows costs exactly one fetch.
+const GRID_PAGE_SIZE = 25;
 
 function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   // Only ONE pane is mounted at a time (the composer picks by tab), so this pane's engines are never
@@ -111,6 +112,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     databaseDroppedFields,
     workspaceDroppedFields,
     loading,
+    loadingMore,
     error,
     hasMore,
     loadMore,
@@ -149,12 +151,18 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     if (ownedIds.length > 0) hydrateRevealed(ownedIds);
   }, [hits, hydrateRevealed]);
 
-  const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
   // A pending row-level bulk action: the single id to seed + which bulk dialog to open.
   const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
+
+  // Which 25-row page of the merged list is showing (2026-08-31 pagination). Client state over the loaded
+  // keyset pages: "Next" past the loaded rows asks the engine for exactly one more fetch. Reset on any query
+  // or scope change — page 3 of one search is not page 3 of another.
+  const [page, setPage] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset keyed on the search identity, not read values.
+  useEffect(() => setPage(0), [query, shell.workspace.scope]);
 
   // Top free-text box: a local mirror committed to the query after a short debounce (typeahead feel), and
   // re-synced when the query changes externally (AI apply / URL restore).
@@ -184,8 +192,36 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   // holds only the STORE (identity-stable, costs no renders); the checkboxes and the bar host subscribe
   // themselves, so a toggle re-renders 1-2 checkboxes instead of the whole page (perf-audit P3.1).
   const selectionStore = useBulkSelectionStore();
+
+  // The visible 25-row slice, and the pager facts derived from it. A page past the loaded rows (Next just
+  // triggered the fetch) renders the skeleton until the keyset page lands; a page emptied by removals
+  // (archive) clamps back to the last page that still has rows.
+  const pageRows = useMemo(
+    () => hits.slice(page * GRID_PAGE_SIZE, (page + 1) * GRID_PAGE_SIZE),
+    [hits, page],
+  );
+  const lastLoadedPage = Math.max(0, Math.ceil(hits.length / GRID_PAGE_SIZE) - 1);
+  useEffect(() => {
+    if (page > lastLoadedPage && !loadingMore && !loading) setPage(lastLoadedPage);
+  }, [page, lastLoadedPage, loadingMore, loading]);
+  const hasNextPage = hits.length > (page + 1) * GRID_PAGE_SIZE || hasMore;
+  const goNext = useCallback(() => {
+    if (hits.length <= (page + 1) * GRID_PAGE_SIZE) loadMore();
+    setPage((p) => p + 1);
+  }, [hits.length, page, loadMore]);
+  const pagerLabel =
+    hits.length === 0
+      ? undefined
+      : `${page * GRID_PAGE_SIZE + 1}–${Math.min(hits.length, (page + 1) * GRID_PAGE_SIZE)} of ${
+          hasMore || databaseHasMore ? `${hits.length}+` : hits.length
+        }`;
+
   // Only SAVED rows are selectable: bulk actions address contacts by id, and a not-saved row has none.
-  const shownIds = useMemo(() => hits.filter((c) => !c.databaseSlug).map((c) => c.id), [hits]);
+  // Scoped to the visible page so select-all means "select what I can see".
+  const shownIds = useMemo(
+    () => pageRows.filter((c) => !c.databaseSlug).map((c) => c.id),
+    [pageRows],
+  );
 
   // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
   const startRowAction = useCallback(
@@ -221,7 +257,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   );
 
   return (
-    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density={density}>
+    <div className={shellStyles.page} data-collapsed={shell.collapsed} data-density="compact">
       <SearchDrawer
         collapsed={shell.collapsed}
         isOverlay={shell.isOverlay}
@@ -246,53 +282,43 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
       </SearchDrawer>
 
       <section className={styles.results}>
-        <div className={styles.resultsHead}>
-          <div className={styles.headLeft}>
-            {/* Visible only while the rail is off-canvas (≤768px, collapsed) — otherwise the toggle in the
-                rail itself is the way back, and two openers would be one too many. */}
-            <SearchDrawerOpener onOpen={shell.toggle} />
-            {/* The People/Accounts switch lives in the rail; while the rail is collapsed it is mirrored
-                here so the tab is never out of reach (decisions.md 2026-08-25). */}
-            {shell.collapsed ? <span className={styles.headTabs}>{shell.tabs}</span> : null}
-            <span className={styles.count}>
-              {resultHeadline({
-                scope: shell.workspace.scope,
-                loading,
-                saved: workspaceSkipped
-                  ? hits.length - databaseCount
-                  : (totalCount ?? hits.length - databaseCount),
-                savedIsFloor: totalCapped || (totalCount === undefined && hasMore),
-                available: databaseCount,
-                // The database half is one capped page — "Load more" pages the workspace query alone — so
-                // more than it shows is a floor, never the whole of what the database holds.
-                availableIsFloor: databaseHasMore,
-                workspaceSkipped,
-              })}
-            </span>
-          </div>
-          <div className={styles.headRight}>
-            <ProspectToolbar
-              query={query}
-              onChange={setQuery}
-              columns={TOGGLEABLE_COLUMNS}
-              visibleColumns={visibleColumns}
-              onVisibleColumnsChange={setVisibleColumns}
-            />
-            <SegmentedControl
-              items={DENSITIES}
-              value={density}
-              onChange={setDensity}
-              aria-label="Row density"
-            />
-          </div>
-        </div>
-
+        {/* ONE toolbar line (2026-08-31): search box (with the Describe AI mode), the All/Saved/Not-saved
+            scope switch, and the column chooser — the whole row's width is working controls. */}
         <div className={styles.searchRow}>
+          {/* Visible only while the rail is off-canvas (≤768px, collapsed) — otherwise the toggle in the
+              rail itself is the way back, and two openers would be one too many. */}
+          <SearchDrawerOpener onOpen={shell.toggle} />
+          {/* The People/Accounts switch lives in the rail; while the rail is collapsed it is mirrored
+              here so the tab is never out of reach (decisions.md 2026-08-25). */}
+          {shell.collapsed ? <span className={styles.headTabs}>{shell.tabs}</span> : null}
           <SearchBox value={textInput} onChange={setTextInput} onApplyQuery={setQuery} />
           <WorkspaceScopeControl
             scope={shell.workspace.scope}
             onChange={shell.workspace.setScope}
           />
+          <ColumnChooser
+            columns={TOGGLEABLE_COLUMNS}
+            visibleColumns={visibleColumns}
+            onVisibleColumnsChange={setVisibleColumns}
+          />
+        </div>
+
+        <div className={styles.resultsHead}>
+          <span className={styles.count}>
+            {resultHeadline({
+              scope: shell.workspace.scope,
+              loading,
+              saved: workspaceSkipped
+                ? hits.length - databaseCount
+                : (totalCount ?? hits.length - databaseCount),
+              savedIsFloor: totalCapped || (totalCount === undefined && hasMore),
+              available: databaseCount,
+              // The database half is one capped page — paging fetches the workspace query alone — so
+              // more than it shows is a floor, never the whole of what the database holds.
+              availableIsFloor: databaseHasMore,
+              workspaceSkipped,
+            })}
+          </span>
         </div>
 
         {/* Renders nothing when no filter is active — never a "no filters applied" line. */}
@@ -351,25 +377,34 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               )
             }
           >
-            <DataTable
-              columns={columns}
-              rows={hits}
-              rowKey={(c) => c.id}
-              // A not-saved row opens its full masked Layer-0 profile in a drawer (stage 3); its reveal — in
-              // the grid or in that drawer — is what saves it (decisions.md 2026-08-25). A saved row still
-              // opens the lightweight QuickView, which hands off to RecordDetail.
-              onRowClick={(c) =>
-                c.databaseSlug ? shell.openProfile("person", c.databaseSlug) : setPreviewId(c.id)
-              }
-              isSelected={(c) => c.id === previewId}
-            />
-            {hasMore && (
-              <div className={styles.loadMore}>
-                <TpButton variant="secondary" size="sm" loading={loading} onClick={loadMore}>
-                  Load more
-                </TpButton>
-              </div>
+            {loadingMore && pageRows.length === 0 ? (
+              // Next was clicked past the loaded rows — the keyset page is in flight.
+              <TableSkeleton rows={10} />
+            ) : (
+              <DataTable
+                columns={columns}
+                rows={pageRows}
+                rowKey={(c) => c.id}
+                // A not-saved row opens its full masked Layer-0 profile in a drawer (stage 3); its reveal —
+                // in the grid or in that drawer — is what saves it (decisions.md 2026-08-25). A saved row
+                // still opens the lightweight QuickView, which hands off to RecordDetail.
+                onRowClick={(c) =>
+                  c.databaseSlug ? shell.openProfile("person", c.databaseSlug) : setPreviewId(c.id)
+                }
+                isSelected={(c) => c.id === previewId}
+              />
             )}
+            {page > 0 || hasNextPage ? (
+              <div className={styles.loadMore}>
+                <Pagination
+                  hasPrev={page > 0}
+                  hasNext={hasNextPage && !loadingMore}
+                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                  onNext={goNext}
+                  label={pagerLabel}
+                />
+              </div>
+            ) : null}
           </StateSwitch>
         }
       </section>

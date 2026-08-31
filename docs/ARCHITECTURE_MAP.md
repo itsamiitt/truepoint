@@ -1215,6 +1215,15 @@ flowchart TD
   existing prospect/web domain; the filter-rail purposes above were updated in the same pass ("Workspace
   only" badge text removed — `FacetScopeBadge` now marks only `database-only`).
 
+  2026-08-31 refresh, second pass (grid slimming + pagination): `features/prospect/components/` lost
+  `ProspectToolbar.tsx` (its sort control is retired — relevance is the sort; the column chooser moved into
+  the pane's single toolbar line) and `features/accounts/components/` lost `AccountsSort.tsx` (same call).
+  Both grids are fixed `data-density="compact"` — the density switch is gone. The People grid pages 25 rows
+  at a time behind a DS `Pagination` Prev/Next over the keyset pages (`useProspectSearch` PAGE_SIZE 25 +
+  `loadingMore`); the "Load more" button survives only on Accounts. `columnRegistry.ts` gained `title`
+  (Job title) and a trailing `linkedin` icon column; the People defaults are now name · company · title ·
+  email · phone · location · LinkedIn.
+
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
   `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,

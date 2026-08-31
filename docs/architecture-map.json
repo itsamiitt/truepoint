@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2491,
-  "fileSetHash": "sha256:dc850b2e68b8511320e0a7efcd1fc252595989764c9a1a86440f0b4158009087",
+  "fileCount": 2489,
+  "fileSetHash": "sha256:7d1630e5898f2e9dd0809d441b5a99ca099521b87570c6ea8b5b9d2a89a01d81",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -147,7 +147,6 @@
         "apps/web/src/features/accounts/accountRows.ts",
         "apps/web/src/features/accounts/api.ts",
         "apps/web/src/features/accounts/components/AccountsPane.tsx",
-        "apps/web/src/features/accounts/components/AccountsSort.tsx",
         "apps/web/src/features/accounts/components/CompanyPage.tsx",
         "apps/web/src/features/accounts/components/DatabaseProfileDrawer.tsx",
         "apps/web/src/features/accounts/components/MarketsBoard.tsx",
@@ -1568,7 +1567,6 @@
         "apps/web/src/features/prospect/components/HeadcountSection.tsx",
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/PeoplePane.tsx",
-        "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
         "apps/web/src/features/prospect/components/ProvenanceSection.tsx",
         "apps/web/src/features/prospect/components/QuickFilters.tsx",
         "apps/web/src/features/prospect/components/QuickStartPresets.tsx",

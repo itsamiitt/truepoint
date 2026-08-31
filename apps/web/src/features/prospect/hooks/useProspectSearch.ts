@@ -28,7 +28,9 @@ import { prospectKeys } from "../keys";
 import { searchContacts } from "../searchApi";
 import { paramsToQuery, queryToSearchString } from "../searchUrlState";
 
-const PAGE_SIZE = 50;
+// 25 matches the grid's page size (2026-08-31 pagination): the pane shows one fetched page per UI page, so
+// "Next" past the loaded rows is exactly one keyset fetch.
+const PAGE_SIZE = 25;
 const NO_ROWS: ReadonlyMap<string, ProspectRow> = new Map();
 
 export interface ProspectSearch {
@@ -49,6 +51,8 @@ export interface ProspectSearch {
    *  skipped. Non-empty ⇒ the grid is showing the platform database, with owned matches marked. */
   workspaceDroppedFields: string[];
   loading: boolean;
+  /** A further keyset page is in flight (the pane's pager shows a skeleton on a not-yet-loaded page). */
+  loadingMore: boolean;
   error: string | null;
   hasMore: boolean;
   loadMore: () => void;
@@ -304,6 +308,7 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     loading: workspaceSkipped
       ? databaseSearch.isPending && enabled && includeDatabase
       : search.isPending && enabled && !excludeOwned,
+    loadingMore: search.isFetchingNextPage,
     error: search.error
       ? search.error instanceof Error
         ? search.error.message

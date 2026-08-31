@@ -24,9 +24,11 @@ export interface ToggleableColumn {
 export const PEOPLE_TOGGLEABLE_COLUMNS: ToggleableColumn[] = [
   { key: "name", label: "Name" },
   { key: "company", label: "Company" },
+  // Job title as its own column (2026-08-31 grid slimming) — it used to be a sub-line inside the Name cell,
+  // which a compact row has no vertical room for.
+  { key: "title", label: "Job title" },
   { key: "seniority", label: "Seniority" },
   { key: "department", label: "Department" },
-  { key: "location", label: "Location" },
   // The glyph column and the reveal column BOTH used to be headed "Email", one of them labelled "Address" in
   // the chooser — so the header and the menu disagreed about the same column. The glyph is a verification
   // verdict, the reveal cell is the address; each is now named for what it holds.
@@ -34,24 +36,28 @@ export const PEOPLE_TOGGLEABLE_COLUMNS: ToggleableColumn[] = [
   { key: "address", label: "Email" },
   { key: "phone", label: "Phone" },
   { key: "lineType", label: "Line type" },
+  { key: "location", label: "Location" },
   { key: "outreach", label: "Outreach" },
   { key: "health", label: "Data health" },
   { key: "verified", label: "Last verified" },
   { key: "created", label: "Added" },
+  // Last on purpose: the LinkedIn link is the row's trailing affordance (2026-08-31 grid slimming).
+  { key: "linkedin", label: "LinkedIn" },
 ];
 
 /** People: the columns always rendered, never offered in the chooser. */
 export const PEOPLE_ALWAYS_ON_COLUMNS = ["select", "actions"];
 
-/** People: the resting column set. */
+/** People: the resting column set (2026-08-31 grid slimming): name · company · job title · email · phone ·
+ *  location · LinkedIn. Everything else is one chooser click away. */
 export const PEOPLE_DEFAULT_VISIBLE_COLUMNS = [
   "name",
   "company",
-  "seniority",
-  "location",
-  "email",
+  "title",
   "address",
   "phone",
+  "location",
+  "linkedin",
 ];
 
 /** Accounts: the toggleable columns, in render order. `name` is always on. */
