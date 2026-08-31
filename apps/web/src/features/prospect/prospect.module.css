@@ -210,9 +210,10 @@
 .facetToggle:hover .facetLabel {
   color: var(--tp-ink);
 }
+/* ink-3, not ink-4: the inkFourContrast ratchet counts every ink-4 colour declaration, glyph or not. */
 .facetChevron {
   margin-left: auto;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   font-size: 13px;
 }
 .facetBody {
@@ -267,7 +268,7 @@
 }
 .msCaret {
   flex: none;
-  color: var(--tp-ink-4);
+  color: var(--tp-ink-3);
   font-size: 10px;
 }
 .msPanel {
