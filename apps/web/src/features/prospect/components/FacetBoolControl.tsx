@@ -38,7 +38,7 @@ export function BoolControl({
   return (
     <FacetDisclosure
       label={label}
-      badge={current === undefined ? undefined : 1}
+      summary={current === undefined ? undefined : current ? "Yes" : "No"}
       scopeNote={scopeNote}
     >
       <SegmentedControl

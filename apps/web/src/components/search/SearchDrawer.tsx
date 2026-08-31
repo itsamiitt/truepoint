@@ -52,8 +52,6 @@ export function SearchDrawer({
     wasOpenOverlay.current = openOverlay;
   }, [isOverlay, collapsed]);
 
-  const label = collapsed ? "Show filters" : "Hide filters";
-
   return (
     <>
       {isOverlay && !collapsed ? (
@@ -66,17 +64,22 @@ export function SearchDrawer({
       ) : null}
 
       <div className={styles.railCol} data-collapsed={collapsed} data-overlay={isOverlay}>
-        <div className={styles.railTop}>
-          <TpIconButton
-            id={TOGGLE_ID}
-            label={label}
-            aria-expanded={!collapsed}
-            aria-controls={RAIL_BODY_ID}
-            onClick={onToggle}
-          >
-            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </TpIconButton>
-        </div>
+        {/* The toggle lives INSIDE the card while the rail is open (beside the People/Accounts switch —
+            no dead band above the card); collapsed, the card is gone, so the strip carries the opener.
+            One at a time, same id — the focus-return effect above finds whichever is mounted. */}
+        {collapsed ? (
+          <div className={styles.railTop}>
+            <TpIconButton
+              id={TOGGLE_ID}
+              label="Show filters"
+              aria-expanded={false}
+              aria-controls={RAIL_BODY_ID}
+              onClick={onToggle}
+            >
+              <PanelLeftOpen size={16} />
+            </TpIconButton>
+          </div>
+        ) : null}
 
         {/* `inert` is what actually removes the collapsed panel from the tab order and the accessibility
             tree — CSS visibility alone leaves it announced in some engines. */}
@@ -87,7 +90,18 @@ export function SearchDrawer({
           tabIndex={-1}
           inert={collapsed ? true : undefined}
         >
-          <div className={styles.tabs}>{tabs}</div>
+          <div className={styles.railBar}>
+            <div className={styles.tabs}>{tabs}</div>
+            <TpIconButton
+              id={collapsed ? undefined : TOGGLE_ID}
+              label="Hide filters"
+              aria-expanded={true}
+              aria-controls={RAIL_BODY_ID}
+              onClick={onToggle}
+            >
+              <PanelLeftClose size={16} />
+            </TpIconButton>
+          </div>
           {children}
         </div>
       </div>

@@ -60,10 +60,14 @@ export function TermFacetField({
     }
   }
 
+  // The closed row's summary: every applied value as words, exclusions marked ("VP, Not Director").
+  const summary =
+    conditions.map((c) => `${c.op === "exclude" ? "Not " : ""}${c.label}`).join(", ") || undefined;
+
   return (
     <FacetDisclosure
       label={label}
-      badge={conditions.length || undefined}
+      summary={summary}
       scopeNote={scopeNote}
       headExtra={
         /* Stays a raw <button>: this is a DISCLOSURE, not an action button. Its expanded state is a

@@ -31,15 +31,23 @@
   max-height: calc(100vh - 32px);
 }
 
+/* Rendered ONLY while collapsed — the strip's opener. Open, the toggle sits inside the card (.railBar),
+   so the rail has no dead band above it and the card starts at the very top of the column. */
 .railTop {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   min-height: 32px;
 }
-/* Collapsed, the toggle is the only thing left, so centre it in the strip. */
-.railCol[data-collapsed="true"] .railTop {
-  justify-content: center;
+/* The card's head row: the People/Accounts switch takes the width, the close toggle sits at its end. */
+.railBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.railBar > .tabs {
+  flex: 1;
+  min-width: 0;
 }
 
 .railBody {
@@ -50,6 +58,12 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Search v4: the rail is a CARD, matching the results card beside it. */
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-card);
+  box-shadow: var(--tp-shadow-card);
+  padding: 12px;
 }
 .railCol[data-collapsed="true"] .railBody {
   /* visibility (not display:none) so the width transition has something to animate against, and so focus
@@ -100,17 +114,21 @@
       transition: transform 200ms ease;
     }
   }
-  /* Collapsed on mobile the rail is off-canvas, so the toggle inside it goes with it — the results header
+  /* Collapsed on mobile the rail is off-canvas (the strip's opener goes with it) — the results header
      carries its own opener (.overlayOpener below). */
-  .railCol[data-collapsed="true"] .railTop {
-    justify-content: flex-end;
-  }
   .railCol[data-collapsed="true"] .railBody {
     /* Off-canvas, not zero-height: the panel must keep its layout so the slide reads as a drawer. */
     visibility: hidden;
     opacity: 0;
     height: auto;
     pointer-events: none;
+  }
+  /* The overlay drawer already IS a panel — the card chrome inside it would be a frame in a frame. */
+  .railBody {
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
   }
 }
 
@@ -146,6 +164,13 @@
   padding: 8px 0;
   border-bottom: 1px solid var(--tp-hairline);
   margin-bottom: 8px;
+}
+/* Search v4: the same chips flowed into the caller's own meta line — no bordered row of their own. */
+.chipRowInline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tp-space-2);
 }
 
 /* ── Scope notice ─────────────────────────────────────────────────────────────────────────────────────── */

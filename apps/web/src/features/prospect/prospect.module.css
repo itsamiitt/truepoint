@@ -25,9 +25,8 @@
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  padding-right: 4px;
 }
 .railHead {
   display: flex;
@@ -90,16 +89,16 @@
   gap: 14px;
   min-width: 0;
 }
-.resultsHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 .count {
   font-size: 13px;
   color: var(--tp-ink-3);
+}
+/* Search v4: headline + applied chips on one meta line. */
+.metaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ONE toolbar line (2026-08-31): search box (with Describe), scope switch, column chooser — the search box
@@ -115,11 +114,21 @@
   min-width: 220px;
 }
 
-/* The pager footer under the results (2026-08-31 pagination — replaced the keyset "Load more" button). */
-.loadMore {
+/* The pager footer under the results (Search v4): range on the left, Previous/Next on the right. */
+.pagerRow {
   display: flex;
-  justify-content: center;
-  padding: 8px 0 4px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 0;
+}
+.pagerRange {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/* The in-cell reveal action (Search v4): a quiet cobalt ghost, not a pill — the cost text stays. */
+.revealAction {
+  color: var(--tp-cobalt-700);
 }
 
 /* ── Filter accordion (collapsed by default) + is/is-not conditions ─────────────────────────────────────── */
@@ -161,9 +170,16 @@
   color: var(--tp-surface);
   background: var(--tp-cobalt);
 }
-.groupChevron {
-  color: var(--tp-ink-4);
-  font-size: 14px;
+/* The one rail chevron (Search v4): ▾, rotating open on the toggle's own aria-expanded. */
+.railChev {
+  flex: none;
+  color: var(--tp-ink-3);
+  transition: transform var(--tp-duration-fast) var(--tp-ease);
+}
+.facetToggle[aria-expanded="true"] .railChev,
+.groupHead[aria-expanded="true"] .railChev,
+.tierHead[aria-expanded="true"] .railChev {
+  transform: rotate(180deg);
 }
 .groupBody {
   display: flex;
@@ -201,11 +217,19 @@
 .facetToggle:hover .facetLabel {
   color: var(--tp-ink);
 }
-/* ink-3, not ink-4: the inkFourContrast ratchet counts every ink-4 colour declaration, glyph or not. */
-.facetChevron {
+/* The closed row's selected-value summary (Search v4): muted "Any" at rest, cobalt words when set. */
+.facetVal {
   margin-left: auto;
+  font-size: 12px;
   color: var(--tp-ink-3);
-  font-size: 13px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.facetVal[data-set="true"] {
+  color: var(--tp-cobalt-700);
+  font-weight: 500;
 }
 .facetBody {
   display: flex;
@@ -213,73 +237,45 @@
   gap: 6px;
 }
 
-/* ── Multi-select dropdown (TermMultiSelect — fixed-option term facets) ─────────────────────────────────── */
-/* The DS Popover's anchor (.tp-ui-anchor, its only child) is inline-flex; inside the rail the trigger owns
-   the full row width. A structural selector, not :global() — biome's CSS-modules parsing is off. */
-.msWrap {
-  display: flex;
-}
-.msWrap > * {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
-.msTrigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 12px;
-  color: var(--tp-ink-2);
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--tp-radius-sm);
-  cursor: pointer;
-  transition: border-color var(--tp-duration-fast) var(--tp-ease);
-}
-.msTrigger:hover {
-  border-color: var(--tp-ink-4);
-}
-/* Inside the exclude block the trigger adds to the negative clause — it says so before the click. */
-.msTrigger[data-op="exclude"] {
-  border-color: var(--danger-200);
-  color: var(--danger-700);
-}
-.msTrigger[data-op="exclude"]:hover {
-  border-color: var(--danger);
-}
-.msSummary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.msCaret {
-  flex: none;
-  color: var(--tp-ink-3);
-  font-size: 10px;
-}
-.msPanel {
-  width: 100%;
-}
+/* ── Inline option list (TermOptionList — fixed-option term facets, Search v4) ──────────────────────────── */
 /* A real <fieldset>, so the browser's own default chrome has to be reset before the list treatment. */
-.msList {
+.optList {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 0;
   border: 0;
-  padding: 8px;
+  padding: 0;
   min-width: 0;
-  max-height: 240px;
-  overflow-y: auto;
 }
-.msCount {
-  color: var(--tp-ink-3);
+.optRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.optRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.optCount {
+  flex: none;
   font-size: 11px;
+  color: var(--tp-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.optMore {
+  border: 0;
+  background: none;
+  padding: 4px 0 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-cobalt);
+  text-align: left;
+  cursor: pointer;
+}
+.optMore:hover {
+  color: var(--tp-cobalt-700);
 }
 
 /* ── Progressive exclude (term facets) ──────────────────────────────────────────────────────────────────
@@ -442,7 +438,7 @@
   color: var(--danger-700);
 }
 /* .miniToggle is gone — the any/all/none pills are <TpChip active> now. */
-/* .addChip is gone — fixed-option pickers are the TermMultiSelect dropdown now (2026-08-31). */
+/* .addChip is gone — fixed-option pickers are the TermOptionList inline checkbox list now (Search v4). */
 .rangeRow {
   display: flex;
   gap: 8px;
@@ -519,7 +515,8 @@
 .glyphNone {
   color: var(--tp-ink-3);
 }
-/* The trailing LinkedIn column's icon link (2026-08-31 grid slimming) — a real 32px hit target. */
+/* The trailing LinkedIn column's icon link (2026-08-31 grid slimming) — a real hit target. Muted at rest,
+   cobalt on hover (Search v4) so twelve rows of brand-blue don't out-shout the data. */
 .linkedinLink {
   display: inline-flex;
   align-items: center;
@@ -527,10 +524,11 @@
   width: 28px;
   height: 28px;
   border-radius: var(--tp-radius-sm);
-  color: var(--tp-cobalt);
+  color: var(--tp-ink-3);
 }
 .linkedinLink:hover {
   background: var(--tp-surface-2);
+  color: var(--tp-cobalt);
 }
 .lock {
   color: var(--tp-ink-3);
@@ -1065,8 +1063,19 @@
   flex-direction: column;
   gap: 10px;
 }
-.tier {
+/* A rail section (Search v4): "All filters", "Saved searches" — a hairline above and a small caps title. */
+.railSec {
   border-top: 1px solid var(--tp-hairline);
+  padding-top: 4px;
+}
+.railSecTitle {
+  margin: 0;
+  padding: 6px 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
 }
 .tierHead {
   display: flex;

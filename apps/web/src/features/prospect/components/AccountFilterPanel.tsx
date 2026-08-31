@@ -23,9 +23,6 @@ import styles from "../prospect.module.css";
 import { AccordionGroup } from "./AccordionGroup";
 import { AccountFacetControl } from "./AccountFacetControl";
 
-const TIER_ID = "accounts-all-filters";
-const NARROWING_FIELDS = ACCOUNT_ALL_FILTER_GROUPS.flatMap((g) => g.facets.map((f) => f.field));
-
 export function AccountFilterPanel({
   query,
   onChange,
@@ -44,8 +41,6 @@ export function AccountFilterPanel({
 }) {
   // Namespaced ids so the Accounts rail's open state never collides with the People rail's.
   const groups = useOpenGroups();
-  const active = groupActiveCount(query, NARROWING_FIELDS);
-  const open = groups.isOpen("accounts-all");
 
   return (
     <aside className={styles.rail} aria-label="Company filters">
@@ -73,63 +68,40 @@ export function AccountFilterPanel({
         ))}
       </div>
 
-      <section className={styles.tier}>
-        <button
-          type="button"
-          className={styles.tierHead}
-          aria-expanded={open}
-          aria-controls={TIER_ID}
-          onClick={() => groups.toggle("accounts-all")}
-        >
-          <span className={styles.groupTitle}>
-            All filters
-            {active > 0 ? <span className={styles.groupBadge}>{active}</span> : null}
-          </span>
-          <span aria-hidden className={styles.groupChevron}>
-            {open ? "−" : "+"}
-          </span>
-        </button>
-        {open ? (
-          <div id={TIER_ID}>
-            {scope === "exclude" ? (
-              <p className={styles.tierNote}>
-                Filters on your saved accounts don't apply to companies you haven't saved yet —
-                switch to All or Saved to use them.
-              </p>
-            ) : (
-              <>
-                <p className={styles.tierNote}>
-                  These narrow the list to accounts already saved in your workspace.
-                </p>
-                {ACCOUNT_ALL_FILTER_GROUPS.map((group) => (
-                  <AccordionGroup
-                    key={group.id}
-                    id={`accounts-group-${group.id}`}
-                    title={group.title}
-                    open={groups.isOpen(`accounts-${group.id}`)}
-                    onToggle={() => groups.toggle(`accounts-${group.id}`)}
-                    badge={
-                      groupActiveCount(
-                        query,
-                        group.facets.map((f) => f.field),
-                      ) || undefined
-                    }
-                  >
-                    {group.facets.map((facet) => (
-                      <AccountFacetControl
-                        key={`${facet.kind}:${facet.field}`}
-                        facet={facet}
-                        query={query}
-                        onChange={onChange}
-                        counts={counts}
-                      />
-                    ))}
-                  </AccordionGroup>
-                ))}
-              </>
-            )}
-          </div>
-        ) : null}
+      <section className={styles.railSec}>
+        <h3 className={styles.railSecTitle}>All filters</h3>
+        {scope === "exclude" ? (
+          <p className={styles.tierNote}>
+            Filters on your saved accounts don't apply to companies you haven't saved yet — switch
+            to All or Saved to use them.
+          </p>
+        ) : (
+          ACCOUNT_ALL_FILTER_GROUPS.map((group) => (
+            <AccordionGroup
+              key={group.id}
+              id={`accounts-group-${group.id}`}
+              title={group.title}
+              open={groups.isOpen(`accounts-${group.id}`)}
+              onToggle={() => groups.toggle(`accounts-${group.id}`)}
+              badge={
+                groupActiveCount(
+                  query,
+                  group.facets.map((f) => f.field),
+                ) || undefined
+              }
+            >
+              {group.facets.map((facet) => (
+                <AccountFacetControl
+                  key={`${facet.kind}:${facet.field}`}
+                  facet={facet}
+                  query={query}
+                  onChange={onChange}
+                  counts={counts}
+                />
+              ))}
+            </AccordionGroup>
+          ))
+        )}
       </section>
     </aside>
   );

@@ -29,16 +29,19 @@ export function AppliedFilterChips<Q>({
   query,
   onChange,
   onClearAll,
+  inline = false,
 }: {
   chips: AppliedChip<Q>[];
   query: Q;
   onChange: (next: Q) => void;
   onClearAll: () => void;
+  /** Search v4: flow the chips into the caller's own row (no bordered row of their own). */
+  inline?: boolean;
 }) {
   if (chips.length === 0) return null;
 
   return (
-    <div className={styles.chipRow}>
+    <div className={inline ? styles.chipRowInline : styles.chipRow}>
       {chips.map((chip) => (
         <TpChip
           key={chip.id}

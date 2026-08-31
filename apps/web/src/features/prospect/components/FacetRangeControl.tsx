@@ -50,10 +50,14 @@ export function RangeControl({
     return valueKind === "date" ? dateInputToMs(s) : Number(s);
   };
   const type = valueKind === "date" ? "date" : "number";
+  const summary =
+    [gte !== undefined ? `≥ ${toInput(gte)}` : null, lte !== undefined ? `≤ ${toInput(lte)}` : null]
+      .filter(Boolean)
+      .join(" · ") || undefined;
   return (
     <FacetDisclosure
       label={unit ? `${label} (${unit})` : label}
-      badge={gte !== undefined || lte !== undefined ? 1 : undefined}
+      summary={summary}
       scopeNote={scopeNote}
     >
       <div className={styles.rangeRow}>

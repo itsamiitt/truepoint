@@ -181,9 +181,11 @@ export function RevealCell({
   const buttonLabel =
     maskedCount !== undefined && maskedCount > 1 ? `${maskedCount} ${label.toLowerCase()}s` : label;
   const button = (
+    // Ghost + cobalt (Search v4): the reveal reads as a quiet in-cell action, not a pill — the cost stays.
     <TpButton
       size="sm"
-      variant="secondary"
+      variant="ghost"
+      className={styles.revealAction}
       loading={busy}
       leftIcon={<Sparkles size={13} />}
       onClick={(e) => {

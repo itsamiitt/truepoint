@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2490,
-  "fileSetHash": "sha256:9eb4ed9758f64cfb040dba02f42414c245cd660765888e6584f31329bf6e7c0b",
+  "fileCount": 2491,
+  "fileSetHash": "sha256:bacdc05bdaf0d8e906a145f30d6c1c1359e5fa38b374c166e9136388d9650656",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1572,6 +1572,7 @@
         "apps/web/src/features/prospect/components/QuickFilters.tsx",
         "apps/web/src/features/prospect/components/QuickStartPresets.tsx",
         "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
+        "apps/web/src/features/prospect/components/RailChevron.tsx",
         "apps/web/src/features/prospect/components/RailFooter.tsx",
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
@@ -1589,7 +1590,7 @@
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/components/TermFacetField.tsx",
-        "apps/web/src/features/prospect/components/TermMultiSelect.tsx",
+        "apps/web/src/features/prospect/components/TermOptionList.tsx",
         "apps/web/src/features/prospect/components/peopleColumns.tsx",
         "apps/web/src/features/prospect/databaseRows.test.ts",
         "apps/web/src/features/prospect/databaseRows.ts",

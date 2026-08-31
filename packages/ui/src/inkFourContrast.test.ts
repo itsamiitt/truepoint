@@ -58,7 +58,14 @@ import { join } from "node:path";
  * glyphs sitting beside their own visible label (.tp-ws-caret, .cardTitleIcon, .groupChevron,
  * .connectNoteIcon); and LinksTable's two em-dash empty-cell placeholders. The other 6 are packages/ui.
  */
-const INK4_TEXT_BUDGET = 14;
+/**
+ * 14 → 12 (2026-08-31, Search v4): the prospect rail's dropdown picker (`.msTrigger:hover`
+ * border-color — one of the two border-color substring matches in apps/web) and the `.groupChevron`
+ * glyph (one of the four decorative-glyph usages) both left with the rail rework — the chevron is an
+ * ink-3 SVG now, the picker an inline checkbox list with no ink-4 declaration. The ratchet tightens
+ * with them.
+ */
+const INK4_TEXT_BUDGET = 12;
 
 /**
  * BOTH spellings, which is the correction that produced this file.

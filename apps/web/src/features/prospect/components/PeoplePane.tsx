@@ -300,10 +300,13 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
             columns={TOGGLEABLE_COLUMNS}
             visibleColumns={visibleColumns}
             onVisibleColumnsChange={setVisibleColumns}
+            withLabel
           />
         </div>
 
-        <div className={styles.resultsHead}>
+        {/* Search v4: headline + applied chips share ONE row — the meta line reads left to right as "what
+            you have · how it is narrowed". The chips render nothing when no filter is active. */}
+        <div className={styles.metaRow}>
           <span className={styles.count}>
             {resultHeadline({
               scope: shell.workspace.scope,
@@ -319,15 +322,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               workspaceSkipped,
             })}
           </span>
+          <AppliedFilterChips
+            chips={activeChips(query)}
+            query={query}
+            onChange={setQuery}
+            onClearAll={() => setQuery(clearAllFilters(query))}
+            inline
+          />
         </div>
-
-        {/* Renders nothing when no filter is active — never a "no filters applied" line. */}
-        <AppliedFilterChips
-          chips={activeChips(query)}
-          query={query}
-          onChange={setQuery}
-          onClearAll={() => setQuery(clearAllFilters(query))}
-        />
 
         {/* Only when workspace-only filters are actually suppressing the database half — say so, instead of
             letting the not-saved half vanish silently. Moot when the scope already excludes it. */}
@@ -395,13 +397,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
               />
             )}
             {page > 0 || hasNextPage ? (
-              <div className={styles.loadMore}>
+              // Search v4: the range reads on the left, the pager buttons on the right.
+              <div className={styles.pagerRow}>
+                <span className={styles.pagerRange}>{pagerLabel}</span>
                 <Pagination
                   hasPrev={page > 0}
                   hasNext={hasNextPage && !loadingMore}
                   onPrev={() => setPage((p) => Math.max(0, p - 1))}
                   onNext={goNext}
-                  label={pagerLabel}
                 />
               </div>
             ) : null}

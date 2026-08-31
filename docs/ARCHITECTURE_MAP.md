@@ -1233,6 +1233,19 @@ flowchart TD
   `CHANNEL_READ_FROM_CHILD` + `channels_read` off the payload fields are absent and the grid renders
   exactly as before.
 
+  2026-08-31 refresh, fourth pass (Search v4 — the full look): the rail renders as a card
+  (search.module.css owns it on the drawer body); every facet row carries a selected-value SUMMARY on its
+  right edge ("VP, Director" in cobalt, muted "Any" at rest — `FacetDisclosure`) with one rotating chevron
+  (`RailChevron.tsx`, new); fixed-option facets pick values from an INLINE checkbox list with counts and
+  "Show N more" (`TermOptionList.tsx`, new — `TermMultiSelect.tsx` and its dropdown deleted); the "All
+  filters" tier wrapper flattened to a heading with the group accordions always listed
+  (`AllFiltersSection`; `AllFiltersBody` is now the per-group dynamic body, same PA-3 boundary); Saved
+  searches is a closed disclosure that mounts `RailFooter` on open; headline + applied chips share one
+  meta line (`AppliedFilterChips inline`); the column chooser is a labelled "Columns" ghost button; the
+  pager reads range-left / buttons-right; the LinkedIn icon is muted-at-rest; the in-cell reveal is a
+  cobalt ghost. `INK4_TEXT_BUDGET` tightened 14 → 12 (the dropdown's border-color and the `.groupChevron`
+  glyph both left).
+
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
   `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,

@@ -5,6 +5,7 @@
 
 import type { ReactNode } from "react";
 import styles from "../prospect.module.css";
+import { RailChevron } from "./RailChevron";
 
 export function AccordionGroup({
   id,
@@ -40,9 +41,7 @@ export function AccordionGroup({
           {badge ? <span className={styles.groupBadge}>{badge}</span> : null}
           {tag ? <span className={styles.tierTag}>{tag}</span> : null}
         </span>
-        <span aria-hidden className={styles.groupChevron}>
-          {open ? "−" : "+"}
-        </span>
+        <RailChevron />
       </button>
       {open ? (
         <div id={id} className={styles.groupBody}>

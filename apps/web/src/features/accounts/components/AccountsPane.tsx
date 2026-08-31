@@ -115,6 +115,7 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
             columns={ACCOUNT_TOGGLEABLE_COLUMNS}
             visibleColumns={visibleColumns}
             onVisibleColumnsChange={setVisibleColumns}
+            withLabel
           />
           <TpButton
             variant="ghost"

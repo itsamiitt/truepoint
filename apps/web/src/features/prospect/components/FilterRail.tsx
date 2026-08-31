@@ -1,20 +1,22 @@
-// FilterRail.tsx — the People tab's filter rail (24 §2; decisions.md 2026-08-25). Two tiers: QUICK filters
-// (the facets both engines answer), then "All filters" (one-side-only facets) in accordion groups. Every
-// facet is itself a closed-by-default disclosure row (2026-08-31 rail simplification) — the rail reads as a
-// compact list of labels until the user opens one. The saved/recent searches live BELOW the filters, so a
-// first-time user meets the controls before the chrome. The semantics line says the one rule the rail
-// follows. Presentation only — the page owns query state, URL persistence, and counts.
+// FilterRail.tsx — the People tab's filter rail (24 §2; decisions.md 2026-08-25), Search v4 shape: the rail
+// renders as a CARD (search.module.css owns that treatment on the drawer body); quick facets first (the
+// facets both engines answer), each a closed-by-default disclosure row whose right edge summarises what is
+// selected; then the "All filters" groups under a plain heading; then Saved searches as a closed disclosure
+// (the dialogs/menu behind it stay next/dynamic — opening it is the intent that fetches them). The
+// semantics line says the one rule the rail follows. Presentation only — the page owns query state, URL
+// persistence, and counts.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
 import type { ContactQuery } from "@leadwolf/types";
 import { TpButton } from "@leadwolf/ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { clearAllFilters, hasActiveFilters } from "../filterGroups";
 import styles from "../prospect.module.css";
 import { AllFiltersSection } from "./AllFiltersSection";
 import type { OwnerOption } from "./FacetControl";
 import { QuickFilters } from "./QuickFilters";
+import { RailChevron } from "./RailChevron";
 
 export type { OwnerOption } from "./FacetControl";
 
@@ -34,9 +36,10 @@ export function FilterRail({
   owners?: OwnerOption[];
   /** All / Saved / Not saved — in "Not saved" the saved-only tier cannot apply and says so. */
   scope: WorkspaceScope;
-  /** Rail content rendered UNDER the filters (saved + recent searches). */
+  /** Saved + recent searches, rendered when the Saved searches disclosure is opened. */
   footer?: ReactNode;
 }) {
+  const [savedOpen, setSavedOpen] = useState(false);
   return (
     <aside className={styles.rail} aria-label="Filters">
       <div className={styles.railHead}>
@@ -58,7 +61,25 @@ export function FilterRail({
         scope={scope}
       />
 
-      {footer != null ? <div className={styles.railSection}>{footer}</div> : null}
+      {footer != null ? (
+        <section className={styles.railSec}>
+          <button
+            type="button"
+            className={styles.tierHead}
+            aria-expanded={savedOpen}
+            aria-controls="search-saved-searches"
+            onClick={() => setSavedOpen((o) => !o)}
+          >
+            <span className={styles.groupTitle}>Saved searches</span>
+            <RailChevron />
+          </button>
+          {savedOpen ? (
+            <div id="search-saved-searches" className={styles.railSection}>
+              {footer}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </aside>
   );
 }

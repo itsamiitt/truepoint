@@ -1,6 +1,6 @@
 // AccountFacetControl.tsx — renders ONE firmographic facet definition as its control (the Accounts twin of
 // FacetControl): a term facet (server typeahead where a contacts-side FacetKey exists, free-text add
-// otherwise, a multi-select dropdown for the enums, live-count options for a display-string field; all with
+// otherwise, an inline checkbox list for the enums, live-count options for a display-string field; all with
 // the progressive-exclude block) or a min/max range, each in a closed-by-default FacetDisclosure.
 // Presentation only — the pure helpers in ../accountFilterGroups read and write the AccountQuery.
 "use client";
@@ -23,7 +23,7 @@ import { FacetDisclosure } from "./FacetDisclosure";
 import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
-import { TermMultiSelect } from "./TermMultiSelect";
+import { TermOptionList } from "./TermOptionList";
 
 // Account term fields that ALSO exist on the contacts-side FacetKey index → reuse the server typeahead.
 const TYPEAHEAD_FACET_KEY: Partial<Record<AccountTermField, FacetKey>> = {
@@ -106,7 +106,7 @@ function AccountTermFacet({
   const picker = (op: TermOp, autoFocus: boolean) => {
     if (facet.input !== "typeahead")
       return (
-        <TermMultiSelect
+        <TermOptionList
           field={facet.field}
           label={facet.label}
           options={options}
@@ -221,10 +221,14 @@ function AccountRangeControl({
   );
   const toInput = (n: number | undefined) => (n === undefined ? "" : String(n));
   const fromInput = (s: string): number | undefined => (s ? Number(s) : undefined);
+  const summary =
+    [gte !== undefined ? `≥ ${gte}` : null, lte !== undefined ? `≤ ${lte}` : null]
+      .filter(Boolean)
+      .join(" · ") || undefined;
   return (
     <FacetDisclosure
       label={unit ? `${label} (${unit})` : label}
-      badge={gte !== undefined || lte !== undefined ? 1 : undefined}
+      summary={summary}
       scopeNote={scopeNote}
     >
       <div className={styles.rangeRow}>

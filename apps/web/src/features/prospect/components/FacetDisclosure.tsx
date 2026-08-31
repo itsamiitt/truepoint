@@ -1,23 +1,25 @@
-// FacetDisclosure.tsx — ONE filter as a closed-by-default disclosure row (2026-08-31 rail simplification):
-// the label row is the toggle, an active-count badge keeps a closed row legible, and the control itself
-// renders only once opened. Local state on purpose — "closed until the user opens it" is the contract, so
-// the open state is neither persisted nor URL state. Shared by every People and Accounts facet control so
-// the rails cannot drift.
+// FacetDisclosure.tsx — ONE filter as a closed-by-default disclosure row (Search v4): the label row is the
+// toggle, the row's right edge carries a SELECTED-VALUE SUMMARY ("VP, Director" in cobalt; a muted "Any"
+// when nothing is set) so a closed rail still reads as the whole filter state, and the chevron rotates open.
+// The control itself renders only once opened. Local state on purpose — "closed until the user opens it" is
+// the contract, so the open state is neither persisted nor URL state. Shared by every People and Accounts
+// facet control so the rails cannot drift.
 "use client";
 
 import { type ReactNode, useId, useState } from "react";
 import styles from "../prospect.module.css";
+import { RailChevron } from "./RailChevron";
 
 export function FacetDisclosure({
   label,
-  badge,
+  summary,
   scopeNote,
   headExtra,
   children,
 }: {
   label: ReactNode;
-  /** Number of active selections inside — shown on the closed row so nothing applied is ever invisible. */
-  badge?: number;
+  /** What is selected, as words ("VP, Director" · "Yes" · "≥ 50 · ≤ 500"). Absent ⇒ a muted "Any". */
+  summary?: string;
   /** Optional mark beside the label — the scope badge. */
   scopeNote?: ReactNode;
   /** A head-row control rendered OUTSIDE the toggle button, only while open (e.g. the Exclude toggle). */
@@ -37,11 +39,11 @@ export function FacetDisclosure({
           onClick={() => setOpen((o) => !o)}
         >
           <span className={styles.facetLabel}>{label}</span>
-          {badge ? <span className={styles.groupBadge}>{badge}</span> : null}
           {scopeNote}
-          <span aria-hidden className={styles.facetChevron}>
-            {open ? "−" : "+"}
+          <span className={styles.facetVal} data-set={summary ? "true" : undefined}>
+            {summary ?? "Any"}
           </span>
+          <RailChevron />
         </button>
         {open ? headExtra : null}
       </div>

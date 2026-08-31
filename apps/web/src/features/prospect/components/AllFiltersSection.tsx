@@ -1,20 +1,22 @@
-// AllFiltersSection.tsx — the second tier of the rail (decisions.md 2026-08-25): every facet that searches
-// ONE side only, under one collapsible "All filters" header. Collapsed by default (progressive disclosure);
-// the badge counts active selections so a collapsed tier is still legible. Groups that search the TruePoint
-// database instead of saved contacts are tagged "Database only" (the saved-contacts side is the default and
-// carries no tag), and a scope that already rules a side out hides those groups with a one-line note rather
-// than offering controls that would silently do nothing.
+// AllFiltersSection.tsx — the second tier of the rail, Search v4 shape: a plain "All filters" heading with
+// every one-side-only GROUP listed under it as a closed accordion (no collapsible tier wrapper any more —
+// the group headers are cheap pure data, so hiding them bought nothing but a click). Groups that search the
+// TruePoint database instead of saved contacts are tagged "Database only" (the saved-contacts side is the
+// default and carries no tag), and a scope that already rules a side out hides those groups with a one-line
+// note rather than offering controls that would silently do nothing.
 //
-// The header is eager; the BODY (the groups) is next/dynamic — opening the tier is an intent (perf-checklist
-// PA-3), and /search has a 200kB First Load budget the quick tier + grid must fit inside.
+// The group HEADERS are eager; a group's BODY (the facet controls) is next/dynamic — opening a group is an
+// intent (perf-checklist PA-3), and /search has a 200kB First Load budget the quick tier + grid must fit
+// inside. One module serves every group, so the chunk is fetched once on the first open.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
 import type { ContactQuery } from "@leadwolf/types";
 import dynamic from "next/dynamic";
-import { ALL_FILTER_GROUPS, groupActiveCount } from "../filterGroups";
+import { ALL_FILTER_GROUPS, type FilterGroup, groupActiveCount } from "../filterGroups";
 import { useOpenGroups } from "../hooks/useOpenGroups";
 import styles from "../prospect.module.css";
+import { AccordionGroup } from "./AccordionGroup";
 import type { OwnerOption } from "./FacetControl";
 
 const AllFiltersBody = dynamic(() => import("./AllFiltersBody").then((m) => m.AllFiltersBody), {
@@ -22,8 +24,22 @@ const AllFiltersBody = dynamic(() => import("./AllFiltersBody").then((m) => m.Al
   loading: () => <p className={styles.tierNote}>Loading filters…</p>,
 });
 
-const TIER_ID = "search-all-filters";
-const NARROWING_FIELDS = ALL_FILTER_GROUPS.flatMap((g) => g.facets.map((f) => f.field));
+// Only the database side gets a tag — "Workspace only" labels were removed from every filter option
+// (2026-08-31): the default side needs no mark, and the notice above the grid still explains a narrowing.
+const TAG: Record<string, string> = {
+  "database-only": "Database only",
+};
+
+/**
+ * Which groups can apply under the current scope. "Not saved" has no saved contacts to narrow, so the
+ * workspace-only groups go; "Saved" cannot be searched by a database-only facet (it skips the saved half),
+ * so the Background group goes. "All" offers everything.
+ */
+function applicable(group: FilterGroup, scope: WorkspaceScope): boolean {
+  if (scope === "exclude") return group.scope === "database-only";
+  if (scope === "mine") return group.scope !== "database-only";
+  return true;
+}
 
 export function AllFiltersSection({
   query,
@@ -39,38 +55,42 @@ export function AllFiltersSection({
   scope: WorkspaceScope;
 }) {
   const groups = useOpenGroups();
-  const active = groupActiveCount(query, NARROWING_FIELDS);
-  const open = groups.isOpen("all");
+  const shown = ALL_FILTER_GROUPS.filter((g) => applicable(g, scope));
 
   return (
-    <section className={styles.tier}>
-      <button
-        type="button"
-        className={styles.tierHead}
-        aria-expanded={open}
-        aria-controls={TIER_ID}
-        onClick={() => groups.toggle("all")}
-      >
-        <span className={styles.groupTitle}>
-          All filters
-          {active > 0 ? <span className={styles.groupBadge}>{active}</span> : null}
-        </span>
-        <span className={styles.tierTag}>One side at a time</span>
-        <span aria-hidden className={styles.groupChevron}>
-          {open ? "−" : "+"}
-        </span>
-      </button>
-      {open ? (
-        <div id={TIER_ID}>
+    <section className={styles.railSec}>
+      <h3 className={styles.railSecTitle}>All filters</h3>
+      {scope !== "all" ? (
+        <p className={styles.tierNote}>
+          {scope === "exclude"
+            ? "Filters on your saved contacts don't apply to people you haven't saved yet — switch to All or Saved to use them."
+            : "Database-only filters don't apply to saved contacts — switch to All or Not saved to use them."}
+        </p>
+      ) : null}
+      {shown.map((group) => (
+        <AccordionGroup
+          key={group.id}
+          id={`search-group-${group.id}`}
+          title={group.title}
+          tag={group.scope ? TAG[group.scope] : undefined}
+          open={groups.isOpen(group.id)}
+          onToggle={() => groups.toggle(group.id)}
+          badge={
+            groupActiveCount(
+              query,
+              group.facets.map((f) => f.field),
+            ) || undefined
+          }
+        >
           <AllFiltersBody
+            groupId={group.id}
             query={query}
             onChange={onChange}
             counts={counts}
             owners={owners}
-            scope={scope}
           />
-        </div>
-      ) : null}
+        </AccordionGroup>
+      ))}
     </section>
   );
 }
