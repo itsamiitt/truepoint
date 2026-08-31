@@ -1,7 +1,8 @@
-// FacetControl.tsx — renders ONE facet definition as its control: a term facet (typeahead or fixed-option
-// chips, with the progressive-exclude block), a three-way boolean, or a min/max range. Shared by the quick
-// tier and the "All filters" accordions so a facet looks identical wherever it sits. Presentation only —
-// the pure helpers in ../filterGroups read and write the query.
+// FacetControl.tsx — renders ONE facet definition as its control: a term facet (typeahead or a fixed-option
+// multi-select dropdown, with the progressive-exclude block), a three-way boolean, or a min/max range. Every
+// control sits in a closed-by-default FacetDisclosure. Shared by the quick tier and the "All filters"
+// accordions so a facet looks identical wherever it sits. Presentation only — the pure helpers in
+// ../filterGroups read and write the query.
 //
 // Every control carries its own scope mark (FacetScopeBadge — nothing for a `both` facet), so "this filter
 // searches one side only" is visible BEFORE the click rather than only in the notice above the grid after.
@@ -21,7 +22,7 @@ import { RangeControl } from "./FacetRangeControl";
 import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
-import { TermOptionChips } from "./TermOptionChips";
+import { TermMultiSelect } from "./TermMultiSelect";
 
 export interface OwnerOption {
   value: string;
@@ -96,10 +97,10 @@ function TermFacet({
 }) {
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
-  // A value applied in EITHER direction is never offered again — it can never be both included and excluded.
-  const options = (facet.input === "owner" ? owners : (facet.options ?? [])).filter(
-    (o) => !applied.has(o.value),
-  );
+  // The FULL option list — the dropdown carries applied state as checkmarks. Checking a value applied in
+  // the other direction moves it there (addTermCondition keeps a value single-typed, never duplicated).
+  const options = facet.input === "owner" ? owners : (facet.options ?? []);
+  const valuesFor = (op: TermOp) => conditions.filter((c) => c.op === op).map((c) => c.value);
   const add = (op: TermOp, value: string) =>
     onChange(addTermCondition(query, facet.field, op, value));
 
@@ -125,13 +126,18 @@ function TermFacet({
             onAdd={(v) => add(op, v)}
           />
         ) : (
-          <TermOptionChips
+          <TermMultiSelect
             field={facet.field}
+            label={facet.label}
             options={options}
             op={op}
             counts={counts}
-            anyApplied={applied.size > 0}
-            onAdd={(v) => add(op, v)}
+            selected={valuesFor(op)}
+            onToggle={(v) =>
+              valuesFor(op).includes(v)
+                ? onChange(removeTermCondition(query, facet.field, op, v))
+                : add(op, v)
+            }
           />
         )
       }

@@ -1,5 +1,6 @@
-// AllFiltersBody.tsx — the OPENED "All filters" tier: the one-side-only groups as accordions, each tagged
-// with the side it searches. Loaded through next/dynamic by AllFiltersSection (perf-checklist PA-3):
+// AllFiltersBody.tsx — the OPENED "All filters" tier: the one-side-only groups as accordions (database-only
+// groups tagged; the saved-contacts side is the default and carries no tag). Loaded through next/dynamic by
+// AllFiltersSection (perf-checklist PA-3):
 // opening the tier is an intent, and the default visit — the quick tier and the grid — should not pay for
 // the six groups it has not asked for.
 "use client";
@@ -12,8 +13,9 @@ import styles from "../prospect.module.css";
 import { AccordionGroup } from "./AccordionGroup";
 import { FacetControl, type OwnerOption } from "./FacetControl";
 
+// Only the database side gets a tag — "Workspace only" labels were removed from every filter option
+// (2026-08-31): the default side needs no mark, and the notice above the grid still explains a narrowing.
 const TAG: Record<string, string> = {
-  "workspace-only": "Workspace only",
   "database-only": "Database only",
 };
 
@@ -47,10 +49,10 @@ export function AllFiltersBody({
     <>
       <p className={styles.tierNote}>
         {scope === "exclude"
-          ? "Workspace-only filters don't apply to people you haven't saved yet — switch to All or Saved to use them."
+          ? "Filters on your saved contacts don't apply to people you haven't saved yet — switch to All or Saved to use them."
           : scope === "mine"
             ? "Database-only filters don't apply to saved contacts — switch to All or Not saved to use them."
-            : "Each group searches one side: Workspace only narrows to your saved contacts; Database only searches the TruePoint database instead."}
+            : "Most groups narrow to your saved contacts; groups marked Database only search the TruePoint database instead."}
       </p>
       {shown.map((group) => (
         <AccordionGroup

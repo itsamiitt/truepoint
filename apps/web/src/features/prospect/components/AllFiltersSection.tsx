@@ -1,9 +1,9 @@
 // AllFiltersSection.tsx — the second tier of the rail (decisions.md 2026-08-25): every facet that searches
 // ONE side only, under one collapsible "All filters" header. Collapsed by default (progressive disclosure);
-// the badge counts active selections so a collapsed tier is still legible. Each group inside is tagged with
-// the side it searches ("Workspace only" narrows to saved contacts; "Database only" searches the TruePoint
-// database instead), and a scope that already rules a side out hides those groups with a one-line note
-// rather than offering controls that would silently do nothing.
+// the badge counts active selections so a collapsed tier is still legible. Groups that search the TruePoint
+// database instead of saved contacts are tagged "Database only" (the saved-contacts side is the default and
+// carries no tag), and a scope that already rules a side out hides those groups with a one-line note rather
+// than offering controls that would silently do nothing.
 //
 // The header is eager; the BODY (the groups) is next/dynamic — opening the tier is an intent (perf-checklist
 // PA-3), and /search has a 200kB First Load budget the quick tier + grid must fit inside.

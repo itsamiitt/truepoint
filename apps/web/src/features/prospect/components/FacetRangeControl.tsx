@@ -1,6 +1,7 @@
-// FacetRangeControl.tsx — a min/max range facet (number or date). Keystrokes land in a draft and commit after
-// a quiet 400ms or on blur: the query is the cache key for search + facets + count + database, so committing
-// per keystroke fired 4–5 requests per character typed.
+// FacetRangeControl.tsx — a min/max range facet (number or date) behind a closed-by-default
+// FacetDisclosure. Keystrokes land in a draft and commit after a quiet 400ms or on blur: the query is the
+// cache key for search + facets + count + database, so committing per keystroke fired 4–5 requests per
+// character typed.
 "use client";
 
 import type { ContactQuery } from "@leadwolf/types";
@@ -9,6 +10,7 @@ import type { ReactNode } from "react";
 import { getRange, setRange } from "../filterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
+import { FacetDisclosure } from "./FacetDisclosure";
 
 /** epoch-ms → <input type=date> value (YYYY-MM-DD, UTC). */
 function msToDateInput(ms: number): string {
@@ -49,14 +51,11 @@ export function RangeControl({
   };
   const type = valueKind === "date" ? "date" : "number";
   return (
-    <div className={styles.facet}>
-      <span className={styles.facetLabelRow}>
-        <span className={styles.facetLabel}>
-          {label}
-          {unit ? ` (${unit})` : ""}
-        </span>
-        {scopeNote}
-      </span>
+    <FacetDisclosure
+      label={unit ? `${label} (${unit})` : label}
+      badge={gte !== undefined || lte !== undefined ? 1 : undefined}
+      scopeNote={scopeNote}
+    >
       <div className={styles.rangeRow}>
         <TpInput
           type={type}
@@ -75,6 +74,6 @@ export function RangeControl({
           onBlur={flush}
         />
       </div>
-    </div>
+    </FacetDisclosure>
   );
 }

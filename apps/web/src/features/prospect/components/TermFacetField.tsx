@@ -1,15 +1,18 @@
 // TermFacetField.tsx — the PROGRESSIVE EXCLUDE term facet (design system: "Progressive exclude", the
-// replacement for the old is / is-not toggle). Include is the default and owns the full width of the rail;
-// exclusion is one quiet click on the facet's label row and, once opened, becomes its own labelled + tinted
-// region, so a reopened saved search reads its own negations back at you. Presentation only — the panel owns
-// the query and supplies the picker for each direction; the underlying model is unchanged (a term field
-// carries an include AND an exclude clause at once, so both directions coexist).
+// replacement for the old is / is-not toggle), hosted in a closed-by-default FacetDisclosure (2026-08-31
+// rail simplification): the label row is the accordion toggle and the picker renders only once opened, with
+// an active-count badge keeping the closed row legible. Include is the default and owns the full width of
+// the open body; exclusion is one quiet click on the head row and, once opened, becomes its own labelled +
+// tinted region, so a reopened saved search reads its own negations back at you. Presentation only — the
+// panel owns the query and supplies the picker for each direction; the underlying model is unchanged (a
+// term field carries an include AND an exclude clause at once, so both directions coexist).
 "use client";
 
 import { TpIconButton } from "@leadwolf/ui";
 import { type ReactNode, useId, useState } from "react";
 import type { TermOp } from "../filterGroups";
 import styles from "../prospect.module.css";
+import { FacetDisclosure } from "./FacetDisclosure";
 
 /** One applied value on a term facet, in one direction. Structurally shared with both filter-group modules. */
 export interface TermFacetCondition {
@@ -34,7 +37,7 @@ export function TermFacetField({
   renderPicker: (op: TermOp, autoFocus: boolean) => ReactNode;
   /** What gets dropped by an exclusion, for the block's explanatory note — "Contacts" or "Accounts". */
   excludeNoun: string;
-  /** Optional mark beside the label — the "Workspace only" scope badge. */
+  /** Optional mark beside the label — the scope badge. */
   scopeNote?: ReactNode;
 }) {
   const blockId = useId();
@@ -44,8 +47,10 @@ export function TermFacetField({
 
   const [open, setOpen] = useState(hasExcluded);
   const [focusOnOpen, setFocusOnOpen] = useState(false);
-  // Auto-open when a query that carries an exclusion arrives (applying a saved search), so the negation is
-  // visible without a click. Derived-during-render rather than an effect: no extra paint, no stale frame.
+  // Pre-open the exclude block when a query that carries an exclusion arrives (applying a saved search), so
+  // the negation reads back the moment the user opens the facet — the FacetDisclosure itself stays closed by
+  // contract, with the head-row badge counting both directions. Derived-during-render rather than an effect:
+  // no extra paint, no stale frame.
   const [hadExcluded, setHadExcluded] = useState(hasExcluded);
   if (hasExcluded !== hadExcluded) {
     setHadExcluded(hasExcluded);
@@ -56,15 +61,14 @@ export function TermFacetField({
   }
 
   return (
-    <div className={styles.facet}>
-      <div className={styles.facetHead}>
-        <span className={styles.facetLabelRow}>
-          <span className={styles.facetLabel}>{label}</span>
-          {scopeNote}
-        </span>
-        {/* Stays a raw <button>: this is a DISCLOSURE, not an action button. Its expanded state is a
-            danger-tinted treatment driven by `[aria-expanded="true"]` that no TpButton variant produces,
-            and `tp-ui-btn`'s own height/padding/font-size would fight the module class. */}
+    <FacetDisclosure
+      label={label}
+      badge={conditions.length || undefined}
+      scopeNote={scopeNote}
+      headExtra={
+        /* Stays a raw <button>: this is a DISCLOSURE, not an action button. Its expanded state is a
+           danger-tinted treatment driven by `[aria-expanded="true"]` that no TpButton variant produces,
+           and `tp-ui-btn`'s own height/padding/font-size would fight the module class. */
         <button
           type="button"
           className={styles.excToggle}
@@ -80,8 +84,8 @@ export function TermFacetField({
           </span>
           Exclude
         </button>
-      </div>
-
+      }
+    >
       {renderPicker("include", false)}
       <ChipRow conditions={included} facetLabel={label} onRemove={onRemove} />
 
@@ -114,7 +118,7 @@ export function TermFacetField({
           Excluding <b>{excluded.length}</b> {excluded.length === 1 ? "value" : "values"}
         </p>
       ) : null}
-    </div>
+    </FacetDisclosure>
   );
 }
 

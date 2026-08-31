@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2490,
-  "fileSetHash": "sha256:5f4ebd1fea4266e14bf7c46acdcfd2a5209f824fd230745d6de821a47c37ca95",
+  "fileCount": 2491,
+  "fileSetHash": "sha256:dc850b2e68b8511320e0a7efcd1fc252595989764c9a1a86440f0b4158009087",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1560,6 +1560,7 @@
         "apps/web/src/features/prospect/components/EmploymentSection.tsx",
         "apps/web/src/features/prospect/components/FacetBoolControl.tsx",
         "apps/web/src/features/prospect/components/FacetControl.tsx",
+        "apps/web/src/features/prospect/components/FacetDisclosure.tsx",
         "apps/web/src/features/prospect/components/FacetRangeControl.tsx",
         "apps/web/src/features/prospect/components/FacetScopeBadge.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
@@ -1589,7 +1590,7 @@
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/components/TermFacetField.tsx",
-        "apps/web/src/features/prospect/components/TermOptionChips.tsx",
+        "apps/web/src/features/prospect/components/TermMultiSelect.tsx",
         "apps/web/src/features/prospect/components/peopleColumns.tsx",
         "apps/web/src/features/prospect/databaseRows.test.ts",
         "apps/web/src/features/prospect/databaseRows.ts",

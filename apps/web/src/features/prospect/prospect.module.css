@@ -60,16 +60,8 @@
   font-weight: 600;
   color: var(--tp-ink-2);
 }
-/* Groups a facet's label with its scope badge so the pair stays together when the head row justifies its
-   ends (the exclude toggle sits at the far end). */
-.facetLabelRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-/* "Workspace only" — this control cannot be answered by the platform database. Quiet by design: it is a
-   scope note, not a warning, and it sits on controls the user is expected to use. */
+/* "Database only" — this control searches the platform database, not the workspace overlay. Quiet by
+   design: it is a scope note, not a warning, and it sits on controls the user is expected to use. */
 .scopeBadge {
   flex: 0 0 auto;
   font-size: var(--tp-text-micro);
@@ -188,21 +180,13 @@
   gap: 10px;
   padding: 2px 0 10px;
 }
-.facetRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .facetEmpty {
   font-size: 12px;
   color: var(--tp-ink-3);
 }
-/* ── Progressive exclude (term facets) ──────────────────────────────────────────────────────────────────
- * Include is the default and owns the full width; exclusion is one click away on the facet's label row and,
- * once opened, becomes its own labelled + tinted region — so a reopened saved search reads its negations back.
- * Negation is never carried by colour alone: every excluded value also carries a minus rule, and the block is
- * a role="group" labelled "Exclude {facet}". */
+/* ── One filter = one closed-by-default disclosure row (FacetDisclosure, 2026-08-31) ─────────────────────
+ * The label row is the toggle; an active-count badge keeps a closed row legible; the control renders only
+ * once opened. */
 .facetHead {
   display: flex;
   align-items: center;
@@ -210,6 +194,107 @@
   gap: 8px;
   min-height: 22px;
 }
+.facetToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.facetToggle:hover .facetLabel {
+  color: var(--tp-ink);
+}
+.facetChevron {
+  margin-left: auto;
+  color: var(--tp-ink-4);
+  font-size: 13px;
+}
+.facetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Multi-select dropdown (TermMultiSelect — fixed-option term facets) ─────────────────────────────────── */
+/* The DS Popover's anchor (.tp-ui-anchor, its only child) is inline-flex; inside the rail the trigger owns
+   the full row width. A structural selector, not :global() — biome's CSS-modules parsing is off. */
+.msWrap {
+  display: flex;
+}
+.msWrap > * {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.msTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  cursor: pointer;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease);
+}
+.msTrigger:hover {
+  border-color: var(--tp-ink-4);
+}
+/* Inside the exclude block the trigger adds to the negative clause — it says so before the click. */
+.msTrigger[data-op="exclude"] {
+  border-color: var(--danger-200);
+  color: var(--danger-700);
+}
+.msTrigger[data-op="exclude"]:hover {
+  border-color: var(--danger);
+}
+.msSummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msCaret {
+  flex: none;
+  color: var(--tp-ink-4);
+  font-size: 10px;
+}
+.msPanel {
+  width: 100%;
+}
+/* A real <fieldset>, so the browser's own default chrome has to be reset before the list treatment. */
+.msList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  border: 0;
+  padding: 8px;
+  min-width: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.msCount {
+  color: var(--tp-ink-3);
+  font-size: 11px;
+}
+
+/* ── Progressive exclude (term facets) ──────────────────────────────────────────────────────────────────
+ * Include is the default and owns the full width of the open facet body; exclusion is one click away on the
+ * facet's head row and, once opened, becomes its own labelled + tinted region — so a reopened saved search
+ * reads its negations back. Negation is never carried by colour alone: every excluded value also carries a
+ * minus rule, and the block is a real <fieldset> labelled "Exclude {facet}". */
 .excToggle {
   display: inline-flex;
   align-items: center;
@@ -364,35 +449,8 @@
   background: var(--danger-100);
   color: var(--danger-700);
 }
-.opToggle {
-  display: inline-flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
 /* .miniToggle is gone — the any/all/none pills are <TpChip active> now. */
-.addChip {
-  font: inherit;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  cursor: pointer;
-  border: 1px dashed var(--tp-hairline-2);
-  background: var(--tp-surface);
-  color: var(--tp-ink-2);
-}
-.addChip:hover {
-  border-style: solid;
-  border-color: var(--tp-ink-4);
-}
-/* The same option list inside the exclude block adds to the negative clause — it says so on hover. */
-.addChip[data-op="exclude"] {
-  border-color: var(--danger-200);
-  color: var(--danger-700);
-}
-.addChip[data-op="exclude"]:hover {
-  border-color: var(--danger);
-  background: var(--danger-50);
-}
+/* .addChip is gone — fixed-option pickers are the TermMultiSelect dropdown now (2026-08-31). */
 .rangeRow {
   display: flex;
   gap: 8px;
@@ -913,11 +971,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.quickPair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
 }
 .tier {
   border-top: 1px solid var(--tp-hairline);

@@ -1,10 +1,10 @@
 // AccountFilterPanel.tsx — the firmographic filter rail (the Accounts sibling of FilterRail; decisions.md
-// 2026-08-25). Two tiers: QUICK filters, always visible — exactly the facets the global company graph
-// answers too (industry, HQ country/city, employees, founded year) — then "All filters", the workspace-only
-// firmographics in accordions collapsed by default (active-count badge per header, open state persisted).
-// Term facets use the PROGRESSIVE EXCLUDE pattern (TermFacetField) and every control carries its scope
-// badge. The Prospect/Account scope switch is hosted at the top of the rail. Presentation only — the pane
-// owns query state, URL persistence, and counts.
+// 2026-08-25). Two tiers: QUICK filters — exactly the facets the global company graph answers too
+// (industry, HQ country/city, employees, founded year) — then "All filters", the saved-accounts
+// firmographics in accordion groups collapsed by default (active-count badge per header, open state
+// persisted). Every facet is itself a closed-by-default disclosure row (2026-08-31 rail simplification).
+// Term facets use the PROGRESSIVE EXCLUDE pattern (TermFacetField). The Prospect/Account scope switch is
+// hosted at the top of the rail. Presentation only — the pane owns query state, URL persistence, counts.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
@@ -85,7 +85,6 @@ export function AccountFilterPanel({
             All filters
             {active > 0 ? <span className={styles.groupBadge}>{active}</span> : null}
           </span>
-          <span className={styles.tierTag}>Workspace only</span>
           <span aria-hidden className={styles.groupChevron}>
             {open ? "−" : "+"}
           </span>
@@ -94,8 +93,8 @@ export function AccountFilterPanel({
           <div id={TIER_ID}>
             {scope === "exclude" ? (
               <p className={styles.tierNote}>
-                Workspace-only filters don't apply to companies you haven't saved yet — switch to
-                All or Saved to use them.
+                Filters on your saved accounts don't apply to companies you haven't saved yet —
+                switch to All or Saved to use them.
               </p>
             ) : (
               <>

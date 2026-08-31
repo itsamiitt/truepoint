@@ -1,15 +1,15 @@
-// FacetBoolControl.tsx — a three-way boolean facet (Any / Yes / No) as a compact segmented row. The DS
-// SegmentedControl rather than hand-rolled pills: it carries the selected state to assistive tech and the
-// keyboard model itself, which the raw `MiniToggle` buttons this replaced did not (UI remediation
-// 2026-08-22 retired that class). Presentation only; the pure helpers in ../filterGroups read and write the
-// query.
+// FacetBoolControl.tsx — a three-way boolean facet (Any / Yes / No) behind a closed-by-default
+// FacetDisclosure, as a compact segmented row. The DS SegmentedControl rather than hand-rolled pills: it
+// carries the selected state to assistive tech and the keyboard model itself, which the raw `MiniToggle`
+// buttons this replaced did not (UI remediation 2026-08-22 retired that class). Presentation only; the pure
+// helpers in ../filterGroups read and write the query.
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
 import { SegmentedControl } from "@leadwolf/ui";
 import type { ReactNode } from "react";
 import { getBool, setBool } from "../filterGroups";
-import styles from "../prospect.module.css";
+import { FacetDisclosure } from "./FacetDisclosure";
 
 const ITEMS = [
   { value: "any", label: "Any" },
@@ -36,19 +36,17 @@ export function BoolControl({
 }) {
   const current = getBool(query, field);
   return (
-    <div className={styles.facetRow}>
-      <span className={styles.facetLabelRow}>
-        <span className={styles.facetLabel}>{label}</span>
-        {scopeNote}
-      </span>
-      <span className={styles.opToggle}>
-        <SegmentedControl
-          items={ITEMS}
-          value={toValue(current)}
-          onChange={(v) => onChange(setBool(query, field, fromValue(v)))}
-          aria-label={label}
-        />
-      </span>
-    </div>
+    <FacetDisclosure
+      label={label}
+      badge={current === undefined ? undefined : 1}
+      scopeNote={scopeNote}
+    >
+      <SegmentedControl
+        items={ITEMS}
+        value={toValue(current)}
+        onChange={(v) => onChange(setBool(query, field, fromValue(v)))}
+        aria-label={label}
+      />
+    </FacetDisclosure>
   );
 }

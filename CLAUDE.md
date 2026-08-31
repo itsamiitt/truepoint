@@ -175,7 +175,8 @@ The doc's `services/*` are **modules, not directories**. Do not create a `servic
 
 ## Skills — read before writing code in that area
 
-Nine skills under `.claude/skills/`. **Read the `SKILL.md` of every skill your task touches
+Eight skills under `.claude/skills/`. (The former `truepoint-design` UI skill was removed
+2026-08-31 by owner decision.) **Read the `SKILL.md` of every skill your task touches
 before writing any code, file, or migration** — and run the pre-build pass in
 `truepoint-architecture/references/pre-build-thinking.md` first. Most real features need
 several at once.
@@ -185,7 +186,6 @@ several at once.
 | `apps/api` (Hono on Bun), the database, the two-tier `tenant_id`/`workspace_id` tenancy model, the `/api/v1` contract (cursor pagination, idempotency-key, RFC 9457), queues, caching, deploy, "will this scale" | **truepoint-platform** |
 | The data model, who owns/can-see a record, enrichment, verification, search over the dataset, retention/deletion/DSAR | **truepoint-data** |
 | Where frontend code lives, feature structure, client state & data fetching, frontend tests, feature flags | **truepoint-architecture** |
-| Anything that renders — `@leadwolf/ui`, tokens (`var(--tp-*)`), layout, large tables, WCAG 2.2 AA, motion, copy, i18n | **truepoint-design** |
 | Access control & tenant isolation (RLS), IAM/SSO/SCIM, input validation, secrets/KMS, PII/residency, abuse, compliance | **truepoint-security** |
 | Incidents, breach response, cost/FinOps, runbooks | **truepoint-operations** |
 | `apps/extension` — service worker, manifest, message bus, storage, MV3 lifecycle, build/release | **truepoint-extension-architecture** |
@@ -194,7 +194,7 @@ several at once.
 
 **Precedence when skills tension.** Security has the final say on whether something is safe.
 Platform owns the tenancy mechanism (RLS), the API contract, and scale. Data owns the model and
-ownership semantics; security enforces them. Design defers to security on whether input is safe.
+ownership semantics; security enforces them. UI work defers to security on whether input is safe.
 **Structure rules never override correctness rules** — the file-size / feature-folder rules never
 justify skipping tenant-scoping, an isolation test, or input validation.
 

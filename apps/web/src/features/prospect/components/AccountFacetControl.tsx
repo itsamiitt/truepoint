@@ -1,8 +1,7 @@
 // AccountFacetControl.tsx — renders ONE firmographic facet definition as its control (the Accounts twin of
 // FacetControl): a term facet (server typeahead where a contacts-side FacetKey exists, free-text add
-// otherwise, fixed-option chips for the enums, live-count options for a display-string field; all with the
-// progressive-exclude block) or a min/max range. Every control carries its scope mark, so "this filter will
-// not search the database" is visible before the click rather than only in the notice above the grid after.
+// otherwise, a multi-select dropdown for the enums, live-count options for a display-string field; all with
+// the progressive-exclude block) or a min/max range, each in a closed-by-default FacetDisclosure.
 // Presentation only — the pure helpers in ../accountFilterGroups read and write the AccountQuery.
 "use client";
 
@@ -20,10 +19,11 @@ import {
 } from "../accountFilterGroups";
 import { useDraftRange } from "../hooks/useDraftRange";
 import styles from "../prospect.module.css";
+import { FacetDisclosure } from "./FacetDisclosure";
 import { FacetScopeBadge } from "./FacetScopeBadge";
 import { FacetTypeahead } from "./FacetTypeahead";
 import { TermFacetField } from "./TermFacetField";
-import { TermOptionChips } from "./TermOptionChips";
+import { TermMultiSelect } from "./TermMultiSelect";
 
 // Account term fields that ALSO exist on the contacts-side FacetKey index → reuse the server typeahead.
 const TYPEAHEAD_FACET_KEY: Partial<Record<AccountTermField, FacetKey>> = {
@@ -96,21 +96,28 @@ function AccountTermFacet({
             return { value, label: value };
           })
       : null;
-  // A value applied in EITHER direction is never offered again — it can never be both included and excluded.
-  const options = (countOptions ?? facet.options ?? []).filter((o) => !applied.has(o.value));
+  // The FULL option list — the dropdown carries applied state as checkmarks. Checking a value applied in
+  // the other direction moves it there (addTermCondition keeps a value single-typed, never duplicated).
+  const options = countOptions ?? facet.options ?? [];
+  const valuesFor = (op: TermOp) => conditions.filter((c) => c.op === op).map((c) => c.value);
   const add = (op: TermOp, value: string) =>
     onChange(addTermCondition(query, facet.field, op, value));
 
   const picker = (op: TermOp, autoFocus: boolean) => {
     if (facet.input !== "typeahead")
       return (
-        <TermOptionChips
+        <TermMultiSelect
           field={facet.field}
+          label={facet.label}
           options={options}
           op={op}
           counts={counts}
-          anyApplied={applied.size > 0}
-          onAdd={(v) => add(op, v)}
+          selected={valuesFor(op)}
+          onToggle={(v) =>
+            valuesFor(op).includes(v)
+              ? onChange(removeTermCondition(query, facet.field, op, v))
+              : add(op, v)
+          }
         />
       );
     return typeaheadKey ? (
@@ -215,14 +222,11 @@ function AccountRangeControl({
   const toInput = (n: number | undefined) => (n === undefined ? "" : String(n));
   const fromInput = (s: string): number | undefined => (s ? Number(s) : undefined);
   return (
-    <div className={styles.facet}>
-      <span className={styles.facetLabelRow}>
-        <span className={styles.facetLabel}>
-          {label}
-          {unit ? ` (${unit})` : ""}
-        </span>
-        {scopeNote}
-      </span>
+    <FacetDisclosure
+      label={unit ? `${label} (${unit})` : label}
+      badge={gte !== undefined || lte !== undefined ? 1 : undefined}
+      scopeNote={scopeNote}
+    >
       <div className={styles.rangeRow}>
         <TpInput
           type="number"
@@ -241,6 +245,6 @@ function AccountRangeControl({
           onBlur={flush}
         />
       </div>
-    </div>
+    </FacetDisclosure>
   );
 }

@@ -410,15 +410,19 @@ apps/                           # deployable processes (thin transport adapters)
   subscribing checkboxes (`SelectionControls.tsx`) instead of the page, `BulkActionBar` (mounted via a
   subscribing host), `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
   **filter rail** (`FilterRail`/`AccountFilterPanel` — two tiers each: `QuickFilters` = the `scope: "both"` facets, then
-  "All filters" = the one-side-only groups, tagged (decisions.md 2026-08-25) — over `filterGroups.ts`/`accountFilterGroups.ts` — the
+  "All filters" = the one-side-only groups (decisions.md 2026-08-25) — over `filterGroups.ts`/`accountFilterGroups.ts` — the
   MVP-era client-side `FilterRail` was deleted by the search-consolidation cutover, dead since the
-  server-search rewrite; both panels now render inside the shared `components/search` drawer, with
-  `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the shared progressive-exclude pattern
-  `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips` +
-  `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits to the query, i.e. the
-  cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound is 1 search, not one per digit));
+  server-search rewrite; both panels now render inside the shared `components/search` drawer. Since the
+  2026-08-31 rail simplification **every facet control sits in `FacetDisclosure`** (closed by default, local
+  state, active-count badge), with `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the
+  shared progressive-exclude pattern `TermFacetField` (include by default, exclusion opens its own labelled
+  block) + `TermMultiSelect` (fixed-option facets as a checkbox dropdown on the DS Popover — replaced
+  `TermOptionChips`) + `hooks/useDraftRange.ts` (keystroke buffer for both panels' range/date inputs — commits
+  to the query, i.e. the cache key for search/facets/count, after a quiet 400ms or on blur, so typing a bound
+  is 1 search, not one per digit));
   every facet carries a **`scope`** (`both` | `workspace-only` | `database-only`) and `FacetScopeBadge`
-  renders it: the two narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`)
+  renders the `database-only` mark (the workspace-only badge text was removed 2026-08-31 — the saved side is
+  the unmarked default; the narrowing maps below are what enforce scope, not the badge): the two narrowing maps (`databaseRows.toDatabaseQuery`, `accountRows.toDatabaseCompanyQuery`)
   DERIVE from that one declaration and return the fields they dropped, so the badge, the `ScopeNotice` above
   the grid and the query actually sent cannot drift — before it, 13 of 20 People controls deleted the whole
   database half of the results with nothing on screen saying so (`filterScope.test.ts` is the gate).
@@ -1205,6 +1209,12 @@ flowchart TD
   engine). Post-merge with main's concurrent hook fixes (edf64d2d…27578b28) the regenerated map reads
   unassigned 2 / warnings 51 — main's REPO_DOMAIN/config-placement fixes absorbed the earlier seven.
 
+  2026-08-31 refresh (search-rail simplification): `features/prospect/components/` gained `FacetDisclosure.tsx`
+  (every facet a closed-by-default disclosure row) and `TermMultiSelect.tsx` (fixed-option facets as a
+  checkbox dropdown), and lost `TermOptionChips.tsx` (superseded by the dropdown). All three bucket into the
+  existing prospect/web domain; the filter-rail purposes above were updated in the same pass ("Workspace
+  only" badge text removed — `FacetScopeBadge` now marks only `database-only`).
+
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
   `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,
@@ -1720,8 +1730,8 @@ flowchart TD
     is what keeps `lint:cross-feature`'s apps/web ledger at its budget.
   - **The rail is two tiers** (`components/FilterRail.tsx` replaces `FilterPanel.tsx`), derived from the
     2026-08-22 `scope` declarations: `QuickFilters` — exactly the `scope: "both"` facets (`QUICK_FACETS`,
-    pinned by `filterTiers.test.ts`) — then `AllFiltersSection`, every group tagged with the one side it
-    searches ("Workspace only" / "Database only") and hidden under a scope that rules that side out; its
+    pinned by `filterTiers.test.ts`) — then `AllFiltersSection`, database-only groups tagged ("Database
+    only"; the saved-contacts side is unmarked since 2026-08-31) and hidden under a scope that rules that side out; its
     `AllFiltersBody` and the `RailFooter` are `next/dynamic`, which is what held `/search` at exactly 200kB First
     Load before this merge. **Measured after it: 294kB, of which 192kB is the shared-by-all baseline** — the `/` route
     (350 B of its own code) now weighs 192kB, so the perf-checklist's 200kB target is unreachable for ANY route.

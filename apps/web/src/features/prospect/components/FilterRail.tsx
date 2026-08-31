@@ -1,8 +1,9 @@
-// FilterRail.tsx — the People tab's filter rail (24 §2; decisions.md 2026-08-25). Two tiers: QUICK filters,
-// always visible (the facets both engines answer), then "All filters" (saved contacts only) in accordions;
-// the saved/recent searches live BELOW the filters, so a first-time user meets the controls before the
-// chrome. The semantics line says the one rule the rail follows. Presentation only — the page owns query
-// state, URL persistence, and counts.
+// FilterRail.tsx — the People tab's filter rail (24 §2; decisions.md 2026-08-25). Two tiers: QUICK filters
+// (the facets both engines answer), then "All filters" (one-side-only facets) in accordion groups. Every
+// facet is itself a closed-by-default disclosure row (2026-08-31 rail simplification) — the rail reads as a
+// compact list of labels until the user opens one. The saved/recent searches live BELOW the filters, so a
+// first-time user meets the controls before the chrome. The semantics line says the one rule the rail
+// follows. Presentation only — the page owns query state, URL persistence, and counts.
 "use client";
 
 import type { WorkspaceScope } from "@/components/search";
