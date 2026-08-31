@@ -46,6 +46,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import dynamic from "next/dynamic";
 
+import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchCount } from "../bulkActionsApi";
 import { activeChips, clearAllFilters, facetLabel } from "../filterGroups";
@@ -122,6 +123,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     loadingMore,
     error,
     hasMore,
+    workspaceHasMore,
     loadMore,
     reload,
     markRevealed,
@@ -169,11 +171,17 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
 
   // Which 25-row page of the merged list is showing (2026-08-31 pagination). Client state over the loaded
-  // keyset pages: "Next" past the loaded rows asks the engine for exactly one more fetch. Reset on any query
-  // or scope change — page 3 of one search is not page 3 of another.
+  // keyset pages. Reset on any query or scope change — page 3 of one search is not page 3 of another.
+  // Keyed on the query's CONTENT, not the object: the query is re-derived from searchParams, so keying on
+  // identity reset the page whenever any unrelated URL param changed — opening a profile drawer (?person=)
+  // threw the user from page 4 back to page 1.
   const [page, setPage] = useState(0);
+  const querySignature = useMemo(
+    () => JSON.stringify([query.text ?? "", query.sort, query.filters]),
+    [query],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset keyed on the search identity, not read values.
-  useEffect(() => setPage(0), [query, shell.workspace.scope]);
+  useEffect(() => setPage(0), [querySignature, shell.workspace.scope]);
 
   // Top free-text box: a local mirror committed to the query after a short debounce (typeahead feel), and
   // re-synced when the query changes externally (AI apply / URL restore).
@@ -216,10 +224,14 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     if (page > lastLoadedPage && !loadingMore && !loading) setPage(lastLoadedPage);
   }, [page, lastLoadedPage, loadingMore, loading]);
   const hasNextPage = hits.length > (page + 1) * GRID_PAGE_SIZE || hasMore;
-  const goNext = useCallback(() => {
-    if (hits.length <= (page + 1) * GRID_PAGE_SIZE) loadMore();
-    setPage((p) => p + 1);
-  }, [hits.length, page, loadMore]);
+  const goNext = useCallback(() => setPage((p) => p + 1), []);
+  // Keep the CURRENT page filled: when the visible slice is short of 25 and more rows exist (the workspace
+  // half ended mid-page, or Next just outran the loaded rows), fetch until the page is full or the data is
+  // exhausted. This replaces the fetch-on-Next call — one place decides when a fetch is owed.
+  useEffect(() => {
+    if (hasMore && !loadingMore && !loading && hits.length < (page + 1) * GRID_PAGE_SIZE)
+      loadMore();
+  }, [hasMore, loadingMore, loading, hits.length, page, loadMore]);
   // "Showing X–Y", with a total ONLY when it is exact (everything loaded, no floors) — a floor here and a
   // differently-shaped floor in the headline read as two disagreeing numbers for the same list.
   const pagerLabel =
@@ -236,7 +248,32 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
     [pageRows],
   );
 
-  const appliedChips = useMemo(() => activeChips(query), [query]);
+  // The Owner facet's options. A "Me" entry from the session identity is what makes "My prospects" askable;
+  // the full teammate list needs a members source this slice may not import (lint:cross-feature) and stays a
+  // documented follow-up. Any owner id the URL carries beyond these is labelled as a teammate, never shown
+  // as a raw UUID.
+  const { userId } = useSessionIdentity();
+  const owners = useMemo(() => (userId ? [{ value: userId, label: "Me" }] : []), [userId]);
+  const ownerLabel = useCallback(
+    (value: string) =>
+      owners.find((o) => o.value === value)?.label ?? `Teammate ${value.slice(0, 8)}`,
+    [owners],
+  );
+
+  const appliedChips = useMemo(
+    () =>
+      activeChips(query).map((chip) =>
+        // The generic labeller falls back to the raw value for facets without a fixed option list — for
+        // Owner that was a UUID in the chip. Rewrite just the value part of the label.
+        chip.field === "owner"
+          ? {
+              ...chip,
+              label: chip.label.replace(/: (.+)$/, (_, v: string) => `: ${ownerLabel(v)}`),
+            }
+          : chip,
+      ),
+    [query, ownerLabel],
+  );
 
   // The rail's stat card (user call 2026-08-31 — replaced the results-area headline): MATCHING = everyone
   // the applied filters reach across both engines (saved + database), SAVED = the workspace's own share.
@@ -244,7 +281,9 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
   const savedCount = workspaceSkipped
     ? hits.length - databaseCount
     : (totalCount ?? hits.length - databaseCount);
-  const savedFloor = totalCapped || (totalCount === undefined && hasMore);
+  // The saved floor listens to the WORKSPACE half only — the merged hasMore includes the database cursor,
+  // which must not pin a "+" on a fully-counted saved number.
+  const savedFloor = totalCapped || (totalCount === undefined && workspaceHasMore);
   const totalFloor = savedFloor || databaseHasMore;
   const railStats = loading
     ? { total: "…", saved: "…" }
@@ -299,6 +338,7 @@ function PeoplePaneInner({ shell }: { shell: SearchShell }) {
           query={query}
           onChange={setQuery}
           counts={workspaceCountsApply ? counts : undefined}
+          owners={owners}
           scope={shell.workspace.scope}
           stats={railStats}
           footer={

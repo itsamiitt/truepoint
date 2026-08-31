@@ -17,16 +17,10 @@ import { AllFiltersSection } from "./AllFiltersSection";
 import type { OwnerOption } from "./FacetControl";
 import { QuickFilters } from "./QuickFilters";
 import { RailChevron } from "./RailChevron";
+import { type RailStats, RailStatsCard } from "./RailStatsCard";
 
 export type { OwnerOption } from "./FacetControl";
-
-/** The two numbers the rail's stat card shows — pre-formatted by the pane (floors carry a trailing "+"). */
-export interface RailStats {
-  /** Everyone the applied filters match, both engines (saved + database). */
-  total: string;
-  /** How many of them are already saved in this workspace. */
-  saved: string;
-}
+export type { RailStats } from "./RailStatsCard";
 
 export function FilterRail({
   query,
@@ -53,18 +47,7 @@ export function FilterRail({
   const [savedOpen, setSavedOpen] = useState(false);
   return (
     <aside className={styles.rail} aria-label="Filters">
-      {stats ? (
-        <div className={styles.railStats}>
-          <div className={styles.railStat}>
-            <span className={styles.railStatNum}>{stats.total}</span>
-            <span className={styles.railStatLabel}>Matching</span>
-          </div>
-          <div className={styles.railStat}>
-            <span className={styles.railStatNum}>{stats.saved}</span>
-            <span className={styles.railStatLabel}>Saved</span>
-          </div>
-        </div>
-      ) : null}
+      {stats ? <RailStatsCard stats={stats} /> : null}
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
@@ -84,8 +67,10 @@ export function FilterRail({
       </div>
       <p className={styles.semantics}>Matches all groups · any value within a group</p>
       {/* The option counts come from the workspace engine — in "All" they describe the saved half only.
-          (In "Not saved" the pane passes no counts at all: a wrong number is worse than none.) */}
-      {counts !== undefined && scope === "all" ? (
+          (In "Not saved" the pane passes no counts at all: a wrong number is worse than none.) The note
+          renders only when counts actually LOADED — a failed fetch leaves an empty map, and a note about
+          numbers that are not on screen reads as a bug. */}
+      {counts !== undefined && counts.size > 0 && scope === "all" ? (
         <p className={styles.semantics}>Option counts reflect your saved contacts.</p>
       ) : null}
 

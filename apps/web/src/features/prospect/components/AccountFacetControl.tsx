@@ -112,6 +112,7 @@ function AccountTermFacet({
           options={options}
           op={op}
           counts={counts}
+          autoFocus={autoFocus}
           selected={valuesFor(op)}
           onToggle={(v) =>
             valuesFor(op).includes(v)

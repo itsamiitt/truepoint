@@ -112,11 +112,6 @@
   flex-wrap: wrap;
   gap: 6px;
 }
-.checkRow {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 
 /* ── Results column ──────────────────────────────────────────────────────────────────────────────────── */
 .results {
@@ -421,6 +416,15 @@
 .excBlock input:focus {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px var(--danger-50);
+}
+/* …but NOT the option list's filter box — it narrows the list, it does not add to the negative clause,
+   and the rose border read as an error state on it. */
+.excBlock .optList input {
+  border-color: var(--tp-hairline-2);
+}
+.excBlock .optList input:focus {
+  border-color: var(--tp-cobalt);
+  box-shadow: 0 0 0 3px var(--tp-cobalt-50);
 }
 /* Applied values for one direction — cobalt for include, rose for exclude. */
 .termChips {

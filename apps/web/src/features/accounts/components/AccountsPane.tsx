@@ -89,6 +89,20 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
           onChange={search.setQuery}
           counts={counts}
           scope={shell.workspace.scope}
+          // Same stat card as the People rail (the two tabs must read the same way): MATCHING = saved rows
+          // in view + the database total; SAVED = the workspace share (a floor while more pages exist).
+          stats={
+            search.loading
+              ? { total: "…", saved: "…" }
+              : {
+                  total: `${(
+                    search.rows.length - search.databaseCount + (search.databaseTotal ?? 0)
+                  ).toLocaleString()}${search.databaseCapped || search.hasMore ? "+" : ""}`,
+                  saved: `${(search.rows.length - search.databaseCount).toLocaleString()}${
+                    search.hasMore ? "+" : ""
+                  }`,
+                }
+          }
         />
       </SearchDrawer>
 
@@ -142,18 +156,6 @@ export function AccountsPane({ shell }: { shell: SearchShell }) {
           fields={shell.workspace.includeDatabase ? search.databaseDroppedFields : []}
           labelFor={accountFacetLabel}
         />
-
-        <div className={styles.resultCount}>
-          {search.loading
-            ? "Loading…"
-            : `${(search.rows.length - search.databaseCount).toLocaleString()} in your workspace${
-                search.databaseTotal !== undefined && search.databaseTotal > 0
-                  ? ` · ${search.databaseTotal.toLocaleString()}${
-                      search.databaseCapped ? "+" : ""
-                    } more in the database`
-                  : ""
-              }`}
-        </div>
 
         <StateSwitch
           loading={search.loading}

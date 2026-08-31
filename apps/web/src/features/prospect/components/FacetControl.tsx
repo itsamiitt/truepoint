@@ -95,7 +95,17 @@ function TermFacet({
   owners: OwnerOption[];
   scopeNote: ReactNode;
 }) {
-  const conditions = termConditions(query, facet.field);
+  const rawConditions = termConditions(query, facet.field);
+  // The generic labeller cannot name an owner (no fixed option list) — resolve through the owners prop, and
+  // never show a raw UUID for an id the list does not carry (a teammate's filter arriving via a shared URL).
+  const conditions =
+    facet.input === "owner"
+      ? rawConditions.map((c) => ({
+          ...c,
+          label:
+            owners.find((o) => o.value === c.value)?.label ?? `Teammate ${c.value.slice(0, 8)}`,
+        }))
+      : rawConditions;
   const applied = new Set(conditions.map((c) => c.value));
   // The FULL option list — the checkbox list carries applied state as checkmarks. Checking a value applied
   // in the other direction moves it there (addTermCondition keeps a value single-typed, never duplicated).
@@ -132,6 +142,7 @@ function TermFacet({
             options={options}
             op={op}
             counts={counts}
+            autoFocus={autoFocus}
             selected={valuesFor(op)}
             onToggle={(v) =>
               valuesFor(op).includes(v)

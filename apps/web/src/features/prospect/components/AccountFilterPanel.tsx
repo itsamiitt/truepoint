@@ -22,6 +22,7 @@ import { useOpenGroups } from "../hooks/useOpenGroups";
 import styles from "../prospect.module.css";
 import { AccordionGroup } from "./AccordionGroup";
 import { AccountFacetControl } from "./AccountFacetControl";
+import { type RailStats, RailStatsCard } from "./RailStatsCard";
 
 export function AccountFilterPanel({
   query,
@@ -29,6 +30,7 @@ export function AccountFilterPanel({
   counts,
   scopeSwitch,
   scope,
+  stats,
 }: {
   query: AccountQuery;
   onChange: (next: AccountQuery) => void;
@@ -38,6 +40,8 @@ export function AccountFilterPanel({
   scopeSwitch?: ReactNode;
   /** All / Saved / Not saved — in "Not saved" the workspace-only tier cannot apply and says so. */
   scope: WorkspaceScope;
+  /** The result numbers for the stat card at the top of the rail — same card as the People rail. */
+  stats?: RailStats;
 }) {
   // Namespaced ids so the Accounts rail's open state never collides with the People rail's.
   const groups = useOpenGroups();
@@ -45,6 +49,7 @@ export function AccountFilterPanel({
   return (
     <aside className={styles.rail} aria-label="Company filters">
       {scopeSwitch != null ? <div className={styles.railScope}>{scopeSwitch}</div> : null}
+      {stats ? <RailStatsCard stats={stats} /> : null}
 
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>

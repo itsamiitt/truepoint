@@ -1246,6 +1246,16 @@ flowchart TD
   cobalt ghost. `INK4_TEXT_BUDGET` tightened 14 → 12 (the dropdown's border-color and the `.groupChevron`
   glyph both left).
 
+  2026-08-31 refresh, fifth pass (audit fixes): `RailStatsCard.tsx` (new) is the shared Matching/Saved stat
+  card on BOTH rails (AccountsPane's `resultCount` line retired). The Owner facet finally has options — a
+  "Me" entry from `useSessionIdentity` (full teammate list still needs a members source; foreign ids label
+  as "Teammate <prefix>", never raw UUIDs — remapped in FacetControl and the applied chips). The pane's
+  page-reset keys on the query's CONTENT (opening `?person=` no longer threw the pager back to page 1);
+  a keep-the-page-filled effect replaces fetch-on-Next (no short pages when the workspace half ends
+  mid-page); `workspaceHasMore` (new on ProspectSearch) keeps the SAVED floor honest; the counts note
+  renders only when counts actually loaded; `TermOptionList` takes `autoFocus`; the exclude-block rose
+  tint no longer hits the option filter box; `.checkRow` orphan removed.
+
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps
   `zoominfo → enrichment`, but that rule keys on a top-level `packages/integrations/<provider>/` folder,

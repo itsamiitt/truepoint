@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2489,
-  "fileSetHash": "sha256:dea3adacfc5c11bd4d039a13781f261502734750d910123ccc195f59cc865c16",
+  "fileCount": 2490,
+  "fileSetHash": "sha256:eedd64b9d73a4bb840a7fc93f5e2dfccfbfd5dfbb973cc25a46f6990b39b05d0",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1574,6 +1574,7 @@
         "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
         "apps/web/src/features/prospect/components/RailChevron.tsx",
         "apps/web/src/features/prospect/components/RailFooter.tsx",
+        "apps/web/src/features/prospect/components/RailStatsCard.tsx",
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",

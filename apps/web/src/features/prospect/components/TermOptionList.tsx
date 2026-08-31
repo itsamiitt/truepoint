@@ -9,7 +9,7 @@
 "use client";
 
 import { TpCheckbox, TpInput } from "@leadwolf/ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FacetOption, TermOp } from "../filterGroups";
 import styles from "../prospect.module.css";
 
@@ -30,6 +30,7 @@ export function TermOptionList({
   counts,
   selected,
   onToggle,
+  autoFocus = false,
 }: {
   /** Facet field — keys into the live per-option counts (`${field}:${value}`). */
   field: string;
@@ -41,6 +42,8 @@ export function TermOptionList({
   /** Values currently applied in THIS direction. */
   selected: string[];
   onToggle: (value: string) => void;
+  /** Focus the filter box (when one renders) on mount — the exclude block's just-opened affordance. */
+  autoFocus?: boolean;
 }) {
   const expandKey = `${field}:${op}`;
   const [expanded, setExpandedState] = useState(() => EXPANDED.has(expandKey));
@@ -50,6 +53,12 @@ export function TermOptionList({
     setExpandedState(v);
   };
   const [filter, setFilter] = useState("");
+  const rootRef = useRef<HTMLFieldSetElement>(null);
+  useEffect(() => {
+    // TpInput renders a plain <input> and takes no ref, so reach it through the wrapper (FreeTextAdd's trick).
+    if (autoFocus)
+      rootRef.current?.querySelector<HTMLInputElement>("input[type='search']")?.focus();
+  }, [autoFocus]);
   if (options.length === 0) {
     return <span className={styles.facetEmpty}>No options</span>;
   }
@@ -62,7 +71,11 @@ export function TermOptionList({
   const shown = filtering || expanded ? matched : matched.slice(0, VISIBLE);
   const hidden = matched.length - shown.length;
   return (
-    <fieldset className={styles.optList} aria-label={op === "exclude" ? `Exclude ${label}` : label}>
+    <fieldset
+      ref={rootRef}
+      className={styles.optList}
+      aria-label={op === "exclude" ? `Exclude ${label}` : label}
+    >
       {options.length > FILTERABLE ? (
         <TpInput
           type="search"

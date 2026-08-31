@@ -50,6 +50,8 @@ export interface ProspectSearch {
   loadingMore: boolean;
   error: string | null;
   hasMore: boolean;
+  /** The workspace half alone has further pages (drives the SAVED count's floor marker). */
+  workspaceHasMore: boolean;
   loadMore: () => void;
   reload: () => void;
   /** Optimistically flip a row to revealed after a successful reveal (no refetch). */
@@ -325,6 +327,8 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
       : null,
     // The workspace half pages first; once it is exhausted the database half keeps going on its own cursor.
     hasMore: search.hasNextPage || (databaseActive && Boolean(databaseSearch.hasNextPage)),
+    // The WORKSPACE half alone — the saved-count floor must not inherit the database half's "more".
+    workspaceHasMore: Boolean(search.hasNextPage),
     loadMore: () => {
       if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
       else if (databaseActive && databaseSearch.hasNextPage && !databaseSearch.isFetchingNextPage)
