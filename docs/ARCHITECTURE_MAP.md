@@ -1220,9 +1220,9 @@ flowchart TD
   the pane's single toolbar line) and `features/accounts/components/` lost `AccountsSort.tsx` (same call).
   Both grids are fixed `data-density="compact"` — the density switch is gone. The People grid pages 25 rows
   at a time behind a DS `Pagination` Prev/Next over the keyset pages (`useProspectSearch` PAGE_SIZE 25 +
-  `loadingMore`); the "Load more" button survives only on Accounts. `columnRegistry.ts` gained `title`
-  (Job title) and a trailing `linkedin` icon column; the People defaults are now name · company · title ·
-  email · phone · location · LinkedIn.
+  `loadingMore`); the "Load more" button survives only on Accounts. `columnRegistry.ts` gained a trailing
+  `linkedin` icon column; the People defaults are now name (job title as the Name cell's sub-line — user
+  call) · company · email · phone · location · LinkedIn.
 
   2026-08-18 refresh (ZoomInfo enrich, a2ea62f1): 2133 → 2135 files, both in
   `shared["packages/integrations"]` — `enrichment/zoominfoAuth.ts` and its test. `PROVIDER_DOMAIN` maps

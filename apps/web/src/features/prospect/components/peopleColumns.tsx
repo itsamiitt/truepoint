@@ -93,30 +93,27 @@ export function buildPeopleColumns({
       key: "name",
       header: "Name",
       sortValue: (c) => displayName(c),
-      // One line, no sub-line (2026-08-31 grid slimming): the job title is its own column now and the
-      // profile link is the trailing LinkedIn column, so the name cell fits a compact row.
+      // Name with the job title as its sub-line (user call 2026-08-31: title lives UNDER the name, not as
+      // its own column). The old "profile" text link stays gone — the trailing LinkedIn column is the link.
       cell: (c) => (
         <span className={styles.nameCell}>
-          <span className={styles.name}>
-            {displayName(c)}
-            {c.databaseSlug ? (
-              // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place the
-              // grid says which side a row is on — its reveal is what saves it (decisions.md 2026-08-25).
-              // Matches the Accounts grid's chip. [A-01]
-              <>
-                {" "}
-                <TpChip>Not saved</TpChip>
-              </>
-            ) : null}
+          <span className={styles.nameMeta}>
+            <span className={styles.name}>
+              {displayName(c)}
+              {c.databaseSlug ? (
+                // Not colour alone: the chip carries the word (WCAG 2.2 AA), and it is the one place the
+                // grid says which side a row is on — its reveal is what saves it (decisions.md 2026-08-25).
+                // Matches the Accounts grid's chip. [A-01]
+                <>
+                  {" "}
+                  <TpChip>Not saved</TpChip>
+                </>
+              ) : null}
+            </span>
+            <span className={styles.title}>{c.jobTitle ?? "—"}</span>
           </span>
         </span>
       ),
-    },
-    {
-      key: "title",
-      header: "Job title",
-      sortValue: (c) => c.jobTitle ?? "",
-      cell: (c) => textCell(c.jobTitle),
     },
     {
       key: "company",
