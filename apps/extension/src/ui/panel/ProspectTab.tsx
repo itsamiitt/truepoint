@@ -236,6 +236,22 @@ function ContactCard({
                   : t("contact.revealNoPrice")}
             </Button>
           </div>
+          {hasEmail && hasPhone ? (
+            // Both channels in one gesture (the Apollo "email & phone" parity). Priced from the server's
+            // full_profile cost — one reveal_type, one idempotent charge — never the sum of the two.
+            <div style={{ marginTop: 8 }}>
+              <Button
+                variant="secondary"
+                full
+                busy={busy === "full_profile"}
+                onClick={() => void reveal("full_profile")}
+              >
+                {costs
+                  ? t("contact.revealBoth").replace("{n}", String(costs.full_profile))
+                  : t("contact.revealBothNoPrice")}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 
