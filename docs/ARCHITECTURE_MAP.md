@@ -1299,6 +1299,11 @@ flowchart TD
   GlobalRegistrator) so nothing leaks into bun's shared test process. Same area, no new domain/warning;
   unassigned holds at **0**. `happy-dom@20.11.6` joined the extension's devDependencies.
 
+  2026-09-01 refresh, third pass (return-stash wall, 2500 → 2502): `apps/web/src/app/auth/callback/`
+  gained `returnPath.ts` + `returnPath.test.ts` — the login return-stash validation extracted pure and
+  pinned (the open-redirect wall on the extension deep link's round-trip), into the existing
+  `shared["apps/web/app"]` area. No new domain/warning; unassigned holds at **0**.
+
   2026-08-21 refresh (search consolidation, stage 1 — [`docs/planning/search-consolidation/`](./planning/search-consolidation/README.md)):
   2205 → 2216 files, 90 → **89** code-bearing domains. The operator retired the `Companies` destination and
   renamed `Prospect` to **Search**, one surface with People and Accounts as tabs. This partially reverses

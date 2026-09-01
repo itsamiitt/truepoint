@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2500,
-  "fileSetHash": "sha256:583e343ebde821bb2bee452486f8860ee5c86b0c5cccca445973381b60493837",
+  "fileCount": 2502,
+  "fileSetHash": "sha256:5257e32f3650cc6785d7a4c377f6b0c9aaa0524a5da18a4d57ae11ed43d09961",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -3064,6 +3064,8 @@
       "apps/web/src/app/(shell)/settings/workspace/page.tsx",
       "apps/web/src/app/(shell)/signals/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
+      "apps/web/src/app/auth/callback/returnPath.test.ts",
+      "apps/web/src/app/auth/callback/returnPath.ts",
       "apps/web/src/app/auth/extension/page.tsx",
       "apps/web/src/app/global-error.tsx",
       "apps/web/src/app/import/page.tsx",
