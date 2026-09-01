@@ -170,7 +170,7 @@ apps/                           # deployable processes (thin transport adapters)
   extension/ scripts/           # gen-icons + pack-zip (portable forward-slash zip packer for the admin download)
     background/{index,bus,api,auth,queue,config,telemetry,eventStream,events}  # SW hub: bus·ApiClient·PKCE·IndexedDB queue·SSE
     content/{index,observer,adapters/linkedin,extract,hovercard}              # isolated world: adapter + shadow-DOM hover-card
-    ui/{popup,panel}  shared/{messages,storage,idb,client,env,types}  i18n/   # React surfaces · Zod bus · storage · i18n
+    ui/{popup,panel}  shared/{messages,storage,idb,client,env,types,linkedinUrl,intel/}  i18n/  # React surfaces · Zod bus · storage · pure derivers · i18n
     manifest.config.ts  vite.config.ts  scripts/gen-icons.mjs                 # least-privilege manifest + build
 ```
 
@@ -1280,6 +1280,19 @@ flowchart TD
   resolver + the SSE push handler that turns `contact.lookup_updated` into a fresh `SUBJECT_STATUS`) and its
   test; the bus router now imports the singleton instead of holding its own. No new domain/warning;
   unassigned holds at **2**. Doc-15 §13 option D, consumer step (P2 step 4).
+
+  2026-09-01 refresh (Apollo-grade in-page card — extension build wave + this regen, 2497 → 2499): the
+  wave's earlier files entered the JSON through a concurrent regen without a prose note; this entry records
+  the whole of it. `content/hovercard/` grew from one file into a module set — `viewModel.ts` (the PURE
+  P0–P11/C0–C3 state ladder) + `viewModel.test.ts`, `renderPerson.ts`/`renderCompany.ts` (vanilla-DOM
+  painters), `dom.ts`, `styles.ts`, `shadowTokens.ts` (the pre-existing `shadowTokens.test.ts` now imports
+  it through the index re-export), and `dismissMemory.ts`/`.test.ts` (the two files of THIS regen —
+  per-subject ✕ memory). The pure derivers `format.ts`/`headcount.ts` (+tests) MOVED `ui/panel/intel/` →
+  `shared/intel/` (the content bundle must not import from `src/ui/`; `deriveSignals` stays panel-side).
+  All within the existing `shared["apps/extension/content"]` / `…/shared` / `…/ui` areas — no new domain,
+  no new warning, unassigned holds at **0**. Companion notes: the `bulkReveal` flag was deleted from
+  `background/config`, `SET_CAPTURE_ENABLED` joined the bus, and apps/web gained the login return-trip
+  stash (edits in place — no new web files).
 
   2026-08-21 refresh (search consolidation, stage 1 — [`docs/planning/search-consolidation/`](./planning/search-consolidation/README.md)):
   2205 → 2216 files, 90 → **89** code-bearing domains. The operator retired the `Companies` destination and

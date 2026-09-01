@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2497,
-  "fileSetHash": "sha256:f6d6c633e9a3dde3aab991a517a770872e295cb867f05e0974f7bda5dd09b408",
+  "fileCount": 2499,
+  "fileSetHash": "sha256:b21e4d52aad81aba8b25485f8479aee7e735de88b664538bccc958254c0eb282",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2866,6 +2866,8 @@
       "apps/extension/src/content/extract/dom.ts",
       "apps/extension/src/content/extract/guards.test.ts",
       "apps/extension/src/content/extract/guards.ts",
+      "apps/extension/src/content/hovercard/dismissMemory.test.ts",
+      "apps/extension/src/content/hovercard/dismissMemory.ts",
       "apps/extension/src/content/hovercard/dom.ts",
       "apps/extension/src/content/hovercard/index.ts",
       "apps/extension/src/content/hovercard/renderCompany.ts",
