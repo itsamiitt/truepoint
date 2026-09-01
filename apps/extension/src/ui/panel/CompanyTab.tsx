@@ -9,9 +9,9 @@
 // exists because the headline number hides the most useful read: a company at +194% that stopped moving last
 // month is a different conversation from one still climbing.
 import { t } from "../../i18n/index.ts";
+import { monogram, monthLabel, signedPct } from "../../shared/intel/format.ts";
+import { headcountRead, headcountWindows, sparkline } from "../../shared/intel/headcount.ts";
 import type { IntelPayload } from "../../shared/messages.ts";
-import { monogram, monthLabel, signedPct } from "./intel/format.ts";
-import { headcountRead, headcountWindows, sparkline } from "./intel/headcount.ts";
 import {
   Chip,
   EmptyBlock,

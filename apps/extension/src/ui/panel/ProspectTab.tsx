@@ -8,9 +8,6 @@
 import { useState } from "react";
 import { t } from "../../i18n/index.ts";
 import { send } from "../../shared/client.ts";
-import type { IntelPayload } from "../../shared/messages.ts";
-import type { RevealType } from "../../shared/types.ts";
-import { deriveSignals } from "./intel/deriveSignals.ts";
 import {
   ageDays,
   contactSummary,
@@ -20,7 +17,10 @@ import {
   maskEmail,
   monogram,
   tenure,
-} from "./intel/format.ts";
+} from "../../shared/intel/format.ts";
+import type { IntelPayload } from "../../shared/messages.ts";
+import type { RevealType } from "../../shared/types.ts";
+import { deriveSignals } from "./intel/deriveSignals.ts";
 import {
   Badge,
   type BadgeTone,

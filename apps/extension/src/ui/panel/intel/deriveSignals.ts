@@ -16,7 +16,7 @@
 // producer (the S-13 sweep), and listing the other eight enum values would advertise coverage that does not
 // exist.
 import type { ProfileIntelResponse } from "@leadwolf/types";
-import { headcountWindows } from "./headcount.ts";
+import { headcountWindows } from "../../../shared/intel/headcount.ts";
 
 /** The row's category. Ordered here as they are rendered — the sort order below depends on it. */
 export type SignalKind = "people" | "growth" | "caution" | "data quality";
