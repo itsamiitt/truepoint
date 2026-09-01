@@ -22,6 +22,52 @@ Legend: ✅ shipped & live · 🌒 built, dark (flag-off) · 💤 built, inert �
 
 ---
 
+## Build log — 2026-09-01 — the Apollo-grade in-page card + the popup grows up
+
+Eleven commits on `main` (local; unpushed at time of writing). The in-page hover card grows from a
+pill-and-one-button strip into the **summary + money surface** (the panel stays the deep workspace), the
+popup gains its designed quick-entry affordances, and two looks-operable-but-isn't surfaces are torn out.
+Reference UX: an on-disk scan of Apollo.io v16.5.0 — the UX copied, its mechanism (MAIN-world network
+interception, runtime-injected double-iframe dock) explicitly NOT (ADR-0043 §4 stands).
+
+- **Hover card, Apollo-grade (person P0–P11 + company C0–C3).** `src/content/hovercard/` split into
+  modules: `viewModel.ts` (PURE, table-tested state ladder), `renderPerson`/`renderCompany` (vanilla DOM),
+  `styles.ts`, `dom.ts`, `shadowTokens.ts`; `index.ts` orchestrates with seq-based stale guards. On a
+  `found`/`in_database` lookup the card sends the existing `INTEL` message (context-agnostic — **zero new
+  bus messages, zero new API**) and upgrades in place: masked email (workspace-contact rows only), per-type
+  reveal buttons priced from the server's costs, credits-aware disable, verification badge, copy, and
+  "Open full profile" → the side panel. Intel failure falls back to exactly the old thin card. Shadow root
+  is now `mode:"closed"`.
+- **Company in-page card** — company pages stop hiding the card: subject from `subjectFromUrl` (URL only;
+  **X07's DOM adapter stays deferred and unneeded**), `INTEL` resolves logo/industry/headcount + 12-mo
+  growth/founded-HQ server-side; numeric Sales-Nav ids never render.
+- **Queued-forever fix.** The drain's `SUBJECT_STATUS` broadcast rides `runtime.sendMessage`, which never
+  reaches a content script — a queued capture read "Queued — sending" until navigation. The SW now pushes
+  that one broadcast type to LinkedIn tabs; the content script validates it at the boundary.
+- **Deep link.** "Open in TruePoint" → `/search?person=<slug>` (the profile-drawer param apps/web already
+  reserves), tested slug ladder. Apps/web change ridealong: a signed-out deep link now survives the login
+  round-trip (path stashed pre-login, honored by the callback as a validated same-origin PATH only). A
+  `?contact=<uuid>` variant is **deliberately not built** — it needs the get-one-contact endpoint whose
+  absence is a recorded audit decision (`extensionScope.ts` C9).
+- **Popup.** Quick search (the key existed with no UI) → `/search?q=`; a REAL capture pause — new
+  `SET_CAPTURE_ENABLED` message operating the `captureEnabled` drain gate nothing could previously
+  operate, honest paused copy, queue depth shown. `AppState` now carries `captureEnabled`.
+- **Torn out:** `bulkReveal` (read by nothing — the killSwitch precedent applies) and the
+  `popup.capturedOnPage` key (a per-page count the SW cannot derive).
+- **Panel:** combined "Reveal email & phone" (`full_profile` cost, never the sum); job-change warning badge
+  at eye level [S-13]; phone-verification signal twins in `deriveSignals` [S-10]; the S-CH4 per-value
+  arrays render under "Also on record" (every owned email/phone, per-value badges + line type) [S-04];
+  reveal-state merge no longer lets an optional-field response overwrite earlier facts with `undefined`.
+- **Moved:** pure derivers `format.ts`/`headcount.ts` → `src/shared/intel/` (the content bundle must not
+  import from `src/ui/`).
+
+Traps for the next session: UA `[hidden]` loses to any author `display` declaration inside the shadow
+stylesheet (`[hidden]{display:none!important}` is load-bearing); `chrome.sidePanel.open` wants
+`sender.tab.id` with no await before it or the gesture token can expire; runtime broadcasts never reach
+content scripts — pull, or push via `tabs.sendMessage`.
+
+---
+
 ## Build log — 2026-08-22 — the Profile Intelligence Panel (X06 remainder, X07-lite)
 
 Rebuilt the side panel as the **Prospect | Company** surface specified by the Claude Design project
@@ -97,7 +143,7 @@ verification.
 | **Reveal** (money path) | `06` | 🌒 built, dark — **now reachable (P3)**: LOOKUP resolves a real `contactId` → reveal works end-to-end | `src/background/bus/index.ts` (LOOKUP→resolver), `client.ts` reveal |
 | **Side panel** (Profile Intelligence Panel: Prospect + Company) | `08` | 🌒 **built, dark (2026-08-22)** — two tabs, four states each; the `lists`/`sequences`/`ai` placeholders and the standalone Reveal/Captured tabs are **removed** (reveal now lives in the contact card) | `src/ui/panel/{Panel,ProspectTab,CompanyTab,useIntel,primitives}.tsx`; derivers `src/ui/panel/intel/*` |
 | **Popup** | `11`/`13` | 🌒 built, dark | `src/ui/popup/Popup.tsx:85-142` |
-| **LinkedIn content script** (profile detect + SPA nav + hover card) | `01`/`02` | 🌒 built, dark — **profiles only** (`extract()` returns null off-profile) | `adapters/linkedin/index.ts:18-29,36-39,60-62`; SPA nav `content/observer.ts:1-40` (popstate + `MutationObserver`) |
+| **LinkedIn content script** (profile detect + SPA nav + hover card) | `01`/`02` | 🌒 built, dark — profile pages get the **Apollo-grade person card** (P0–P11, priced reveals, verification, deep links); company pages get the **company card** from the URL alone (2026-09-01). `extract()` still runs on profiles only | `adapters/linkedin/index.ts`; `content/hovercard/{viewModel,renderPerson,renderCompany}.ts`; SPA nav `content/observer.ts:1-40` |
 | **Messaging bus** (Zod discriminated union · validate-and-drop) | `02` | 🌒 built, dark | `src/shared/messages.ts:13-100`; `src/background/bus/index.ts:11-20` |
 | **LinkedIn identity → `contactId` resolver** | net-new | 🌒 **built (P2)** — the crux, unblocked | `GET /contacts/by-linkedin/:publicId` (`apps/api/src/features/contacts-resolve/`); `contactRepository.resolveByLinkedinPublicId` |
 | **`GET /api/v1/me`** (display identity) | `12` gap #6 | 🌒 built (P2) | `apps/api/src/features/identity/routes.ts` (`meRoutes`) |
@@ -106,7 +152,7 @@ verification.
 | **RemoteConfig signed fetch** (fail-closed) | `02`/`03` | 🟡 partial — caches locally; signature check is a marked TODO (X09) | `src/background/config/remoteConfig.ts:3-4,40-47` |
 | **Telemetry upload** | `02`/`03` | 🟡 partial — events buffered in IDB, never uploaded (X10) | `src/background/telemetry/telemetry.ts:2` |
 | **Options page** | — | 🔲 not built (absent — no `options_ui` in the manifest) | `manifest.config.ts` |
-| **Company card + adapter** | `06`/`08` | 🟡 partial — the **Company tab is built** and resolves from the URL server-side (`/company/<slug>` via `master_company_identifiers`, `/sales/company/<id>` via the fetch registry). The content-script company ADAPTER (X07) stays deferred and is not needed for it — no company DOM is read | `src/ui/panel/CompanyTab.tsx`; `packages/core/src/prospect/profileIntel.ts`; `adapters/linkedin/index.ts:36-39` (still returns null, by design) |
+| **Company card + adapter** | `06`/`08` | 🟡 partial — the **Company tab is built** and, since 2026-09-01, company pages also get an **in-page card** (logo, industry, headcount + 12-mo growth, founded/HQ) — both resolve from the URL server-side. The content-script company ADAPTER (X07) stays deferred and is not needed — no company DOM is read | `src/ui/panel/CompanyTab.tsx`; `src/content/hovercard/renderCompany.ts`; `adapters/linkedin/index.ts:36-39` (still returns null, by design) |
 | **Quick actions** (add-to-list · add-note · server timeline) | `06`/`09` | 🟡 partial — **add-to-list built** (panel footer picker → `GET /lists` + `POST /lists/:id/members`, both newly allow-listed); notes + server timeline still not built | `src/ui/panel/Panel.tsx` (`AddToList`); `POST/GET /contacts/:id/activities` (`activity/routes.ts:18,29`) — unbuilt |
 | **Tasks / dialer / one-off email** | `06` | 🔲 not built — **no backend either** (X14, deferred) | no `tasks` table; calls are activity-log only; email is sequence-based |
 | **Claude Skills library** | net-new | ✅ **built (P1)** | three concern-split skills `.claude/skills/truepoint-extension-{architecture,linkedin,auth}/` + CLAUDE.md routing |
