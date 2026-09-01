@@ -14,6 +14,7 @@
 import { RECOVERY_KEY, completeLogin, recoveryActionFor, startLogin } from "@/lib/authClient";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { safeReturnPath } from "./returnPath";
 
 // The default signed-in destination (Prospect, 04 §3). Navigating here directly from the callback collapses
 // the old callback → "/" → "/search" chain into a single hop.
@@ -62,17 +63,11 @@ export default function CallbackPage() {
           return;
         }
         // The path the shell stashed before it sent a signed-out visitor to login (deep links — the
-        // extension's ?person= open). Same-origin PATH only, validated: it must start with "/" and must not
-        // be protocol-relative ("//host") or carry a backslash — sessionStorage is same-origin-writable,
-        // and this must never become an open redirect.
+        // extension's ?person= open). Validated by safeReturnPath (same-origin PATH only — the
+        // open-redirect wall is pure and pinned by returnPath.test.ts).
         const stashedReturn = sessionStorage.getItem("tp_return");
         if (stashedReturn) sessionStorage.removeItem("tp_return");
-        const returnTo =
-          stashedReturn?.startsWith("/") &&
-          !stashedReturn.startsWith("//") &&
-          !stashedReturn.includes("\\")
-            ? stashedReturn
-            : null;
+        const returnTo = safeReturnPath(stashedReturn);
         // Client-side nav (NOT window.location): keeps the just-minted in-memory token alive across the hop
         // so the shell renders signed-in without a redundant silent refresh, and lands on the destination directly.
         router.replace(returnTo ?? POST_LOGIN_DESTINATION);
