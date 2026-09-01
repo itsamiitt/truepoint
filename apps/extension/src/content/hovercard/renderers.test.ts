@@ -23,7 +23,7 @@ beforeAll(() => {
 
 afterAll(() => {
   if (hadDocument) (globalThis as { document?: unknown }).document = priorDocument;
-  else delete (globalThis as { document?: unknown }).document;
+  else Reflect.deleteProperty(globalThis, "document");
   void win.happyDOM.close();
 });
 
