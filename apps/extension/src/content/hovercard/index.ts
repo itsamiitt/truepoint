@@ -14,6 +14,7 @@ import { ENV } from "../../shared/env.ts";
 import type { ViewedSubject } from "../../shared/linkedinUrl.ts";
 import type { IntelPayload } from "../../shared/messages.ts";
 import type { CapturedRecord, RevealType, SubjectStatus } from "../../shared/types.ts";
+import { DismissMemory } from "./dismissMemory.ts";
 import { type CardHandlers, type CardRegions, el } from "./dom.ts";
 import { renderCompany } from "./renderCompany.ts";
 import { renderPerson } from "./renderPerson.ts";
@@ -54,6 +55,9 @@ export class HoverCard {
   private revealError: string | null = null;
   /** Bumped by every show*(); async answers tagged with an older value are stale and never paint. */
   private seq = 0;
+  /** The ✕ is remembered per SUBJECT for the page session — a sub-tab nav on the same person must not
+   *  resurrect a card the user just closed. Programmatic hide() (nav to an unsupported page) never counts. */
+  private readonly dismissMemory = new DismissMemory();
 
   constructor() {
     this.host = document.createElement("div");
@@ -91,7 +95,7 @@ export class HoverCard {
     this.closeButton.className = "close";
     this.closeButton.textContent = "✕";
     this.closeButton.setAttribute("aria-label", t("card.dismiss"));
-    this.closeButton.addEventListener("click", () => this.hide());
+    this.closeButton.addEventListener("click", () => this.dismissCurrent());
     header.append(idrow, this.closeButton);
 
     const row = el("div", "row");
@@ -124,8 +128,26 @@ export class HoverCard {
   /** Bound so it can be REMOVED — the old inline listener stayed on `document` for the page's lifetime, and
    *  fired on every Escape whether the card was showing or not. */
   private readonly onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape" && this.host.style.display !== "none") this.hide();
+    if (e.key === "Escape" && this.host.style.display !== "none") this.dismissCurrent();
   };
+
+  /** A USER dismissal (✕ / Escape) — remembered for this subject so a same-subject re-evaluate stays quiet. */
+  private dismissCurrent(): void {
+    const key = this.record?.subjectKey ?? this.subject?.subjectKey;
+    if (key) this.dismissMemory.dismiss(key);
+    this.hide();
+  }
+
+  /** Suppressed show: hide AND drop the previous subject's state, so a late LOOKUP/push for the old subject
+   *  can never be applied against the wrong record (setStatus trusts `this.record` to be current). */
+  private suppressForDismissed(): void {
+    this.seq += 1;
+    this.record = null;
+    this.subject = null;
+    this.reExtract = null;
+    this.resetSubjectState();
+    this.hide();
+  }
 
   /** Tear down the injected host and its document listener (SPA teardown / extension disable). */
   destroy(): void {
@@ -141,6 +163,10 @@ export class HoverCard {
   /** Show the card for a freshly detected profile. `reExtract` (optional) re-reads the DOM at Save time so
    *  the capture carries the rendered header, not the nav-time snapshot (slice 5e). */
   showForRecord(record: CapturedRecord, reExtract?: () => CapturedRecord | null): void {
+    if (this.dismissMemory.isDismissed(record.subjectKey)) {
+      this.suppressForDismissed();
+      return;
+    }
     this.seq += 1;
     this.mode = "person";
     this.record = record;
@@ -155,6 +181,10 @@ export class HoverCard {
   /** Show the card for a company page. URL-derived subject only — no DOM is read (X07 stays deferred);
    *  INTEL is the company card's one read, so it starts immediately. */
   showForCompany(subject: ViewedSubject): void {
+    if (this.dismissMemory.isDismissed(subject.subjectKey)) {
+      this.suppressForDismissed();
+      return;
+    }
     this.seq += 1;
     this.mode = "company";
     this.subject = subject;
