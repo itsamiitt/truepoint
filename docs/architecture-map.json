@@ -112,8 +112,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2499,
-  "fileSetHash": "sha256:b21e4d52aad81aba8b25485f8479aee7e735de88b664538bccc958254c0eb282",
+  "fileCount": 2500,
+  "fileSetHash": "sha256:583e343ebde821bb2bee452486f8860ee5c86b0c5cccca445973381b60493837",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2872,6 +2872,7 @@
       "apps/extension/src/content/hovercard/index.ts",
       "apps/extension/src/content/hovercard/renderCompany.ts",
       "apps/extension/src/content/hovercard/renderPerson.ts",
+      "apps/extension/src/content/hovercard/renderers.test.ts",
       "apps/extension/src/content/hovercard/shadowTokens.test.ts",
       "apps/extension/src/content/hovercard/shadowTokens.ts",
       "apps/extension/src/content/hovercard/styles.ts",

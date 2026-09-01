@@ -1294,6 +1294,11 @@ flowchart TD
   `background/config`, `SET_CAPTURE_ENABLED` joined the bus, and apps/web gained the login return-trip
   stash (edits in place — no new web files).
 
+  2026-09-01 refresh, second pass (renderer DOM tests, 2499 → 2500): `content/hovercard/renderers.test.ts`
+  — happy-dom tests over the vanilla painters, with the Window scoped to the file (beforeAll/afterAll, no
+  GlobalRegistrator) so nothing leaks into bun's shared test process. Same area, no new domain/warning;
+  unassigned holds at **0**. `happy-dom@20.11.6` joined the extension's devDependencies.
+
   2026-08-21 refresh (search consolidation, stage 1 — [`docs/planning/search-consolidation/`](./planning/search-consolidation/README.md)):
   2205 → 2216 files, 90 → **89** code-bearing domains. The operator retired the `Companies` destination and
   renamed `Prospect` to **Search**, one surface with People and Accounts as tabs. This partially reverses
