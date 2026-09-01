@@ -3,8 +3,9 @@
 //
 // The file previously advertised a `killSwitch` and described itself as signed remote config, while nothing
 // fetched or verified anything — an incident control that existed only as a field name. An operator reaching
-// for it during an incident would have found nothing. These tests pin its removal, and pin that a stale
-// storage entry written by an older build cannot smuggle it back in.
+// for it during an incident would have found nothing. `bulkReveal` went the same way later: no code ever
+// read it. These tests pin both removals, and pin that a stale storage entry written by an older build
+// cannot smuggle a removed key back in.
 
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -29,34 +30,29 @@ describe("RemoteConfig (local flags)", () => {
     await config.load();
     expect(config.snapshot()).toEqual({
       captureEnabled: true,
-      bulkReveal: false,
       realtimeSse: false,
     });
   });
 
-  test("there is NO killSwitch on the surface", async () => {
-    // Removed deliberately: nothing remote could ever set it, so it advertised an incident control that did
+  test("there is NO killSwitch and NO bulkReveal on the surface", async () => {
+    // Both removed deliberately: nothing could ever operate them, so each advertised a control that did
     // not exist. The real kill is server-side (CHROME_EXTENSION_ENABLED, and 403 capture_disabled at the
     // capture ingress), enforced where the data lands rather than in a client that could be stale or tampered.
     const config = new RemoteConfig();
     await config.load();
-    expect(Object.keys(config.snapshot()).sort()).toEqual([
-      "bulkReveal",
-      "captureEnabled",
-      "realtimeSse",
-    ]);
+    expect(Object.keys(config.snapshot()).sort()).toEqual(["captureEnabled", "realtimeSse"]);
   });
 
-  test("a stale cache from an older build cannot reintroduce killSwitch", async () => {
+  test("a stale cache from an older build cannot reintroduce removed keys", async () => {
     // The reason load() merges key-by-key instead of spreading: an installed extension still has the old
-    // object in chrome.storage.local, and a spread would put the removed key straight back on the live flags.
+    // object in chrome.storage.local, and a spread would put removed keys straight back on the live flags.
     stored.flags = { captureEnabled: true, bulkReveal: true, realtimeSse: false, killSwitch: true };
     const config = new RemoteConfig();
     await config.load();
     expect(config.snapshot()).not.toHaveProperty("killSwitch");
-    // And the stale killSwitch must not disable anything on its way out.
+    expect(config.snapshot()).not.toHaveProperty("bulkReveal");
+    // And the stale keys must not disable anything on their way out.
     expect(config.isEnabled("captureEnabled")).toBe(true);
-    expect(config.isEnabled("bulkReveal")).toBe(true);
   });
 
   test("cached values override defaults; unknown keys are ignored", async () => {
@@ -71,11 +67,11 @@ describe("RemoteConfig (local flags)", () => {
   test("save persists and is readable back", async () => {
     const config = new RemoteConfig();
     await config.load();
-    await config.save({ bulkReveal: true });
-    expect(config.isEnabled("bulkReveal")).toBe(true);
+    await config.save({ captureEnabled: false });
+    expect(config.isEnabled("captureEnabled")).toBe(false);
 
     const reloaded = new RemoteConfig();
     await reloaded.load();
-    expect(reloaded.isEnabled("bulkReveal")).toBe(true);
+    expect(reloaded.isEnabled("captureEnabled")).toBe(false);
   });
 });

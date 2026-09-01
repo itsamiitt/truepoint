@@ -294,6 +294,15 @@ async function handle(
       return state;
     }
 
+    case "SET_CAPTURE_ENABLED": {
+      await ctx.config.save({ captureEnabled: msg.enabled });
+      // Re-enabling releases whatever queued up during the pause; the drain re-checks the flag itself.
+      if (msg.enabled) void scheduler.drain();
+      const state = await ctx.getState();
+      ctx.broadcast({ type: "STATE_CHANGED", state });
+      return state;
+    }
+
     case "LIST_ORGS":
       // The orgs list is a tenant-membership read on /api/v1 — route it through the SW API client (the one
       // HTTP client), not the auth module. The endpoint returns { orgs, activeTenantId } (chrome-extension/14 X04).

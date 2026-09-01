@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { t } from "../../i18n/index.ts";
 import { onBroadcast, send } from "../../shared/client.ts";
+import { ENV } from "../../shared/env.ts";
 import type { AppState } from "../../shared/messages.ts";
 import { CreditsPill } from "../brand/CreditsPill.tsx";
 import { Lockup, Mark } from "../brand/Mark.tsx";
@@ -89,6 +90,7 @@ function ConnectedTag(): React.ReactElement {
 
 export function Popup(): React.ReactElement {
   const [state, setState] = useState<AppState | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     void send({ type: "GET_STATE" }).then(setState);
@@ -135,6 +137,67 @@ export function Popup(): React.ReactElement {
       <div style={{ marginTop: 14 }}>
         <CreditsPill credits={state.auth.credits} />
       </div>
+      <form
+        style={{ marginTop: 14 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const q = query.trim();
+          if (!q) return;
+          // A quick jump, not an in-popup result list — the popup is quick entry, the app is the workspace.
+          void chrome.tabs.create({
+            url: `${ENV.appOrigin}/search?q=${encodeURIComponent(q)}`,
+          });
+          window.close();
+        }}
+      >
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("popup.quickSearch")}
+          aria-label={t("popup.quickSearch")}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "8px 11px",
+            fontSize: 13,
+            fontFamily: "inherit",
+            color: "var(--tp-ink, #111827)",
+            background: "var(--tp-surface, #fff)",
+            border: "1px solid var(--tp-hairline-2, #e5e7eb)",
+            borderRadius: "var(--radius, 8px)",
+          }}
+        />
+      </form>
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 14,
+          fontSize: 13,
+          cursor: "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={state.captureEnabled}
+          onChange={(e) => {
+            void send({ type: "SET_CAPTURE_ENABLED", enabled: e.target.checked }).then(setState);
+          }}
+        />
+        {t("popup.captureLabel")}
+      </label>
+      {!state.captureEnabled ? (
+        <div style={{ fontSize: 12, color: "var(--tp-ink-3, #6b7280)", marginTop: 5 }}>
+          {t("popup.capturePausedHint")}
+        </div>
+      ) : null}
+      {state.queueDepth > 0 ? (
+        <div style={{ fontSize: 12, color: "var(--tp-ink-3, #6b7280)", marginTop: 5 }}>
+          {t("popup.queued", { n: state.queueDepth })}
+        </div>
+      ) : null}
       <button
         type="button"
         style={{ ...primaryBtn, marginTop: 16 }}

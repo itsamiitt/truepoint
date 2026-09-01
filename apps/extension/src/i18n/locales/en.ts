@@ -9,8 +9,11 @@ export const en = {
   "popup.lowBalance": "Low balance",
   "popup.quickSearch": "Quick search TruePoint…",
   "popup.openWorkspace": "Open workspace",
-  "popup.capturedOnPage": "{count} captured on this page",
   "popup.signedOutHint": "Sign in to capture and reveal prospects.",
+  "popup.captureLabel": "Capture on this browser",
+  // Honest about what pausing does: saves still queue locally; nothing is sent until re-enabled.
+  "popup.capturePausedHint": "Paused — saves queue locally and send when re-enabled.",
+  "popup.queued": "{n} queued to send",
   "card.reveal": "Reveal contact",
   "card.revealing": "Revealing…",
   "card.revealed": "Revealed",

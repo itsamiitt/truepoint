@@ -25,13 +25,11 @@ import { getLocal, setLocal } from "../../shared/storage.ts";
 /** Local, UX-only feature gates. Nothing here is a security or incident control. */
 export interface FeatureFlags {
   captureEnabled: boolean;
-  bulkReveal: boolean;
   realtimeSse: boolean;
 }
 
 const DEFAULTS: FeatureFlags = {
   captureEnabled: true,
-  bulkReveal: false,
   realtimeSse: false,
 };
 
@@ -43,10 +41,11 @@ export class RemoteConfig {
   async load(): Promise<void> {
     const cached = await getLocal<Partial<FeatureFlags>>(FLAGS_KEY);
     // Explicit per-key merge rather than a spread: a storage entry written by an older build still carries
-    // `killSwitch`, and a spread would put that removed key back into the live flag object.
+    // removed keys (`killSwitch`, `bulkReveal` — the latter torn out for the same reason: nothing ever read
+    // it, and a flag that looks operable but is not is worse than none), and a spread would put a removed
+    // key back into the live flag object.
     this.flags = {
       captureEnabled: cached?.captureEnabled ?? DEFAULTS.captureEnabled,
-      bulkReveal: cached?.bulkReveal ?? DEFAULTS.bulkReveal,
       realtimeSse: cached?.realtimeSse ?? DEFAULTS.realtimeSse,
     };
   }

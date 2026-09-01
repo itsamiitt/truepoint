@@ -70,6 +70,9 @@ export const requestMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("SWITCH_ORG"), tenantId: z.string().uuid() }),
   z.object({ type: z.literal("LIST_ORGS") }),
   z.object({ type: z.literal("OPEN_PANEL") }),
+  // The popup's capture pause — writes the LOCAL captureEnabled flag (the scheduler's drain gate). A UX
+  // control only: the queue keeps accepting saves while paused, and the server remains the enforcer.
+  z.object({ type: z.literal("SET_CAPTURE_ENABLED"), enabled: z.boolean() }),
 ]);
 export type RequestMessage = z.infer<typeof requestMessage>;
 export type RequestType = RequestMessage["type"];
@@ -100,6 +103,8 @@ export interface AuthState {
 export interface AppState {
   auth: AuthState;
   queueDepth: number;
+  /** The LOCAL capture gate (UX pause, user-operated from the popup). The server stays the enforcer. */
+  captureEnabled: boolean;
 }
 
 export interface LookupResponse {
@@ -148,25 +153,27 @@ export type ResponseFor<T extends RequestType> = T extends "PING"
           ? RevealResponse
           : T extends "AUTH_LOGIN" | "AUTH_LOGOUT" | "SWITCH_WORKSPACE" | "SWITCH_ORG"
             ? AuthState
-            : T extends "LIST_ORGS"
-              ? { orgs: OrgSummary[]; activeTenantId: string | null }
-              : T extends "OPEN_PANEL"
-                ? { ok: boolean }
-                : T extends "LINKS_CAPTURED"
-                  ? { registered: number; dropped: number }
-                  : T extends "VIEW_FETCH"
-                    ? { outcome: string; contactId: string | null }
-                    : T extends "GET_SUBJECT"
-                      ? { subject: ViewedSubject | null }
-                      : T extends "INTEL"
-                        ? IntelResponse
-                        : T extends "CAPTURE_CURRENT"
-                          ? CaptureResponse
-                          : T extends "LIST_LISTS"
-                            ? { lists: ListSummary[] }
-                            : T extends "ADD_TO_LIST"
-                              ? { ok: boolean; affected?: number; errorClass?: ErrorClass }
-                              : never;
+            : T extends "SET_CAPTURE_ENABLED"
+              ? AppState
+              : T extends "LIST_ORGS"
+                ? { orgs: OrgSummary[]; activeTenantId: string | null }
+                : T extends "OPEN_PANEL"
+                  ? { ok: boolean }
+                  : T extends "LINKS_CAPTURED"
+                    ? { registered: number; dropped: number }
+                    : T extends "VIEW_FETCH"
+                      ? { outcome: string; contactId: string | null }
+                      : T extends "GET_SUBJECT"
+                        ? { subject: ViewedSubject | null }
+                        : T extends "INTEL"
+                          ? IntelResponse
+                          : T extends "CAPTURE_CURRENT"
+                            ? CaptureResponse
+                            : T extends "LIST_LISTS"
+                              ? { lists: ListSummary[] }
+                              : T extends "ADD_TO_LIST"
+                                ? { ok: boolean; affected?: number; errorClass?: ErrorClass }
+                                : never;
 
 /** One workspace list, trimmed to what the picker renders (id + name + size). Never its members. */
 export interface ListSummary {

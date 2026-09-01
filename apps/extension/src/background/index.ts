@@ -54,6 +54,7 @@ const ctx: RuntimeContext = {
     return {
       auth: { ...auth.getState(), credits: credits.balance },
       queueDepth: await queue.depth(),
+      captureEnabled: config.isEnabled("captureEnabled"),
     };
   },
   broadcast(message) {
