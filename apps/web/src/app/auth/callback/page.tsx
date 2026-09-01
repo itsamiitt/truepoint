@@ -61,9 +61,21 @@ export default function CallbackPage() {
           window.location.replace(extReturn);
           return;
         }
+        // The path the shell stashed before it sent a signed-out visitor to login (deep links — the
+        // extension's ?person= open). Same-origin PATH only, validated: it must start with "/" and must not
+        // be protocol-relative ("//host") or carry a backslash — sessionStorage is same-origin-writable,
+        // and this must never become an open redirect.
+        const stashedReturn = sessionStorage.getItem("tp_return");
+        if (stashedReturn) sessionStorage.removeItem("tp_return");
+        const returnTo =
+          stashedReturn?.startsWith("/") &&
+          !stashedReturn.startsWith("//") &&
+          !stashedReturn.includes("\\")
+            ? stashedReturn
+            : null;
         // Client-side nav (NOT window.location): keeps the just-minted in-memory token alive across the hop
         // so the shell renders signed-in without a redundant silent refresh, and lands on the destination directly.
-        router.replace(POST_LOGIN_DESTINATION);
+        router.replace(returnTo ?? POST_LOGIN_DESTINATION);
       })
       .catch(async (err: unknown) => {
         const reason = err instanceof Error ? err.message : "unknown";

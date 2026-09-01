@@ -90,6 +90,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (!getAccessToken()) await silentRefresh();
       if (!getAccessToken()) {
         if (live()) setAuth("redirecting");
+        // A cold, signed-out landing loses its URL through the login round-trip (the callback lands on the
+        // fixed post-login destination), which strands any deep link — the extension's ?person= open being
+        // the first. Stash the path so the callback can put the user back where they were headed.
+        try {
+          sessionStorage.setItem("tp_return", `${location.pathname}${location.search}`);
+        } catch {
+          // Storage can be unavailable (private windows with quotas, blocked storage) — losing the deep
+          // link there is the old behavior, not a new failure.
+        }
         await startLogin();
         return;
       }
