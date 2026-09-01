@@ -128,6 +128,7 @@ export class HoverCard {
 
   /** Tear down the injected host and its document listener (SPA teardown / extension disable). */
   destroy(): void {
+    if (this.copiedTimer) clearTimeout(this.copiedTimer);
     document.removeEventListener("keydown", this.onKeyDown);
     this.host.remove();
   }
