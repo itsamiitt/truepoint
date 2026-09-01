@@ -2,6 +2,7 @@
 // hover-card. On a supported profile it extracts the visible record and offers capture/reveal; it does
 // a best-effort LOOKUP so an already-owned subject shows the right action. No network patching.
 import { send } from "../shared/client.ts";
+import { subjectFromUrl } from "../shared/linkedinUrl.ts";
 import type { CapturedLink } from "../shared/types.ts";
 import { linkedinAdapter } from "./adapters/linkedin/index.ts";
 import { AdapterRegistry } from "./adapters/registry.ts";
@@ -64,6 +65,16 @@ function evaluate(url: URL): void {
   // Fetch-on-view: ensure the licensed document for the viewed entity is fresh, then read the intel back.
   const entityKind = kind === "company" ? "company" : "person";
   void send({ type: "VIEW_FETCH", entityKind, url: url.href }).catch(() => undefined);
+
+  // Company pages get the in-page card WITHOUT any DOM extraction: the subject key comes from the URL
+  // alone (same derivation the side panel uses) and the server resolves the rest. The content-script
+  // company adapter (X07) stays deferred — `adapter.extract` is never called on this branch.
+  if (kind === "company") {
+    const subject = subjectFromUrl(url.href);
+    if (subject?.kind === "company") card.showForCompany(subject);
+    else card.hide();
+    return;
+  }
 
   const record = adapter.extract(url, document);
   if (record) {
