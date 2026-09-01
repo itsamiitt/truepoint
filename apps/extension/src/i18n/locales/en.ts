@@ -92,6 +92,9 @@ export const en = {
   "badge.verified": "Verified",
   "badge.unverified": "Unverified",
   "signals.label": "Signals",
+  "signals.jobChangeBadge": "Job change detected",
+  // The post-reveal secondary values (S-CH4 arrays) — everything beyond the primary rows.
+  "contact.alsoOnRecord": "Also on record",
   "signals.footer":
     "Tap a signal for the field it came from. Nothing is inferred beyond the record.",
   "experience.label": "Experience",

@@ -91,6 +91,12 @@ function ContactCard({
   const hasPhone = contact?.hasPhone ?? person?.hasPhone ?? false;
   const email = justRevealed?.email ?? revealed?.email ?? null;
   const phone = justRevealed?.phone ?? revealed?.phone ?? null;
+  // S-CH4: the no-charge read carries EVERY live value for owned types (primary-first); the scalars above
+  // stay the primary. Everything beyond what the primary rows already show renders under "Also on record" —
+  // the parity the web grid shipped (every email and phone a record holds). Gate-off the arrays are absent
+  // and these are simply empty.
+  const extraEmails = (revealed?.emails ?? []).filter((v) => v.value !== email);
+  const extraPhones = (revealed?.phones ?? []).filter((v) => v.value !== phone);
 
   const reveal = async (type: RevealType): Promise<void> => {
     if (!intel.contactId) return;
@@ -180,6 +186,49 @@ function ContactCard({
           ) : null}
           {phone ? <div style={{ ...mono, fontSize: 14, marginTop: 6 }}>{phone}</div> : null}
           <div style={{ fontSize: 11, color: ink3, marginTop: 3 }}>{badgeText}</div>
+          {extraEmails.length + extraPhones.length > 0 ? (
+            <div style={{ marginTop: 11, paddingTop: 9, borderTop: `1px solid ${hairline}` }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: ink3,
+                }}
+              >
+                {t("contact.alsoOnRecord")}
+              </div>
+              {extraEmails.map((v) => (
+                <div
+                  key={`e:${v.value}`}
+                  style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {v.value}
+                  </span>
+                  <Badge tone={v.status === "valid" ? "success" : "muted"}>
+                    {v.status === "valid" ? t("badge.verified") : t("badge.unverified")}
+                  </Badge>
+                </div>
+              ))}
+              {extraPhones.map((v) => (
+                <div key={`p:${v.value}`} style={{ ...mono, fontSize: 13, marginTop: 5 }}>
+                  {/* Line type is the pre-dial TCPA read (mobile vs landline) — a classification, shown
+                      beside the value the way the per-call picker does. */}
+                  {joined([v.value, v.lineType, v.type], " · ")}
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: 6, marginTop: 11, flexWrap: "wrap" }}>
             {email ? (
               <Button variant="secondary" onClick={() => copy(email)}>
@@ -357,6 +406,7 @@ export function ProspectTab({
     intel.profile?.employment.find((e) => e.isPrimary && e.isCurrent) ??
     intel.profile?.employment.find((e) => e.isCurrent);
   const inSeat = primary ? tenure(primary.startedOn, primary.startPrecision) : null;
+  const jobChange = intel.signals.find((s) => s.signal_type === "job_change") ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -401,6 +451,17 @@ export function ProspectTab({
           </div>
         </div>
       </div>
+
+      {jobChange ? (
+        // S-13 at eye level: the job-change sweep's finding was buried in a disclosure row; a saved contact
+        // whose person moved is the single most time-sensitive fact this panel holds. The full provenance
+        // stays in the Signals list — this is the same fact, made glanceable.
+        <div>
+          <Badge tone="warning">
+            {`${t("signals.jobChangeBadge")} · ${jobChange.detected_at.slice(0, 10)}`}
+          </Badge>
+        </div>
+      ) : null}
 
       <ContactCard payload={payload} onRevealed={onChanged} />
 

@@ -170,10 +170,53 @@ describe("deriveSignals", () => {
 
     // A verified email is not a signal — only what a rep should treat carefully earns a row.
     const verified = deriveSignals(
-      intel({ contact: { hasEmail: true, hasPhone: true, emailStatus: "valid" } as never }),
+      intel({
+        contact: {
+          hasEmail: true,
+          hasPhone: true,
+          emailStatus: "valid",
+          phoneStatus: "valid",
+        } as never,
+      }),
       NOW,
     );
     expect(verified).toHaveLength(0);
+  });
+
+  it("6b. reports an ungraded or failed phone the way it reports an unverified email", () => {
+    // Ungraded (phone_status is null until a verification runs) — the dial-risk twin of email_unverified.
+    const ungraded = deriveSignals(
+      intel({
+        contact: {
+          hasEmail: true,
+          hasPhone: true,
+          emailStatus: "valid",
+          phoneStatus: null,
+        } as never,
+      }),
+      NOW,
+    );
+    expect(ungraded.find((x) => x.id === "phone_unverified")?.grade).toBe(
+      "unverified — dial risk on first call",
+    );
+    expect(ungraded.find((x) => x.id === "phone_invalid")).toBeUndefined();
+
+    // Verified BAD is a different fact than never-verified, and reads as caution, not data quality.
+    const invalid = deriveSignals(
+      intel({
+        contact: {
+          hasEmail: true,
+          hasPhone: true,
+          emailStatus: "valid",
+          phoneStatus: "invalid",
+        } as never,
+      }),
+      NOW,
+    );
+    const row = invalid.find((x) => x.id === "phone_invalid");
+    expect(row?.kind).toBe("caution");
+    expect(row?.grade).toBe("verified bad — do not dial");
+    expect(invalid.find((x) => x.id === "phone_unverified")).toBeUndefined();
   });
 
   it("7. every signal cites a field, a basis and a grade (the A-01 property)", () => {

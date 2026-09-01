@@ -172,6 +172,28 @@ export function deriveSignals(
         grade: "absence of a value, not a failed lookup",
       });
     }
+    // The phone twin of the email row — the asymmetry hid dial risk while bounce risk was surfaced.
+    // `== null` on purpose: phone_status is null until a verification has graded the number.
+    if (contact.hasPhone && (contact.phoneStatus == null || contact.phoneStatus === "unknown")) {
+      out.push({
+        id: "phone_unverified",
+        kind: "data quality",
+        title: "Phone has never been verified",
+        field: "contacts.phone_status",
+        basis: `status ${contact.phoneStatus ?? "not graded"}`,
+        grade: "unverified — dial risk on first call",
+      });
+    }
+    if (contact.hasPhone && contact.phoneStatus === "invalid") {
+      out.push({
+        id: "phone_invalid",
+        kind: "caution",
+        title: "Phone failed verification",
+        field: "contacts.phone_status",
+        basis: "status invalid",
+        grade: "verified bad — do not dial",
+      });
+    }
   }
 
   return out.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
