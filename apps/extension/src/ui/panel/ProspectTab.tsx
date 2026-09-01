@@ -102,12 +102,16 @@ function ContactCard({
       setError(t(`error.${res.errorClass ?? "unexpected"}` as Parameters<typeof t>[0]));
       return;
     }
+    // Merge ONLY what this response asserts: `nothingToReveal` and `verification` are optional on the
+    // wire, and an unconditional assignment let a second reveal (e.g. the phone after the email) overwrite
+    // an earlier true/verification with undefined — flipping "Nothing on file" back into reveal buttons
+    // and dropping the confidence badge.
     setJustRevealed((prev) => ({
       ...prev,
       email: res.email ?? prev?.email,
       phone: res.phone ?? prev?.phone,
-      nothing: res.nothingToReveal,
-      verification: res.verification,
+      nothing: res.nothingToReveal ?? prev?.nothing,
+      verification: res.verification ?? prev?.verification,
     }));
     onRevealed();
   };

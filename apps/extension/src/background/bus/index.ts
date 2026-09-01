@@ -310,9 +310,11 @@ async function handle(
           return { ok: true };
         }
         const win = await chrome.windows.getCurrent();
-        if (win.id !== undefined) {
-          await chrome.sidePanel.open({ windowId: win.id });
+        if (win.id === undefined) {
+          // Nothing was opened — say so instead of reporting a success that didn't happen.
+          return { ok: false };
         }
+        await chrome.sidePanel.open({ windowId: win.id });
         return { ok: true };
       } catch {
         return { ok: false };
