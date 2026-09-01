@@ -159,7 +159,7 @@ describe("derivePersonVm — the lookup ladder (thin tiers)", () => {
       }),
     );
     expect(vm.phase).toBe("P11");
-    expect(vm.buttons.map((b) => b.id)).toEqual(["add"]);
+    expect(vm.buttons.map((b) => b.id)).toEqual(["add", "retryIntel"]);
     expect(vm.openPanelLabel).not.toBeNull();
   });
 });

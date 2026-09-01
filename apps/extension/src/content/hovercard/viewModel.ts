@@ -294,14 +294,25 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
   }
 
   if (intelState === "error" || !intel) {
-    // P11 — the deep read failed; fall back to exactly the thin card this surface used to be.
+    // P11 — the deep read failed; fall back to exactly the thin card this surface used to be, plus the
+    // same retry the company card offers (C3): an intel failure is usually transient, and without the
+    // affordance the person card was the one surface where a rep could not re-ask.
+    const retry: ButtonVm = {
+      id: "retryIntel",
+      label: t("panel.retry"),
+      kind: "secondary",
+      disabled: false,
+    };
     if (status.outcome === "in_database") {
       return {
         ...base,
         phase: "P11",
         pill: lookupPill,
         hint: t("card.inDatabaseHint"),
-        buttons: [{ id: "add", label: t("card.addToWorkspace"), kind: "primary", disabled: false }],
+        buttons: [
+          { id: "add", label: t("card.addToWorkspace"), kind: "primary", disabled: false },
+          retry,
+        ],
         openPanelLabel: t("card.openFullProfile"),
       };
     }
@@ -312,7 +323,7 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
       ...base,
       phase: "P11",
       pill: lookupPill,
-      buttons: [thin],
+      buttons: [thin, retry],
       openPanelLabel: t("card.openFullProfile"),
     };
   }
