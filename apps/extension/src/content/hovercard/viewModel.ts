@@ -143,17 +143,21 @@ export function personDeepLink(
   return slug ? `${appOrigin}/search?person=${encodeURIComponent(slug)}` : `${appOrigin}/search`;
 }
 
+const ERROR_CLASSES = [
+  "auth",
+  "validation",
+  "rate_limit",
+  "transient",
+  "suppression",
+  "extraction",
+  "permission",
+] as const;
+
+/** The catalog string for a typed error class — the SAME mapping the panel's template keys use, so a
+ *  permission failure reads "You don't have permission" here too, not a generic shrug. Unknown → unexpected. */
 export function errorMessage(errorClass?: string): string {
-  switch (errorClass) {
-    case "auth":
-      return t("error.auth");
-    case "rate_limit":
-      return t("error.rate_limit");
-    case "transient":
-      return t("error.transient");
-    default:
-      return t("error.unexpected");
-  }
+  const known = ERROR_CLASSES.find((c) => c === errorClass);
+  return known ? t(`error.${known}`) : t("error.unexpected");
 }
 
 /** A reveal button, priced from the SERVER's costs — an unknown cost renders unpriced, never a made-up "1". */

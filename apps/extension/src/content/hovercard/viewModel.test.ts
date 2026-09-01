@@ -12,6 +12,7 @@ import {
   type PersonVmInput,
   deriveCompanyVm,
   derivePersonVm,
+  errorMessage,
   humanizeSlug,
   personDeepLink,
 } from "./viewModel.ts";
@@ -322,6 +323,16 @@ describe("derivePersonVm — P9/P10 revealed", () => {
     );
     expect(vm.phase).toBe("P10");
     expect(vm.hint).toBe("Nothing on file for this contact");
+  });
+});
+
+describe("errorMessage", () => {
+  it("maps every typed class to its own catalog string; unknown falls to unexpected", () => {
+    expect(errorMessage("permission")).toBe("You don't have permission to do that.");
+    expect(errorMessage("suppression")).toBe("This record isn't available.");
+    expect(errorMessage("rate_limit")).toBe("Slow down — too many requests.");
+    expect(errorMessage("no_such_class")).toBe("Unexpected error.");
+    expect(errorMessage(undefined)).toBe("Unexpected error.");
   });
 });
 
