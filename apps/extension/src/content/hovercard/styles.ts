@@ -4,6 +4,9 @@
 // are the DS's own light values, which is why lint:design-tokens sanctions the pattern.
 export const baseCss = `
 :host { all: initial; }
+/* The renderers toggle visibility with el.hidden. The UA's [hidden] rule loses to any author display
+   declaration (.footer is display:flex), so without this the attribute silently stops hiding. */
+[hidden] { display: none !important; }
 .card {
   position: fixed; top: 84px; inset-inline-end: 24px; width: 340px;
   max-height: min(560px, calc(100vh - 108px));
