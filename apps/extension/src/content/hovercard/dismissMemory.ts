@@ -13,9 +13,4 @@ export class DismissMemory {
   isDismissed(subjectKey: string): boolean {
     return this.dismissed.has(subjectKey);
   }
-
-  /** An explicit user gesture toward the subject (Save, panel open) un-dismisses it — they re-engaged. */
-  revive(subjectKey: string): void {
-    this.dismissed.delete(subjectKey);
-  }
 }

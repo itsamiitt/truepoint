@@ -10,12 +10,12 @@ describe("DismissMemory", () => {
     expect(m.isDismissed("john-roe")).toBe(false);
   });
 
-  it("revive clears exactly the one subject", () => {
+  it("dismissals are independent per subject", () => {
     const m = new DismissMemory();
     m.dismiss("jane-doe");
     m.dismiss("company:acme");
-    m.revive("jane-doe");
-    expect(m.isDismissed("jane-doe")).toBe(false);
+    expect(m.isDismissed("jane-doe")).toBe(true);
     expect(m.isDismissed("company:acme")).toBe(true);
+    expect(m.isDismissed("john-roe")).toBe(false);
   });
 });
