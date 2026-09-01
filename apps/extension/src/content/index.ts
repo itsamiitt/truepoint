@@ -3,7 +3,7 @@
 // a best-effort LOOKUP so an already-owned subject shows the right action. No network patching.
 import { send } from "../shared/client.ts";
 import { subjectFromUrl } from "../shared/linkedinUrl.ts";
-import type { CapturedLink } from "../shared/types.ts";
+import { type CapturedLink, subjectStatus } from "../shared/types.ts";
 import { linkedinAdapter } from "./adapters/linkedin/index.ts";
 import { AdapterRegistry } from "./adapters/registry.ts";
 import { HoverCard } from "./hovercard/index.ts";
@@ -112,18 +112,34 @@ function settle(url: URL): void {
  * after the navigation settles — the same reason `card.showForRecord` takes a re-extract callback.
  */
 chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
-  if (!raw || typeof raw !== "object" || (raw as { type?: unknown }).type !== "EXTRACT_CURRENT") {
+  if (!raw || typeof raw !== "object") return false;
+  const type = (raw as { type?: unknown }).type;
+
+  if (type === "EXTRACT_CURRENT") {
+    try {
+      const url = new URL(location.href);
+      const adapter = registry.match(url);
+      sendResponse(adapter?.extract(url, document) ?? null);
+    } catch {
+      // Fail soft: a selector miss or a foreign page yields "nothing to capture", never a thrown error in a
+      // page we do not own.
+      sendResponse(null);
+    }
     return false;
   }
-  try {
-    const url = new URL(location.href);
-    const adapter = registry.match(url);
-    sendResponse(adapter?.extract(url, document) ?? null);
-  } catch {
-    // Fail soft: a selector miss or a foreign page yields "nothing to capture", never a thrown error in a
-    // page we do not own.
-    sendResponse(null);
+
+  // The SW pushes SUBJECT_STATUS here because runtime broadcasts never reach a content script — without
+  // this, a queued capture read "Queued — sending" forever (the drain's real outcome only ever reached the
+  // panel). Validated like any boundary crossing; the card ignores a status for a subject it isn't showing.
+  if (type === "SUBJECT_STATUS") {
+    const push = raw as { subjectKey?: unknown; status?: unknown };
+    const parsed = subjectStatus.safeParse(push.status);
+    if (typeof push.subjectKey === "string" && parsed.success) {
+      card.applyPushedStatus(push.subjectKey, parsed.data);
+    }
+    return false;
   }
+
   return false;
 });
 

@@ -58,6 +58,22 @@ const ctx: RuntimeContext = {
   },
   broadcast(message) {
     void chrome.runtime.sendMessage(message).catch(() => undefined);
+    // runtime.sendMessage reaches extension pages only — a content script never hears it. The one broadcast
+    // the in-page card DEPENDS on (a queued capture resolving to the drain's real outcome) is therefore also
+    // pushed to the LinkedIn tabs the content script runs in. Scoped to this one type on purpose: fanning
+    // every STATE_CHANGED into pages would be needless chatter.
+    if (message.type === "SUBJECT_STATUS") {
+      void chrome.tabs
+        .query({ url: "*://*.linkedin.com/*" })
+        .then((tabs) => {
+          for (const tab of tabs) {
+            if (tab.id !== undefined) {
+              void chrome.tabs.sendMessage(tab.id, message).catch(() => undefined);
+            }
+          }
+        })
+        .catch(() => undefined);
+    }
   },
 };
 

@@ -8,7 +8,13 @@ import { describe, expect, it } from "bun:test";
 import type { ProfileIntelResponse } from "@leadwolf/types";
 import type { IntelPayload } from "../../shared/messages.ts";
 import type { CapturedRecord, SubjectStatus } from "../../shared/types.ts";
-import { type PersonVmInput, deriveCompanyVm, derivePersonVm, humanizeSlug } from "./viewModel.ts";
+import {
+  type PersonVmInput,
+  deriveCompanyVm,
+  derivePersonVm,
+  humanizeSlug,
+  personDeepLink,
+} from "./viewModel.ts";
 
 const record: CapturedRecord = {
   subjectKey: "jane-doe",
@@ -282,6 +288,36 @@ describe("derivePersonVm — P9/P10 revealed", () => {
     );
     expect(vm.phase).toBe("P10");
     expect(vm.hint).toBe("Nothing on file for this contact");
+  });
+});
+
+describe("personDeepLink", () => {
+  const origin = "https://app.truepoint.in";
+
+  it("prefers the server intel's public id", () => {
+    expect(personDeepLink(origin, { intel: payload(), status: null, record })).toBe(
+      "https://app.truepoint.in/search?person=jane-doe",
+    );
+  });
+
+  it("uses the subject key itself when it IS the public slug", () => {
+    expect(personDeepLink(origin, { intel: null, status: null, record })).toBe(
+      "https://app.truepoint.in/search?person=jane-doe",
+    );
+  });
+
+  it("a sales-lead key is never a slug — falls back to the bare workspace", () => {
+    const lead = { ...record, subjectKey: "sales-lead:12345", fields: {} };
+    expect(personDeepLink(origin, { intel: null, status: null, record: lead })).toBe(
+      "https://app.truepoint.in/search",
+    );
+  });
+
+  it("URL-encodes the slug", () => {
+    const odd = { ...record, subjectKey: "j%C3%A9an d", fields: { publicId: "jéan d" } };
+    expect(personDeepLink(origin, { intel: null, status: null, record: odd })).toBe(
+      `https://app.truepoint.in/search?person=${encodeURIComponent("jéan d")}`,
+    );
   });
 });
 

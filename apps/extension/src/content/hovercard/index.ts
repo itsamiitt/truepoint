@@ -25,6 +25,7 @@ import {
   deriveCompanyVm,
   derivePersonVm,
   errorMessage,
+  personDeepLink,
 } from "./viewModel.ts";
 
 // Re-exported so the transform's own test (shadowTokens.test.ts) and any external caller keep one import
@@ -189,6 +190,13 @@ export class HoverCard {
     }
   }
 
+  /** A status the SW PUSHED (the capture drain's real outcome). Applies only when the card is still showing
+   *  that subject — a push for someone the user has navigated away from is silently dropped. */
+  applyPushedStatus(subjectKey: string, status: SubjectStatus): void {
+    if (this.mode !== "person" || this.record?.subjectKey !== subjectKey) return;
+    this.setStatus(status);
+  }
+
   setStatus(status: SubjectStatus): void {
     if (this.mode !== "person" || !this.record) return;
     this.status = status;
@@ -285,9 +293,19 @@ export class HoverCard {
   private async onAction(id: string): Promise<void> {
     switch (id) {
       case "openApp": {
-        // The app has no per-contact detail route yet, so open the prospect workspace (a deep link is a
-        // future apps/web route). A content-script click is a user gesture, so window.open is allowed.
-        window.open(`${ENV.appOrigin}/search`, "_blank", "noopener,noreferrer");
+        // Deep-open the person in the app (`/search?person=<slug>` — the profile drawer the search surface
+        // already hosts); the bare workspace is the no-slug fallback. A `?contact=<uuid>` variant is
+        // deliberately NOT built: it needs a get-one-contact endpoint whose absence is a recorded audit
+        // decision (extensionScope.ts). A content-script click is a user gesture, so window.open is allowed.
+        window.open(
+          personDeepLink(ENV.appOrigin, {
+            intel: this.intel,
+            status: this.status,
+            record: this.record,
+          }),
+          "_blank",
+          "noopener,noreferrer",
+        );
         return;
       }
       case "retryLookup": {

@@ -117,6 +117,28 @@ export function freshnessLabel(lastUpdatedAt: string | null | undefined): string
   return t("card.updatedDaysAgo", { n: days });
 }
 
+/**
+ * The "Open in TruePoint" destination. `/search?person=<slug>` deep-opens the person's profile drawer in the
+ * app (the param useProfileParam already reserves); the slug ladder mirrors the identity ladder — server
+ * intel, then the lookup's masked identity, then the DOM capture, then the subject key itself when it IS the
+ * public slug (a `sales-lead:<id>` key carries a colon and is never a slug). No slug → the bare workspace.
+ */
+export function personDeepLink(
+  appOrigin: string,
+  input: {
+    intel: IntelPayload | null;
+    status: SubjectStatus | null;
+    record: CapturedRecord | null;
+  },
+): string {
+  const slug =
+    input.intel?.intel.person?.linkedinPublicId ??
+    input.status?.identity?.linkedinPublicId ??
+    input.record?.fields.publicId ??
+    (input.record && !input.record.subjectKey.includes(":") ? input.record.subjectKey : null);
+  return slug ? `${appOrigin}/search?person=${encodeURIComponent(slug)}` : `${appOrigin}/search`;
+}
+
 export function errorMessage(errorClass?: string): string {
   switch (errorClass) {
     case "auth":
