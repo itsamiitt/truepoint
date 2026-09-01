@@ -55,6 +55,8 @@ export interface PersonVmInput {
   intelState: IntelState;
   credits: number | null;
   busy: RevealType | null;
+  /** The free add-from-database call is in flight — the button says so instead of sitting inert. */
+  adding: boolean;
   justRevealed: RevealedNow | null;
   copied: "email" | "phone" | null;
   revealError: string | null;
@@ -192,8 +194,24 @@ function verificationLine(
 }
 
 export function derivePersonVm(input: PersonVmInput): PersonCardVm {
-  const { record, status, intel, intelState, credits, busy, justRevealed, copied, revealError } =
-    input;
+  const {
+    record,
+    status,
+    intel,
+    intelState,
+    credits,
+    busy,
+    adding,
+    justRevealed,
+    copied,
+    revealError,
+  } = input;
+  const addButton: ButtonVm = {
+    id: "add",
+    label: adding ? t("card.adding") : t("card.addToWorkspace"),
+    kind: "primary",
+    disabled: adding,
+  };
 
   const person = intel?.intel.person ?? null;
   const contact = intel?.intel.contact ?? null;
@@ -309,10 +327,7 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
         phase: "P11",
         pill: lookupPill,
         hint: t("card.inDatabaseHint"),
-        buttons: [
-          { id: "add", label: t("card.addToWorkspace"), kind: "primary", disabled: false },
-          retry,
-        ],
+        buttons: [addButton, retry],
         openPanelLabel: t("card.openFullProfile"),
       };
     }
@@ -360,7 +375,7 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
           copied: false,
         },
       ],
-      buttons: [{ id: "add", label: t("card.addToWorkspace"), kind: "primary", disabled: false }],
+      buttons: [addButton],
       openPanelLabel: t("card.openFullProfile"),
     };
   }

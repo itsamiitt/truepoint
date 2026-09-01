@@ -104,6 +104,7 @@ function input(over: Partial<PersonVmInput>): PersonVmInput {
     intelState: "idle",
     credits: 100,
     busy: null,
+    adding: false,
     justRevealed: null,
     copied: null,
     revealError: null,
@@ -178,6 +179,19 @@ describe("derivePersonVm — P7 in database", () => {
     const vm = p7();
     expect(vm.phase).toBe("P7");
     expect(vm.buttons.map((b) => b.id)).toEqual(["add"]);
+  });
+
+  it("an in-flight add says so and disables the button", () => {
+    const vm = derivePersonVm(
+      input({
+        status: status({ outcome: "in_database" }),
+        intel: payload({ intel: { status: "in_database", contactId: null, contact: null } }),
+        intelState: "ready",
+        adding: true,
+      }),
+    );
+    expect(vm.buttons[0]?.label).toBe("Adding…");
+    expect(vm.buttons[0]?.disabled).toBe(true);
   });
 
   it("shows presence lines only — no masked domain without a workspace contact row", () => {

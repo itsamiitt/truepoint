@@ -49,6 +49,7 @@ export class HoverCard {
   private intelState: IntelState = "idle";
   private credits: number | null = null;
   private busy: RevealType | null = null;
+  private adding = false;
   private justRevealed: RevealedNow | null = null;
   private copied: "email" | "phone" | null = null;
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
@@ -202,6 +203,7 @@ export class HoverCard {
     this.intel = null;
     this.intelState = "idle";
     this.busy = null;
+    this.adding = false;
     this.justRevealed = null;
     this.copied = null;
     this.revealError = null;
@@ -300,6 +302,7 @@ export class HoverCard {
         intelState: this.intelState,
         credits: this.credits,
         busy: this.busy,
+        adding: this.adding,
         justRevealed: this.justRevealed,
         copied: this.copied,
         revealError: this.revealError,
@@ -402,11 +405,18 @@ export class HoverCard {
    *  from the LICENSED document, not the DOM (Layer-0-as-database slice 4). A user gesture per row. */
   private async addFromDatabase(): Promise<void> {
     const sourceUrl = this.record?.sourceUrl;
-    if (!sourceUrl || this.busy) return;
+    if (!sourceUrl || this.busy || this.adding) return;
     const seq = this.seq;
     this.revealError = null;
+    this.adding = true;
+    this.paint();
     const res = await send({ type: "ADD_FROM_DATABASE", url: sourceUrl }).catch(() => null);
-    if (seq !== this.seq || !res) return;
+    if (seq !== this.seq) return;
+    this.adding = false;
+    if (!res) {
+      this.paint();
+      return;
+    }
     // The person is now (or is becoming) a workspace contact — the cached intel describes the pre-add
     // world, so drop it and re-resolve from the new status.
     this.intel = null;

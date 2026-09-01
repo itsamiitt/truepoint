@@ -14,15 +14,11 @@ export const en = {
   // Honest about what pausing does: saves still queue locally; nothing is sent until re-enabled.
   "popup.capturePausedHint": "Paused — saves queue locally and send when re-enabled.",
   "popup.queued": "{n} queued to send",
-  "card.reveal": "Reveal contact",
   "card.revealing": "Revealing…",
   "card.revealed": "Revealed",
-  "card.notRevealed": "Not revealed",
   "card.save": "Save to TruePoint",
   "card.queued": "Queued — sending",
   "card.openInApp": "Open in TruePoint",
-  "card.noMatch": "No TruePoint match",
-  "card.noMatchHint": "We couldn't find this profile.",
   // Lookup-ladder states (extension-intelligence-loop): the card always says which stage the lookup is in.
   "card.checking": "Checking TruePoint…",
   "card.dismiss": "Dismiss TruePoint card",
@@ -36,7 +32,6 @@ export const en = {
   "card.notFoundPill": "Not in TruePoint",
   "card.unavailablePill": "Source unavailable",
   "card.unavailableHint": "Data source unreachable — save captures the visible page",
-  "card.verified": "verified",
   // Confidence badge v0 (S-10) + the S-12 empty-record case. Placeholders are substituted by the caller
   // rather than interpolated here, so the catalogue stays plain strings a translator can read.
   "card.verifiedToday": "Verified today",
