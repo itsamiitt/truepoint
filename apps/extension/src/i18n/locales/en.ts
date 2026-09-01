@@ -44,6 +44,20 @@ export const en = {
   // the web UI used to get wrong.
   "card.nothingOnFile": "Nothing on file for this contact",
   "card.suppressed": "Not available",
+  // ── Apollo-grade in-page card (per-type priced reveals + the company card) ─────────────────────────
+  "card.revealEmail": "Reveal email · {n} credits",
+  "card.revealEmailNoPrice": "Reveal email",
+  "card.revealPhone": "Reveal phone · {n} credits",
+  "card.revealPhoneNoPrice": "Reveal phone",
+  "card.phoneOnRecord": "Phone on record",
+  "card.openFullProfile": "Open full profile",
+  "card.openCompanyProfile": "Open company profile",
+  "card.outOfCredits": "Not enough credits",
+  "card.checkFailed": "Couldn't check TruePoint",
+  "card.companyFounded": "Founded {year}",
+  // The provisional company-card title while the server answers — also what a NUMERIC Sales-Nav company id
+  // humanizes to, because a numeric LinkedIn id must never render (README front-end contract).
+  "card.companyLoading": "Company",
   // ── Profile Intelligence Panel ────────────────────────────────────────────────────────────────────
   "panel.retry": "Retry",
   "panel.noSubject": "No prospect in view",
@@ -65,6 +79,8 @@ export const en = {
   "contact.revealNoPrice": "Reveal contact",
   "contact.findPhone": "Find phone to dial · {n} credits",
   "contact.findPhoneNoPrice": "Find phone to dial",
+  "contact.revealBoth": "Reveal email & phone · {n} credits",
+  "contact.revealBothNoPrice": "Reveal email & phone",
   "contact.noPhone": "No phone on record",
   "contact.noEmail": "No email on record",
   // Presence, not shape: we know an address exists but not what it looks like until it is revealed.

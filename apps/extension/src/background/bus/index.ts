@@ -35,13 +35,13 @@ async function activeSubject(): Promise<ReturnType<typeof subjectFromUrl>> {
 }
 
 export function registerBus(ctx: RuntimeContext, scheduler: JobScheduler): void {
-  chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     const parsed = requestMessage.safeParse(raw);
     if (!parsed.success) {
       sendResponse({ error: "bad_message" });
       return false;
     }
-    handle(ctx, scheduler, parsed.data)
+    handle(ctx, scheduler, parsed.data, sender)
       .then(sendResponse)
       .catch((error: unknown) => sendResponse({ error: String(error) }));
     return true;
@@ -52,6 +52,7 @@ async function handle(
   ctx: RuntimeContext,
   scheduler: JobScheduler,
   msg: RequestMessage,
+  sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
   switch (msg.type) {
     case "PING":
@@ -299,7 +300,15 @@ async function handle(
       return ctx.api.listOrgs();
 
     case "OPEN_PANEL": {
+      // `sidePanel.open` demands a user gesture, and the gesture token can expire across an extra await.
+      // A content-script click carries a tab — open against it directly, with NO await first. The popup has
+      // no `sender.tab`, so it keeps the windows.getCurrent path (where the gesture has always survived).
       try {
+        const tabId = sender.tab?.id;
+        if (tabId !== undefined) {
+          await chrome.sidePanel.open({ tabId });
+          return { ok: true };
+        }
         const win = await chrome.windows.getCurrent();
         if (win.id !== undefined) {
           await chrome.sidePanel.open({ windowId: win.id });
