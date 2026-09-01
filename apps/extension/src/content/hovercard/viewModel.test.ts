@@ -277,6 +277,26 @@ describe("derivePersonVm — P9/P10 revealed", () => {
     expect(vm.buttons[0]?.label).toContain("7");
   });
 
+  it("carries the job-change alert when the intel signals hold one — and never invents it", () => {
+    const withSignal = derivePersonVm(
+      input({
+        status: found,
+        intel: payload({
+          intel: {
+            signals: [
+              { signal_type: "job_change", weight: 1, detected_at: "2026-08-30T00:00:00Z" },
+            ],
+          },
+        }),
+        intelState: "ready",
+      }),
+    );
+    expect(withSignal.alert).toBe("Job change detected · 2026-08-30");
+
+    const without = derivePersonVm(input({ status: found, intel: payload(), intelState: "ready" }));
+    expect(without.alert).toBeNull();
+  });
+
   it("P10: nothingToReveal reads 'nothing on file', never 'already owned'", () => {
     const vm = derivePersonVm(
       input({

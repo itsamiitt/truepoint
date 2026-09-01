@@ -100,6 +100,8 @@ export interface PersonCardVm {
   meta: string | null;
   initials: string;
   pill: string;
+  /** The one time-sensitive fact worth interrupting with (today: the job-change sweep's finding). */
+  alert: string | null;
   hint: string | null;
   channels: ChannelVm[];
   freshnessLine: string | null;
@@ -223,6 +225,11 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
     record.fields.location ??
     null;
 
+  // S-13 at the surface a rep actually sees: the job-change sweep's finding rides the intel signals, and a
+  // stale saved contact is the most time-sensitive fact this card can carry. Composed here so every
+  // intel-carrying phase inherits it; no intel yet (or failed) → no claim.
+  const jobChange = intel?.intel.signals.find((s) => s.signal_type === "job_change") ?? null;
+
   const base: PersonCardVm = {
     phase: "P0",
     name,
@@ -230,6 +237,9 @@ export function derivePersonVm(input: PersonVmInput): PersonCardVm {
     meta: location,
     initials: initials(name),
     pill: t("card.checking"),
+    alert: jobChange
+      ? `${t("signals.jobChangeBadge")} · ${jobChange.detected_at.slice(0, 10)}`
+      : null,
     hint: null,
     channels: [],
     freshnessLine: null,

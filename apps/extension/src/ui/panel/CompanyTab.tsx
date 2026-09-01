@@ -114,9 +114,11 @@ export function CompanyTab({
     .map((l) => l.city)
     .filter((v): v is string => Boolean(v))
     .slice(0, 3);
-  // The signals deriver decides when a revenue band has been outrun by headcount; the Details row reuses that
-  // verdict rather than inventing a second rule.
+  // The signals deriver decides when a revenue band has been outrun by headcount; the Details row restates
+  // that verdict, INCLUDING its two-point floor — a single data point is not a change, and marking a band
+  // stale off one reading is exactly the second rule this comment promises not to invent.
   const revenueStale =
+    series.length >= 2 &&
     c.revenueDisplay &&
     c.employeeCount !== null &&
     (series[0]?.employeeCount ?? 0) > 0 &&

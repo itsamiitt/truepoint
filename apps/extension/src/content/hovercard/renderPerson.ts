@@ -18,6 +18,12 @@ export function renderPerson(regions: CardRegions, vm: PersonCardVm, handlers: C
   const body = regions.bodyEl;
   body.replaceChildren();
 
+  if (vm.alert) {
+    const row = el("div", "chrow");
+    row.appendChild(badge("warning", vm.alert));
+    body.appendChild(row);
+  }
+
   if (vm.skeleton) {
     body.append(el("div", "skel"), el("div", "skel"));
   }
