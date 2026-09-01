@@ -77,6 +77,8 @@ export function ListDetailPage({ listId }: { listId: string }) {
   const [reVerify, setReVerify] = useState<{
     ids: string[];
     estimate: BulkSpendEstimate | null;
+    /** The estimate fetch failed — say so instead of "Estimating cost…" forever. The action still works. */
+    estimateFailed?: boolean;
   } | null>(null);
   const [reVerifyBusy, setReVerifyBusy] = useState(false);
 
@@ -129,7 +131,11 @@ export function ListDetailPage({ listId }: { listId: string }) {
       const estimate = await bulkEstimate({ contactIds: ids }, "enrich");
       setReVerify((prev) => (prev && prev.ids === ids ? { ids, estimate } : prev));
     } catch {
-      // The confirm still works without the estimate — leave it null.
+      // The confirm still works without the estimate — but SAY it failed, or the dialog reads
+      // "Estimating cost…" forever and looks hung.
+      setReVerify((prev) =>
+        prev && prev.ids === ids ? { ids, estimate: null, estimateFailed: true } : prev,
+      );
     }
   }, [selectedContacts]);
 
@@ -478,6 +484,8 @@ export function ListDetailPage({ listId }: { listId: string }) {
               </strong>{" "}
               is unaffected.
             </>
+          ) : reVerify?.estimateFailed ? (
+            "Couldn't fetch the cost estimate — re-verifying data you already own is free either way, and the job can still run."
           ) : (
             "Estimating cost…"
           )}

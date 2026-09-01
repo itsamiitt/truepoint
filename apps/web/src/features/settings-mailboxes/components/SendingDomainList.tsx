@@ -53,7 +53,9 @@ export function SendingDomainList({
       <div className={styles.cardHeader}>
         <h2 className={styles.cardTitle}>Sending domains</h2>
         <p className={styles.cardHint}>
-          A domain must pass SPF, DKIM, and DMARC before it can send.
+          A domain must pass SPF, DKIM, and DMARC before it can send. A failing domain never blocks
+          anything else — fix its DNS records and click Verify to re-check; it simply stays unusable
+          for sending until it passes.
         </p>
       </div>
 

@@ -15,7 +15,9 @@ const columns: Column<AuthAuditEntry>[] = [
   {
     key: "actor",
     header: "User",
-    cell: (e) => (e.actorUserId ? e.actorUserId.slice(0, 8) : "system"),
+    // Truncated for scanability; the title carries the full id so two similar prefixes stay tellable apart.
+    cell: (e) =>
+      e.actorUserId ? <span title={e.actorUserId}>{e.actorUserId.slice(0, 8)}</span> : "system",
   },
   { key: "ip", header: "IP", cell: (e) => e.ipAddress ?? "—" },
   { key: "origin", header: "Origin", cell: (e) => e.originDomain ?? "—" },
@@ -24,7 +26,18 @@ const columns: Column<AuthAuditEntry>[] = [
     header: "When",
     align: "right",
     sortValue: (e) => e.occurredAt,
-    cell: (e) => new Date(e.occurredAt).toLocaleString(),
+    // timeZoneName makes the zone explicit — a multi-region team reading "10:00" could not tell WHOSE
+    // 10:00 an event was.
+    // Component options, not dateStyle/timeStyle — Intl REJECTS timeZoneName combined with the styles.
+    cell: (e) =>
+      new Date(e.occurredAt).toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "short",
+      }),
   },
 ];
 

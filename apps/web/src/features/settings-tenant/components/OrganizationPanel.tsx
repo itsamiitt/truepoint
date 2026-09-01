@@ -116,7 +116,7 @@ export function OrganizationPanel() {
               <FieldGroup
                 label="Logo URL"
                 htmlFor="org-logo"
-                hint="Paste an image URL; upload arrives with the tenant API."
+                hint="Paste a link to a hosted image (direct file upload isn't available yet)."
                 className={styles.identityField}
               >
                 <TpInput

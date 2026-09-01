@@ -187,7 +187,9 @@ export function ImportWizard({
         if (active) setTemplates(t);
       })
       .catch(() => {
-        /* templates are a convenience — a load failure must never block importing */
+        // Templates are a convenience — a load failure must never block importing. But it must not be
+        // INVISIBLE either: the picker otherwise sits empty and applying appears to do nothing.
+        if (active) setTemplateMsg("Saved templates couldn't load — mapping by hand still works.");
       });
     return () => {
       active = false;

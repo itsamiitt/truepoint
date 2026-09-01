@@ -73,7 +73,12 @@ export function ThreadList() {
           ))}
         </ul>
       </StateSwitch>
-      <ThreadView threadId={openId} onClose={() => setOpenId(null)} onChanged={reload} />
+      <ThreadView
+        threadId={openId}
+        onClose={() => setOpenId(null)}
+        onChanged={reload}
+        actionsAvailable={feed?.available ?? false}
+      />
     </div>
   );
 }

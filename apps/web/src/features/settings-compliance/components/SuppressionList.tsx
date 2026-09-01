@@ -6,7 +6,7 @@
 "use client";
 
 import type { SuppressionListItem } from "@leadwolf/types";
-import { TpButton } from "@leadwolf/ui";
+import { Dialog, TpButton } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import { listSuppressions, removeSuppression } from "../api";
 import styles from "../compliance.module.css";
@@ -34,6 +34,9 @@ export function SuppressionList() {
   const [entries, setEntries] = useState<SuppressionListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  // The entry awaiting the confirm dialog. Removal is a COMPLIANCE decision — one accidental click must
+  // never silently re-enable reveals and sends to a suppressed subject.
+  const [confirming, setConfirming] = useState<SuppressionListItem | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -100,7 +103,7 @@ export function SuppressionList() {
                   variant="danger"
                   size="sm"
                   loading={removingId === e.id}
-                  onClick={() => void onRemove(e.id)}
+                  onClick={() => setConfirming(e)}
                 >
                   Remove
                 </TpButton>
@@ -109,6 +112,41 @@ export function SuppressionList() {
           ))}
         </ul>
       )}
+
+      <Dialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title="Remove this suppression entry?"
+        description={
+          confirming
+            ? `${MATCH_LABEL[confirming.match_type] ?? confirming.match_type} · ${entryKey(confirming)} — reveals and sends to it will be allowed again immediately.`
+            : undefined
+        }
+        maxWidth={440}
+        footer={
+          <>
+            <TpButton variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+              Keep entry
+            </TpButton>
+            <TpButton
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                const id = confirming?.id;
+                setConfirming(null);
+                if (id) void onRemove(id);
+              }}
+            >
+              Remove entry
+            </TpButton>
+          </>
+        }
+      >
+        <p className={styles.cardHint}>
+          This lifts the block for everyone in the workspace. If the person asked not to be
+          contacted, keep the entry.
+        </p>
+      </Dialog>
     </section>
   );
 }

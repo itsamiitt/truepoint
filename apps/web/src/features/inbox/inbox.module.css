@@ -134,6 +134,12 @@
 .messageOut .messageTime {
   color: color-mix(in srgb, var(--tp-on-fill) 60%, transparent);
 }
+/* The footer note shown INSTEAD of the reply box while sending isn't wired (M9) — honest up front. */
+.threadMetaNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
 .replyBox {
   display: flex;
   flex-direction: column;

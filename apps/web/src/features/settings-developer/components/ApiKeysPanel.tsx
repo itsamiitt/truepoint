@@ -181,7 +181,8 @@ export function ApiKeysPanel() {
         <div className={styles.panelHeadText}>
           <h2 className={styles.panelTitle}>API keys</h2>
           <p className={styles.panelDesc}>
-            Tenant-scoped, hashed keys for the public API. The secret is shown once at creation.
+            Keys for the public API. Each key works across your whole organization — every
+            workspace, not just this one. The secret is shown once at creation and never again.
           </p>
         </div>
         <TpButton leftIcon={<KeyRound size={15} />} onClick={() => setCreating(true)}>

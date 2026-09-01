@@ -92,7 +92,7 @@ export function SubscriptionTab() {
           </div>
           <p className="app-muted" style={{ fontSize: "var(--tp-text-body)", marginBottom: 0 }}>
             {sub.cancelAtPeriodEnd
-              ? "Your subscription is set to end at the close of the current period. Purchased credits never expire."
+              ? "Your subscription ends at the close of the current period. Until then everything keeps working; after that the workspace drops to the Free plan — your data and purchased credits stay (purchased credits never expire), but plan features and the monthly allotment stop."
               : sub.status === "past_due"
                 ? "We couldn't process your last payment. Update your payment method to keep your plan active."
                 : "Your monthly credit allotment refreshes each period; unused allotment doesn't carry over. Purchased credits never expire."}

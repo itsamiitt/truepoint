@@ -22,10 +22,14 @@ export function ThreadView({
   threadId,
   onClose,
   onChanged,
+  actionsAvailable,
 }: {
   threadId: string | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Whether reply/done/snooze are actually wired (the feed's `available`) — when false the controls say
+   *  so up front instead of failing to a toast after the user has typed a reply. */
+  actionsAvailable: boolean;
 }) {
   const toast = useToast();
   const [thread, setThread] = useState<InboxThread | null>(null);
@@ -111,17 +115,29 @@ export function ThreadView({
       title={thread?.contactName ?? "Conversation"}
       width={480}
       footer={
-        <div className={styles.replyBox}>
-          <TpTextarea
-            placeholder="Write a quick reply…"
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            rows={2}
-          />
-          <TpButton onClick={send} disabled={busy || reply.trim().length === 0} loading={busy} full>
-            Send reply
-          </TpButton>
-        </div>
+        actionsAvailable ? (
+          <div className={styles.replyBox}>
+            <TpTextarea
+              placeholder="Write a quick reply…"
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              rows={2}
+            />
+            <TpButton
+              onClick={send}
+              disabled={busy || reply.trim().length === 0}
+              loading={busy}
+              full
+            >
+              Send reply
+            </TpButton>
+          </div>
+        ) : (
+          // Say it BEFORE anyone types a reply — an editable box whose send fails afterwards is a trap.
+          <p className={styles.threadMetaNote}>
+            Replying from TruePoint arrives with mailbox sync — for now, answer from your own inbox.
+          </p>
+        )
       }
     >
       <StateSwitch
@@ -144,11 +160,24 @@ export function ThreadView({
                 <StatusBadge tone="muted">{thread.sequenceName}</StatusBadge>
               ) : null}
             </div>
-            <div className={styles.actions}>
-              <TpButton variant="secondary" size="sm" onClick={() => act("done")} disabled={busy}>
+            <div
+              className={styles.actions}
+              title={actionsAvailable ? undefined : "Thread actions arrive with mailbox sync (M9)"}
+            >
+              <TpButton
+                variant="secondary"
+                size="sm"
+                onClick={() => act("done")}
+                disabled={busy || !actionsAvailable}
+              >
                 Mark done
               </TpButton>
-              <TpButton variant="ghost" size="sm" onClick={() => act("snoozed")} disabled={busy}>
+              <TpButton
+                variant="ghost"
+                size="sm"
+                onClick={() => act("snoozed")}
+                disabled={busy || !actionsAvailable}
+              >
                 Snooze
               </TpButton>
             </div>

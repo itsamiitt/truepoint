@@ -18,8 +18,9 @@ import { EmptyState, Icon, Progress, StateSwitch } from "@leadwolf/ui";
 import { Target } from "lucide-react";
 import styles from "../reports.module.css";
 
-/** The roadmap's Phase 1 threshold. Named rather than inlined so the panel and the doc cannot drift apart. */
-const KILL_THRESHOLD = 0.4;
+// The roadmap's Phase-1 KILL_THRESHOLD (0.4) used to tint this bar warning-yellow — retired from the UI
+// 2026-09-01: it is an internal go/no-go line, not something a customer can act on. The measurement stays
+// in the admin/ops surfaces where the decision is made.
 
 function formatRate(rate: number | null): string {
   // "Not enough data" is NOT 0%. They are opposite conclusions — one says nobody has tried, the other says
@@ -74,11 +75,9 @@ export function RevealOutcomesSection({
               <Progress
                 value={outcomes.hits}
                 max={attempts || 1}
-                tone={
-                  outcomes.hitRate !== null && outcomes.hitRate < KILL_THRESHOLD
-                    ? "warning"
-                    : "success"
-                }
+                // Neutral, not warning: the old threshold tint was an INTERNAL go/no-go line, and a yellow
+                // bar told customers to fix something they don't control. The rate text carries the number.
+                tone="ink"
                 label="Reveal hit rate"
               />
               <span className={styles.rateSub}>

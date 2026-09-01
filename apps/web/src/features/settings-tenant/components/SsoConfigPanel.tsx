@@ -309,7 +309,7 @@ export function SsoConfigPanel() {
             <FieldGroup
               label="Enforce SSO"
               htmlFor="sso-enforced"
-              hint="Require members in your verified domains to sign in through SSO."
+              hint="Require members in your verified domains to sign in through SSO. Password sign-in stops working for them — if the identity provider goes down or is misconfigured, those members are locked out until an owner turns this off. Test a full SSO sign-in in another browser BEFORE enforcing."
             >
               <TpSwitch
                 id="sso-enforced"
@@ -317,6 +317,12 @@ export function SsoConfigPanel() {
                 onChange={(e) => setForm((f) => ({ ...f, enforced: e.target.checked }))}
               />
             </FieldGroup>
+            {form.enforced ? (
+              <p className={styles.error}>
+                Enforcement locks password sign-in for every member in your verified domains the
+                moment you save. Make sure SSO sign-in works end to end first.
+              </p>
+            ) : null}
 
             <div className={styles.formActions}>
               <TpButton onClick={onSave} loading={saving}>

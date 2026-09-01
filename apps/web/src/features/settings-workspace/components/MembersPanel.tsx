@@ -171,7 +171,11 @@ export function MembersPanel() {
         open={toRemove != null}
         onClose={() => setToRemove(null)}
         title="Remove member?"
-        description={toRemove ? `${toRemove.email} will lose access to this workspace.` : undefined}
+        description={
+          toRemove
+            ? `${toRemove.email} loses access immediately — open sessions end on their next request. Contacts, lists and saved searches they created stay with the workspace.`
+            : undefined
+        }
         footer={
           <>
             <TpButton variant="ghost" onClick={() => setToRemove(null)}>

@@ -101,24 +101,32 @@ export function SendStatusDashboard({
               ))}
             </div>
 
-            <ul className={styles.funnelList}>
-              {STAGES.map((stage) => (
-                <li key={stage.key} className={styles.funnelStage}>
-                  <span className={styles.funnelStageLabel}>{stage.label}</span>
-                  <Progress
-                    value={metrics[stage.key]}
-                    max={sent}
-                    tone={stage.key === "bounced" ? "danger" : "ink"}
-                    label={`${stage.label} relative to sent`}
-                  />
-                  <span className={styles.funnelStageValue}>
-                    {metrics[stage.key].toLocaleString()}
-                    {stage.key !== "sent" &&
-                      ` · ${formatPct(rate(metrics[stage.key], metrics.sent))}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {metrics.sent === 0 ? (
+              // An explicit zero state: with the Math.max(1, sent) denominator guard alone, an untouched
+              // sequence rendered funnel bars that LOOKED like activity.
+              <p className={styles.footnote}>
+                No sends yet — the funnel fills in once this sequence's first step goes out.
+              </p>
+            ) : (
+              <ul className={styles.funnelList}>
+                {STAGES.map((stage) => (
+                  <li key={stage.key} className={styles.funnelStage}>
+                    <span className={styles.funnelStageLabel}>{stage.label}</span>
+                    <Progress
+                      value={metrics[stage.key]}
+                      max={sent}
+                      tone={stage.key === "bounced" ? "danger" : "ink"}
+                      label={`${stage.label} relative to sent`}
+                    />
+                    <span className={styles.funnelStageValue}>
+                      {metrics[stage.key].toLocaleString()}
+                      {stage.key !== "sent" &&
+                        ` · ${formatPct(rate(metrics[stage.key], metrics.sent))}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             <p className={styles.footnote} style={{ marginTop: "var(--tp-space-4)" }}>
               Counts come from the outreach engine. The dedicated analytics pipeline (ClickHouse)

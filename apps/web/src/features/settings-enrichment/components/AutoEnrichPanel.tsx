@@ -151,7 +151,9 @@ export function AutoEnrichPanel() {
             htmlFor="ae-budget"
             hint={
               data
-                ? `Used this month: ${spentCredits.toLocaleString()} credits.`
+                ? spentCredits >= form.monthlyBudgetCredits && form.monthlyBudgetCredits > 0
+                  ? `Used this month: ${spentCredits.toLocaleString()} credits — the cap is REACHED, so auto-enrich is paused until next month or a higher budget.`
+                  : `Used this month: ${spentCredits.toLocaleString()} credits. Auto-enrich pauses when the cap is reached.`
                 : "Auto-enrich stops once this cap is reached."
             }
           >

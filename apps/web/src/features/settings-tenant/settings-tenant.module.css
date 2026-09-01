@@ -111,6 +111,18 @@
   border-top: 1px solid var(--tp-hairline);
 }
 
+/* Inline error / high-consequence warning line (SSO save failures, the enforce-SSO lockout notice). The
+   class was referenced by SsoConfigPanel but never defined — errors rendered as unstyled body text. */
+.error {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-200);
+  border-radius: var(--tp-radius-sm);
+  background: var(--danger-50);
+  font-size: 13px;
+  color: var(--danger-700);
+}
+
 /* ── Security & access option list (allowed login methods) ──────────────────────────────────────── */
 .optionList {
   display: flex;

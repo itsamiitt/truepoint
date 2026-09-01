@@ -108,7 +108,11 @@ export function CreditUsageSection({
             }
           />
 
-          <h3 className={styles.subheading}>Credits per day — last 14 days</h3>
+          {/* The daily series is a FIXED 14-day window from the rollup — the range filter above does not
+              reshape it. Say so in the title, or the chart looks like it ignores the user's selection. */}
+          <h3 className={styles.subheading}>
+            Credits per day — always the last 14 days, whatever range is picked above
+          </h3>
           {quiet ? (
             <p className={styles.muted}>No credit spend in the last 14 days.</p>
           ) : (

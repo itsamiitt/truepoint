@@ -54,11 +54,26 @@ export function TasksPanel() {
                 {formatDue(task.dueAt) || `Added ${formatRelative(task.createdAt)}`}
               </span>
             </span>
-            <span className={styles.taskActions}>
-              <TpButton variant="secondary" size="sm" onClick={() => act(task, "done")}>
+            <span
+              className={styles.taskActions}
+              // Availability is known UP FRONT (feed.available) — a button that looks live and fails to a
+              // "not available yet" toast after the click trains people not to trust buttons.
+              title={feed?.available ? undefined : "Task actions arrive with the M9 inbox build"}
+            >
+              <TpButton
+                variant="secondary"
+                size="sm"
+                disabled={!feed?.available}
+                onClick={() => act(task, "done")}
+              >
                 Done
               </TpButton>
-              <TpButton variant="ghost" size="sm" onClick={() => act(task, "snoozed")}>
+              <TpButton
+                variant="ghost"
+                size="sm"
+                disabled={!feed?.available}
+                onClick={() => act(task, "snoozed")}
+              >
                 Snooze
               </TpButton>
             </span>

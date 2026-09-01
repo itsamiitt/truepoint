@@ -96,7 +96,12 @@ export function CustomFieldsPanel() {
     try {
       const { ok } = await update(def.id, { archived: !def.archived });
       if (ok) {
-        toast.success(def.archived ? "Field restored" : "Field archived");
+        toast.success(
+          def.archived ? "Field restored" : "Field archived",
+          def.archived
+            ? "It shows on records again, with its data intact."
+            : "Hidden from records — its data is kept, and Restore brings it back any time.",
+        );
         await reload();
       } else {
         toast.toast({ title: "Not available yet" });

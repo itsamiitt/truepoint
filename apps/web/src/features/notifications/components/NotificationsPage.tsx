@@ -62,7 +62,13 @@ function relTime(iso: string): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  // Older than a month: a full local date with month name — a bare "8/15" left the year and locale order
+  // ambiguous for anyone scanning an old notification.
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function NotificationsPage() {

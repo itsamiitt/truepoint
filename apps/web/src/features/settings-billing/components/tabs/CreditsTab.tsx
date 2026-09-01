@@ -5,6 +5,7 @@
 
 import { Card, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import { CreditCard, Wallet } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import styles from "../../billing.module.css";
 
@@ -68,7 +69,10 @@ export function CreditsTab({
             Top up
           </TpButton>
         ) : (
-          <span className={styles.mutedHint}>Ask a workspace admin to top up</span>
+          <span className={styles.mutedHint}>
+            Only workspace admins can top up — find yours under{" "}
+            <Link href="/settings/members">Settings → Members</Link>
+          </span>
         )}
       </div>
       <p className={styles.note}>

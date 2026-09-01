@@ -4,7 +4,7 @@
 // acted on. Presentation + local view state only — the request is recorded server-side via api.submitDsar.
 "use client";
 
-import { TpButton, TpInput, TpSelect } from "@leadwolf/ui";
+import { Dialog, TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { type FormEvent, useState } from "react";
 import { type DsarInput, type DsarReceipt, submitDsar } from "../api";
 import styles from "../compliance.module.css";
@@ -21,12 +21,14 @@ export function DsarForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<DsarReceipt | null>(null);
+  // A DELETE request gets a confirm step — it asks for erasure everywhere, and the dropdown makes it one
+  // mis-pick away from an access request. (Nothing is deleted before identity verification server-side,
+  // but the request itself should still never be filed by accident.)
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const canSubmit = email.trim().length > 0 && !busy;
 
-  async function onSubmit(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!canSubmit) return;
+  async function doSubmit(): Promise<void> {
     setBusy(true);
     setError(null);
     setReceipt(null);
@@ -41,12 +43,24 @@ export function DsarForm() {
     }
   }
 
+  function onSubmit(e: FormEvent): void {
+    e.preventDefault();
+    if (!canSubmit) return;
+    if (requestType === "delete") {
+      setConfirmDelete(true);
+      return;
+    }
+    void doSubmit();
+  }
+
   return (
     <section className={styles.card}>
       <div className={styles.cardHeader}>
         <h2 className={styles.cardTitle}>Data subject request (DSAR)</h2>
         <p className={styles.cardHint}>
-          Anyone can ask to access, delete, or correct the data we hold about them.
+          Anyone can ask to access, delete, or correct the data we hold about them. Every request is
+          identity-verified before anything is shared or changed — submitting for someone
+          else&apos;s address goes nowhere.
         </p>
       </div>
 
@@ -87,6 +101,35 @@ export function DsarForm() {
           {error && <p className={styles.error}>{error}</p>}
         </div>
       </form>
+
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="File a deletion request?"
+        description={`This asks us to erase everything held about ${email.trim() || "this address"} — everywhere, permanently, once identity is verified.`}
+        maxWidth={440}
+        footer={
+          <>
+            <TpButton variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setConfirmDelete(false);
+                void doSubmit();
+              }}
+            >
+              File deletion request
+            </TpButton>
+          </>
+        }
+      >
+        <p className={styles.cardHint}>
+          If you only want a copy of the data, cancel and pick “Access” instead.
+        </p>
+      </Dialog>
 
       {receipt && (
         <div className={styles.receipt}>

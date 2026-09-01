@@ -63,7 +63,11 @@ export function WorkspaceGeneralPanel() {
               placeholder="Acme Sales"
             />
           </FieldGroup>
-          <FieldGroup label="Workspace URL slug" htmlFor="ws-slug" hint="Used in workspace links.">
+          <FieldGroup
+            label="Workspace URL slug"
+            htmlFor="ws-slug"
+            hint="Used in workspace links. Changing it breaks existing bookmarks, shared links and API integrations that use the old slug — update those after saving."
+          >
             <TpInput
               id="ws-slug"
               value={form.slug}
